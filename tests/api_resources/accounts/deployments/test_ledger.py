@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts.deployments import LedgerRetrieveResponse
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
@@ -19,7 +19,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         ledger = client.accounts.deployments.ledger.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -28,7 +28,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.deployments.ledger.with_raw_response.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -41,7 +41,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.deployments.ledger.with_streaming_response.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -56,7 +56,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployments.ledger.with_raw_response.retrieve(
                 deployment_id="deployment_id",
@@ -71,7 +71,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_reset(self, client: FireworksAI) -> None:
+    def test_method_reset(self, client: Fireworks) -> None:
         ledger = client.accounts.deployments.ledger.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -80,7 +80,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_reset(self, client: FireworksAI) -> None:
+    def test_raw_response_reset(self, client: Fireworks) -> None:
         response = client.accounts.deployments.ledger.with_raw_response.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -93,7 +93,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_reset(self, client: FireworksAI) -> None:
+    def test_streaming_response_reset(self, client: Fireworks) -> None:
         with client.accounts.deployments.ledger.with_streaming_response.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -108,7 +108,7 @@ class TestLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_reset(self, client: FireworksAI) -> None:
+    def test_path_params_reset(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployments.ledger.with_raw_response.reset(
                 deployment_id="deployment_id",
@@ -129,7 +129,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         ledger = await async_client.accounts.deployments.ledger.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -138,7 +138,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployments.ledger.with_raw_response.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -151,7 +151,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployments.ledger.with_streaming_response.retrieve(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -166,7 +166,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployments.ledger.with_raw_response.retrieve(
                 deployment_id="deployment_id",
@@ -181,7 +181,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_reset(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_reset(self, async_client: AsyncFireworks) -> None:
         ledger = await async_client.accounts.deployments.ledger.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -190,7 +190,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_reset(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_reset(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployments.ledger.with_raw_response.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -203,7 +203,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_reset(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_reset(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployments.ledger.with_streaming_response.reset(
             deployment_id="deployment_id",
             account_id="account_id",
@@ -218,7 +218,7 @@ class TestAsyncLedger:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_reset(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_reset(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployments.ledger.with_raw_response.reset(
                 deployment_id="deployment_id",

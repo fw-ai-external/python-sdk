@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai._utils import parse_datetime
 from fireworks_ai.types.accounts import (
     GatewayLeaderboard,
@@ -25,7 +25,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.create(
             account_id="account_id",
             leaderboard={},
@@ -34,7 +34,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.create(
             account_id="account_id",
             leaderboard={
@@ -57,7 +57,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.leaderboards.with_raw_response.create(
             account_id="account_id",
             leaderboard={},
@@ -70,7 +70,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.leaderboards.with_streaming_response.create(
             account_id="account_id",
             leaderboard={},
@@ -85,7 +85,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.leaderboards.with_raw_response.create(
                 account_id="",
@@ -94,7 +94,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -103,7 +103,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -113,7 +113,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.leaderboards.with_raw_response.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -126,7 +126,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.leaderboards.with_streaming_response.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -141,7 +141,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.leaderboards.with_raw_response.retrieve(
                 leaderboard_id="leaderboard_id",
@@ -156,7 +156,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.list(
             account_id="account_id",
         )
@@ -164,7 +164,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.list(
             account_id="account_id",
             filter="filter",
@@ -177,7 +177,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.leaderboards.with_raw_response.list(
             account_id="account_id",
         )
@@ -189,7 +189,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.leaderboards.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -203,7 +203,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.leaderboards.with_raw_response.list(
                 account_id="",
@@ -211,7 +211,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -220,7 +220,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.leaderboards.with_raw_response.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -233,7 +233,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.leaderboards.with_streaming_response.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -248,7 +248,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.leaderboards.with_raw_response.delete(
                 leaderboard_id="leaderboard_id",
@@ -263,7 +263,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_evaluation_jobs(self, client: FireworksAI) -> None:
+    def test_method_list_evaluation_jobs(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -272,7 +272,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_evaluation_jobs_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_evaluation_jobs_with_all_params(self, client: Fireworks) -> None:
         leaderboard = client.accounts.leaderboards.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -285,7 +285,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list_evaluation_jobs(self, client: FireworksAI) -> None:
+    def test_raw_response_list_evaluation_jobs(self, client: Fireworks) -> None:
         response = client.accounts.leaderboards.with_raw_response.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -298,7 +298,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list_evaluation_jobs(self, client: FireworksAI) -> None:
+    def test_streaming_response_list_evaluation_jobs(self, client: Fireworks) -> None:
         with client.accounts.leaderboards.with_streaming_response.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -313,7 +313,7 @@ class TestLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list_evaluation_jobs(self, client: FireworksAI) -> None:
+    def test_path_params_list_evaluation_jobs(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.leaderboards.with_raw_response.list_evaluation_jobs(
                 leaderboard_id="leaderboard_id",
@@ -334,7 +334,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.create(
             account_id="account_id",
             leaderboard={},
@@ -343,7 +343,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.create(
             account_id="account_id",
             leaderboard={
@@ -366,7 +366,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.leaderboards.with_raw_response.create(
             account_id="account_id",
             leaderboard={},
@@ -379,7 +379,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.leaderboards.with_streaming_response.create(
             account_id="account_id",
             leaderboard={},
@@ -394,7 +394,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.leaderboards.with_raw_response.create(
                 account_id="",
@@ -403,7 +403,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -412,7 +412,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -422,7 +422,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.leaderboards.with_raw_response.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -435,7 +435,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.leaderboards.with_streaming_response.retrieve(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -450,7 +450,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.leaderboards.with_raw_response.retrieve(
                 leaderboard_id="leaderboard_id",
@@ -465,7 +465,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.list(
             account_id="account_id",
         )
@@ -473,7 +473,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.list(
             account_id="account_id",
             filter="filter",
@@ -486,7 +486,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.leaderboards.with_raw_response.list(
             account_id="account_id",
         )
@@ -498,7 +498,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.leaderboards.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -512,7 +512,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.leaderboards.with_raw_response.list(
                 account_id="",
@@ -520,7 +520,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -529,7 +529,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.leaderboards.with_raw_response.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -542,7 +542,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.leaderboards.with_streaming_response.delete(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -557,7 +557,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.leaderboards.with_raw_response.delete(
                 leaderboard_id="leaderboard_id",
@@ -572,7 +572,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_evaluation_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_evaluation_jobs(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -581,7 +581,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_evaluation_jobs_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_evaluation_jobs_with_all_params(self, async_client: AsyncFireworks) -> None:
         leaderboard = await async_client.accounts.leaderboards.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -594,7 +594,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list_evaluation_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list_evaluation_jobs(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.leaderboards.with_raw_response.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -607,7 +607,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list_evaluation_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list_evaluation_jobs(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.leaderboards.with_streaming_response.list_evaluation_jobs(
             leaderboard_id="leaderboard_id",
             account_id="account_id",
@@ -622,7 +622,7 @@ class TestAsyncLeaderboards:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list_evaluation_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list_evaluation_jobs(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.leaderboards.with_raw_response.list_evaluation_jobs(
                 leaderboard_id="leaderboard_id",

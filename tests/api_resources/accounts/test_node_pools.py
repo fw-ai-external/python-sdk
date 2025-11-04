@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayNodePool,
     GatewayNodePoolStats,
@@ -23,7 +23,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -32,7 +32,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -42,7 +42,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -55,7 +55,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -70,7 +70,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.retrieve(
                 node_pool_id="node_pool_id",
@@ -85,7 +85,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update(self, client: FireworksAI) -> None:
+    def test_method_update(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -94,7 +94,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_update_with_all_params(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -123,7 +123,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_update(self, client: FireworksAI) -> None:
+    def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -136,7 +136,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_update(self, client: FireworksAI) -> None:
+    def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -151,7 +151,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_update(self, client: FireworksAI) -> None:
+    def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.update(
                 node_pool_id="node_pool_id",
@@ -166,7 +166,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -175,7 +175,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -188,7 +188,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -203,7 +203,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.delete(
                 node_pool_id="node_pool_id",
@@ -218,7 +218,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_node_pools(self, client: FireworksAI) -> None:
+    def test_method_node_pools(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.node_pools(
             account_id="account_id",
             node_pool={},
@@ -228,7 +228,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_node_pools_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_node_pools_with_all_params(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.node_pools(
             account_id="account_id",
             node_pool={
@@ -259,7 +259,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_node_pools(self, client: FireworksAI) -> None:
+    def test_raw_response_node_pools(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.node_pools(
             account_id="account_id",
             node_pool={},
@@ -273,7 +273,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_node_pools(self, client: FireworksAI) -> None:
+    def test_streaming_response_node_pools(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.node_pools(
             account_id="account_id",
             node_pool={},
@@ -289,7 +289,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_node_pools(self, client: FireworksAI) -> None:
+    def test_path_params_node_pools(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.node_pools(
                 account_id="",
@@ -299,7 +299,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_node_pool_id_get_stats(self, client: FireworksAI) -> None:
+    def test_method_retrieve_node_pool_id_get_stats(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -308,7 +308,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_node_pool_id_get_stats_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_node_pool_id_get_stats_with_all_params(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -318,7 +318,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve_node_pool_id_get_stats(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve_node_pool_id_get_stats(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -331,7 +331,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve_node_pool_id_get_stats(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve_node_pool_id_get_stats(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -346,7 +346,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve_node_pool_id_get_stats(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve_node_pool_id_get_stats(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.retrieve_node_pool_id_get_stats(
                 node_pool_id="node_pool_id",
@@ -361,7 +361,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_node_pools(self, client: FireworksAI) -> None:
+    def test_method_retrieve_node_pools(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve_node_pools(
             account_id="account_id",
         )
@@ -369,7 +369,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_node_pools_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_node_pools_with_all_params(self, client: Fireworks) -> None:
         node_pool = client.accounts.node_pools.retrieve_node_pools(
             account_id="account_id",
             filter="filter",
@@ -382,7 +382,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve_node_pools(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve_node_pools(self, client: Fireworks) -> None:
         response = client.accounts.node_pools.with_raw_response.retrieve_node_pools(
             account_id="account_id",
         )
@@ -394,7 +394,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve_node_pools(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve_node_pools(self, client: Fireworks) -> None:
         with client.accounts.node_pools.with_streaming_response.retrieve_node_pools(
             account_id="account_id",
         ) as response:
@@ -408,7 +408,7 @@ class TestNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve_node_pools(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve_node_pools(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.node_pools.with_raw_response.retrieve_node_pools(
                 account_id="",
@@ -422,7 +422,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -431,7 +431,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -441,7 +441,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -454,7 +454,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.retrieve(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -469,7 +469,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.retrieve(
                 node_pool_id="node_pool_id",
@@ -484,7 +484,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -493,7 +493,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -522,7 +522,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -535,7 +535,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.update(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -550,7 +550,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.update(
                 node_pool_id="node_pool_id",
@@ -565,7 +565,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -574,7 +574,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -587,7 +587,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.delete(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -602,7 +602,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.delete(
                 node_pool_id="node_pool_id",
@@ -617,7 +617,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_node_pools(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.node_pools(
             account_id="account_id",
             node_pool={},
@@ -627,7 +627,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_node_pools_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_node_pools_with_all_params(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.node_pools(
             account_id="account_id",
             node_pool={
@@ -658,7 +658,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_node_pools(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.node_pools(
             account_id="account_id",
             node_pool={},
@@ -672,7 +672,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_node_pools(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.node_pools(
             account_id="account_id",
             node_pool={},
@@ -688,7 +688,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_node_pools(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.node_pools(
                 account_id="",
@@ -698,7 +698,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -707,7 +707,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_node_pool_id_get_stats_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_node_pool_id_get_stats_with_all_params(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -717,7 +717,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -730,7 +730,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.retrieve_node_pool_id_get_stats(
             node_pool_id="node_pool_id",
             account_id="account_id",
@@ -745,7 +745,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve_node_pool_id_get_stats(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.retrieve_node_pool_id_get_stats(
                 node_pool_id="node_pool_id",
@@ -760,7 +760,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_node_pools(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve_node_pools(
             account_id="account_id",
         )
@@ -768,7 +768,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_node_pools_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_node_pools_with_all_params(self, async_client: AsyncFireworks) -> None:
         node_pool = await async_client.accounts.node_pools.retrieve_node_pools(
             account_id="account_id",
             filter="filter",
@@ -781,7 +781,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve_node_pools(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.node_pools.with_raw_response.retrieve_node_pools(
             account_id="account_id",
         )
@@ -793,7 +793,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve_node_pools(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.node_pools.with_streaming_response.retrieve_node_pools(
             account_id="account_id",
         ) as response:
@@ -807,7 +807,7 @@ class TestAsyncNodePools:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve_node_pools(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve_node_pools(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.node_pools.with_raw_response.retrieve_node_pools(
                 account_id="",

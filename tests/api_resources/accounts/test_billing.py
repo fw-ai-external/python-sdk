@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai._utils import parse_datetime
 from fireworks_ai.types.accounts import BillingGetSummaryResponse
 
@@ -20,7 +20,7 @@ class TestBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_summary(self, client: FireworksAI) -> None:
+    def test_method_get_summary(self, client: Fireworks) -> None:
         billing = client.accounts.billing.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -30,7 +30,7 @@ class TestBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_get_summary(self, client: FireworksAI) -> None:
+    def test_raw_response_get_summary(self, client: Fireworks) -> None:
         response = client.accounts.billing.with_raw_response.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -44,7 +44,7 @@ class TestBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_get_summary(self, client: FireworksAI) -> None:
+    def test_streaming_response_get_summary(self, client: Fireworks) -> None:
         with client.accounts.billing.with_streaming_response.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -60,7 +60,7 @@ class TestBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_get_summary(self, client: FireworksAI) -> None:
+    def test_path_params_get_summary(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.billing.with_raw_response.get_summary(
                 account_id="",
@@ -76,7 +76,7 @@ class TestAsyncBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_summary(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_summary(self, async_client: AsyncFireworks) -> None:
         billing = await async_client.accounts.billing.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -86,7 +86,7 @@ class TestAsyncBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_get_summary(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_get_summary(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.billing.with_raw_response.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -100,7 +100,7 @@ class TestAsyncBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_get_summary(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_get_summary(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.billing.with_streaming_response.get_summary(
             account_id="account_id",
             end_time=parse_datetime("2019-12-27T18:11:19.117Z"),
@@ -116,7 +116,7 @@ class TestAsyncBilling:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_get_summary(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_get_summary(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.billing.with_raw_response.get_summary(
                 account_id="",

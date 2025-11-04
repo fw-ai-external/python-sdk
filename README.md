@@ -1,9 +1,9 @@
-# Fireworks AI Python API library
+# Fireworks Python API library
 
 <!-- prettier-ignore -->
 [![PyPI version](https://img.shields.io/pypi/v/fireworks_ai.svg?label=pypi%20(stable))](https://pypi.org/project/fireworks_ai/)
 
-The Fireworks AI Python library provides convenient access to the Fireworks AI REST API from any Python 3.8+
+The Fireworks Python library provides convenient access to the Fireworks REST API from any Python 3.8+
 application. The library includes type definitions for all request params and response fields,
 and offers both synchronous and asynchronous clients powered by [httpx](https://github.com/encode/httpx).
 
@@ -11,7 +11,7 @@ It is generated with [Stainless](https://www.stainless.com/).
 
 ## Documentation
 
-The full API of this library can be found in [api.md](api.md).
+The REST API documentation can be found on [docs.fireworks.ai](https://docs.fireworks.ai/api-reference/introduction). The full API of this library can be found in [api.md](api.md).
 
 ## Installation
 
@@ -29,9 +29,9 @@ The full API of this library can be found in [api.md](api.md).
 
 ```python
 import os
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
-client = FireworksAI(
+client = Fireworks(
     api_key=os.environ.get("FIREWORKS_AI_API_KEY"),  # This is the default and can be omitted
 )
 
@@ -46,14 +46,14 @@ so that your API Key is not stored in source control.
 
 ## Async usage
 
-Simply import `AsyncFireworksAI` instead of `FireworksAI` and use `await` with each API call:
+Simply import `AsyncFireworks` instead of `Fireworks` and use `await` with each API call:
 
 ```python
 import os
 import asyncio
-from fireworks_ai import AsyncFireworksAI
+from fireworks_ai import AsyncFireworks
 
-client = AsyncFireworksAI(
+client = AsyncFireworks(
     api_key=os.environ.get("FIREWORKS_AI_API_KEY"),  # This is the default and can be omitted
 )
 
@@ -84,11 +84,11 @@ Then you can enable it by instantiating the client with `http_client=DefaultAioH
 ```python
 import asyncio
 from fireworks_ai import DefaultAioHttpClient
-from fireworks_ai import AsyncFireworksAI
+from fireworks_ai import AsyncFireworks
 
 
 async def main() -> None:
-    async with AsyncFireworksAI(
+    async with AsyncFireworks(
         api_key="My API Key",
         http_client=DefaultAioHttpClient(),
     ) as client:
@@ -113,9 +113,9 @@ Typed requests and responses provide autocomplete and documentation within your 
 Nested parameters are dictionaries, typed using `TypedDict`, for example:
 
 ```python
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
-client = FireworksAI()
+client = Fireworks()
 
 gateway_evaluator = client.accounts.create_evaluator_v2(
     account_id="account_id",
@@ -135,9 +135,9 @@ All errors inherit from `fireworks_ai.APIError`.
 
 ```python
 import fireworks_ai
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
-client = FireworksAI()
+client = Fireworks()
 
 try:
     client.accounts.list()
@@ -174,10 +174,10 @@ Connection errors (for example, due to a network connectivity problem), 408 Requ
 You can use the `max_retries` option to configure or disable retry settings:
 
 ```python
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
 # Configure the default for all requests:
-client = FireworksAI(
+client = Fireworks(
     # default is 2
     max_retries=0,
 )
@@ -192,16 +192,16 @@ By default requests time out after 1 minute. You can configure this with a `time
 which accepts a float or an [`httpx.Timeout`](https://www.python-httpx.org/advanced/timeouts/#fine-tuning-the-configuration) object:
 
 ```python
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
 # Configure the default for all requests:
-client = FireworksAI(
+client = Fireworks(
     # 20 seconds (default is 1 minute)
     timeout=20.0,
 )
 
 # More granular control:
-client = FireworksAI(
+client = Fireworks(
     timeout=httpx.Timeout(60.0, read=5.0, write=10.0, connect=2.0),
 )
 
@@ -219,10 +219,10 @@ Note that requests that time out are [retried twice by default](#retries).
 
 We use the standard library [`logging`](https://docs.python.org/3/library/logging.html) module.
 
-You can enable logging by setting the environment variable `FIREWORKS_AI_LOG` to `info`.
+You can enable logging by setting the environment variable `FIREWORKS_LOG` to `info`.
 
 ```shell
-$ export FIREWORKS_AI_LOG=info
+$ export FIREWORKS_LOG=info
 ```
 
 Or to `debug` for more verbose logging.
@@ -244,9 +244,9 @@ if response.my_field is None:
 The "raw" Response object can be accessed by prefixing `.with_raw_response.` to any HTTP method call, e.g.,
 
 ```py
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
-client = FireworksAI()
+client = Fireworks()
 response = client.accounts.with_raw_response.list()
 print(response.headers.get('X-My-Header'))
 
@@ -318,10 +318,10 @@ You can directly override the [httpx client](https://www.python-httpx.org/api/#c
 
 ```python
 import httpx
-from fireworks_ai import FireworksAI, DefaultHttpxClient
+from fireworks_ai import Fireworks, DefaultHttpxClient
 
-client = FireworksAI(
-    # Or use the `FIREWORKS_AI_BASE_URL` env var
+client = Fireworks(
+    # Or use the `FIREWORKS_BASE_URL` env var
     base_url="http://my.test.server.example.com:8083",
     http_client=DefaultHttpxClient(
         proxy="http://my.test.proxy.example.com",
@@ -341,9 +341,9 @@ client.with_options(http_client=DefaultHttpxClient(...))
 By default the library closes underlying HTTP connections whenever the client is [garbage collected](https://docs.python.org/3/reference/datamodel.html#object.__del__). You can manually close the client using the `.close()` method if desired, or with a context manager that closes when exiting.
 
 ```py
-from fireworks_ai import FireworksAI
+from fireworks_ai import Fireworks
 
-with FireworksAI() as client:
+with Fireworks() as client:
   # make requests here
   ...
 

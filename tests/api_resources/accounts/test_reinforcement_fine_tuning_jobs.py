@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayReinforcementFineTuningJob,
     ReinforcementFineTuningJobReinforcementFineTuningJobIDDebugResponse,
@@ -23,7 +23,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.accounts.reinforcement_fine_tuning_jobs.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -32,7 +32,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.accounts.reinforcement_fine_tuning_jobs.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -42,7 +42,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -55,7 +55,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -70,7 +70,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -87,7 +87,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.accounts.reinforcement_fine_tuning_jobs.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -96,7 +96,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -109,7 +109,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -124,7 +124,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.delete(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -141,7 +141,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_reinforcement_fine_tuning_job_id_debug(self, client: FireworksAI) -> None:
+    def test_method_reinforcement_fine_tuning_job_id_debug(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = (
             client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_job_id_debug(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -157,7 +157,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_reinforcement_fine_tuning_job_id_debug(self, client: FireworksAI) -> None:
+    def test_raw_response_reinforcement_fine_tuning_job_id_debug(self, client: Fireworks) -> None:
         response = (
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_debug(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -177,7 +177,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_reinforcement_fine_tuning_job_id_debug(self, client: FireworksAI) -> None:
+    def test_streaming_response_reinforcement_fine_tuning_job_id_debug(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_job_id_debug(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -197,7 +197,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_reinforcement_fine_tuning_job_id_debug(self, client: FireworksAI) -> None:
+    def test_path_params_reinforcement_fine_tuning_job_id_debug(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_debug(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -216,7 +216,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_reinforcement_fine_tuning_job_id_resume(self, client: FireworksAI) -> None:
+    def test_method_reinforcement_fine_tuning_job_id_resume(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = (
             client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_job_id_resume(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -228,7 +228,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_reinforcement_fine_tuning_job_id_resume(self, client: FireworksAI) -> None:
+    def test_raw_response_reinforcement_fine_tuning_job_id_resume(self, client: Fireworks) -> None:
         response = (
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_resume(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -244,7 +244,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_reinforcement_fine_tuning_job_id_resume(self, client: FireworksAI) -> None:
+    def test_streaming_response_reinforcement_fine_tuning_job_id_resume(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_job_id_resume(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -260,7 +260,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_reinforcement_fine_tuning_job_id_resume(self, client: FireworksAI) -> None:
+    def test_path_params_reinforcement_fine_tuning_job_id_resume(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_resume(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -279,7 +279,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_method_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_jobs(
             account_id="account_id",
             dataset="dataset",
@@ -289,7 +289,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_reinforcement_fine_tuning_jobs_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_reinforcement_fine_tuning_jobs_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_jobs(
             account_id="account_id",
             dataset="dataset",
@@ -336,7 +336,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_raw_response_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         response = client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_jobs(
             account_id="account_id",
             dataset="dataset",
@@ -350,7 +350,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_streaming_response_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_jobs(
             account_id="account_id",
             dataset="dataset",
@@ -366,7 +366,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_path_params_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_jobs(
                 account_id="",
@@ -376,7 +376,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_method_retrieve_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = (
             client.accounts.reinforcement_fine_tuning_jobs.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -390,7 +390,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_reinforcement_fine_tuning_jobs_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_reinforcement_fine_tuning_jobs_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = (
             client.accounts.reinforcement_fine_tuning_jobs.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -409,7 +409,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         response = (
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -427,7 +427,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         with client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.retrieve_reinforcement_fine_tuning_jobs(
             account_id="account_id",
         ) as response:
@@ -445,7 +445,7 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve_reinforcement_fine_tuning_jobs(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve_reinforcement_fine_tuning_jobs(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="",
@@ -459,7 +459,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = await async_client.accounts.reinforcement_fine_tuning_jobs.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -468,7 +468,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = await async_client.accounts.reinforcement_fine_tuning_jobs.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -478,7 +478,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -491,7 +491,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.retrieve(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -506,7 +506,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -523,7 +523,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = await async_client.accounts.reinforcement_fine_tuning_jobs.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -532,7 +532,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -545,7 +545,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.delete(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -560,7 +560,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.delete(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -577,7 +577,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_job_id_debug(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -593,7 +593,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_debug(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -612,7 +612,7 @@ class TestAsyncReinforcementFineTuningJobs:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_reinforcement_fine_tuning_job_id_debug(
-        self, async_client: AsyncFireworksAI
+        self, async_client: AsyncFireworks
     ) -> None:
         async with async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_job_id_debug(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -633,7 +633,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_reinforcement_fine_tuning_job_id_debug(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_debug(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -652,7 +652,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_job_id_resume(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -664,7 +664,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_resume(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
@@ -679,7 +679,7 @@ class TestAsyncReinforcementFineTuningJobs:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_reinforcement_fine_tuning_job_id_resume(
-        self, async_client: AsyncFireworksAI
+        self, async_client: AsyncFireworks
     ) -> None:
         async with async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_job_id_resume(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -696,7 +696,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_reinforcement_fine_tuning_job_id_resume(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_job_id_resume(
                 reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -715,7 +715,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -727,7 +727,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_reinforcement_fine_tuning_jobs_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_reinforcement_fine_tuning_jobs_with_all_params(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -776,7 +776,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         response = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -792,7 +792,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         async with (
             async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -810,7 +810,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.reinforcement_fine_tuning_jobs(
                 account_id="",
@@ -820,7 +820,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="account_id",
@@ -835,7 +835,7 @@ class TestAsyncReinforcementFineTuningJobs:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_retrieve_reinforcement_fine_tuning_jobs_with_all_params(
-        self, async_client: AsyncFireworksAI
+        self, async_client: AsyncFireworks
     ) -> None:
         reinforcement_fine_tuning_job = (
             await async_client.accounts.reinforcement_fine_tuning_jobs.retrieve_reinforcement_fine_tuning_jobs(
@@ -855,7 +855,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve_reinforcement_fine_tuning_jobs(
             account_id="account_id",
         )
@@ -872,7 +872,7 @@ class TestAsyncReinforcementFineTuningJobs:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_retrieve_reinforcement_fine_tuning_jobs(
-        self, async_client: AsyncFireworksAI
+        self, async_client: AsyncFireworks
     ) -> None:
         async with async_client.accounts.reinforcement_fine_tuning_jobs.with_streaming_response.retrieve_reinforcement_fine_tuning_jobs(
             account_id="account_id",
@@ -891,7 +891,7 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve_reinforcement_fine_tuning_jobs(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.reinforcement_fine_tuning_jobs.with_raw_response.retrieve_reinforcement_fine_tuning_jobs(
                 account_id="",
