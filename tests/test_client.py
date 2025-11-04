@@ -18,11 +18,11 @@ import pytest
 from respx import MockRouter
 from pydantic import ValidationError
 
-from fireworks_ai import FireworksAI, AsyncFireworksAI, APIResponseValidationError
+from fireworks_ai import Fireworks, AsyncFireworks, APIResponseValidationError
 from fireworks_ai._types import Omit
 from fireworks_ai._utils import asyncify
 from fireworks_ai._models import BaseModel, FinalRequestOptions
-from fireworks_ai._exceptions import APIStatusError, APITimeoutError, FireworksAIError, APIResponseValidationError
+from fireworks_ai._exceptions import APIStatusError, FireworksError, APITimeoutError, APIResponseValidationError
 from fireworks_ai._base_client import (
     DEFAULT_TIMEOUT,
     HTTPX_DEFAULT_TIMEOUT,
@@ -50,7 +50,7 @@ def _low_retry_timeout(*_args: Any, **_kwargs: Any) -> float:
     return 0.1
 
 
-def _get_open_connections(client: FireworksAI | AsyncFireworksAI) -> int:
+def _get_open_connections(client: Fireworks | AsyncFireworks) -> int:
     transport = client._client._transport
     assert isinstance(transport, httpx.HTTPTransport) or isinstance(transport, httpx.AsyncHTTPTransport)
 
@@ -58,9 +58,9 @@ def _get_open_connections(client: FireworksAI | AsyncFireworksAI) -> int:
     return len(pool._requests)
 
 
-class TestFireworksAI:
+class TestFireworks:
     @pytest.mark.respx(base_url=base_url)
-    def test_raw_response(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_raw_response(self, respx_mock: MockRouter, client: Fireworks) -> None:
         respx_mock.post("/foo").mock(return_value=httpx.Response(200, json={"foo": "bar"}))
 
         response = client.post("/foo", cast_to=httpx.Response)
@@ -69,7 +69,7 @@ class TestFireworksAI:
         assert response.json() == {"foo": "bar"}
 
     @pytest.mark.respx(base_url=base_url)
-    def test_raw_response_for_binary(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_raw_response_for_binary(self, respx_mock: MockRouter, client: Fireworks) -> None:
         respx_mock.post("/foo").mock(
             return_value=httpx.Response(200, headers={"Content-Type": "application/binary"}, content='{"foo": "bar"}')
         )
@@ -79,7 +79,7 @@ class TestFireworksAI:
         assert isinstance(response, httpx.Response)
         assert response.json() == {"foo": "bar"}
 
-    def test_copy(self, client: FireworksAI) -> None:
+    def test_copy(self, client: Fireworks) -> None:
         copied = client.copy()
         assert id(copied) != id(client)
 
@@ -87,7 +87,7 @@ class TestFireworksAI:
         assert copied.api_key == "another My API Key"
         assert client.api_key == "My API Key"
 
-    def test_copy_default_options(self, client: FireworksAI) -> None:
+    def test_copy_default_options(self, client: Fireworks) -> None:
         # options that have a default are overridden correctly
         copied = client.copy(max_retries=7)
         assert copied.max_retries == 7
@@ -104,7 +104,7 @@ class TestFireworksAI:
         assert isinstance(client.timeout, httpx.Timeout)
 
     def test_copy_default_headers(self) -> None:
-        client = FireworksAI(
+        client = Fireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_headers={"X-Foo": "bar"}
         )
         assert client.default_headers["X-Foo"] == "bar"
@@ -139,7 +139,7 @@ class TestFireworksAI:
         client.close()
 
     def test_copy_default_query(self) -> None:
-        client = FireworksAI(
+        client = Fireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_query={"foo": "bar"}
         )
         assert _get_params(client)["foo"] == "bar"
@@ -176,7 +176,7 @@ class TestFireworksAI:
 
         client.close()
 
-    def test_copy_signature(self, client: FireworksAI) -> None:
+    def test_copy_signature(self, client: Fireworks) -> None:
         # ensure the same parameters that can be passed to the client are defined in the `.copy()` method
         init_signature = inspect.signature(
             # mypy doesn't like that we access the `__init__` property.
@@ -193,7 +193,7 @@ class TestFireworksAI:
             assert copy_param is not None, f"copy() signature is missing the {name} param"
 
     @pytest.mark.skipif(sys.version_info >= (3, 10), reason="fails because of a memory leak that started from 3.12")
-    def test_copy_build_request(self, client: FireworksAI) -> None:
+    def test_copy_build_request(self, client: Fireworks) -> None:
         options = FinalRequestOptions(method="get", url="/foo")
 
         def build_request(options: FinalRequestOptions) -> None:
@@ -255,7 +255,7 @@ class TestFireworksAI:
                     print(frame)
             raise AssertionError()
 
-    def test_request_timeout(self, client: FireworksAI) -> None:
+    def test_request_timeout(self, client: Fireworks) -> None:
         request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
         timeout = httpx.Timeout(**request.extensions["timeout"])  # type: ignore
         assert timeout == DEFAULT_TIMEOUT
@@ -265,7 +265,7 @@ class TestFireworksAI:
         assert timeout == httpx.Timeout(100.0)
 
     def test_client_timeout_option(self) -> None:
-        client = FireworksAI(
+        client = Fireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, timeout=httpx.Timeout(0)
         )
 
@@ -278,7 +278,7 @@ class TestFireworksAI:
     def test_http_client_timeout_option(self) -> None:
         # custom timeout given to the httpx client should be used
         with httpx.Client(timeout=None) as http_client:
-            client = FireworksAI(
+            client = Fireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -290,7 +290,7 @@ class TestFireworksAI:
 
         # no timeout given to the httpx client should not use the httpx default
         with httpx.Client() as http_client:
-            client = FireworksAI(
+            client = Fireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -302,7 +302,7 @@ class TestFireworksAI:
 
         # explicitly passing the default timeout currently results in it being ignored
         with httpx.Client(timeout=HTTPX_DEFAULT_TIMEOUT) as http_client:
-            client = FireworksAI(
+            client = Fireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -315,7 +315,7 @@ class TestFireworksAI:
     async def test_invalid_http_client(self) -> None:
         with pytest.raises(TypeError, match="Invalid `http_client` arg"):
             async with httpx.AsyncClient() as http_client:
-                FireworksAI(
+                Fireworks(
                     base_url=base_url,
                     api_key=api_key,
                     _strict_response_validation=True,
@@ -323,14 +323,14 @@ class TestFireworksAI:
                 )
 
     def test_default_headers_option(self) -> None:
-        test_client = FireworksAI(
+        test_client = Fireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_headers={"X-Foo": "bar"}
         )
         request = test_client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "bar"
         assert request.headers.get("x-stainless-lang") == "python"
 
-        test_client2 = FireworksAI(
+        test_client2 = Fireworks(
             base_url=base_url,
             api_key=api_key,
             _strict_response_validation=True,
@@ -347,17 +347,17 @@ class TestFireworksAI:
         test_client2.close()
 
     def test_validate_headers(self) -> None:
-        client = FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("Authorization") == f"Bearer {api_key}"
 
-        with pytest.raises(FireworksAIError):
+        with pytest.raises(FireworksError):
             with update_env(**{"FIREWORKS_AI_API_KEY": Omit()}):
-                client2 = FireworksAI(base_url=base_url, api_key=None, _strict_response_validation=True)
+                client2 = Fireworks(base_url=base_url, api_key=None, _strict_response_validation=True)
             _ = client2
 
     def test_default_query_option(self) -> None:
-        client = FireworksAI(
+        client = Fireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_query={"query_param": "bar"}
         )
         request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
@@ -376,7 +376,7 @@ class TestFireworksAI:
 
         client.close()
 
-    def test_request_extra_json(self, client: FireworksAI) -> None:
+    def test_request_extra_json(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -410,7 +410,7 @@ class TestFireworksAI:
         data = json.loads(request.content.decode("utf-8"))
         assert data == {"foo": "bar", "baz": None}
 
-    def test_request_extra_headers(self, client: FireworksAI) -> None:
+    def test_request_extra_headers(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -432,7 +432,7 @@ class TestFireworksAI:
         )
         assert request.headers.get("X-Bar") == "false"
 
-    def test_request_extra_query(self, client: FireworksAI) -> None:
+    def test_request_extra_query(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -473,7 +473,7 @@ class TestFireworksAI:
         params = dict(request.url.params)
         assert params == {"foo": "2"}
 
-    def test_multipart_repeating_array(self, client: FireworksAI) -> None:
+    def test_multipart_repeating_array(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions.construct(
                 method="post",
@@ -503,7 +503,7 @@ class TestFireworksAI:
         ]
 
     @pytest.mark.respx(base_url=base_url)
-    def test_basic_union_response(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_basic_union_response(self, respx_mock: MockRouter, client: Fireworks) -> None:
         class Model1(BaseModel):
             name: str
 
@@ -517,7 +517,7 @@ class TestFireworksAI:
         assert response.foo == "bar"
 
     @pytest.mark.respx(base_url=base_url)
-    def test_union_response_different_types(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_union_response_different_types(self, respx_mock: MockRouter, client: Fireworks) -> None:
         """Union of objects with the same field name using a different type"""
 
         class Model1(BaseModel):
@@ -539,7 +539,7 @@ class TestFireworksAI:
         assert response.foo == 1
 
     @pytest.mark.respx(base_url=base_url)
-    def test_non_application_json_content_type_for_json_data(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_non_application_json_content_type_for_json_data(self, respx_mock: MockRouter, client: Fireworks) -> None:
         """
         Response that sets Content-Type to something other than application/json but returns json data
         """
@@ -560,9 +560,7 @@ class TestFireworksAI:
         assert response.foo == 2
 
     def test_base_url_setter(self) -> None:
-        client = FireworksAI(
-            base_url="https://example.com/from_init", api_key=api_key, _strict_response_validation=True
-        )
+        client = Fireworks(base_url="https://example.com/from_init", api_key=api_key, _strict_response_validation=True)
         assert client.base_url == "https://example.com/from_init/"
 
         client.base_url = "https://example.com/from_setter"  # type: ignore[assignment]
@@ -572,17 +570,15 @@ class TestFireworksAI:
         client.close()
 
     def test_base_url_env(self) -> None:
-        with update_env(FIREWORKS_AI_BASE_URL="http://localhost:5000/from/env"):
-            client = FireworksAI(api_key=api_key, _strict_response_validation=True)
+        with update_env(FIREWORKS_BASE_URL="http://localhost:5000/from/env"):
+            client = Fireworks(api_key=api_key, _strict_response_validation=True)
             assert client.base_url == "http://localhost:5000/from/env/"
 
     @pytest.mark.parametrize(
         "client",
         [
-            FireworksAI(
-                base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
-            ),
-            FireworksAI(
+            Fireworks(base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True),
+            Fireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -591,7 +587,7 @@ class TestFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    def test_base_url_trailing_slash(self, client: FireworksAI) -> None:
+    def test_base_url_trailing_slash(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -605,10 +601,8 @@ class TestFireworksAI:
     @pytest.mark.parametrize(
         "client",
         [
-            FireworksAI(
-                base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
-            ),
-            FireworksAI(
+            Fireworks(base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True),
+            Fireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -617,7 +611,7 @@ class TestFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    def test_base_url_no_trailing_slash(self, client: FireworksAI) -> None:
+    def test_base_url_no_trailing_slash(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -631,10 +625,8 @@ class TestFireworksAI:
     @pytest.mark.parametrize(
         "client",
         [
-            FireworksAI(
-                base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
-            ),
-            FireworksAI(
+            Fireworks(base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True),
+            Fireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -643,7 +635,7 @@ class TestFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    def test_absolute_request_url(self, client: FireworksAI) -> None:
+    def test_absolute_request_url(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -655,7 +647,7 @@ class TestFireworksAI:
         client.close()
 
     def test_copied_client_does_not_close_http(self) -> None:
-        test_client = FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        test_client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         assert not test_client.is_closed()
 
         copied = test_client.copy()
@@ -666,7 +658,7 @@ class TestFireworksAI:
         assert not test_client.is_closed()
 
     def test_client_context_manager(self) -> None:
-        test_client = FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        test_client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         with test_client as c2:
             assert c2 is test_client
             assert not c2.is_closed()
@@ -674,7 +666,7 @@ class TestFireworksAI:
         assert test_client.is_closed()
 
     @pytest.mark.respx(base_url=base_url)
-    def test_client_response_validation_error(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_client_response_validation_error(self, respx_mock: MockRouter, client: Fireworks) -> None:
         class Model(BaseModel):
             foo: str
 
@@ -687,9 +679,7 @@ class TestFireworksAI:
 
     def test_client_max_retries_validation(self) -> None:
         with pytest.raises(TypeError, match=r"max_retries cannot be None"):
-            FireworksAI(
-                base_url=base_url, api_key=api_key, _strict_response_validation=True, max_retries=cast(Any, None)
-            )
+            Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True, max_retries=cast(Any, None))
 
     @pytest.mark.respx(base_url=base_url)
     def test_received_text_for_expected_json(self, respx_mock: MockRouter) -> None:
@@ -698,12 +688,12 @@ class TestFireworksAI:
 
         respx_mock.get("/foo").mock(return_value=httpx.Response(200, text="my-custom-format"))
 
-        strict_client = FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        strict_client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
 
         with pytest.raises(APIResponseValidationError):
             strict_client.get("/foo", cast_to=Model)
 
-        non_strict_client = FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=False)
+        non_strict_client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=False)
 
         response = non_strict_client.get("/foo", cast_to=Model)
         assert isinstance(response, str)  # type: ignore[unreachable]
@@ -734,7 +724,7 @@ class TestFireworksAI:
     )
     @mock.patch("time.time", mock.MagicMock(return_value=1696004797))
     def test_parse_retry_after_header(
-        self, remaining_retries: int, retry_after: str, timeout: float, client: FireworksAI
+        self, remaining_retries: int, retry_after: str, timeout: float, client: Fireworks
     ) -> None:
         headers = httpx.Headers({"retry-after": retry_after})
         options = FinalRequestOptions(method="get", url="/foo", max_retries=3)
@@ -743,7 +733,7 @@ class TestFireworksAI:
 
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
-    def test_retrying_timeout_errors_doesnt_leak(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_retrying_timeout_errors_doesnt_leak(self, respx_mock: MockRouter, client: Fireworks) -> None:
         respx_mock.get("/v1/accounts").mock(side_effect=httpx.TimeoutException("Test timeout error"))
 
         with pytest.raises(APITimeoutError):
@@ -753,7 +743,7 @@ class TestFireworksAI:
 
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
-    def test_retrying_status_errors_doesnt_leak(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_retrying_status_errors_doesnt_leak(self, respx_mock: MockRouter, client: Fireworks) -> None:
         respx_mock.get("/v1/accounts").mock(return_value=httpx.Response(500))
 
         with pytest.raises(APIStatusError):
@@ -766,7 +756,7 @@ class TestFireworksAI:
     @pytest.mark.parametrize("failure_mode", ["status", "exception"])
     def test_retries_taken(
         self,
-        client: FireworksAI,
+        client: Fireworks,
         failures_before_success: int,
         failure_mode: Literal["status", "exception"],
         respx_mock: MockRouter,
@@ -795,7 +785,7 @@ class TestFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     def test_omit_retry_count_header(
-        self, client: FireworksAI, failures_before_success: int, respx_mock: MockRouter
+        self, client: Fireworks, failures_before_success: int, respx_mock: MockRouter
     ) -> None:
         client = client.with_options(max_retries=4)
 
@@ -818,7 +808,7 @@ class TestFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     def test_overwrite_retry_count_header(
-        self, client: FireworksAI, failures_before_success: int, respx_mock: MockRouter
+        self, client: Fireworks, failures_before_success: int, respx_mock: MockRouter
     ) -> None:
         client = client.with_options(max_retries=4)
 
@@ -860,7 +850,7 @@ class TestFireworksAI:
         )
 
     @pytest.mark.respx(base_url=base_url)
-    def test_follow_redirects(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_follow_redirects(self, respx_mock: MockRouter, client: Fireworks) -> None:
         # Test that the default follow_redirects=True allows following redirects
         respx_mock.post("/redirect").mock(
             return_value=httpx.Response(302, headers={"Location": f"{base_url}/redirected"})
@@ -872,7 +862,7 @@ class TestFireworksAI:
         assert response.json() == {"status": "ok"}
 
     @pytest.mark.respx(base_url=base_url)
-    def test_follow_redirects_disabled(self, respx_mock: MockRouter, client: FireworksAI) -> None:
+    def test_follow_redirects_disabled(self, respx_mock: MockRouter, client: Fireworks) -> None:
         # Test that follow_redirects=False prevents following redirects
         respx_mock.post("/redirect").mock(
             return_value=httpx.Response(302, headers={"Location": f"{base_url}/redirected"})
@@ -885,9 +875,9 @@ class TestFireworksAI:
         assert exc_info.value.response.headers["Location"] == f"{base_url}/redirected"
 
 
-class TestAsyncFireworksAI:
+class TestAsyncFireworks:
     @pytest.mark.respx(base_url=base_url)
-    async def test_raw_response(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         respx_mock.post("/foo").mock(return_value=httpx.Response(200, json={"foo": "bar"}))
 
         response = await async_client.post("/foo", cast_to=httpx.Response)
@@ -896,7 +886,7 @@ class TestAsyncFireworksAI:
         assert response.json() == {"foo": "bar"}
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_raw_response_for_binary(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_for_binary(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         respx_mock.post("/foo").mock(
             return_value=httpx.Response(200, headers={"Content-Type": "application/binary"}, content='{"foo": "bar"}')
         )
@@ -906,7 +896,7 @@ class TestAsyncFireworksAI:
         assert isinstance(response, httpx.Response)
         assert response.json() == {"foo": "bar"}
 
-    def test_copy(self, async_client: AsyncFireworksAI) -> None:
+    def test_copy(self, async_client: AsyncFireworks) -> None:
         copied = async_client.copy()
         assert id(copied) != id(async_client)
 
@@ -914,7 +904,7 @@ class TestAsyncFireworksAI:
         assert copied.api_key == "another My API Key"
         assert async_client.api_key == "My API Key"
 
-    def test_copy_default_options(self, async_client: AsyncFireworksAI) -> None:
+    def test_copy_default_options(self, async_client: AsyncFireworks) -> None:
         # options that have a default are overridden correctly
         copied = async_client.copy(max_retries=7)
         assert copied.max_retries == 7
@@ -931,7 +921,7 @@ class TestAsyncFireworksAI:
         assert isinstance(async_client.timeout, httpx.Timeout)
 
     async def test_copy_default_headers(self) -> None:
-        client = AsyncFireworksAI(
+        client = AsyncFireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_headers={"X-Foo": "bar"}
         )
         assert client.default_headers["X-Foo"] == "bar"
@@ -966,7 +956,7 @@ class TestAsyncFireworksAI:
         await client.close()
 
     async def test_copy_default_query(self) -> None:
-        client = AsyncFireworksAI(
+        client = AsyncFireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_query={"foo": "bar"}
         )
         assert _get_params(client)["foo"] == "bar"
@@ -1003,7 +993,7 @@ class TestAsyncFireworksAI:
 
         await client.close()
 
-    def test_copy_signature(self, async_client: AsyncFireworksAI) -> None:
+    def test_copy_signature(self, async_client: AsyncFireworks) -> None:
         # ensure the same parameters that can be passed to the client are defined in the `.copy()` method
         init_signature = inspect.signature(
             # mypy doesn't like that we access the `__init__` property.
@@ -1020,7 +1010,7 @@ class TestAsyncFireworksAI:
             assert copy_param is not None, f"copy() signature is missing the {name} param"
 
     @pytest.mark.skipif(sys.version_info >= (3, 10), reason="fails because of a memory leak that started from 3.12")
-    def test_copy_build_request(self, async_client: AsyncFireworksAI) -> None:
+    def test_copy_build_request(self, async_client: AsyncFireworks) -> None:
         options = FinalRequestOptions(method="get", url="/foo")
 
         def build_request(options: FinalRequestOptions) -> None:
@@ -1082,7 +1072,7 @@ class TestAsyncFireworksAI:
                     print(frame)
             raise AssertionError()
 
-    async def test_request_timeout(self, async_client: AsyncFireworksAI) -> None:
+    async def test_request_timeout(self, async_client: AsyncFireworks) -> None:
         request = async_client._build_request(FinalRequestOptions(method="get", url="/foo"))
         timeout = httpx.Timeout(**request.extensions["timeout"])  # type: ignore
         assert timeout == DEFAULT_TIMEOUT
@@ -1094,7 +1084,7 @@ class TestAsyncFireworksAI:
         assert timeout == httpx.Timeout(100.0)
 
     async def test_client_timeout_option(self) -> None:
-        client = AsyncFireworksAI(
+        client = AsyncFireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, timeout=httpx.Timeout(0)
         )
 
@@ -1107,7 +1097,7 @@ class TestAsyncFireworksAI:
     async def test_http_client_timeout_option(self) -> None:
         # custom timeout given to the httpx client should be used
         async with httpx.AsyncClient(timeout=None) as http_client:
-            client = AsyncFireworksAI(
+            client = AsyncFireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -1119,7 +1109,7 @@ class TestAsyncFireworksAI:
 
         # no timeout given to the httpx client should not use the httpx default
         async with httpx.AsyncClient() as http_client:
-            client = AsyncFireworksAI(
+            client = AsyncFireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -1131,7 +1121,7 @@ class TestAsyncFireworksAI:
 
         # explicitly passing the default timeout currently results in it being ignored
         async with httpx.AsyncClient(timeout=HTTPX_DEFAULT_TIMEOUT) as http_client:
-            client = AsyncFireworksAI(
+            client = AsyncFireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, http_client=http_client
             )
 
@@ -1144,7 +1134,7 @@ class TestAsyncFireworksAI:
     def test_invalid_http_client(self) -> None:
         with pytest.raises(TypeError, match="Invalid `http_client` arg"):
             with httpx.Client() as http_client:
-                AsyncFireworksAI(
+                AsyncFireworks(
                     base_url=base_url,
                     api_key=api_key,
                     _strict_response_validation=True,
@@ -1152,14 +1142,14 @@ class TestAsyncFireworksAI:
                 )
 
     async def test_default_headers_option(self) -> None:
-        test_client = AsyncFireworksAI(
+        test_client = AsyncFireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_headers={"X-Foo": "bar"}
         )
         request = test_client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "bar"
         assert request.headers.get("x-stainless-lang") == "python"
 
-        test_client2 = AsyncFireworksAI(
+        test_client2 = AsyncFireworks(
             base_url=base_url,
             api_key=api_key,
             _strict_response_validation=True,
@@ -1176,17 +1166,17 @@ class TestAsyncFireworksAI:
         await test_client2.close()
 
     def test_validate_headers(self) -> None:
-        client = AsyncFireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("Authorization") == f"Bearer {api_key}"
 
-        with pytest.raises(FireworksAIError):
+        with pytest.raises(FireworksError):
             with update_env(**{"FIREWORKS_AI_API_KEY": Omit()}):
-                client2 = AsyncFireworksAI(base_url=base_url, api_key=None, _strict_response_validation=True)
+                client2 = AsyncFireworks(base_url=base_url, api_key=None, _strict_response_validation=True)
             _ = client2
 
     async def test_default_query_option(self) -> None:
-        client = AsyncFireworksAI(
+        client = AsyncFireworks(
             base_url=base_url, api_key=api_key, _strict_response_validation=True, default_query={"query_param": "bar"}
         )
         request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
@@ -1205,7 +1195,7 @@ class TestAsyncFireworksAI:
 
         await client.close()
 
-    def test_request_extra_json(self, client: FireworksAI) -> None:
+    def test_request_extra_json(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1239,7 +1229,7 @@ class TestAsyncFireworksAI:
         data = json.loads(request.content.decode("utf-8"))
         assert data == {"foo": "bar", "baz": None}
 
-    def test_request_extra_headers(self, client: FireworksAI) -> None:
+    def test_request_extra_headers(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1261,7 +1251,7 @@ class TestAsyncFireworksAI:
         )
         assert request.headers.get("X-Bar") == "false"
 
-    def test_request_extra_query(self, client: FireworksAI) -> None:
+    def test_request_extra_query(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1302,7 +1292,7 @@ class TestAsyncFireworksAI:
         params = dict(request.url.params)
         assert params == {"foo": "2"}
 
-    def test_multipart_repeating_array(self, async_client: AsyncFireworksAI) -> None:
+    def test_multipart_repeating_array(self, async_client: AsyncFireworks) -> None:
         request = async_client._build_request(
             FinalRequestOptions.construct(
                 method="post",
@@ -1332,7 +1322,7 @@ class TestAsyncFireworksAI:
         ]
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_basic_union_response(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_basic_union_response(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         class Model1(BaseModel):
             name: str
 
@@ -1346,7 +1336,7 @@ class TestAsyncFireworksAI:
         assert response.foo == "bar"
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_union_response_different_types(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_union_response_different_types(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         """Union of objects with the same field name using a different type"""
 
         class Model1(BaseModel):
@@ -1369,7 +1359,7 @@ class TestAsyncFireworksAI:
 
     @pytest.mark.respx(base_url=base_url)
     async def test_non_application_json_content_type_for_json_data(
-        self, respx_mock: MockRouter, async_client: AsyncFireworksAI
+        self, respx_mock: MockRouter, async_client: AsyncFireworks
     ) -> None:
         """
         Response that sets Content-Type to something other than application/json but returns json data
@@ -1391,7 +1381,7 @@ class TestAsyncFireworksAI:
         assert response.foo == 2
 
     async def test_base_url_setter(self) -> None:
-        client = AsyncFireworksAI(
+        client = AsyncFireworks(
             base_url="https://example.com/from_init", api_key=api_key, _strict_response_validation=True
         )
         assert client.base_url == "https://example.com/from_init/"
@@ -1403,17 +1393,17 @@ class TestAsyncFireworksAI:
         await client.close()
 
     async def test_base_url_env(self) -> None:
-        with update_env(FIREWORKS_AI_BASE_URL="http://localhost:5000/from/env"):
-            client = AsyncFireworksAI(api_key=api_key, _strict_response_validation=True)
+        with update_env(FIREWORKS_BASE_URL="http://localhost:5000/from/env"):
+            client = AsyncFireworks(api_key=api_key, _strict_response_validation=True)
             assert client.base_url == "http://localhost:5000/from/env/"
 
     @pytest.mark.parametrize(
         "client",
         [
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
             ),
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -1422,7 +1412,7 @@ class TestAsyncFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    async def test_base_url_trailing_slash(self, client: AsyncFireworksAI) -> None:
+    async def test_base_url_trailing_slash(self, client: AsyncFireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1436,10 +1426,10 @@ class TestAsyncFireworksAI:
     @pytest.mark.parametrize(
         "client",
         [
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
             ),
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -1448,7 +1438,7 @@ class TestAsyncFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    async def test_base_url_no_trailing_slash(self, client: AsyncFireworksAI) -> None:
+    async def test_base_url_no_trailing_slash(self, client: AsyncFireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1462,10 +1452,10 @@ class TestAsyncFireworksAI:
     @pytest.mark.parametrize(
         "client",
         [
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/", api_key=api_key, _strict_response_validation=True
             ),
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url="http://localhost:5000/custom/path/",
                 api_key=api_key,
                 _strict_response_validation=True,
@@ -1474,7 +1464,7 @@ class TestAsyncFireworksAI:
         ],
         ids=["standard", "custom http client"],
     )
-    async def test_absolute_request_url(self, client: AsyncFireworksAI) -> None:
+    async def test_absolute_request_url(self, client: AsyncFireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
                 method="post",
@@ -1486,7 +1476,7 @@ class TestAsyncFireworksAI:
         await client.close()
 
     async def test_copied_client_does_not_close_http(self) -> None:
-        test_client = AsyncFireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        test_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         assert not test_client.is_closed()
 
         copied = test_client.copy()
@@ -1498,7 +1488,7 @@ class TestAsyncFireworksAI:
         assert not test_client.is_closed()
 
     async def test_client_context_manager(self) -> None:
-        test_client = AsyncFireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        test_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
         async with test_client as c2:
             assert c2 is test_client
             assert not c2.is_closed()
@@ -1506,9 +1496,7 @@ class TestAsyncFireworksAI:
         assert test_client.is_closed()
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_client_response_validation_error(
-        self, respx_mock: MockRouter, async_client: AsyncFireworksAI
-    ) -> None:
+    async def test_client_response_validation_error(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         class Model(BaseModel):
             foo: str
 
@@ -1521,7 +1509,7 @@ class TestAsyncFireworksAI:
 
     async def test_client_max_retries_validation(self) -> None:
         with pytest.raises(TypeError, match=r"max_retries cannot be None"):
-            AsyncFireworksAI(
+            AsyncFireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, max_retries=cast(Any, None)
             )
 
@@ -1532,12 +1520,12 @@ class TestAsyncFireworksAI:
 
         respx_mock.get("/foo").mock(return_value=httpx.Response(200, text="my-custom-format"))
 
-        strict_client = AsyncFireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        strict_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
 
         with pytest.raises(APIResponseValidationError):
             await strict_client.get("/foo", cast_to=Model)
 
-        non_strict_client = AsyncFireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=False)
+        non_strict_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=False)
 
         response = await non_strict_client.get("/foo", cast_to=Model)
         assert isinstance(response, str)  # type: ignore[unreachable]
@@ -1568,7 +1556,7 @@ class TestAsyncFireworksAI:
     )
     @mock.patch("time.time", mock.MagicMock(return_value=1696004797))
     async def test_parse_retry_after_header(
-        self, remaining_retries: int, retry_after: str, timeout: float, async_client: AsyncFireworksAI
+        self, remaining_retries: int, retry_after: str, timeout: float, async_client: AsyncFireworks
     ) -> None:
         headers = httpx.Headers({"retry-after": retry_after})
         options = FinalRequestOptions(method="get", url="/foo", max_retries=3)
@@ -1578,7 +1566,7 @@ class TestAsyncFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     async def test_retrying_timeout_errors_doesnt_leak(
-        self, respx_mock: MockRouter, async_client: AsyncFireworksAI
+        self, respx_mock: MockRouter, async_client: AsyncFireworks
     ) -> None:
         respx_mock.get("/v1/accounts").mock(side_effect=httpx.TimeoutException("Test timeout error"))
 
@@ -1590,7 +1578,7 @@ class TestAsyncFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     async def test_retrying_status_errors_doesnt_leak(
-        self, respx_mock: MockRouter, async_client: AsyncFireworksAI
+        self, respx_mock: MockRouter, async_client: AsyncFireworks
     ) -> None:
         respx_mock.get("/v1/accounts").mock(return_value=httpx.Response(500))
 
@@ -1604,7 +1592,7 @@ class TestAsyncFireworksAI:
     @pytest.mark.parametrize("failure_mode", ["status", "exception"])
     async def test_retries_taken(
         self,
-        async_client: AsyncFireworksAI,
+        async_client: AsyncFireworks,
         failures_before_success: int,
         failure_mode: Literal["status", "exception"],
         respx_mock: MockRouter,
@@ -1633,7 +1621,7 @@ class TestAsyncFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     async def test_omit_retry_count_header(
-        self, async_client: AsyncFireworksAI, failures_before_success: int, respx_mock: MockRouter
+        self, async_client: AsyncFireworks, failures_before_success: int, respx_mock: MockRouter
     ) -> None:
         client = async_client.with_options(max_retries=4)
 
@@ -1656,7 +1644,7 @@ class TestAsyncFireworksAI:
     @mock.patch("fireworks_ai._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
     @pytest.mark.respx(base_url=base_url)
     async def test_overwrite_retry_count_header(
-        self, async_client: AsyncFireworksAI, failures_before_success: int, respx_mock: MockRouter
+        self, async_client: AsyncFireworks, failures_before_success: int, respx_mock: MockRouter
     ) -> None:
         client = async_client.with_options(max_retries=4)
 
@@ -1702,7 +1690,7 @@ class TestAsyncFireworksAI:
         )
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_follow_redirects(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_follow_redirects(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         # Test that the default follow_redirects=True allows following redirects
         respx_mock.post("/redirect").mock(
             return_value=httpx.Response(302, headers={"Location": f"{base_url}/redirected"})
@@ -1714,7 +1702,7 @@ class TestAsyncFireworksAI:
         assert response.json() == {"status": "ok"}
 
     @pytest.mark.respx(base_url=base_url)
-    async def test_follow_redirects_disabled(self, respx_mock: MockRouter, async_client: AsyncFireworksAI) -> None:
+    async def test_follow_redirects_disabled(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
         # Test that follow_redirects=False prevents following redirects
         respx_mock.post("/redirect").mock(
             return_value=httpx.Response(302, headers={"Location": f"{base_url}/redirected"})

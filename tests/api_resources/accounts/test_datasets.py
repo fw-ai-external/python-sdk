@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayDataset,
     DatasetListResponse,
@@ -25,7 +25,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.create(
             account_id="account_id",
             dataset={},
@@ -35,7 +35,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.create(
             account_id="account_id",
             dataset={
@@ -62,7 +62,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.create(
             account_id="account_id",
             dataset={},
@@ -76,7 +76,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.create(
             account_id="account_id",
             dataset={},
@@ -92,7 +92,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.create(
                 account_id="",
@@ -102,7 +102,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -111,7 +111,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -121,7 +121,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -134,7 +134,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -149,7 +149,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.retrieve(
                 dataset_id="dataset_id",
@@ -164,7 +164,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update(self, client: FireworksAI) -> None:
+    def test_method_update(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -173,7 +173,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_update_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -196,7 +196,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_update(self, client: FireworksAI) -> None:
+    def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -209,7 +209,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_update(self, client: FireworksAI) -> None:
+    def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -224,7 +224,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_update(self, client: FireworksAI) -> None:
+    def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.update(
                 dataset_id="dataset_id",
@@ -239,7 +239,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.list(
             account_id="account_id",
         )
@@ -247,7 +247,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.list(
             account_id="account_id",
             filter="filter",
@@ -260,7 +260,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.list(
             account_id="account_id",
         )
@@ -272,7 +272,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -286,7 +286,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.list(
                 account_id="",
@@ -294,7 +294,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -303,7 +303,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -316,7 +316,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -331,7 +331,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.delete(
                 dataset_id="dataset_id",
@@ -346,7 +346,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_method_get_download_endpoint(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -355,7 +355,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_download_endpoint_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_get_download_endpoint_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -366,7 +366,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_raw_response_get_download_endpoint(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -379,7 +379,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_streaming_response_get_download_endpoint(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -394,7 +394,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_path_params_get_download_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.get_download_endpoint(
                 dataset_id="dataset_id",
@@ -409,7 +409,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_method_get_upload_endpoint(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -419,7 +419,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_upload_endpoint_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_get_upload_endpoint_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -430,7 +430,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_raw_response_get_upload_endpoint(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -444,7 +444,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_streaming_response_get_upload_endpoint(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -460,7 +460,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_path_params_get_upload_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.get_upload_endpoint(
                 dataset_id="dataset_id",
@@ -477,7 +477,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_split(self, client: FireworksAI) -> None:
+    def test_method_split(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -486,7 +486,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_split_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_split_with_all_params(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -497,7 +497,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_split(self, client: FireworksAI) -> None:
+    def test_raw_response_split(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -510,7 +510,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_split(self, client: FireworksAI) -> None:
+    def test_streaming_response_split(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -525,7 +525,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_split(self, client: FireworksAI) -> None:
+    def test_path_params_split(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.split(
                 dataset_id="dataset_id",
@@ -540,7 +540,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_validate_upload(self, client: FireworksAI) -> None:
+    def test_method_validate_upload(self, client: Fireworks) -> None:
         dataset = client.accounts.datasets.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -550,7 +550,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_validate_upload(self, client: FireworksAI) -> None:
+    def test_raw_response_validate_upload(self, client: Fireworks) -> None:
         response = client.accounts.datasets.with_raw_response.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -564,7 +564,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_validate_upload(self, client: FireworksAI) -> None:
+    def test_streaming_response_validate_upload(self, client: Fireworks) -> None:
         with client.accounts.datasets.with_streaming_response.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -580,7 +580,7 @@ class TestDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_validate_upload(self, client: FireworksAI) -> None:
+    def test_path_params_validate_upload(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.datasets.with_raw_response.validate_upload(
                 dataset_id="dataset_id",
@@ -603,7 +603,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.create(
             account_id="account_id",
             dataset={},
@@ -613,7 +613,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.create(
             account_id="account_id",
             dataset={
@@ -640,7 +640,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.create(
             account_id="account_id",
             dataset={},
@@ -654,7 +654,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.create(
             account_id="account_id",
             dataset={},
@@ -670,7 +670,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.create(
                 account_id="",
@@ -680,7 +680,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -689,7 +689,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -699,7 +699,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -712,7 +712,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.retrieve(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -727,7 +727,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.retrieve(
                 dataset_id="dataset_id",
@@ -742,7 +742,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -751,7 +751,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -774,7 +774,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -787,7 +787,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -802,7 +802,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.update(
                 dataset_id="dataset_id",
@@ -817,7 +817,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.list(
             account_id="account_id",
         )
@@ -825,7 +825,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.list(
             account_id="account_id",
             filter="filter",
@@ -838,7 +838,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.list(
             account_id="account_id",
         )
@@ -850,7 +850,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -864,7 +864,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.list(
                 account_id="",
@@ -872,7 +872,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -881,7 +881,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -894,7 +894,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.delete(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -909,7 +909,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.delete(
                 dataset_id="dataset_id",
@@ -924,7 +924,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -933,7 +933,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_download_endpoint_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_download_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -944,7 +944,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -957,7 +957,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.get_download_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -972,7 +972,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.get_download_endpoint(
                 dataset_id="dataset_id",
@@ -987,7 +987,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -997,7 +997,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_upload_endpoint_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_upload_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1008,7 +1008,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1022,7 +1022,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.get_upload_endpoint(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1038,7 +1038,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.get_upload_endpoint(
                 dataset_id="dataset_id",
@@ -1055,7 +1055,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_split(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_split(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1064,7 +1064,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_split_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_split_with_all_params(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1075,7 +1075,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_split(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_split(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1088,7 +1088,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_split(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_split(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.split(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1103,7 +1103,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_split(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_split(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.split(
                 dataset_id="dataset_id",
@@ -1118,7 +1118,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_validate_upload(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.accounts.datasets.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1128,7 +1128,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.datasets.with_raw_response.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1142,7 +1142,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.datasets.with_streaming_response.validate_upload(
             dataset_id="dataset_id",
             account_id="account_id",
@@ -1158,7 +1158,7 @@ class TestAsyncDatasets:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_validate_upload(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.datasets.with_raw_response.validate_upload(
                 dataset_id="dataset_id",

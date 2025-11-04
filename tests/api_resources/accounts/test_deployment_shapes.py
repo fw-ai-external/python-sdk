@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayDeploymentShape,
     DeploymentShapeListResponse,
@@ -22,7 +22,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.create(
             account_id="account_id",
             base_model="baseModel",
@@ -31,7 +31,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.create(
             account_id="account_id",
             base_model="baseModel",
@@ -53,7 +53,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.deployment_shapes.with_raw_response.create(
             account_id="account_id",
             base_model="baseModel",
@@ -66,7 +66,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.deployment_shapes.with_streaming_response.create(
             account_id="account_id",
             base_model="baseModel",
@@ -81,7 +81,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployment_shapes.with_raw_response.create(
                 account_id="",
@@ -90,7 +90,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -99,7 +99,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -109,7 +109,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.deployment_shapes.with_raw_response.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -122,7 +122,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.deployment_shapes.with_streaming_response.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -137,7 +137,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployment_shapes.with_raw_response.retrieve(
                 deployment_shape_id="deployment_shape_id",
@@ -152,7 +152,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update(self, client: FireworksAI) -> None:
+    def test_method_update(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -162,7 +162,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_update_with_all_params(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -185,7 +185,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_update(self, client: FireworksAI) -> None:
+    def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.accounts.deployment_shapes.with_raw_response.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -199,7 +199,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_update(self, client: FireworksAI) -> None:
+    def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.accounts.deployment_shapes.with_streaming_response.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -215,7 +215,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_update(self, client: FireworksAI) -> None:
+    def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployment_shapes.with_raw_response.update(
                 deployment_shape_id="deployment_shape_id",
@@ -232,7 +232,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.list(
             account_id="account_id",
         )
@@ -240,7 +240,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.list(
             account_id="account_id",
             filter="filter",
@@ -254,7 +254,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.deployment_shapes.with_raw_response.list(
             account_id="account_id",
         )
@@ -266,7 +266,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.deployment_shapes.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -280,7 +280,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployment_shapes.with_raw_response.list(
                 account_id="",
@@ -288,7 +288,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         deployment_shape = client.accounts.deployment_shapes.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -297,7 +297,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.deployment_shapes.with_raw_response.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -310,7 +310,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.deployment_shapes.with_streaming_response.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -325,7 +325,7 @@ class TestDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.deployment_shapes.with_raw_response.delete(
                 deployment_shape_id="deployment_shape_id",
@@ -346,7 +346,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.create(
             account_id="account_id",
             base_model="baseModel",
@@ -355,7 +355,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.create(
             account_id="account_id",
             base_model="baseModel",
@@ -377,7 +377,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployment_shapes.with_raw_response.create(
             account_id="account_id",
             base_model="baseModel",
@@ -390,7 +390,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployment_shapes.with_streaming_response.create(
             account_id="account_id",
             base_model="baseModel",
@@ -405,7 +405,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployment_shapes.with_raw_response.create(
                 account_id="",
@@ -414,7 +414,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -423,7 +423,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -433,7 +433,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployment_shapes.with_raw_response.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -446,7 +446,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployment_shapes.with_streaming_response.retrieve(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -461,7 +461,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployment_shapes.with_raw_response.retrieve(
                 deployment_shape_id="deployment_shape_id",
@@ -476,7 +476,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -486,7 +486,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -509,7 +509,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployment_shapes.with_raw_response.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -523,7 +523,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployment_shapes.with_streaming_response.update(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -539,7 +539,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployment_shapes.with_raw_response.update(
                 deployment_shape_id="deployment_shape_id",
@@ -556,7 +556,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.list(
             account_id="account_id",
         )
@@ -564,7 +564,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.list(
             account_id="account_id",
             filter="filter",
@@ -578,7 +578,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployment_shapes.with_raw_response.list(
             account_id="account_id",
         )
@@ -590,7 +590,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployment_shapes.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -604,7 +604,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployment_shapes.with_raw_response.list(
                 account_id="",
@@ -612,7 +612,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         deployment_shape = await async_client.accounts.deployment_shapes.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -621,7 +621,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.deployment_shapes.with_raw_response.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -634,7 +634,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.deployment_shapes.with_streaming_response.delete(
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
@@ -649,7 +649,7 @@ class TestAsyncDeploymentShapes:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.deployment_shapes.with_raw_response.delete(
                 deployment_shape_id="deployment_shape_id",

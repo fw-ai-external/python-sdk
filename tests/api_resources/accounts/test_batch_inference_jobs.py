@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayBatchInferenceJob,
     BatchInferenceJobListResponse,
@@ -22,7 +22,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.create(
             account_id="account_id",
         )
@@ -30,7 +30,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.create(
             account_id="account_id",
             batch_inference_job_id="batchInferenceJobId",
@@ -53,7 +53,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.batch_inference_jobs.with_raw_response.create(
             account_id="account_id",
         )
@@ -65,7 +65,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.batch_inference_jobs.with_streaming_response.create(
             account_id="account_id",
         ) as response:
@@ -79,7 +79,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.batch_inference_jobs.with_raw_response.create(
                 account_id="",
@@ -87,7 +87,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -96,7 +96,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -106,7 +106,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.batch_inference_jobs.with_raw_response.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -119,7 +119,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.batch_inference_jobs.with_streaming_response.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -134,7 +134,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.batch_inference_jobs.with_raw_response.retrieve(
                 batch_inference_job_id="batch_inference_job_id",
@@ -151,7 +151,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.list(
             account_id="account_id",
         )
@@ -159,7 +159,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.list(
             account_id="account_id",
             filter="filter",
@@ -172,7 +172,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.batch_inference_jobs.with_raw_response.list(
             account_id="account_id",
         )
@@ -184,7 +184,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.batch_inference_jobs.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -198,7 +198,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.batch_inference_jobs.with_raw_response.list(
                 account_id="",
@@ -206,7 +206,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         batch_inference_job = client.accounts.batch_inference_jobs.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -215,7 +215,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.batch_inference_jobs.with_raw_response.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -228,7 +228,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.batch_inference_jobs.with_streaming_response.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -243,7 +243,7 @@ class TestBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.batch_inference_jobs.with_raw_response.delete(
                 batch_inference_job_id="batch_inference_job_id",
@@ -266,7 +266,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.create(
             account_id="account_id",
         )
@@ -274,7 +274,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.create(
             account_id="account_id",
             batch_inference_job_id="batchInferenceJobId",
@@ -297,7 +297,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.batch_inference_jobs.with_raw_response.create(
             account_id="account_id",
         )
@@ -309,7 +309,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.batch_inference_jobs.with_streaming_response.create(
             account_id="account_id",
         ) as response:
@@ -323,7 +323,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.batch_inference_jobs.with_raw_response.create(
                 account_id="",
@@ -331,7 +331,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -340,7 +340,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -350,7 +350,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.batch_inference_jobs.with_raw_response.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -363,7 +363,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.batch_inference_jobs.with_streaming_response.retrieve(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -378,7 +378,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.batch_inference_jobs.with_raw_response.retrieve(
                 batch_inference_job_id="batch_inference_job_id",
@@ -395,7 +395,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.list(
             account_id="account_id",
         )
@@ -403,7 +403,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.list(
             account_id="account_id",
             filter="filter",
@@ -416,7 +416,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.batch_inference_jobs.with_raw_response.list(
             account_id="account_id",
         )
@@ -428,7 +428,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.batch_inference_jobs.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -442,7 +442,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.batch_inference_jobs.with_raw_response.list(
                 account_id="",
@@ -450,7 +450,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         batch_inference_job = await async_client.accounts.batch_inference_jobs.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -459,7 +459,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.batch_inference_jobs.with_raw_response.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -472,7 +472,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.batch_inference_jobs.with_streaming_response.delete(
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
@@ -487,7 +487,7 @@ class TestAsyncBatchInferenceJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.batch_inference_jobs.with_raw_response.delete(
                 batch_inference_job_id="batch_inference_job_id",

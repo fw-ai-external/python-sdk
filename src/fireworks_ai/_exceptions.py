@@ -18,11 +18,11 @@ __all__ = [
 ]
 
 
-class FireworksAIError(Exception):
+class FireworksError(Exception):
     pass
 
 
-class APIError(FireworksAIError):
+class APIError(FireworksError):
     message: str
     request: httpx.Request
 
