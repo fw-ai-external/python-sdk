@@ -23,7 +23,7 @@ from ._utils import is_given, get_async_library
 from ._version import __version__
 from .resources import validate_model_config
 from ._streaming import Stream as Stream, AsyncStream as AsyncStream
-from ._exceptions import APIStatusError, FireworksAIError
+from ._exceptions import APIStatusError, FireworksError
 from ._base_client import (
     DEFAULT_MAX_RETRIES,
     SyncAPIClient,
@@ -36,18 +36,18 @@ __all__ = [
     "Transport",
     "ProxiesTypes",
     "RequestOptions",
-    "FireworksAI",
-    "AsyncFireworksAI",
+    "Fireworks",
+    "AsyncFireworks",
     "Client",
     "AsyncClient",
 ]
 
 
-class FireworksAI(SyncAPIClient):
+class Fireworks(SyncAPIClient):
     accounts: accounts.AccountsResource
     validate_model_config: validate_model_config.ValidateModelConfigResource
-    with_raw_response: FireworksAIWithRawResponse
-    with_streaming_response: FireworksAIWithStreamedResponse
+    with_raw_response: FireworksWithRawResponse
+    with_streaming_response: FireworksWithStreamedResponse
 
     # client options
     api_key: str
@@ -75,20 +75,20 @@ class FireworksAI(SyncAPIClient):
         # part of our public interface in the future.
         _strict_response_validation: bool = False,
     ) -> None:
-        """Construct a new synchronous FireworksAI client instance.
+        """Construct a new synchronous Fireworks client instance.
 
         This automatically infers the `api_key` argument from the `FIREWORKS_AI_API_KEY` environment variable if it is not provided.
         """
         if api_key is None:
             api_key = os.environ.get("FIREWORKS_AI_API_KEY")
         if api_key is None:
-            raise FireworksAIError(
+            raise FireworksError(
                 "The api_key client option must be set either by passing api_key to the client or by setting the FIREWORKS_AI_API_KEY environment variable"
             )
         self.api_key = api_key
 
         if base_url is None:
-            base_url = os.environ.get("FIREWORKS_AI_BASE_URL")
+            base_url = os.environ.get("FIREWORKS_BASE_URL")
         if base_url is None:
             base_url = f"https://api.fireworks.ai"
 
@@ -105,8 +105,8 @@ class FireworksAI(SyncAPIClient):
 
         self.accounts = accounts.AccountsResource(self)
         self.validate_model_config = validate_model_config.ValidateModelConfigResource(self)
-        self.with_raw_response = FireworksAIWithRawResponse(self)
-        self.with_streaming_response = FireworksAIWithStreamedResponse(self)
+        self.with_raw_response = FireworksWithRawResponse(self)
+        self.with_streaming_response = FireworksWithStreamedResponse(self)
 
     @property
     @override
@@ -213,11 +213,11 @@ class FireworksAI(SyncAPIClient):
         return APIStatusError(err_msg, response=response, body=body)
 
 
-class AsyncFireworksAI(AsyncAPIClient):
+class AsyncFireworks(AsyncAPIClient):
     accounts: accounts.AsyncAccountsResource
     validate_model_config: validate_model_config.AsyncValidateModelConfigResource
-    with_raw_response: AsyncFireworksAIWithRawResponse
-    with_streaming_response: AsyncFireworksAIWithStreamedResponse
+    with_raw_response: AsyncFireworksWithRawResponse
+    with_streaming_response: AsyncFireworksWithStreamedResponse
 
     # client options
     api_key: str
@@ -245,20 +245,20 @@ class AsyncFireworksAI(AsyncAPIClient):
         # part of our public interface in the future.
         _strict_response_validation: bool = False,
     ) -> None:
-        """Construct a new async AsyncFireworksAI client instance.
+        """Construct a new async AsyncFireworks client instance.
 
         This automatically infers the `api_key` argument from the `FIREWORKS_AI_API_KEY` environment variable if it is not provided.
         """
         if api_key is None:
             api_key = os.environ.get("FIREWORKS_AI_API_KEY")
         if api_key is None:
-            raise FireworksAIError(
+            raise FireworksError(
                 "The api_key client option must be set either by passing api_key to the client or by setting the FIREWORKS_AI_API_KEY environment variable"
             )
         self.api_key = api_key
 
         if base_url is None:
-            base_url = os.environ.get("FIREWORKS_AI_BASE_URL")
+            base_url = os.environ.get("FIREWORKS_BASE_URL")
         if base_url is None:
             base_url = f"https://api.fireworks.ai"
 
@@ -275,8 +275,8 @@ class AsyncFireworksAI(AsyncAPIClient):
 
         self.accounts = accounts.AsyncAccountsResource(self)
         self.validate_model_config = validate_model_config.AsyncValidateModelConfigResource(self)
-        self.with_raw_response = AsyncFireworksAIWithRawResponse(self)
-        self.with_streaming_response = AsyncFireworksAIWithStreamedResponse(self)
+        self.with_raw_response = AsyncFireworksWithRawResponse(self)
+        self.with_streaming_response = AsyncFireworksWithStreamedResponse(self)
 
     @property
     @override
@@ -383,38 +383,38 @@ class AsyncFireworksAI(AsyncAPIClient):
         return APIStatusError(err_msg, response=response, body=body)
 
 
-class FireworksAIWithRawResponse:
-    def __init__(self, client: FireworksAI) -> None:
+class FireworksWithRawResponse:
+    def __init__(self, client: Fireworks) -> None:
         self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
         self.validate_model_config = validate_model_config.ValidateModelConfigResourceWithRawResponse(
             client.validate_model_config
         )
 
 
-class AsyncFireworksAIWithRawResponse:
-    def __init__(self, client: AsyncFireworksAI) -> None:
+class AsyncFireworksWithRawResponse:
+    def __init__(self, client: AsyncFireworks) -> None:
         self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
         self.validate_model_config = validate_model_config.AsyncValidateModelConfigResourceWithRawResponse(
             client.validate_model_config
         )
 
 
-class FireworksAIWithStreamedResponse:
-    def __init__(self, client: FireworksAI) -> None:
+class FireworksWithStreamedResponse:
+    def __init__(self, client: Fireworks) -> None:
         self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
         self.validate_model_config = validate_model_config.ValidateModelConfigResourceWithStreamingResponse(
             client.validate_model_config
         )
 
 
-class AsyncFireworksAIWithStreamedResponse:
-    def __init__(self, client: AsyncFireworksAI) -> None:
+class AsyncFireworksWithStreamedResponse:
+    def __init__(self, client: AsyncFireworks) -> None:
         self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
         self.validate_model_config = validate_model_config.AsyncValidateModelConfigResourceWithStreamingResponse(
             client.validate_model_config
         )
 
 
-Client = FireworksAI
+Client = Fireworks
 
-AsyncClient = AsyncFireworksAI
+AsyncClient = AsyncFireworks

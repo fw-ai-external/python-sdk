@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayAwsIamRoleBinding,
     AwsIamRoleBindingListResponse,
@@ -22,7 +22,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         aws_iam_role_binding = client.accounts.aws_iam_role_bindings.create(
             account_id="account_id",
             principal="principal",
@@ -32,7 +32,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.aws_iam_role_bindings.with_raw_response.create(
             account_id="account_id",
             principal="principal",
@@ -46,7 +46,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.aws_iam_role_bindings.with_streaming_response.create(
             account_id="account_id",
             principal="principal",
@@ -62,7 +62,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.aws_iam_role_bindings.with_raw_response.create(
                 account_id="",
@@ -72,7 +72,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         aws_iam_role_binding = client.accounts.aws_iam_role_bindings.list(
             account_id="account_id",
         )
@@ -80,7 +80,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         aws_iam_role_binding = client.accounts.aws_iam_role_bindings.list(
             account_id="account_id",
             filter="filter",
@@ -93,7 +93,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.aws_iam_role_bindings.with_raw_response.list(
             account_id="account_id",
         )
@@ -105,7 +105,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.aws_iam_role_bindings.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -119,7 +119,7 @@ class TestAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.aws_iam_role_bindings.with_raw_response.list(
                 account_id="",
@@ -133,7 +133,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         aws_iam_role_binding = await async_client.accounts.aws_iam_role_bindings.create(
             account_id="account_id",
             principal="principal",
@@ -143,7 +143,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.aws_iam_role_bindings.with_raw_response.create(
             account_id="account_id",
             principal="principal",
@@ -157,7 +157,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.aws_iam_role_bindings.with_streaming_response.create(
             account_id="account_id",
             principal="principal",
@@ -173,7 +173,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.aws_iam_role_bindings.with_raw_response.create(
                 account_id="",
@@ -183,7 +183,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         aws_iam_role_binding = await async_client.accounts.aws_iam_role_bindings.list(
             account_id="account_id",
         )
@@ -191,7 +191,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         aws_iam_role_binding = await async_client.accounts.aws_iam_role_bindings.list(
             account_id="account_id",
             filter="filter",
@@ -204,7 +204,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.aws_iam_role_bindings.with_raw_response.list(
             account_id="account_id",
         )
@@ -216,7 +216,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.aws_iam_role_bindings.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -230,7 +230,7 @@ class TestAsyncAwsIamRoleBindings:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.aws_iam_role_bindings.with_raw_response.list(
                 account_id="",

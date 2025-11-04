@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     GatewayPeftMergeJob,
     PeftMergeJobListResponse,
@@ -22,7 +22,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -32,7 +32,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -43,7 +43,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.peft_merge_jobs.with_raw_response.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -57,7 +57,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.peft_merge_jobs.with_streaming_response.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -73,7 +73,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.peft_merge_jobs.with_raw_response.create(
                 account_id="",
@@ -83,7 +83,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -92,7 +92,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -102,7 +102,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.peft_merge_jobs.with_raw_response.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -115,7 +115,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.peft_merge_jobs.with_streaming_response.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -130,7 +130,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.peft_merge_jobs.with_raw_response.retrieve(
                 peft_merge_job_id="peft_merge_job_id",
@@ -145,7 +145,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.list(
             account_id="account_id",
         )
@@ -153,7 +153,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.list(
             account_id="account_id",
             filter="filter",
@@ -166,7 +166,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.peft_merge_jobs.with_raw_response.list(
             account_id="account_id",
         )
@@ -178,7 +178,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.peft_merge_jobs.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -192,7 +192,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.peft_merge_jobs.with_raw_response.list(
                 account_id="",
@@ -200,7 +200,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         peft_merge_job = client.accounts.peft_merge_jobs.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -209,7 +209,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.peft_merge_jobs.with_raw_response.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -222,7 +222,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.peft_merge_jobs.with_streaming_response.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -237,7 +237,7 @@ class TestPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.peft_merge_jobs.with_raw_response.delete(
                 peft_merge_job_id="peft_merge_job_id",
@@ -258,7 +258,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -268,7 +268,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -279,7 +279,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.peft_merge_jobs.with_raw_response.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -293,7 +293,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.peft_merge_jobs.with_streaming_response.create(
             account_id="account_id",
             merged_model="mergedModel",
@@ -309,7 +309,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.peft_merge_jobs.with_raw_response.create(
                 account_id="",
@@ -319,7 +319,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -328,7 +328,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -338,7 +338,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.peft_merge_jobs.with_raw_response.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -351,7 +351,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.peft_merge_jobs.with_streaming_response.retrieve(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -366,7 +366,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.peft_merge_jobs.with_raw_response.retrieve(
                 peft_merge_job_id="peft_merge_job_id",
@@ -381,7 +381,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.list(
             account_id="account_id",
         )
@@ -389,7 +389,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.list(
             account_id="account_id",
             filter="filter",
@@ -402,7 +402,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.peft_merge_jobs.with_raw_response.list(
             account_id="account_id",
         )
@@ -414,7 +414,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.peft_merge_jobs.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -428,7 +428,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.peft_merge_jobs.with_raw_response.list(
                 account_id="",
@@ -436,7 +436,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         peft_merge_job = await async_client.accounts.peft_merge_jobs.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -445,7 +445,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.peft_merge_jobs.with_raw_response.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -458,7 +458,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.peft_merge_jobs.with_streaming_response.delete(
             peft_merge_job_id="peft_merge_job_id",
             account_id="account_id",
@@ -473,7 +473,7 @@ class TestAsyncPeftMergeJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.peft_merge_jobs.with_raw_response.delete(
                 peft_merge_job_id="peft_merge_job_id",

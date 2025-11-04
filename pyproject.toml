@@ -1,11 +1,11 @@
 [project]
 name = "fireworks_ai"
 version = "0.0.1"
-description = "The official Python library for the fireworks-ai API"
+description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
 authors = [
-{ name = "Fireworks AI", email = "" },
+{ name = "Fireworks", email = "dhuang@fireworks.ai" },
 ]
 dependencies = [
     "httpx>=0.23.0, <1",

@@ -10,7 +10,7 @@ import httpx
 import pytest
 from pytest_asyncio import is_async_test
 
-from fireworks_ai import FireworksAI, AsyncFireworksAI, DefaultAioHttpClient
+from fireworks_ai import Fireworks, AsyncFireworks, DefaultAioHttpClient
 from fireworks_ai._utils import is_dict
 
 if TYPE_CHECKING:
@@ -49,17 +49,17 @@ api_key = "My API Key"
 
 
 @pytest.fixture(scope="session")
-def client(request: FixtureRequest) -> Iterator[FireworksAI]:
+def client(request: FixtureRequest) -> Iterator[Fireworks]:
     strict = getattr(request, "param", True)
     if not isinstance(strict, bool):
         raise TypeError(f"Unexpected fixture parameter type {type(strict)}, expected {bool}")
 
-    with FireworksAI(base_url=base_url, api_key=api_key, _strict_response_validation=strict) as client:
+    with Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=strict) as client:
         yield client
 
 
 @pytest.fixture(scope="session")
-async def async_client(request: FixtureRequest) -> AsyncIterator[AsyncFireworksAI]:
+async def async_client(request: FixtureRequest) -> AsyncIterator[AsyncFireworks]:
     param = getattr(request, "param", True)
 
     # defaults
@@ -78,7 +78,7 @@ async def async_client(request: FixtureRequest) -> AsyncIterator[AsyncFireworksA
     else:
         raise TypeError(f"Unexpected fixture parameter type {type(param)}, expected bool or dict")
 
-    async with AsyncFireworksAI(
+    async with AsyncFireworks(
         base_url=base_url, api_key=api_key, _strict_response_validation=strict, http_client=http_client
     ) as client:
         yield client

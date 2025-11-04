@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from tests.utils import assert_matches_type
-from fireworks_ai import FireworksAI, AsyncFireworksAI
+from fireworks_ai import Fireworks, AsyncFireworks
 from fireworks_ai.types.accounts import (
     Model,
     ModelVersion,
@@ -27,7 +27,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: FireworksAI) -> None:
+    def test_method_create(self, client: Fireworks) -> None:
         model = client.accounts.models.create(
             account_id="account_id",
             model_id="modelId",
@@ -36,7 +36,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.create(
             account_id="account_id",
             model_id="modelId",
@@ -90,7 +90,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create(self, client: FireworksAI) -> None:
+    def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.create(
             account_id="account_id",
             model_id="modelId",
@@ -103,7 +103,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create(self, client: FireworksAI) -> None:
+    def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.create(
             account_id="account_id",
             model_id="modelId",
@@ -118,7 +118,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create(self, client: FireworksAI) -> None:
+    def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.create(
                 account_id="",
@@ -127,7 +127,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve(self, client: FireworksAI) -> None:
+    def test_method_retrieve(self, client: Fireworks) -> None:
         model = client.accounts.models.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -136,7 +136,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_retrieve_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_retrieve_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -146,7 +146,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_retrieve(self, client: FireworksAI) -> None:
+    def test_raw_response_retrieve(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -159,7 +159,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_retrieve(self, client: FireworksAI) -> None:
+    def test_streaming_response_retrieve(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -174,7 +174,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_retrieve(self, client: FireworksAI) -> None:
+    def test_path_params_retrieve(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.retrieve(
                 model_id="model_id",
@@ -189,7 +189,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update(self, client: FireworksAI) -> None:
+    def test_method_update(self, client: Fireworks) -> None:
         model = client.accounts.models.update(
             model_id="model_id",
             account_id="account_id",
@@ -198,7 +198,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_update_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_update_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.update(
             model_id="model_id",
             account_id="account_id",
@@ -249,7 +249,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_update(self, client: FireworksAI) -> None:
+    def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.update(
             model_id="model_id",
             account_id="account_id",
@@ -262,7 +262,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_update(self, client: FireworksAI) -> None:
+    def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.update(
             model_id="model_id",
             account_id="account_id",
@@ -277,7 +277,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_update(self, client: FireworksAI) -> None:
+    def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.update(
                 model_id="model_id",
@@ -292,7 +292,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list(self, client: FireworksAI) -> None:
+    def test_method_list(self, client: Fireworks) -> None:
         model = client.accounts.models.list(
             account_id="account_id",
         )
@@ -300,7 +300,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_list_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_list_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.list(
             account_id="account_id",
             filter="filter",
@@ -313,7 +313,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_list(self, client: FireworksAI) -> None:
+    def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.list(
             account_id="account_id",
         )
@@ -325,7 +325,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_list(self, client: FireworksAI) -> None:
+    def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -339,7 +339,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_list(self, client: FireworksAI) -> None:
+    def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.list(
                 account_id="",
@@ -347,7 +347,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_delete(self, client: FireworksAI) -> None:
+    def test_method_delete(self, client: Fireworks) -> None:
         model = client.accounts.models.delete(
             model_id="model_id",
             account_id="account_id",
@@ -356,7 +356,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_delete(self, client: FireworksAI) -> None:
+    def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.delete(
             model_id="model_id",
             account_id="account_id",
@@ -369,7 +369,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_delete(self, client: FireworksAI) -> None:
+    def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.delete(
             model_id="model_id",
             account_id="account_id",
@@ -384,7 +384,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_delete(self, client: FireworksAI) -> None:
+    def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.delete(
                 model_id="model_id",
@@ -399,7 +399,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_count_versions(self, client: FireworksAI) -> None:
+    def test_method_count_versions(self, client: Fireworks) -> None:
         model = client.accounts.models.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -408,7 +408,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_count_versions(self, client: FireworksAI) -> None:
+    def test_raw_response_count_versions(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -421,7 +421,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_count_versions(self, client: FireworksAI) -> None:
+    def test_streaming_response_count_versions(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -436,7 +436,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_count_versions(self, client: FireworksAI) -> None:
+    def test_path_params_count_versions(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.count_versions(
                 model_id="model_id",
@@ -451,7 +451,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_version(self, client: FireworksAI) -> None:
+    def test_method_create_version(self, client: Fireworks) -> None:
         model = client.accounts.models.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -460,7 +460,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create_version_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_create_version_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -470,7 +470,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_create_version(self, client: FireworksAI) -> None:
+    def test_raw_response_create_version(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -483,7 +483,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_create_version(self, client: FireworksAI) -> None:
+    def test_streaming_response_create_version(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -498,7 +498,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_create_version(self, client: FireworksAI) -> None:
+    def test_path_params_create_version(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.create_version(
                 model_id="model_id",
@@ -513,7 +513,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_method_get_download_endpoint(self, client: Fireworks) -> None:
         model = client.accounts.models.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -522,7 +522,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_download_endpoint_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_get_download_endpoint_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -532,7 +532,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_raw_response_get_download_endpoint(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -545,7 +545,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_streaming_response_get_download_endpoint(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -560,7 +560,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_get_download_endpoint(self, client: FireworksAI) -> None:
+    def test_path_params_get_download_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.get_download_endpoint(
                 model_id="model_id",
@@ -575,7 +575,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_method_get_upload_endpoint(self, client: Fireworks) -> None:
         model = client.accounts.models.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -585,7 +585,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_get_upload_endpoint_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_get_upload_endpoint_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -597,7 +597,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_raw_response_get_upload_endpoint(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -611,7 +611,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_streaming_response_get_upload_endpoint(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -627,7 +627,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_get_upload_endpoint(self, client: FireworksAI) -> None:
+    def test_path_params_get_upload_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.get_upload_endpoint(
                 model_id="model_id",
@@ -644,7 +644,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_import(self, client: FireworksAI) -> None:
+    def test_method_import(self, client: Fireworks) -> None:
         model = client.accounts.models.import_(
             model_id="model_id",
             account_id="account_id",
@@ -653,7 +653,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_import_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_import_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.import_(
             model_id="model_id",
             account_id="account_id",
@@ -669,7 +669,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_import(self, client: FireworksAI) -> None:
+    def test_raw_response_import(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.import_(
             model_id="model_id",
             account_id="account_id",
@@ -682,7 +682,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_import(self, client: FireworksAI) -> None:
+    def test_streaming_response_import(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.import_(
             model_id="model_id",
             account_id="account_id",
@@ -697,7 +697,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_import(self, client: FireworksAI) -> None:
+    def test_path_params_import(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.import_(
                 model_id="model_id",
@@ -712,7 +712,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_prepare(self, client: FireworksAI) -> None:
+    def test_method_prepare(self, client: Fireworks) -> None:
         model = client.accounts.models.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -721,7 +721,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_prepare_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_prepare_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -732,7 +732,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_prepare(self, client: FireworksAI) -> None:
+    def test_raw_response_prepare(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -745,7 +745,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_prepare(self, client: FireworksAI) -> None:
+    def test_streaming_response_prepare(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -760,7 +760,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_prepare(self, client: FireworksAI) -> None:
+    def test_path_params_prepare(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.prepare(
                 model_id="model_id",
@@ -775,7 +775,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_validate_upload(self, client: FireworksAI) -> None:
+    def test_method_validate_upload(self, client: Fireworks) -> None:
         model = client.accounts.models.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -784,7 +784,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_validate_upload_with_all_params(self, client: FireworksAI) -> None:
+    def test_method_validate_upload_with_all_params(self, client: Fireworks) -> None:
         model = client.accounts.models.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -796,7 +796,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_validate_upload(self, client: FireworksAI) -> None:
+    def test_raw_response_validate_upload(self, client: Fireworks) -> None:
         response = client.accounts.models.with_raw_response.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -809,7 +809,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_validate_upload(self, client: FireworksAI) -> None:
+    def test_streaming_response_validate_upload(self, client: Fireworks) -> None:
         with client.accounts.models.with_streaming_response.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -824,7 +824,7 @@ class TestModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_validate_upload(self, client: FireworksAI) -> None:
+    def test_path_params_validate_upload(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.accounts.models.with_raw_response.validate_upload(
                 model_id="model_id",
@@ -845,7 +845,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.create(
             account_id="account_id",
             model_id="modelId",
@@ -854,7 +854,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.create(
             account_id="account_id",
             model_id="modelId",
@@ -908,7 +908,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.create(
             account_id="account_id",
             model_id="modelId",
@@ -921,7 +921,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.create(
             account_id="account_id",
             model_id="modelId",
@@ -936,7 +936,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.create(
                 account_id="",
@@ -945,7 +945,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -954,7 +954,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_retrieve_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -964,7 +964,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_retrieve(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -977,7 +977,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_retrieve(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.retrieve(
             model_id="model_id",
             account_id="account_id",
@@ -992,7 +992,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_retrieve(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_retrieve(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.retrieve(
                 model_id="model_id",
@@ -1007,7 +1007,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.update(
             model_id="model_id",
             account_id="account_id",
@@ -1016,7 +1016,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.update(
             model_id="model_id",
             account_id="account_id",
@@ -1067,7 +1067,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.update(
             model_id="model_id",
             account_id="account_id",
@@ -1080,7 +1080,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.update(
             model_id="model_id",
             account_id="account_id",
@@ -1095,7 +1095,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_update(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.update(
                 model_id="model_id",
@@ -1110,7 +1110,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.list(
             account_id="account_id",
         )
@@ -1118,7 +1118,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_list_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.list(
             account_id="account_id",
             filter="filter",
@@ -1131,7 +1131,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.list(
             account_id="account_id",
         )
@@ -1143,7 +1143,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.list(
             account_id="account_id",
         ) as response:
@@ -1157,7 +1157,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_list(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.list(
                 account_id="",
@@ -1165,7 +1165,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.delete(
             model_id="model_id",
             account_id="account_id",
@@ -1174,7 +1174,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.delete(
             model_id="model_id",
             account_id="account_id",
@@ -1187,7 +1187,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.delete(
             model_id="model_id",
             account_id="account_id",
@@ -1202,7 +1202,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.delete(
                 model_id="model_id",
@@ -1217,7 +1217,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_count_versions(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_count_versions(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -1226,7 +1226,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_count_versions(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_count_versions(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -1239,7 +1239,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_count_versions(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_count_versions(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.count_versions(
             model_id="model_id",
             account_id="account_id",
@@ -1254,7 +1254,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_count_versions(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_count_versions(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.count_versions(
                 model_id="model_id",
@@ -1269,7 +1269,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_version(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_version(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -1278,7 +1278,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_version_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_create_version_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -1288,7 +1288,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create_version(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_create_version(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -1301,7 +1301,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create_version(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_create_version(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.create_version(
             model_id="model_id",
             account_id="account_id",
@@ -1316,7 +1316,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create_version(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_create_version(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.create_version(
                 model_id="model_id",
@@ -1331,7 +1331,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1340,7 +1340,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_download_endpoint_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_download_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1350,7 +1350,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1363,7 +1363,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.get_download_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1378,7 +1378,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_get_download_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.get_download_endpoint(
                 model_id="model_id",
@@ -1393,7 +1393,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1403,7 +1403,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_get_upload_endpoint_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_get_upload_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1415,7 +1415,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1429,7 +1429,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.get_upload_endpoint(
             model_id="model_id",
             account_id="account_id",
@@ -1445,7 +1445,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_get_upload_endpoint(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.get_upload_endpoint(
                 model_id="model_id",
@@ -1462,7 +1462,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_import(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_import(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.import_(
             model_id="model_id",
             account_id="account_id",
@@ -1471,7 +1471,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_import_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_import_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.import_(
             model_id="model_id",
             account_id="account_id",
@@ -1487,7 +1487,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_import(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_import(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.import_(
             model_id="model_id",
             account_id="account_id",
@@ -1500,7 +1500,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_import(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_import(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.import_(
             model_id="model_id",
             account_id="account_id",
@@ -1515,7 +1515,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_import(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_import(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.import_(
                 model_id="model_id",
@@ -1530,7 +1530,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_prepare(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_prepare(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -1539,7 +1539,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_prepare_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_prepare_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -1550,7 +1550,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_prepare(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_prepare(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -1563,7 +1563,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_prepare(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_prepare(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.prepare(
             model_id="model_id",
             account_id="account_id",
@@ -1578,7 +1578,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_prepare(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_prepare(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.prepare(
                 model_id="model_id",
@@ -1593,7 +1593,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_validate_upload(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -1602,7 +1602,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_validate_upload_with_all_params(self, async_client: AsyncFireworksAI) -> None:
+    async def test_method_validate_upload_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.accounts.models.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -1614,7 +1614,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_raw_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         response = await async_client.accounts.models.with_raw_response.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -1627,7 +1627,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_streaming_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.models.with_streaming_response.validate_upload(
             model_id="model_id",
             account_id="account_id",
@@ -1642,7 +1642,7 @@ class TestAsyncModels:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_validate_upload(self, async_client: AsyncFireworksAI) -> None:
+    async def test_path_params_validate_upload(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.accounts.models.with_raw_response.validate_upload(
                 model_id="model_id",
