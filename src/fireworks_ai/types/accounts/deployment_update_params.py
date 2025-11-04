@@ -1,0 +1,139 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
+from __future__ import annotations
+
+from typing import Union
+from datetime import datetime
+from typing_extensions import Required, Annotated, TypedDict
+
+from ..._types import SequenceNotStr
+from ..._utils import PropertyInfo
+from .deployment_precision import DeploymentPrecision
+from .gateway_auto_tune_param import GatewayAutoTuneParam
+from .gateway_placement_param import GatewayPlacementParam
+from .gateway_accelerator_type import GatewayAcceleratorType
+from .gateway_direct_route_type import GatewayDirectRouteType
+from .gateway_autoscaling_policy_param import GatewayAutoscalingPolicyParam
+
+__all__ = ["DeploymentUpdateParams"]
+
+
+class DeploymentUpdateParams(TypedDict, total=False):
+    account_id: Required[str]
+
+    base_model: Required[Annotated[str, PropertyInfo(alias="baseModel")]]
+
+    accelerator_count: Annotated[int, PropertyInfo(alias="acceleratorCount")]
+    """
+    The number of accelerators used per replica. If not specified, the default is
+    the estimated minimum required by the base model.
+    """
+
+    accelerator_type: Annotated[GatewayAcceleratorType, PropertyInfo(alias="acceleratorType")]
+    """
+    The type of accelerator to use. If not specified, the default is
+    NVIDIA_A100_80GB.
+    """
+
+    active_model_version: Annotated[str, PropertyInfo(alias="activeModelVersion")]
+    """The active model version for this deployment.
+
+    Used to enable a specific model version.
+    """
+
+    autoscaling_policy: Annotated[GatewayAutoscalingPolicyParam, PropertyInfo(alias="autoscalingPolicy")]
+
+    auto_tune: Annotated[GatewayAutoTuneParam, PropertyInfo(alias="autoTune")]
+    """The performance profile to use for this deployment."""
+
+    deployment_shape: Annotated[str, PropertyInfo(alias="deploymentShape")]
+    """
+    The name of the deployment shape that this deployment is using. On the server
+    side, this will be replaced with the deployment shape version name.
+    """
+
+    deployment_template: Annotated[str, PropertyInfo(alias="deploymentTemplate")]
+    """The name of the deployment template to use for this deployment.
+
+    Only available to enterprise accounts.
+    """
+
+    description: str
+    """Description of the deployment."""
+
+    direct_route_api_keys: Annotated[SequenceNotStr[str], PropertyInfo(alias="directRouteApiKeys")]
+    """The set of API keys used to access the direct route deployment.
+
+    If direct routing is not enabled, this field is unused.
+    """
+
+    direct_route_type: Annotated[GatewayDirectRouteType, PropertyInfo(alias="directRouteType")]
+    """
+    If set, this deployment will expose an endpoint that bypasses the Fireworks API
+    gateway.
+    """
+
+    disable_deployment_size_validation: Annotated[bool, PropertyInfo(alias="disableDeploymentSizeValidation")]
+    """Whether the deployment size validation is disabled."""
+
+    display_name: Annotated[str, PropertyInfo(alias="displayName")]
+    """Human-readable display name of the deployment.
+
+    e.g. "My Deployment" Must be fewer than 64 characters long.
+    """
+
+    draft_model: Annotated[str, PropertyInfo(alias="draftModel")]
+    """The draft model name for speculative decoding.
+
+    e.g. accounts/fireworks/models/my-draft-model If empty, speculative decoding
+    using a draft model is disabled. Default is the base model's
+    default_draft_model. Set CreateDeploymentRequest.disable_speculative_decoding to
+    false to disable this behavior.
+    """
+
+    draft_token_count: Annotated[int, PropertyInfo(alias="draftTokenCount")]
+    """
+    The number of candidate tokens to generate per step for speculative decoding.
+    Default is the base model's draft_token_count. Set
+    CreateDeploymentRequest.disable_speculative_decoding to false to disable this
+    behavior.
+    """
+
+    enable_addons: Annotated[bool, PropertyInfo(alias="enableAddons")]
+    """If true, PEFT addons are enabled for this deployment."""
+
+    enable_hot_reload_latest_addon: Annotated[bool, PropertyInfo(alias="enableHotReloadLatestAddon")]
+    """
+    Allows up to 1 addon at a time to be loaded, and will merge it into the base
+    model.
+    """
+
+    enable_mtp: Annotated[bool, PropertyInfo(alias="enableMtp")]
+    """If true, MTP is enabled for this deployment."""
+
+    enable_session_affinity: Annotated[bool, PropertyInfo(alias="enableSessionAffinity")]
+    """Whether to apply sticky routing based on `user` field."""
+
+    expire_time: Annotated[Union[str, datetime], PropertyInfo(alias="expireTime", format="iso8601")]
+    """The time at which this deployment will automatically be deleted."""
+
+    max_replica_count: Annotated[int, PropertyInfo(alias="maxReplicaCount")]
+    """
+    The maximum number of replicas. If not specified, the default is
+    max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
+    """
+
+    min_replica_count: Annotated[int, PropertyInfo(alias="minReplicaCount")]
+    """The minimum number of replicas. If not specified, the default is 0."""
+
+    ngram_speculation_length: Annotated[int, PropertyInfo(alias="ngramSpeculationLength")]
+    """The length of previous input sequence to be considered for N-gram speculation."""
+
+    placement: GatewayPlacementParam
+    """
+    The desired geographic region where the deployment must be placed. If
+    unspecified, the default is the GLOBAL multi-region.
+    """
+
+    precision: DeploymentPrecision
+    """The precision with which the model should be served."""
