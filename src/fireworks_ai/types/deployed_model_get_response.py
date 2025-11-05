@@ -8,7 +8,7 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["Account", "Status"]
+__all__ = ["DeployedModelGetResponse", "Status"]
 
 
 class Status(BaseModel):
@@ -39,37 +39,39 @@ class Status(BaseModel):
     """A developer-facing error message in English."""
 
 
-class Account(BaseModel):
-    email: str
-    """For developer accounts, this is the email of the developer user and is
-    immutable.
+class DeployedModelGetResponse(BaseModel):
+    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
+    """The creation time of the resource."""
 
-    For ENTERPRISE and BUSINESS accounts, this is mutable and it is the email that
-    will recieve the invoice for the account if automated billing is used.
+    default: Optional[bool] = None
+    """
+    If true, this is the default target when querying this model without the
+    `#<deployment>` suffix. The first deployment a model is deployed to will have
+    this field set to true.
     """
 
-    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
-    """The creation time of the account."""
+    deployment: Optional[str] = None
+    """The resource name of the base deployment the model is deployed to."""
+
+    description: Optional[str] = None
+    """Description of the resource."""
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
-    """Human-readable display name of the account.
 
-    e.g. "My Account" Must be fewer than 64 characters long.
-    """
+    model: Optional[str] = None
 
     name: Optional[str] = None
 
-    state: Optional[Literal["STATE_UNSPECIFIED", "CREATING", "READY", "UPDATING", "DELETING"]] = None
-    """The state of the account."""
+    public: Optional[bool] = None
+    """If true, the deployed model will be publicly reachable."""
+
+    serverless: Optional[bool] = None
+
+    state: Optional[Literal["STATE_UNSPECIFIED", "UNDEPLOYING", "DEPLOYING", "DEPLOYED", "UPDATING"]] = None
+    """The state of the deployed model."""
 
     status: Optional[Status] = None
-    """Contains information about the account status."""
-
-    suspend_state: Optional[
-        Literal[
-            "UNSUSPENDED", "FAILED_PAYMENTS", "CREDIT_DEPLETED", "MONTHLY_SPEND_LIMIT_EXCEEDED", "BLOCKED_BY_ABUSE_RULE"
-        ]
-    ] = FieldInfo(alias="suspendState", default=None)
+    """Contains model deploy/undeploy details."""
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
-    """The update time for the account."""
+    """The update time for the deployed model."""

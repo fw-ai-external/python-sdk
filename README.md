@@ -117,11 +117,11 @@ from fireworks_ai import Fireworks
 
 client = Fireworks()
 
-gateway_evaluator = client.accounts.create_evaluator_v2(
+batch_inference_job = client.batch_inference_jobs.create(
     account_id="account_id",
-    evaluator={},
+    inference_parameters={},
 )
-print(gateway_evaluator.evaluator)
+print(batch_inference_job.inference_parameters)
 ```
 
 ## Handling errors

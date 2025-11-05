@@ -21,7 +21,18 @@ from ._types import (
 )
 from ._utils import is_given, get_async_library
 from ._version import __version__
-from .resources import validate_model_config
+from .resources import (
+    users,
+    models,
+    accounts,
+    api_keys,
+    datasets,
+    deployments,
+    deployed_models,
+    batch_inference_jobs,
+    supervised_fine_tuning_jobs,
+    reinforcement_fine_tuning_jobs,
+)
 from ._streaming import Stream as Stream, AsyncStream as AsyncStream
 from ._exceptions import APIStatusError, FireworksError
 from ._base_client import (
@@ -29,7 +40,6 @@ from ._base_client import (
     SyncAPIClient,
     AsyncAPIClient,
 )
-from .resources.accounts import accounts
 
 __all__ = [
     "Timeout",
@@ -45,7 +55,15 @@ __all__ = [
 
 class Fireworks(SyncAPIClient):
     accounts: accounts.AccountsResource
-    validate_model_config: validate_model_config.ValidateModelConfigResource
+    batch_inference_jobs: batch_inference_jobs.BatchInferenceJobsResource
+    datasets: datasets.DatasetsResource
+    deployed_models: deployed_models.DeployedModelsResource
+    deployments: deployments.DeploymentsResource
+    models: models.ModelsResource
+    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
+    supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource
+    users: users.UsersResource
+    api_keys: api_keys.APIKeysResource
     with_raw_response: FireworksWithRawResponse
     with_streaming_response: FireworksWithStreamedResponse
 
@@ -104,7 +122,15 @@ class Fireworks(SyncAPIClient):
         )
 
         self.accounts = accounts.AccountsResource(self)
-        self.validate_model_config = validate_model_config.ValidateModelConfigResource(self)
+        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResource(self)
+        self.datasets = datasets.DatasetsResource(self)
+        self.deployed_models = deployed_models.DeployedModelsResource(self)
+        self.deployments = deployments.DeploymentsResource(self)
+        self.models = models.ModelsResource(self)
+        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource(self)
+        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource(self)
+        self.users = users.UsersResource(self)
+        self.api_keys = api_keys.APIKeysResource(self)
         self.with_raw_response = FireworksWithRawResponse(self)
         self.with_streaming_response = FireworksWithStreamedResponse(self)
 
@@ -215,7 +241,15 @@ class Fireworks(SyncAPIClient):
 
 class AsyncFireworks(AsyncAPIClient):
     accounts: accounts.AsyncAccountsResource
-    validate_model_config: validate_model_config.AsyncValidateModelConfigResource
+    batch_inference_jobs: batch_inference_jobs.AsyncBatchInferenceJobsResource
+    datasets: datasets.AsyncDatasetsResource
+    deployed_models: deployed_models.AsyncDeployedModelsResource
+    deployments: deployments.AsyncDeploymentsResource
+    models: models.AsyncModelsResource
+    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
+    supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource
+    users: users.AsyncUsersResource
+    api_keys: api_keys.AsyncAPIKeysResource
     with_raw_response: AsyncFireworksWithRawResponse
     with_streaming_response: AsyncFireworksWithStreamedResponse
 
@@ -274,7 +308,17 @@ class AsyncFireworks(AsyncAPIClient):
         )
 
         self.accounts = accounts.AsyncAccountsResource(self)
-        self.validate_model_config = validate_model_config.AsyncValidateModelConfigResource(self)
+        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResource(self)
+        self.datasets = datasets.AsyncDatasetsResource(self)
+        self.deployed_models = deployed_models.AsyncDeployedModelsResource(self)
+        self.deployments = deployments.AsyncDeploymentsResource(self)
+        self.models = models.AsyncModelsResource(self)
+        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource(
+            self
+        )
+        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource(self)
+        self.users = users.AsyncUsersResource(self)
+        self.api_keys = api_keys.AsyncAPIKeysResource(self)
         self.with_raw_response = AsyncFireworksWithRawResponse(self)
         self.with_streaming_response = AsyncFireworksWithStreamedResponse(self)
 
@@ -386,33 +430,95 @@ class AsyncFireworks(AsyncAPIClient):
 class FireworksWithRawResponse:
     def __init__(self, client: Fireworks) -> None:
         self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
-        self.validate_model_config = validate_model_config.ValidateModelConfigResourceWithRawResponse(
-            client.validate_model_config
+        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse(
+            client.batch_inference_jobs
         )
+        self.datasets = datasets.DatasetsResourceWithRawResponse(client.datasets)
+        self.deployed_models = deployed_models.DeployedModelsResourceWithRawResponse(client.deployed_models)
+        self.deployments = deployments.DeploymentsResourceWithRawResponse(client.deployments)
+        self.models = models.ModelsResourceWithRawResponse(client.models)
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithRawResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse(
+            client.supervised_fine_tuning_jobs
+        )
+        self.users = users.UsersResourceWithRawResponse(client.users)
+        self.api_keys = api_keys.APIKeysResourceWithRawResponse(client.api_keys)
 
 
 class AsyncFireworksWithRawResponse:
     def __init__(self, client: AsyncFireworks) -> None:
         self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
-        self.validate_model_config = validate_model_config.AsyncValidateModelConfigResourceWithRawResponse(
-            client.validate_model_config
+        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse(
+            client.batch_inference_jobs
         )
+        self.datasets = datasets.AsyncDatasetsResourceWithRawResponse(client.datasets)
+        self.deployed_models = deployed_models.AsyncDeployedModelsResourceWithRawResponse(client.deployed_models)
+        self.deployments = deployments.AsyncDeploymentsResourceWithRawResponse(client.deployments)
+        self.models = models.AsyncModelsResourceWithRawResponse(client.models)
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.supervised_fine_tuning_jobs = (
+            supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithRawResponse(
+                client.supervised_fine_tuning_jobs
+            )
+        )
+        self.users = users.AsyncUsersResourceWithRawResponse(client.users)
+        self.api_keys = api_keys.AsyncAPIKeysResourceWithRawResponse(client.api_keys)
 
 
 class FireworksWithStreamedResponse:
     def __init__(self, client: Fireworks) -> None:
         self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
-        self.validate_model_config = validate_model_config.ValidateModelConfigResourceWithStreamingResponse(
-            client.validate_model_config
+        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse(
+            client.batch_inference_jobs
         )
+        self.datasets = datasets.DatasetsResourceWithStreamingResponse(client.datasets)
+        self.deployed_models = deployed_models.DeployedModelsResourceWithStreamingResponse(client.deployed_models)
+        self.deployments = deployments.DeploymentsResourceWithStreamingResponse(client.deployments)
+        self.models = models.ModelsResourceWithStreamingResponse(client.models)
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.supervised_fine_tuning_jobs = (
+            supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithStreamingResponse(
+                client.supervised_fine_tuning_jobs
+            )
+        )
+        self.users = users.UsersResourceWithStreamingResponse(client.users)
+        self.api_keys = api_keys.APIKeysResourceWithStreamingResponse(client.api_keys)
 
 
 class AsyncFireworksWithStreamedResponse:
     def __init__(self, client: AsyncFireworks) -> None:
         self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
-        self.validate_model_config = validate_model_config.AsyncValidateModelConfigResourceWithStreamingResponse(
-            client.validate_model_config
+        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse(
+            client.batch_inference_jobs
         )
+        self.datasets = datasets.AsyncDatasetsResourceWithStreamingResponse(client.datasets)
+        self.deployed_models = deployed_models.AsyncDeployedModelsResourceWithStreamingResponse(client.deployed_models)
+        self.deployments = deployments.AsyncDeploymentsResourceWithStreamingResponse(client.deployments)
+        self.models = models.AsyncModelsResourceWithStreamingResponse(client.models)
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.supervised_fine_tuning_jobs = (
+            supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithStreamingResponse(
+                client.supervised_fine_tuning_jobs
+            )
+        )
+        self.users = users.AsyncUsersResourceWithStreamingResponse(client.users)
+        self.api_keys = api_keys.AsyncAPIKeysResourceWithStreamingResponse(client.api_keys)
 
 
 Client = Fireworks
