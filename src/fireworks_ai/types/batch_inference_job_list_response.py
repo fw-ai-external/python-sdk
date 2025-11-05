@@ -1,0 +1,210 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
+from typing import List, Optional
+from datetime import datetime
+from typing_extensions import Literal
+
+from pydantic import Field as FieldInfo
+
+from .._models import BaseModel
+
+__all__ = [
+    "BatchInferenceJobListResponse",
+    "BatchInferenceJob",
+    "BatchInferenceJobInferenceParameters",
+    "BatchInferenceJobJobProgress",
+    "BatchInferenceJobStatus",
+]
+
+
+class BatchInferenceJobInferenceParameters(BaseModel):
+    extra_body: Optional[str] = FieldInfo(alias="extraBody", default=None)
+    """
+    Additional parameters for the inference request as a JSON string. For example:
+    "{\"stop\": [\"\\n\"]}".
+    """
+
+    max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
+    """Maximum number of tokens to generate per response."""
+
+    n: Optional[int] = None
+    """Number of response candidates to generate per input."""
+
+    temperature: Optional[float] = None
+    """Sampling temperature, typically between 0 and 2."""
+
+    top_k: Optional[int] = FieldInfo(alias="topK", default=None)
+    """Top-k sampling parameter, limits the token selection to the top k tokens."""
+
+    top_p: Optional[float] = FieldInfo(alias="topP", default=None)
+    """Top-p sampling parameter, typically between 0 and 1."""
+
+
+class BatchInferenceJobJobProgress(BaseModel):
+    cached_input_token_count: Optional[int] = FieldInfo(alias="cachedInputTokenCount", default=None)
+    """The number of input tokens that hit the prompt cache."""
+
+    epoch: Optional[int] = None
+    """
+    The epoch for which the progress percent is reported, usually starting from 0.
+    This is optional for jobs that don't run in an epoch fasion, e.g. BIJ, EVJ.
+    """
+
+    failed_requests: Optional[int] = FieldInfo(alias="failedRequests", default=None)
+    """Number of requests that failed to process."""
+
+    input_tokens: Optional[int] = FieldInfo(alias="inputTokens", default=None)
+    """Total number of input tokens processed."""
+
+    output_rows: Optional[int] = FieldInfo(alias="outputRows", default=None)
+    """Number of output rows generated."""
+
+    output_tokens: Optional[int] = FieldInfo(alias="outputTokens", default=None)
+    """Total number of output tokens generated."""
+
+    percent: Optional[int] = None
+    """Progress percent, within the range from 0 to 100."""
+
+    successfully_processed_requests: Optional[int] = FieldInfo(alias="successfullyProcessedRequests", default=None)
+    """Number of requests that were processed successfully."""
+
+    total_input_requests: Optional[int] = FieldInfo(alias="totalInputRequests", default=None)
+    """Total number of input requests/rows in the job."""
+
+    total_processed_requests: Optional[int] = FieldInfo(alias="totalProcessedRequests", default=None)
+    """Total number of requests that have been processed (successfully or failed)."""
+
+
+class BatchInferenceJobStatus(BaseModel):
+    code: Optional[
+        Literal[
+            "OK",
+            "CANCELLED",
+            "UNKNOWN",
+            "INVALID_ARGUMENT",
+            "DEADLINE_EXCEEDED",
+            "NOT_FOUND",
+            "ALREADY_EXISTS",
+            "PERMISSION_DENIED",
+            "UNAUTHENTICATED",
+            "RESOURCE_EXHAUSTED",
+            "FAILED_PRECONDITION",
+            "ABORTED",
+            "OUT_OF_RANGE",
+            "UNIMPLEMENTED",
+            "INTERNAL",
+            "UNAVAILABLE",
+            "DATA_LOSS",
+        ]
+    ] = None
+    """The status code."""
+
+    message: Optional[str] = None
+    """A developer-facing error message in English."""
+
+
+class BatchInferenceJob(BaseModel):
+    continued_from_job_name: Optional[str] = FieldInfo(alias="continuedFromJobName", default=None)
+    """
+    The resource name of the batch inference job that this job continues from. Used
+    for lineage tracking to understand job continuation chains.
+    """
+
+    created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
+    """The email address of the user who initiated this batch inference job."""
+
+    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
+    """The creation time of the batch inference job."""
+
+    display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
+
+    inference_parameters: Optional[BatchInferenceJobInferenceParameters] = FieldInfo(
+        alias="inferenceParameters", default=None
+    )
+    """Parameters controlling the inference process."""
+
+    input_dataset_id: Optional[str] = FieldInfo(alias="inputDatasetId", default=None)
+    """The name of the dataset used for inference.
+
+    This is required, except when continued_from_job_name is specified.
+    """
+
+    job_progress: Optional[BatchInferenceJobJobProgress] = FieldInfo(alias="jobProgress", default=None)
+    """Job progress."""
+
+    model: Optional[str] = None
+    """The name of the model to use for inference.
+
+    This is required, except when continued_from_job_name is specified.
+    """
+
+    name: Optional[str] = None
+
+    output_dataset_id: Optional[str] = FieldInfo(alias="outputDatasetId", default=None)
+    """The name of the dataset used for storing the results.
+
+    This will also contain the error file.
+    """
+
+    precision: Optional[
+        Literal[
+            "PRECISION_UNSPECIFIED",
+            "FP16",
+            "FP8",
+            "FP8_MM",
+            "FP8_AR",
+            "FP8_MM_KV_ATTN",
+            "FP8_KV",
+            "FP8_MM_V2",
+            "FP8_V2",
+            "FP8_MM_KV_ATTN_V2",
+            "NF4",
+            "FP4",
+            "BF16",
+            "FP4_BLOCKSCALED_MM",
+            "FP4_MX_MOE",
+        ]
+    ] = None
+    """
+    The precision with which the model should be served. If PRECISION_UNSPECIFIED, a
+    default will be chosen based on the model.
+    """
+
+    state: Optional[
+        Literal[
+            "JOB_STATE_UNSPECIFIED",
+            "JOB_STATE_CREATING",
+            "JOB_STATE_RUNNING",
+            "JOB_STATE_COMPLETED",
+            "JOB_STATE_FAILED",
+            "JOB_STATE_CANCELLED",
+            "JOB_STATE_DELETING",
+            "JOB_STATE_WRITING_RESULTS",
+            "JOB_STATE_VALIDATING",
+            "JOB_STATE_DELETING_CLEANING_UP",
+            "JOB_STATE_PENDING",
+            "JOB_STATE_EXPIRED",
+            "JOB_STATE_RE_QUEUEING",
+            "JOB_STATE_CREATING_INPUT_DATASET",
+            "JOB_STATE_IDLE",
+        ]
+    ] = None
+    """JobState represents the state an asynchronous job can be in."""
+
+    status: Optional[BatchInferenceJobStatus] = None
+
+    update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
+    """The update time for the batch inference job."""
+
+
+class BatchInferenceJobListResponse(BaseModel):
+    batch_inference_jobs: Optional[List[BatchInferenceJob]] = FieldInfo(alias="batchInferenceJobs", default=None)
+
+    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
+    """
+    A token, which can be sent as `page_token` to retrieve the next page. If this
+    field is omitted, there are no subsequent pages.
+    """
+
+    total_size: Optional[int] = FieldInfo(alias="totalSize", default=None)
+    """The total number of batch inference jobs."""
