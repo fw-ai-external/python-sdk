@@ -8,7 +8,7 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["Account", "Status"]
+__all__ = ["UserUpdateResponse", "Status"]
 
 
 class Status(BaseModel):
@@ -39,37 +39,31 @@ class Status(BaseModel):
     """A developer-facing error message in English."""
 
 
-class Account(BaseModel):
-    email: str
-    """For developer accounts, this is the email of the developer user and is
-    immutable.
-
-    For ENTERPRISE and BUSINESS accounts, this is mutable and it is the email that
-    will recieve the invoice for the account if automated billing is used.
-    """
+class UserUpdateResponse(BaseModel):
+    role: str
+    """The user's role, e.g. admin or user."""
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
-    """The creation time of the account."""
+    """The creation time of the user."""
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
-    """Human-readable display name of the account.
+    """Human-readable display name of the user.
 
-    e.g. "My Account" Must be fewer than 64 characters long.
+    e.g. "Alice" Must be fewer than 64 characters long.
     """
+
+    email: Optional[str] = None
+    """The user's email address."""
 
     name: Optional[str] = None
 
+    service_account: Optional[bool] = FieldInfo(alias="serviceAccount", default=None)
+
     state: Optional[Literal["STATE_UNSPECIFIED", "CREATING", "READY", "UPDATING", "DELETING"]] = None
-    """The state of the account."""
+    """The state of the user."""
 
     status: Optional[Status] = None
-    """Contains information about the account status."""
-
-    suspend_state: Optional[
-        Literal[
-            "UNSUSPENDED", "FAILED_PAYMENTS", "CREDIT_DEPLETED", "MONTHLY_SPEND_LIMIT_EXCEEDED", "BLOCKED_BY_ABUSE_RULE"
-        ]
-    ] = FieldInfo(alias="suspendState", default=None)
+    """Contains information about the user status."""
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
-    """The update time for the account."""
+    """The update time for the user."""
