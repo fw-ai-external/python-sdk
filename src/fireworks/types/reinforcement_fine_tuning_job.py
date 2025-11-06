@@ -7,59 +7,11 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .shared.status import Status
+from .shared.wandb_config import WandbConfig
+from .shared.inference_parameters import InferenceParameters
 
-__all__ = ["ReinforcementFineTuningJob", "InferenceParameters", "Status", "TrainingConfig", "WandbConfig"]
-
-
-class InferenceParameters(BaseModel):
-    extra_body: Optional[str] = FieldInfo(alias="extraBody", default=None)
-    """
-    Additional parameters for the inference request as a JSON string. For example:
-    "{\"stop\": [\"\\n\"]}".
-    """
-
-    max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
-    """Maximum number of tokens to generate per response."""
-
-    n: Optional[int] = None
-    """Number of response candidates to generate per input."""
-
-    temperature: Optional[float] = None
-    """Sampling temperature, typically between 0 and 2."""
-
-    top_k: Optional[int] = FieldInfo(alias="topK", default=None)
-    """Top-k sampling parameter, limits the token selection to the top k tokens."""
-
-    top_p: Optional[float] = FieldInfo(alias="topP", default=None)
-    """Top-p sampling parameter, typically between 0 and 1."""
-
-
-class Status(BaseModel):
-    code: Optional[
-        Literal[
-            "OK",
-            "CANCELLED",
-            "UNKNOWN",
-            "INVALID_ARGUMENT",
-            "DEADLINE_EXCEEDED",
-            "NOT_FOUND",
-            "ALREADY_EXISTS",
-            "PERMISSION_DENIED",
-            "UNAUTHENTICATED",
-            "RESOURCE_EXHAUSTED",
-            "FAILED_PRECONDITION",
-            "ABORTED",
-            "OUT_OF_RANGE",
-            "UNIMPLEMENTED",
-            "INTERNAL",
-            "UNAVAILABLE",
-            "DATA_LOSS",
-        ]
-    ] = None
-    """The status code."""
-
-    message: Optional[str] = None
-    """A developer-facing error message in English."""
+__all__ = ["ReinforcementFineTuningJob", "TrainingConfig"]
 
 
 class TrainingConfig(BaseModel):
@@ -136,26 +88,6 @@ class TrainingConfig(BaseModel):
     The PEFT addon model in Fireworks format to be fine-tuned from Only one of
     'base_model' or 'warm_start_from' should be specified.
     """
-
-
-class WandbConfig(BaseModel):
-    api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
-    """The API key for the wandb service."""
-
-    enabled: Optional[bool] = None
-    """Whether to enable wandb logging."""
-
-    entity: Optional[str] = None
-    """The entity name for the wandb service."""
-
-    project: Optional[str] = None
-    """The project name for the wandb service."""
-
-    run_id: Optional[str] = FieldInfo(alias="runId", default=None)
-    """The run ID for the wandb service."""
-
-    url: Optional[str] = None
-    """The URL for the wandb service."""
 
 
 class ReinforcementFineTuningJob(BaseModel):

@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
+from .shared_params.wandb_config import WandbConfig
+from .shared_params.inference_parameters import InferenceParameters
 
-__all__ = ["ReinforcementFineTuningJobCreateParams", "InferenceParameters", "TrainingConfig", "WandbConfig"]
+__all__ = ["ReinforcementFineTuningJobCreateParams", "TrainingConfig"]
 
 
 class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
@@ -40,29 +42,6 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
-
-
-class InferenceParameters(TypedDict, total=False):
-    extra_body: Annotated[str, PropertyInfo(alias="extraBody")]
-    """
-    Additional parameters for the inference request as a JSON string. For example:
-    "{\"stop\": [\"\\n\"]}".
-    """
-
-    max_tokens: Annotated[int, PropertyInfo(alias="maxTokens")]
-    """Maximum number of tokens to generate per response."""
-
-    n: int
-    """Number of response candidates to generate per input."""
-
-    temperature: float
-    """Sampling temperature, typically between 0 and 2."""
-
-    top_k: Annotated[int, PropertyInfo(alias="topK")]
-    """Top-k sampling parameter, limits the token selection to the top k tokens."""
-
-    top_p: Annotated[float, PropertyInfo(alias="topP")]
-    """Top-p sampling parameter, typically between 0 and 1."""
 
 
 class TrainingConfig(TypedDict, total=False):
@@ -137,20 +116,3 @@ class TrainingConfig(TypedDict, total=False):
     The PEFT addon model in Fireworks format to be fine-tuned from Only one of
     'base_model' or 'warm_start_from' should be specified.
     """
-
-
-class WandbConfig(TypedDict, total=False):
-    api_key: Annotated[str, PropertyInfo(alias="apiKey")]
-    """The API key for the wandb service."""
-
-    enabled: bool
-    """Whether to enable wandb logging."""
-
-    entity: str
-    """The entity name for the wandb service."""
-
-    project: str
-    """The project name for the wandb service."""
-
-    run_id: Annotated[str, PropertyInfo(alias="runId")]
-    """The run ID for the wandb service."""

@@ -31,7 +31,11 @@ from .._response import (
 from ..types.model import Model
 from .._base_client import make_request_options
 from ..types.model_param import ModelParam
+from ..types.type_date_param import TypeDateParam
+from ..types.peft_details_param import PeftDetailsParam
 from ..types.model_list_response import ModelListResponse
+from ..types.base_model_details_param import BaseModelDetailsParam
+from ..types.conversation_config_param import ConversationConfigParam
 from ..types.model_get_upload_endpoint_response import ModelGetUploadEndpointResponse
 from ..types.model_get_download_endpoint_response import ModelGetDownloadEndpointResponse
 
@@ -117,12 +121,12 @@ class ModelsResource(SyncAPIResource):
         model_id: str,
         *,
         account_id: str,
-        base_model_details: model_update_params.BaseModelDetails | Omit = omit,
+        base_model_details: BaseModelDetailsParam | Omit = omit,
         context_length: int | Omit = omit,
-        conversation_config: model_update_params.ConversationConfig | Omit = omit,
+        conversation_config: ConversationConfigParam | Omit = omit,
         default_draft_model: str | Omit = omit,
         default_draft_token_count: int | Omit = omit,
-        deprecation_date: model_update_params.DeprecationDate | Omit = omit,
+        deprecation_date: TypeDateParam | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
         github_url: str | Omit = omit,
@@ -142,7 +146,7 @@ class ModelsResource(SyncAPIResource):
             "SNAPSHOT_MODEL",
         ]
         | Omit = omit,
-        peft_details: model_update_params.PeftDetails | Omit = omit,
+        peft_details: PeftDetailsParam | Omit = omit,
         public: bool | Omit = omit,
         snapshot_type: Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"] | Omit = omit,
         supports_image_input: bool | Omit = omit,
@@ -718,12 +722,12 @@ class AsyncModelsResource(AsyncAPIResource):
         model_id: str,
         *,
         account_id: str,
-        base_model_details: model_update_params.BaseModelDetails | Omit = omit,
+        base_model_details: BaseModelDetailsParam | Omit = omit,
         context_length: int | Omit = omit,
-        conversation_config: model_update_params.ConversationConfig | Omit = omit,
+        conversation_config: ConversationConfigParam | Omit = omit,
         default_draft_model: str | Omit = omit,
         default_draft_token_count: int | Omit = omit,
-        deprecation_date: model_update_params.DeprecationDate | Omit = omit,
+        deprecation_date: TypeDateParam | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
         github_url: str | Omit = omit,
@@ -743,7 +747,7 @@ class AsyncModelsResource(AsyncAPIResource):
             "SNAPSHOT_MODEL",
         ]
         | Omit = omit,
-        peft_details: model_update_params.PeftDetails | Omit = omit,
+        peft_details: PeftDetailsParam | Omit = omit,
         public: bool | Omit = omit,
         snapshot_type: Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"] | Omit = omit,
         supports_image_input: bool | Omit = omit,

@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
+from .shared_params.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJobCreateParams", "HiddenStatesGenConfig", "WandbConfig"]
+__all__ = ["SupervisedFineTuningJobCreateParams", "HiddenStatesGenConfig"]
 
 
 class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
@@ -134,20 +135,3 @@ class HiddenStatesGenConfig(TypedDict, total=False):
     output_activations: Annotated[bool, PropertyInfo(alias="outputActivations")]
 
     regenerate_assistant: Annotated[bool, PropertyInfo(alias="regenerateAssistant")]
-
-
-class WandbConfig(TypedDict, total=False):
-    api_key: Annotated[str, PropertyInfo(alias="apiKey")]
-    """The API key for the wandb service."""
-
-    enabled: bool
-    """Whether to enable wandb logging."""
-
-    entity: str
-    """The entity name for the wandb service."""
-
-    project: str
-    """The project name for the wandb service."""
-
-    run_id: Annotated[str, PropertyInfo(alias="runId")]
-    """The run ID for the wandb service."""

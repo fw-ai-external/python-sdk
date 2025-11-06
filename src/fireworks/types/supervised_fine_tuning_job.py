@@ -7,8 +7,10 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .shared.status import Status
+from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "HiddenStatesGenConfig", "Status", "WandbConfig"]
+__all__ = ["SupervisedFineTuningJob", "HiddenStatesGenConfig"]
 
 
 class HiddenStatesGenConfig(BaseModel):
@@ -29,54 +31,6 @@ class HiddenStatesGenConfig(BaseModel):
     output_activations: Optional[bool] = FieldInfo(alias="outputActivations", default=None)
 
     regenerate_assistant: Optional[bool] = FieldInfo(alias="regenerateAssistant", default=None)
-
-
-class Status(BaseModel):
-    code: Optional[
-        Literal[
-            "OK",
-            "CANCELLED",
-            "UNKNOWN",
-            "INVALID_ARGUMENT",
-            "DEADLINE_EXCEEDED",
-            "NOT_FOUND",
-            "ALREADY_EXISTS",
-            "PERMISSION_DENIED",
-            "UNAUTHENTICATED",
-            "RESOURCE_EXHAUSTED",
-            "FAILED_PRECONDITION",
-            "ABORTED",
-            "OUT_OF_RANGE",
-            "UNIMPLEMENTED",
-            "INTERNAL",
-            "UNAVAILABLE",
-            "DATA_LOSS",
-        ]
-    ] = None
-    """The status code."""
-
-    message: Optional[str] = None
-    """A developer-facing error message in English."""
-
-
-class WandbConfig(BaseModel):
-    api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
-    """The API key for the wandb service."""
-
-    enabled: Optional[bool] = None
-    """Whether to enable wandb logging."""
-
-    entity: Optional[str] = None
-    """The entity name for the wandb service."""
-
-    project: Optional[str] = None
-    """The project name for the wandb service."""
-
-    run_id: Optional[str] = FieldInfo(alias="runId", default=None)
-    """The run ID for the wandb service."""
-
-    url: Optional[str] = None
-    """The URL for the wandb service."""
 
 
 class SupervisedFineTuningJob(BaseModel):

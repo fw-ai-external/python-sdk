@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Union
+from typing import Union
 from datetime import datetime
 from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._types import SequenceNotStr
 from .._utils import PropertyInfo
+from .auto_tune_param import AutoTuneParam
+from .placement_param import PlacementParam
+from .autoscaling_policy_param import AutoscalingPolicyParam
 
-__all__ = ["DeploymentCreateParams", "AutoscalingPolicy", "AutoTune", "Placement"]
+__all__ = ["DeploymentCreateParams"]
 
 
 class DeploymentCreateParams(TypedDict, total=False):
@@ -74,9 +77,9 @@ class DeploymentCreateParams(TypedDict, total=False):
     Used to enable a specific model version.
     """
 
-    autoscaling_policy: Annotated[AutoscalingPolicy, PropertyInfo(alias="autoscalingPolicy")]
+    autoscaling_policy: Annotated[AutoscalingPolicyParam, PropertyInfo(alias="autoscalingPolicy")]
 
-    auto_tune: Annotated[AutoTune, PropertyInfo(alias="autoTune")]
+    auto_tune: Annotated[AutoTuneParam, PropertyInfo(alias="autoTune")]
     """The performance profile to use for this deployment."""
 
     deployment_shape: Annotated[str, PropertyInfo(alias="deploymentShape")]
@@ -165,7 +168,7 @@ class DeploymentCreateParams(TypedDict, total=False):
     ngram_speculation_length: Annotated[int, PropertyInfo(alias="ngramSpeculationLength")]
     """The length of previous input sequence to be considered for N-gram speculation."""
 
-    placement: Placement
+    placement: PlacementParam
     """
     The desired geographic region where the deployment must be placed. If
     unspecified, the default is the GLOBAL multi-region.
@@ -189,91 +192,3 @@ class DeploymentCreateParams(TypedDict, total=False):
         "FP4_MX_MOE",
     ]
     """The precision with which the model should be served."""
-
-
-class AutoscalingPolicy(TypedDict, total=False):
-    load_targets: Annotated[Dict[str, float], PropertyInfo(alias="loadTargets")]
-
-    scale_down_window: Annotated[str, PropertyInfo(alias="scaleDownWindow")]
-    """
-    The duration the autoscaler will wait before scaling down a deployment after
-    observing decreased load. Default is 10m.
-    """
-
-    scale_to_zero_window: Annotated[str, PropertyInfo(alias="scaleToZeroWindow")]
-    """
-    The duration after which there are no requests that the deployment will be
-    scaled down to zero replicas, if min_replica_count==0. Default is 1h. This must
-    be at least 5 minutes.
-    """
-
-    scale_up_window: Annotated[str, PropertyInfo(alias="scaleUpWindow")]
-    """
-    The duration the autoscaler will wait before scaling up a deployment after
-    observing increased load. Default is 30s.
-    """
-
-
-class AutoTune(TypedDict, total=False):
-    long_prompt: Annotated[bool, PropertyInfo(alias="longPrompt")]
-    """If true, this deployment is optimized for long prompt lengths."""
-
-
-class Placement(TypedDict, total=False):
-    multi_region: Annotated[Literal["MULTI_REGION_UNSPECIFIED", "GLOBAL", "US"], PropertyInfo(alias="multiRegion")]
-    """The multi-region where the deployment must be placed."""
-
-    region: Literal[
-        "REGION_UNSPECIFIED",
-        "US_IOWA_1",
-        "US_VIRGINIA_1",
-        "US_ILLINOIS_1",
-        "AP_TOKYO_1",
-        "US_ARIZONA_1",
-        "US_TEXAS_1",
-        "US_ILLINOIS_2",
-        "EU_FRANKFURT_1",
-        "US_TEXAS_2",
-        "EU_ICELAND_1",
-        "EU_ICELAND_2",
-        "US_WASHINGTON_1",
-        "US_WASHINGTON_2",
-        "US_WASHINGTON_3",
-        "AP_TOKYO_2",
-        "US_CALIFORNIA_1",
-        "US_UTAH_1",
-        "US_TEXAS_3",
-        "US_GEORGIA_1",
-        "US_GEORGIA_2",
-        "US_WASHINGTON_4",
-        "US_GEORGIA_3",
-    ]
-    """The region where the deployment must be placed."""
-
-    regions: List[
-        Literal[
-            "REGION_UNSPECIFIED",
-            "US_IOWA_1",
-            "US_VIRGINIA_1",
-            "US_ILLINOIS_1",
-            "AP_TOKYO_1",
-            "US_ARIZONA_1",
-            "US_TEXAS_1",
-            "US_ILLINOIS_2",
-            "EU_FRANKFURT_1",
-            "US_TEXAS_2",
-            "EU_ICELAND_1",
-            "EU_ICELAND_2",
-            "US_WASHINGTON_1",
-            "US_WASHINGTON_2",
-            "US_WASHINGTON_3",
-            "AP_TOKYO_2",
-            "US_CALIFORNIA_1",
-            "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_GEORGIA_1",
-            "US_GEORGIA_2",
-            "US_WASHINGTON_4",
-            "US_GEORGIA_3",
-        ]
-    ]

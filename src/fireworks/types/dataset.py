@@ -7,54 +7,12 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .splitted import Splitted
+from .transformed import Transformed
+from .shared.status import Status
+from .evaluation_result import EvaluationResult
 
-__all__ = ["Dataset", "EvaluationResult", "Splitted", "Status", "Transformed"]
-
-
-class EvaluationResult(BaseModel):
-    evaluation_job_id: str = FieldInfo(alias="evaluationJobId")
-
-
-class Splitted(BaseModel):
-    source_dataset_id: str = FieldInfo(alias="sourceDatasetId")
-
-
-class Status(BaseModel):
-    code: Optional[
-        Literal[
-            "OK",
-            "CANCELLED",
-            "UNKNOWN",
-            "INVALID_ARGUMENT",
-            "DEADLINE_EXCEEDED",
-            "NOT_FOUND",
-            "ALREADY_EXISTS",
-            "PERMISSION_DENIED",
-            "UNAUTHENTICATED",
-            "RESOURCE_EXHAUSTED",
-            "FAILED_PRECONDITION",
-            "ABORTED",
-            "OUT_OF_RANGE",
-            "UNIMPLEMENTED",
-            "INTERNAL",
-            "UNAVAILABLE",
-            "DATA_LOSS",
-        ]
-    ] = None
-    """The status code."""
-
-    message: Optional[str] = None
-    """A developer-facing error message in English."""
-
-
-class Transformed(BaseModel):
-    source_dataset_id: str = FieldInfo(alias="sourceDatasetId")
-
-    filter: Optional[str] = None
-
-    original_format: Optional[Literal["FORMAT_UNSPECIFIED", "CHAT", "COMPLETION", "RL"]] = FieldInfo(
-        alias="originalFormat", default=None
-    )
+__all__ = ["Dataset"]
 
 
 class Dataset(BaseModel):
