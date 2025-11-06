@@ -10,87 +10,31 @@ import pytest
 from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
-    DeployedModel,
-    DeployedModelListResponse,
+    LoraGetResponse,
+    LoraListResponse,
+    LoraLoadResponse,
+    LoraUpdateResponse,
 )
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
 
-class TestDeployedModels:
+class TestLora:
     parametrize = pytest.mark.parametrize("client", [False, True], indirect=True, ids=["loose", "strict"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_create(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.create(
-            account_id="account_id",
-        )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_method_create_with_all_params(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.create(
-            account_id="account_id",
-            replace_merged_addon=True,
-            default=True,
-            deployment="deployment",
-            description="description",
-            display_name="displayName",
-            model="model",
-            public=True,
-            serverless=True,
-        )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_raw_response_create(self, client: Fireworks) -> None:
-        response = client.deployed_models.with_raw_response.create(
-            account_id="account_id",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_streaming_response_create(self, client: Fireworks) -> None:
-        with client.deployed_models.with_streaming_response.create(
-            account_id="account_id",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            deployed_model = response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_path_params_create(self, client: Fireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.deployed_models.with_raw_response.create(
-                account_id="",
-            )
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
     def test_method_update(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.update(
+        lora = client.lora.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_update_with_all_params(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.update(
+        lora = client.lora.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
             default=True,
@@ -101,33 +45,33 @@ class TestDeployedModels:
             public=True,
             serverless=True,
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_update(self, client: Fireworks) -> None:
-        response = client.deployed_models.with_raw_response.update(
+        response = client.lora.with_raw_response.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        lora = response.parse()
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_update(self, client: Fireworks) -> None:
-        with client.deployed_models.with_streaming_response.update(
+        with client.lora.with_streaming_response.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
+            lora = response.parse()
+            assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -135,13 +79,13 @@ class TestDeployedModels:
     @parametrize
     def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.deployed_models.with_raw_response.update(
+            client.lora.with_raw_response.update(
                 deployed_model_id="deployed_model_id",
                 account_id="",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            client.deployed_models.with_raw_response.update(
+            client.lora.with_raw_response.update(
                 deployed_model_id="",
                 account_id="account_id",
             )
@@ -149,15 +93,15 @@ class TestDeployedModels:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_list(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.list(
+        lora = client.lora.list(
             account_id="account_id",
         )
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_list_with_all_params(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.list(
+        lora = client.lora.list(
             account_id="account_id",
             filter="filter",
             order_by="orderBy",
@@ -165,31 +109,31 @@ class TestDeployedModels:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_list(self, client: Fireworks) -> None:
-        response = client.deployed_models.with_raw_response.list(
+        response = client.lora.with_raw_response.list(
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = response.parse()
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        lora = response.parse()
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_list(self, client: Fireworks) -> None:
-        with client.deployed_models.with_streaming_response.list(
+        with client.lora.with_streaming_response.list(
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = response.parse()
-            assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+            lora = response.parse()
+            assert_matches_type(LoraListResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -197,106 +141,54 @@ class TestDeployedModels:
     @parametrize
     def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.deployed_models.with_raw_response.list(
+            client.lora.with_raw_response.list(
                 account_id="",
-            )
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_method_delete(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        )
-        assert_matches_type(object, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_raw_response_delete(self, client: Fireworks) -> None:
-        response = client.deployed_models.with_raw_response.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = response.parse()
-        assert_matches_type(object, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_streaming_response_delete(self, client: Fireworks) -> None:
-        with client.deployed_models.with_streaming_response.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            deployed_model = response.parse()
-            assert_matches_type(object, deployed_model, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_path_params_delete(self, client: Fireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.deployed_models.with_raw_response.delete(
-                deployed_model_id="deployed_model_id",
-                account_id="",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            client.deployed_models.with_raw_response.delete(
-                deployed_model_id="",
-                account_id="account_id",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_get(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.get(
+        lora = client.lora.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_get_with_all_params(self, client: Fireworks) -> None:
-        deployed_model = client.deployed_models.get(
+        lora = client.lora.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_get(self, client: Fireworks) -> None:
-        response = client.deployed_models.with_raw_response.get(
+        response = client.lora.with_raw_response.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        lora = response.parse()
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_get(self, client: Fireworks) -> None:
-        with client.deployed_models.with_streaming_response.get(
+        with client.lora.with_streaming_response.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
+            lora = response.parse()
+            assert_matches_type(LoraGetResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -304,35 +196,29 @@ class TestDeployedModels:
     @parametrize
     def test_path_params_get(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.deployed_models.with_raw_response.get(
+            client.lora.with_raw_response.get(
                 deployed_model_id="deployed_model_id",
                 account_id="",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            client.deployed_models.with_raw_response.get(
+            client.lora.with_raw_response.get(
                 deployed_model_id="",
                 account_id="account_id",
             )
 
-
-class TestAsyncDeployedModels:
-    parametrize = pytest.mark.parametrize(
-        "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
-    )
-
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.create(
+    def test_method_load(self, client: Fireworks) -> None:
+        lora = client.lora.load(
             account_id="account_id",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.create(
+    def test_method_load_with_all_params(self, client: Fireworks) -> None:
+        lora = client.lora.load(
             account_id="account_id",
             replace_merged_addon=True,
             default=True,
@@ -343,55 +229,113 @@ class TestAsyncDeployedModels:
             public=True,
             serverless=True,
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.deployed_models.with_raw_response.create(
+    def test_raw_response_load(self, client: Fireworks) -> None:
+        response = client.lora.with_raw_response.load(
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = await response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        lora = response.parse()
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
-        async with async_client.deployed_models.with_streaming_response.create(
+    def test_streaming_response_load(self, client: Fireworks) -> None:
+        with client.lora.with_streaming_response.load(
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = await response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
+            lora = response.parse()
+            assert_matches_type(LoraLoadResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
+    def test_path_params_load(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.create(
+            client.lora.with_raw_response.load(
                 account_id="",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_update(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.update(
+    def test_method_unload(self, client: Fireworks) -> None:
+        lora = client.lora.unload(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(object, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_unload(self, client: Fireworks) -> None:
+        response = client.lora.with_raw_response.unload(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        lora = response.parse()
+        assert_matches_type(object, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_unload(self, client: Fireworks) -> None:
+        with client.lora.with_streaming_response.unload(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            lora = response.parse()
+            assert_matches_type(object, lora, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_unload(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.lora.with_raw_response.unload(
+                deployed_model_id="deployed_model_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
+            client.lora.with_raw_response.unload(
+                deployed_model_id="",
+                account_id="account_id",
+            )
+
+
+class TestAsyncLora:
+    parametrize = pytest.mark.parametrize(
+        "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
+    )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_update(self, async_client: AsyncFireworks) -> None:
+        lora = await async_client.lora.update(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        )
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.update(
+        lora = await async_client.lora.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
             default=True,
@@ -402,33 +346,33 @@ class TestAsyncDeployedModels:
             public=True,
             serverless=True,
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.deployed_models.with_raw_response.update(
+        response = await async_client.lora.with_raw_response.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = await response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        lora = await response.parse()
+        assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
-        async with async_client.deployed_models.with_streaming_response.update(
+        async with async_client.lora.with_streaming_response.update(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = await response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
+            lora = await response.parse()
+            assert_matches_type(LoraUpdateResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -436,13 +380,13 @@ class TestAsyncDeployedModels:
     @parametrize
     async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.update(
+            await async_client.lora.with_raw_response.update(
                 deployed_model_id="deployed_model_id",
                 account_id="",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.update(
+            await async_client.lora.with_raw_response.update(
                 deployed_model_id="",
                 account_id="account_id",
             )
@@ -450,15 +394,15 @@ class TestAsyncDeployedModels:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_list(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.list(
+        lora = await async_client.lora.list(
             account_id="account_id",
         )
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.list(
+        lora = await async_client.lora.list(
             account_id="account_id",
             filter="filter",
             order_by="orderBy",
@@ -466,31 +410,31 @@ class TestAsyncDeployedModels:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.deployed_models.with_raw_response.list(
+        response = await async_client.lora.with_raw_response.list(
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = await response.parse()
-        assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+        lora = await response.parse()
+        assert_matches_type(LoraListResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
-        async with async_client.deployed_models.with_streaming_response.list(
+        async with async_client.lora.with_streaming_response.list(
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = await response.parse()
-            assert_matches_type(DeployedModelListResponse, deployed_model, path=["response"])
+            lora = await response.parse()
+            assert_matches_type(LoraListResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -498,106 +442,54 @@ class TestAsyncDeployedModels:
     @parametrize
     async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.list(
+            await async_client.lora.with_raw_response.list(
                 account_id="",
-            )
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_method_delete(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        )
-        assert_matches_type(object, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.deployed_models.with_raw_response.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = await response.parse()
-        assert_matches_type(object, deployed_model, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
-        async with async_client.deployed_models.with_streaming_response.delete(
-            deployed_model_id="deployed_model_id",
-            account_id="account_id",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            deployed_model = await response.parse()
-            assert_matches_type(object, deployed_model, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.delete(
-                deployed_model_id="deployed_model_id",
-                account_id="",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.delete(
-                deployed_model_id="",
-                account_id="account_id",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.get(
+        lora = await async_client.lora.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_get_with_all_params(self, async_client: AsyncFireworks) -> None:
-        deployed_model = await async_client.deployed_models.get(
+        lora = await async_client.lora.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_get(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.deployed_models.with_raw_response.get(
+        response = await async_client.lora.with_raw_response.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        deployed_model = await response.parse()
-        assert_matches_type(DeployedModel, deployed_model, path=["response"])
+        lora = await response.parse()
+        assert_matches_type(LoraGetResponse, lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_get(self, async_client: AsyncFireworks) -> None:
-        async with async_client.deployed_models.with_streaming_response.get(
+        async with async_client.lora.with_streaming_response.get(
             deployed_model_id="deployed_model_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            deployed_model = await response.parse()
-            assert_matches_type(DeployedModel, deployed_model, path=["response"])
+            lora = await response.parse()
+            assert_matches_type(LoraGetResponse, lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -605,13 +497,123 @@ class TestAsyncDeployedModels:
     @parametrize
     async def test_path_params_get(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.get(
+            await async_client.lora.with_raw_response.get(
                 deployed_model_id="deployed_model_id",
                 account_id="",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
-            await async_client.deployed_models.with_raw_response.get(
+            await async_client.lora.with_raw_response.get(
+                deployed_model_id="",
+                account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_load(self, async_client: AsyncFireworks) -> None:
+        lora = await async_client.lora.load(
+            account_id="account_id",
+        )
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_load_with_all_params(self, async_client: AsyncFireworks) -> None:
+        lora = await async_client.lora.load(
+            account_id="account_id",
+            replace_merged_addon=True,
+            default=True,
+            deployment="deployment",
+            description="description",
+            display_name="displayName",
+            model="model",
+            public=True,
+            serverless=True,
+        )
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_load(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.lora.with_raw_response.load(
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        lora = await response.parse()
+        assert_matches_type(LoraLoadResponse, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_load(self, async_client: AsyncFireworks) -> None:
+        async with async_client.lora.with_streaming_response.load(
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            lora = await response.parse()
+            assert_matches_type(LoraLoadResponse, lora, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_load(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.lora.with_raw_response.load(
+                account_id="",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_unload(self, async_client: AsyncFireworks) -> None:
+        lora = await async_client.lora.unload(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        )
+        assert_matches_type(object, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_unload(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.lora.with_raw_response.unload(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        lora = await response.parse()
+        assert_matches_type(object, lora, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_unload(self, async_client: AsyncFireworks) -> None:
+        async with async_client.lora.with_streaming_response.unload(
+            deployed_model_id="deployed_model_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            lora = await response.parse()
+            assert_matches_type(object, lora, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_unload(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.lora.with_raw_response.unload(
+                deployed_model_id="deployed_model_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployed_model_id` but received ''"):
+            await async_client.lora.with_raw_response.unload(
                 deployed_model_id="",
                 account_id="account_id",
             )

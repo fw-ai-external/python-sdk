@@ -6,10 +6,10 @@ from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["DeployedModelGetParams"]
+__all__ = ["LoraGetParams"]
 
 
-class DeployedModelGetParams(TypedDict, total=False):
+class LoraGetParams(TypedDict, total=False):
     account_id: Required[str]
 
     read_mask: Annotated[str, PropertyInfo(alias="readMask")]

@@ -7,7 +7,9 @@ import httpx
 from ..types import (
     reinforcement_fine_tuning_job_get_params,
     reinforcement_fine_tuning_job_list_params,
+    reinforcement_fine_tuning_job_cancel_params,
     reinforcement_fine_tuning_job_create_params,
+    reinforcement_fine_tuning_job_resume_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -243,6 +245,50 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
             cast_to=object,
         )
 
+    def cancel(
+        self,
+        reinforcement_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Reinforcement Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not reinforcement_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
+            )
+        return self._post(
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+            body=maybe_transform(
+                body, reinforcement_fine_tuning_job_cancel_params.ReinforcementFineTuningJobCancelParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     def get(
         self,
         reinforcement_fine_tuning_job_id: str,
@@ -290,6 +336,50 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     {"read_mask": read_mask},
                     reinforcement_fine_tuning_job_get_params.ReinforcementFineTuningJobGetParams,
                 ),
+            ),
+            cast_to=ReinforcementFineTuningJob,
+        )
+
+    def resume(
+        self,
+        reinforcement_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> ReinforcementFineTuningJob:
+        """
+        Resume Reinforcement Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not reinforcement_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
+            )
+        return self._post(
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+            body=maybe_transform(
+                body, reinforcement_fine_tuning_job_resume_params.ReinforcementFineTuningJobResumeParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
             cast_to=ReinforcementFineTuningJob,
         )
@@ -510,6 +600,50 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
             cast_to=object,
         )
 
+    async def cancel(
+        self,
+        reinforcement_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Reinforcement Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not reinforcement_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
+            )
+        return await self._post(
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+            body=await async_maybe_transform(
+                body, reinforcement_fine_tuning_job_cancel_params.ReinforcementFineTuningJobCancelParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def get(
         self,
         reinforcement_fine_tuning_job_id: str,
@@ -561,6 +695,50 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
             cast_to=ReinforcementFineTuningJob,
         )
 
+    async def resume(
+        self,
+        reinforcement_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> ReinforcementFineTuningJob:
+        """
+        Resume Reinforcement Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not reinforcement_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
+            )
+        return await self._post(
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+            body=await async_maybe_transform(
+                body, reinforcement_fine_tuning_job_resume_params.ReinforcementFineTuningJobResumeParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=ReinforcementFineTuningJob,
+        )
+
 
 class ReinforcementFineTuningJobsResourceWithRawResponse:
     def __init__(self, reinforcement_fine_tuning_jobs: ReinforcementFineTuningJobsResource) -> None:
@@ -575,8 +753,14 @@ class ReinforcementFineTuningJobsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             reinforcement_fine_tuning_jobs.delete,
         )
+        self.cancel = to_raw_response_wrapper(
+            reinforcement_fine_tuning_jobs.cancel,
+        )
         self.get = to_raw_response_wrapper(
             reinforcement_fine_tuning_jobs.get,
+        )
+        self.resume = to_raw_response_wrapper(
+            reinforcement_fine_tuning_jobs.resume,
         )
 
 
@@ -593,8 +777,14 @@ class AsyncReinforcementFineTuningJobsResourceWithRawResponse:
         self.delete = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_jobs.delete,
         )
+        self.cancel = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_jobs.cancel,
+        )
         self.get = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_jobs.get,
+        )
+        self.resume = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_jobs.resume,
         )
 
 
@@ -611,8 +801,14 @@ class ReinforcementFineTuningJobsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             reinforcement_fine_tuning_jobs.delete,
         )
+        self.cancel = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_jobs.cancel,
+        )
         self.get = to_streamed_response_wrapper(
             reinforcement_fine_tuning_jobs.get,
+        )
+        self.resume = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_jobs.resume,
         )
 
 
@@ -629,6 +825,12 @@ class AsyncReinforcementFineTuningJobsResourceWithStreamingResponse:
         self.delete = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_jobs.delete,
         )
+        self.cancel = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_jobs.cancel,
+        )
         self.get = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_jobs.get,
+        )
+        self.resume = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_jobs.resume,
         )

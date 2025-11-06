@@ -1,5 +1,13 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
+from .lora import (
+    LoraResource,
+    AsyncLoraResource,
+    LoraResourceWithRawResponse,
+    AsyncLoraResourceWithRawResponse,
+    LoraResourceWithStreamingResponse,
+    AsyncLoraResourceWithStreamingResponse,
+)
 from .users import (
     UsersResource,
     AsyncUsersResource,
@@ -48,14 +56,6 @@ from .deployments import (
     DeploymentsResourceWithStreamingResponse,
     AsyncDeploymentsResourceWithStreamingResponse,
 )
-from .deployed_models import (
-    DeployedModelsResource,
-    AsyncDeployedModelsResource,
-    DeployedModelsResourceWithRawResponse,
-    AsyncDeployedModelsResourceWithRawResponse,
-    DeployedModelsResourceWithStreamingResponse,
-    AsyncDeployedModelsResourceWithStreamingResponse,
-)
 from .batch_inference_jobs import (
     BatchInferenceJobsResource,
     AsyncBatchInferenceJobsResource,
@@ -100,12 +100,6 @@ __all__ = [
     "AsyncDatasetsResourceWithRawResponse",
     "DatasetsResourceWithStreamingResponse",
     "AsyncDatasetsResourceWithStreamingResponse",
-    "DeployedModelsResource",
-    "AsyncDeployedModelsResource",
-    "DeployedModelsResourceWithRawResponse",
-    "AsyncDeployedModelsResourceWithRawResponse",
-    "DeployedModelsResourceWithStreamingResponse",
-    "AsyncDeployedModelsResourceWithStreamingResponse",
     "DeploymentsResource",
     "AsyncDeploymentsResource",
     "DeploymentsResourceWithRawResponse",
@@ -142,4 +136,10 @@ __all__ = [
     "AsyncAPIKeysResourceWithRawResponse",
     "APIKeysResourceWithStreamingResponse",
     "AsyncAPIKeysResourceWithStreamingResponse",
+    "LoraResource",
+    "AsyncLoraResource",
+    "LoraResourceWithRawResponse",
+    "AsyncLoraResourceWithRawResponse",
+    "LoraResourceWithStreamingResponse",
+    "AsyncLoraResourceWithStreamingResponse",
 ]

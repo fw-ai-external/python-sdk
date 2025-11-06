@@ -9,10 +9,10 @@ from pydantic import Field as FieldInfo
 from .._models import BaseModel
 from .shared.status import Status
 
-__all__ = ["DeployedModel"]
+__all__ = ["LoraLoadResponse"]
 
 
-class DeployedModel(BaseModel):
+class LoraLoadResponse(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the resource."""
 
