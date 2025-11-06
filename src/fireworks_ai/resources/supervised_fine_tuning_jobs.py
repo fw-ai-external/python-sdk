@@ -98,6 +98,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
+            "US_WASHINGTON_4",
+            "US_GEORGIA_3",
         ]
         | Omit = omit,
         wandb_config: supervised_fine_tuning_job_create_params.WandbConfig | Omit = omit,
@@ -162,7 +164,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -256,7 +260,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -307,7 +313,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
             )
         return self._delete(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -349,7 +357,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
             )
         return self._get(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -432,6 +442,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
+            "US_WASHINGTON_4",
+            "US_GEORGIA_3",
         ]
         | Omit = omit,
         wandb_config: supervised_fine_tuning_job_create_params.WandbConfig | Omit = omit,
@@ -496,7 +508,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -590,7 +604,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -641,7 +657,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
             )
         return await self._delete(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -683,7 +701,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
             )
         return await self._get(
-            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

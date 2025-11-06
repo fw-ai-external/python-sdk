@@ -31,6 +31,7 @@ from .api_key_list_response import APIKeyListResponse as APIKeyListResponse
 from .dataset_create_params import DatasetCreateParams as DatasetCreateParams
 from .dataset_list_response import DatasetListResponse as DatasetListResponse
 from .dataset_update_params import DatasetUpdateParams as DatasetUpdateParams
+from .dataset_upload_params import DatasetUploadParams as DatasetUploadParams
 from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
 from .model_create_response import ModelCreateResponse as ModelCreateResponse
 from .model_update_response import ModelUpdateResponse as ModelUpdateResponse
@@ -38,6 +39,7 @@ from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .api_key_create_response import APIKeyCreateResponse as APIKeyCreateResponse
 from .dataset_create_response import DatasetCreateResponse as DatasetCreateResponse
 from .dataset_update_response import DatasetUpdateResponse as DatasetUpdateResponse
+from .dataset_upload_response import DatasetUploadResponse as DatasetUploadResponse
 from .deployment_get_response import DeploymentGetResponse as DeploymentGetResponse
 from .deployment_create_params import DeploymentCreateParams as DeploymentCreateParams
 from .deployment_delete_params import DeploymentDeleteParams as DeploymentDeleteParams
@@ -53,6 +55,7 @@ from .deployed_model_create_params import DeployedModelCreateParams as DeployedM
 from .deployed_model_list_response import DeployedModelListResponse as DeployedModelListResponse
 from .deployed_model_update_params import DeployedModelUpdateParams as DeployedModelUpdateParams
 from .deployment_undelete_response import DeploymentUndeleteResponse as DeploymentUndeleteResponse
+from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
 from .dataset_validate_upload_params import DatasetValidateUploadParams as DatasetValidateUploadParams
 from .deployed_model_create_response import DeployedModelCreateResponse as DeployedModelCreateResponse

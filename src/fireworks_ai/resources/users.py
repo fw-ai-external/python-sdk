@@ -86,7 +86,9 @@ class UsersResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users",
+            f"/v1/accounts/{account_id}/users"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
             body=maybe_transform(
                 {
                     "role": role,
@@ -147,7 +149,9 @@ class UsersResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/users/{user_id}",
+            f"/v1/accounts/{account_id}/users/{user_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
             body=maybe_transform(
                 {
                     "role": role,
@@ -212,7 +216,9 @@ class UsersResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/users",
+            f"/v1/accounts/{account_id}/users"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -266,7 +272,9 @@ class UsersResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}",
+            f"/v1/accounts/{account_id}/users/{user_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -340,7 +348,9 @@ class AsyncUsersResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users",
+            f"/v1/accounts/{account_id}/users"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
             body=await async_maybe_transform(
                 {
                     "role": role,
@@ -401,7 +411,9 @@ class AsyncUsersResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/users/{user_id}",
+            f"/v1/accounts/{account_id}/users/{user_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
             body=await async_maybe_transform(
                 {
                     "role": role,
@@ -466,7 +478,9 @@ class AsyncUsersResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/users",
+            f"/v1/accounts/{account_id}/users"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -520,7 +534,9 @@ class AsyncUsersResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}",
+            f"/v1/accounts/{account_id}/users/{user_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

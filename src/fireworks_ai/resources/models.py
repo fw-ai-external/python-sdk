@@ -13,6 +13,7 @@ from ..types import (
     model_create_params,
     model_update_params,
     model_prepare_params,
+    model_validate_upload_params,
     model_get_upload_endpoint_params,
     model_get_download_endpoint_params,
 )
@@ -94,7 +95,9 @@ class ModelsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/models",
+            f"/v1/accounts/{account_id}/models"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
             body=maybe_transform(
                 {
                     "model_id": model_id,
@@ -219,7 +222,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             body=maybe_transform(
                 {
                     "base_model_details": base_model_details,
@@ -300,7 +305,9 @@ class ModelsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/models",
+            f"/v1/accounts/{account_id}/models"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -349,7 +356,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -390,7 +399,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -434,7 +445,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint",
+            f"/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -486,7 +499,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint",
+            f"/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint",
             body=maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -549,7 +564,9 @@ class ModelsResource(SyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/models/{model_id}:prepare",
+            f"/v1/accounts/{account_id}/models/{model_id}:prepare"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:prepare",
             body=maybe_transform(
                 {
                     "precision": precision,
@@ -559,6 +576,64 @@ class ModelsResource(SyncAPIResource):
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
+    def validate_upload(
+        self,
+        model_id: str,
+        *,
+        account_id: str,
+        config_only: bool | Omit = omit,
+        skip_hf_config_validation: bool | Omit = omit,
+        trust_remote_code: bool | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Validate Model Upload
+
+        Args:
+          config_only: If true, skip tokenizer and parameter name validation.
+
+          skip_hf_config_validation: If true, skip the Hugging Face config validation.
+
+          trust_remote_code: If true, trusts remote code when validating the Hugging Face config.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not model_id:
+            raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
+        return self._get(
+            f"/v1/accounts/{account_id}/models/{model_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:validateUpload",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {
+                        "config_only": config_only,
+                        "skip_hf_config_validation": skip_hf_config_validation,
+                        "trust_remote_code": trust_remote_code,
+                    },
+                    model_validate_upload_params.ModelValidateUploadParams,
+                ),
             ),
             cast_to=object,
         )
@@ -621,7 +696,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/models",
+            f"/v1/accounts/{account_id}/models"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
             body=await async_maybe_transform(
                 {
                     "model_id": model_id,
@@ -746,7 +823,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             body=await async_maybe_transform(
                 {
                     "base_model_details": base_model_details,
@@ -827,7 +906,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/models",
+            f"/v1/accounts/{account_id}/models"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -876,7 +957,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -917,7 +1000,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/models/{model_id}",
+            f"/v1/accounts/{account_id}/models/{model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -961,7 +1046,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint",
+            f"/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -1013,7 +1100,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint",
+            f"/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint",
             body=await async_maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -1076,7 +1165,9 @@ class AsyncModelsResource(AsyncAPIResource):
         if not model_id:
             raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/models/{model_id}:prepare",
+            f"/v1/accounts/{account_id}/models/{model_id}:prepare"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:prepare",
             body=await async_maybe_transform(
                 {
                     "precision": precision,
@@ -1086,6 +1177,64 @@ class AsyncModelsResource(AsyncAPIResource):
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
+    async def validate_upload(
+        self,
+        model_id: str,
+        *,
+        account_id: str,
+        config_only: bool | Omit = omit,
+        skip_hf_config_validation: bool | Omit = omit,
+        trust_remote_code: bool | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Validate Model Upload
+
+        Args:
+          config_only: If true, skip tokenizer and parameter name validation.
+
+          skip_hf_config_validation: If true, skip the Hugging Face config validation.
+
+          trust_remote_code: If true, trusts remote code when validating the Hugging Face config.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not model_id:
+            raise ValueError(f"Expected a non-empty value for `model_id` but received {model_id!r}")
+        return await self._get(
+            f"/v1/accounts/{account_id}/models/{model_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/models/{model_id}:validateUpload",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {
+                        "config_only": config_only,
+                        "skip_hf_config_validation": skip_hf_config_validation,
+                        "trust_remote_code": trust_remote_code,
+                    },
+                    model_validate_upload_params.ModelValidateUploadParams,
+                ),
             ),
             cast_to=object,
         )
@@ -1119,6 +1268,9 @@ class ModelsResourceWithRawResponse:
         self.prepare = to_raw_response_wrapper(
             models.prepare,
         )
+        self.validate_upload = to_raw_response_wrapper(
+            models.validate_upload,
+        )
 
 
 class AsyncModelsResourceWithRawResponse:
@@ -1148,6 +1300,9 @@ class AsyncModelsResourceWithRawResponse:
         )
         self.prepare = async_to_raw_response_wrapper(
             models.prepare,
+        )
+        self.validate_upload = async_to_raw_response_wrapper(
+            models.validate_upload,
         )
 
 
@@ -1179,6 +1334,9 @@ class ModelsResourceWithStreamingResponse:
         self.prepare = to_streamed_response_wrapper(
             models.prepare,
         )
+        self.validate_upload = to_streamed_response_wrapper(
+            models.validate_upload,
+        )
 
 
 class AsyncModelsResourceWithStreamingResponse:
@@ -1208,4 +1366,7 @@ class AsyncModelsResourceWithStreamingResponse:
         )
         self.prepare = async_to_streamed_response_wrapper(
             models.prepare,
+        )
+        self.validate_upload = async_to_streamed_response_wrapper(
+            models.validate_upload,
         )

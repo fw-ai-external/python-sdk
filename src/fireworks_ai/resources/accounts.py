@@ -85,7 +85,7 @@ class AccountsResource(SyncAPIResource):
           timeout: Override the client-level default timeout for this request, in seconds
         """
         return self._get(
-            "/v1/accounts",
+            "/v1/accounts" if self._client._base_url_overridden else "https://api.fireworks.ai/v1/accounts",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -136,7 +136,9 @@ class AccountsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}",
+            f"/v1/accounts/{account_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -211,7 +213,7 @@ class AsyncAccountsResource(AsyncAPIResource):
           timeout: Override the client-level default timeout for this request, in seconds
         """
         return await self._get(
-            "/v1/accounts",
+            "/v1/accounts" if self._client._base_url_overridden else "https://api.fireworks.ai/v1/accounts",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -262,7 +264,9 @@ class AsyncAccountsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}",
+            f"/v1/accounts/{account_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

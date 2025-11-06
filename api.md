@@ -41,6 +41,7 @@ from fireworks_ai.types import (
     DatasetListResponse,
     DatasetGetResponse,
     DatasetGetUploadEndpointResponse,
+    DatasetUploadResponse,
 )
 ```
 
@@ -52,6 +53,7 @@ Methods:
 - <code title="delete /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks_ai/resources/datasets.py">delete</a>(dataset_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks_ai/resources/datasets.py">get</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/dataset_get_params.py">params</a>) -> <a href="./src/fireworks_ai/types/dataset_get_response.py">DatasetGetResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint">client.datasets.<a href="./src/fireworks_ai/resources/datasets.py">get_upload_endpoint</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/dataset_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks_ai/types/dataset_get_upload_endpoint_response.py">DatasetGetUploadEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:upload">client.datasets.<a href="./src/fireworks_ai/resources/datasets.py">upload</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/dataset_upload_params.py">params</a>) -> <a href="./src/fireworks_ai/types/dataset_upload_response.py">DatasetUploadResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload">client.datasets.<a href="./src/fireworks_ai/resources/datasets.py">validate_upload</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/dataset_validate_upload_params.py">params</a>) -> object</code>
 
 # DeployedModels
@@ -123,6 +125,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint">client.models.<a href="./src/fireworks_ai/resources/models.py">get_download_endpoint</a>(model_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/model_get_download_endpoint_params.py">params</a>) -> <a href="./src/fireworks_ai/types/model_get_download_endpoint_response.py">ModelGetDownloadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint">client.models.<a href="./src/fireworks_ai/resources/models.py">get_upload_endpoint</a>(model_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/model_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks_ai/types/model_get_upload_endpoint_response.py">ModelGetUploadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/models/{model_id}:prepare">client.models.<a href="./src/fireworks_ai/resources/models.py">prepare</a>(model_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/model_prepare_params.py">params</a>) -> object</code>
+- <code title="get /v1/accounts/{account_id}/models/{model_id}:validateUpload">client.models.<a href="./src/fireworks_ai/resources/models.py">validate_upload</a>(model_id, \*, account_id, \*\*<a href="src/fireworks_ai/types/model_validate_upload_params.py">params</a>) -> object</code>
 
 # ReinforcementFineTuningJobs
 
