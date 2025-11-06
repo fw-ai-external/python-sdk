@@ -8,7 +8,7 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["Account", "InferenceParameters", "JobProgress", "Status"]
+__all__ = ["BatchInferenceJob", "InferenceParameters", "JobProgress", "Status"]
 
 
 class InferenceParameters(BaseModel):
@@ -97,7 +97,7 @@ class Status(BaseModel):
     """A developer-facing error message in English."""
 
 
-class Account(BaseModel):
+class BatchInferenceJob(BaseModel):
     continued_from_job_name: Optional[str] = FieldInfo(alias="continuedFromJobName", default=None)
     """
     The resource name of the batch inference job that this job continues from. Used

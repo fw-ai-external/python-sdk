@@ -16,15 +16,15 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import Account, BatchInferenceJobListResponse
+from fireworks.types import BatchInferenceJob, BatchInferenceJobListResponse
 ```
 
 Methods:
 
-- <code title="post /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">create</a>(account_id, \*\*<a href="src/fireworks/types/batch_inference_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/account.py">Account</a></code>
+- <code title="post /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">create</a>(account_id, \*\*<a href="src/fireworks/types/batch_inference_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job.py">BatchInferenceJob</a></code>
 - <code title="get /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">list</a>(account_id, \*\*<a href="src/fireworks/types/batch_inference_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job_list_response.py">BatchInferenceJobListResponse</a></code>
 - <code title="delete /v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">delete</a>(batch_inference_job_id, \*, account_id) -> object</code>
-- <code title="get /v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">get</a>(batch_inference_job_id, \*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/account.py">Account</a></code>
+- <code title="get /v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">get</a>(batch_inference_job_id, \*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job.py">BatchInferenceJob</a></code>
 
 # Datasets
 
