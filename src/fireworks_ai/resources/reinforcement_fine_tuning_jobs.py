@@ -59,8 +59,6 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
-        output_metrics: str | Omit = omit,
-        output_stats: str | Omit = omit,
         training_config: reinforcement_fine_tuning_job_create_params.TrainingConfig | Omit = omit,
         wandb_config: reinforcement_fine_tuning_job_create_params.WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -87,8 +85,6 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
 
           inference_parameters: BIJ parameters.
 
-          output_stats: The output dataset's aggregated stats for the evaluation job.
-
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -104,7 +100,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -114,8 +112,6 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
-                    "output_metrics": output_metrics,
-                    "output_stats": output_stats,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -184,7 +180,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -235,7 +233,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._delete(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -277,7 +277,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -324,8 +326,6 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
-        output_metrics: str | Omit = omit,
-        output_stats: str | Omit = omit,
         training_config: reinforcement_fine_tuning_job_create_params.TrainingConfig | Omit = omit,
         wandb_config: reinforcement_fine_tuning_job_create_params.WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -352,8 +352,6 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
 
           inference_parameters: BIJ parameters.
 
-          output_stats: The output dataset's aggregated stats for the evaluation job.
-
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -369,7 +367,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -379,8 +379,6 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
-                    "output_metrics": output_metrics,
-                    "output_stats": output_stats,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -449,7 +447,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -500,7 +500,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._delete(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -542,7 +544,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

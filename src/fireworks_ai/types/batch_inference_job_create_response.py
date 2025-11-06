@@ -179,6 +179,7 @@ class BatchInferenceJobCreateResponse(BaseModel):
             "JOB_STATE_RE_QUEUEING",
             "JOB_STATE_CREATING_INPUT_DATASET",
             "JOB_STATE_IDLE",
+            "JOB_STATE_CANCELLING",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in."""

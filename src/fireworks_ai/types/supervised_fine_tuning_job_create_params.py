@@ -101,6 +101,8 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
         "US_TEXAS_3",
         "US_GEORGIA_1",
         "US_GEORGIA_2",
+        "US_WASHINGTON_4",
+        "US_GEORGIA_3",
     ]
     """The region where the fine-tuning job is located."""
 

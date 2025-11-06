@@ -74,7 +74,9 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
             body=maybe_transform({"api_key": api_key}, api_key_create_params.APIKeyCreateParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -127,7 +129,9 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -179,7 +183,9 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
             body=maybe_transform({"key_id": key_id}, api_key_delete_params.APIKeyDeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -240,7 +246,9 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
             body=await async_maybe_transform({"api_key": api_key}, api_key_create_params.APIKeyCreateParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -293,7 +301,9 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -345,7 +355,9 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
+            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
             body=await async_maybe_transform({"key_id": key_id}, api_key_delete_params.APIKeyDeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout

@@ -96,7 +96,9 @@ class DeployedModelsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/deployedModels",
+            f"/v1/accounts/{account_id}/deployedModels"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
             body=maybe_transform(
                 {
                     "default": default,
@@ -168,7 +170,9 @@ class DeployedModelsResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             body=maybe_transform(
                 {
                     "default": default,
@@ -236,7 +240,9 @@ class DeployedModelsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/deployedModels",
+            f"/v1/accounts/{account_id}/deployedModels"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -285,7 +291,9 @@ class DeployedModelsResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -326,7 +334,9 @@ class DeployedModelsResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -405,7 +415,9 @@ class AsyncDeployedModelsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/deployedModels",
+            f"/v1/accounts/{account_id}/deployedModels"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
             body=await async_maybe_transform(
                 {
                     "default": default,
@@ -477,7 +489,9 @@ class AsyncDeployedModelsResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             body=await async_maybe_transform(
                 {
                     "default": default,
@@ -545,7 +559,9 @@ class AsyncDeployedModelsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/deployedModels",
+            f"/v1/accounts/{account_id}/deployedModels"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -594,7 +610,9 @@ class AsyncDeployedModelsResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -635,7 +653,9 @@ class AsyncDeployedModelsResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

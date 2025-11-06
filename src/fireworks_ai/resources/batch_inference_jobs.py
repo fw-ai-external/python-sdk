@@ -115,7 +115,9 @@ class BatchInferenceJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/batchInferenceJobs",
+            f"/v1/accounts/{account_id}/batchInferenceJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
             body=maybe_transform(
                 {
                     "continued_from_job_name": continued_from_job_name,
@@ -190,7 +192,9 @@ class BatchInferenceJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/batchInferenceJobs",
+            f"/v1/accounts/{account_id}/batchInferenceJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -241,7 +245,9 @@ class BatchInferenceJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `batch_inference_job_id` but received {batch_inference_job_id!r}"
             )
         return self._delete(
-            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
+            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -283,7 +289,9 @@ class BatchInferenceJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `batch_inference_job_id` but received {batch_inference_job_id!r}"
             )
         return self._get(
-            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
+            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -387,7 +395,9 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/batchInferenceJobs",
+            f"/v1/accounts/{account_id}/batchInferenceJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
             body=await async_maybe_transform(
                 {
                     "continued_from_job_name": continued_from_job_name,
@@ -462,7 +472,9 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/batchInferenceJobs",
+            f"/v1/accounts/{account_id}/batchInferenceJobs"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -513,7 +525,9 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `batch_inference_job_id` but received {batch_inference_job_id!r}"
             )
         return await self._delete(
-            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
+            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -555,7 +569,9 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `batch_inference_job_id` but received {batch_inference_job_id!r}"
             )
         return await self._get(
-            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
+            f"/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

@@ -75,6 +75,8 @@ class DeploymentPlacement(BaseModel):
             "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
+            "US_WASHINGTON_4",
+            "US_GEORGIA_3",
         ]
     ] = None
     """The region where the deployment must be placed."""
@@ -103,6 +105,8 @@ class DeploymentPlacement(BaseModel):
                 "US_TEXAS_3",
                 "US_GEORGIA_1",
                 "US_GEORGIA_2",
+                "US_WASHINGTON_4",
+                "US_GEORGIA_3",
             ]
         ]
     ] = None
@@ -344,6 +348,8 @@ class Deployment(BaseModel):
             "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
+            "US_WASHINGTON_4",
+            "US_GEORGIA_3",
         ]
     ] = None
     """The geographic region where the deployment is presently located.
