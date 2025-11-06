@@ -7,9 +7,9 @@ from typing import Any, cast
 
 import pytest
 
+from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks_ai import Fireworks, AsyncFireworks
-from fireworks_ai.types import Account, AccountListResponse
+from fireworks.types import Account, AccountListResponse
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 

@@ -8,8 +8,8 @@ from typing import Any, TypeVar, Iterator, Sequence, cast
 from datetime import date, datetime
 from typing_extensions import Literal, get_args, get_origin, assert_type
 
-from fireworks_ai._types import Omit, NoneType
-from fireworks_ai._utils import (
+from fireworks._types import Omit, NoneType
+from fireworks._utils import (
     is_dict,
     is_list,
     is_list_type,
@@ -19,8 +19,8 @@ from fireworks_ai._utils import (
     is_annotated_type,
     is_type_alias_type,
 )
-from fireworks_ai._compat import PYDANTIC_V1, field_outer_type, get_model_fields
-from fireworks_ai._models import BaseModel
+from fireworks._compat import PYDANTIC_V1, field_outer_type, get_model_fields
+from fireworks._models import BaseModel
 
 BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
 
