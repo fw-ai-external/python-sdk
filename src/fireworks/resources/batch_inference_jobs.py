@@ -18,7 +18,7 @@ from .._response import (
     async_to_streamed_response_wrapper,
 )
 from .._base_client import make_request_options
-from ..types.account import Account
+from ..types.batch_inference_job import BatchInferenceJob
 from ..types.batch_inference_job_list_response import BatchInferenceJobListResponse
 
 __all__ = ["BatchInferenceJobsResource", "AsyncBatchInferenceJobsResource"]
@@ -79,7 +79,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Account:
+    ) -> BatchInferenceJob:
         """
         Create Batch Inference Job
 
@@ -139,7 +139,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
                     batch_inference_job_create_params.BatchInferenceJobCreateParams,
                 ),
             ),
-            cast_to=Account,
+            cast_to=BatchInferenceJob,
         )
 
     def list(
@@ -265,7 +265,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Account:
+    ) -> BatchInferenceJob:
         """
         Get Batch Inference Job
 
@@ -300,7 +300,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
                     {"read_mask": read_mask}, batch_inference_job_get_params.BatchInferenceJobGetParams
                 ),
             ),
-            cast_to=Account,
+            cast_to=BatchInferenceJob,
         )
 
 
@@ -359,7 +359,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Account:
+    ) -> BatchInferenceJob:
         """
         Create Batch Inference Job
 
@@ -419,7 +419,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                     batch_inference_job_create_params.BatchInferenceJobCreateParams,
                 ),
             ),
-            cast_to=Account,
+            cast_to=BatchInferenceJob,
         )
 
     async def list(
@@ -545,7 +545,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Account:
+    ) -> BatchInferenceJob:
         """
         Get Batch Inference Job
 
@@ -580,7 +580,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                     {"read_mask": read_mask}, batch_inference_job_get_params.BatchInferenceJobGetParams
                 ),
             ),
-            cast_to=Account,
+            cast_to=BatchInferenceJob,
         )
 
 
