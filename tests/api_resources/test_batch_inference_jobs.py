@@ -7,12 +7,11 @@ from typing import Any, cast
 
 import pytest
 
+from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks_ai import Fireworks, AsyncFireworks
-from fireworks_ai.types import (
-    BatchInferenceJobGetResponse,
+from fireworks.types import (
+    Account,
     BatchInferenceJobListResponse,
-    BatchInferenceJobCreateResponse,
 )
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
@@ -27,7 +26,7 @@ class TestBatchInferenceJobs:
         batch_inference_job = client.batch_inference_jobs.create(
             account_id="account_id",
         )
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -50,7 +49,7 @@ class TestBatchInferenceJobs:
             output_dataset_id="outputDatasetId",
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -62,7 +61,7 @@ class TestBatchInferenceJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -74,7 +73,7 @@ class TestBatchInferenceJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
-            assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+            assert_matches_type(Account, batch_inference_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -202,7 +201,7 @@ class TestBatchInferenceJobs:
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
         )
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -212,7 +211,7 @@ class TestBatchInferenceJobs:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -225,7 +224,7 @@ class TestBatchInferenceJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -238,7 +237,7 @@ class TestBatchInferenceJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
-            assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+            assert_matches_type(Account, batch_inference_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -271,7 +270,7 @@ class TestAsyncBatchInferenceJobs:
         batch_inference_job = await async_client.batch_inference_jobs.create(
             account_id="account_id",
         )
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -294,7 +293,7 @@ class TestAsyncBatchInferenceJobs:
             output_dataset_id="outputDatasetId",
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -306,7 +305,7 @@ class TestAsyncBatchInferenceJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
-        assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -318,7 +317,7 @@ class TestAsyncBatchInferenceJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
-            assert_matches_type(BatchInferenceJobCreateResponse, batch_inference_job, path=["response"])
+            assert_matches_type(Account, batch_inference_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -446,7 +445,7 @@ class TestAsyncBatchInferenceJobs:
             batch_inference_job_id="batch_inference_job_id",
             account_id="account_id",
         )
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -456,7 +455,7 @@ class TestAsyncBatchInferenceJobs:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -469,7 +468,7 @@ class TestAsyncBatchInferenceJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
-        assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+        assert_matches_type(Account, batch_inference_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -482,7 +481,7 @@ class TestAsyncBatchInferenceJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
-            assert_matches_type(BatchInferenceJobGetResponse, batch_inference_job, path=["response"])
+            assert_matches_type(Account, batch_inference_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

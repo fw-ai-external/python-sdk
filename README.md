@@ -1,9 +1,9 @@
-# Fireworks Python API library
+# Fireworks AI Python SDK API library
 
 <!-- prettier-ignore -->
-[![PyPI version](https://img.shields.io/pypi/v/fireworks_ai.svg?label=pypi%20(stable))](https://pypi.org/project/fireworks_ai/)
+[![PyPI version](https://img.shields.io/pypi/v/fireworks-ai.svg?label=pypi%20(stable))](https://pypi.org/project/fireworks-ai/)
 
-The Fireworks Python library provides convenient access to the Fireworks REST API from any Python 3.8+
+The Fireworks AI Python SDK library provides convenient access to the Fireworks REST API from any Python 3.8+
 application. The library includes type definitions for all request params and response fields,
 and offers both synchronous and asynchronous clients powered by [httpx](https://github.com/encode/httpx).
 
@@ -21,7 +21,7 @@ pip install git+ssh://git@github.com/fw-ai-external/python-sdk.git
 ```
 
 > [!NOTE]
-> Once this package is [published to PyPI](https://www.stainless.com/docs/guides/publish), this will become: `pip install fireworks_ai`
+> Once this package is [published to PyPI](https://www.stainless.com/docs/guides/publish), this will become: `pip install fireworks-ai`
 
 ## Usage
 
@@ -29,19 +29,22 @@ The full API of this library can be found in [api.md](api.md).
 
 ```python
 import os
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 client = Fireworks(
-    api_key=os.environ.get("FIREWORKS_AI_API_KEY"),  # This is the default and can be omitted
+    api_key=os.environ.get("FIREWORKS_API_KEY"),  # This is the default and can be omitted
 )
 
-accounts = client.accounts.list()
-print(accounts.accounts)
+deployment = client.deployments.create(
+    account_id="account_id",
+    base_model="baseModel",
+)
+print(deployment.disable_deployment_size_validation)
 ```
 
 While you can provide an `api_key` keyword argument,
 we recommend using [python-dotenv](https://pypi.org/project/python-dotenv/)
-to add `FIREWORKS_AI_API_KEY="My API Key"` to your `.env` file
+to add `FIREWORKS_API_KEY="My API Key"` to your `.env` file
 so that your API Key is not stored in source control.
 
 ## Async usage
@@ -51,16 +54,19 @@ Simply import `AsyncFireworks` instead of `Fireworks` and use `await` with each 
 ```python
 import os
 import asyncio
-from fireworks_ai import AsyncFireworks
+from fireworks import AsyncFireworks
 
 client = AsyncFireworks(
-    api_key=os.environ.get("FIREWORKS_AI_API_KEY"),  # This is the default and can be omitted
+    api_key=os.environ.get("FIREWORKS_API_KEY"),  # This is the default and can be omitted
 )
 
 
 async def main() -> None:
-    accounts = await client.accounts.list()
-    print(accounts.accounts)
+    deployment = await client.deployments.create(
+        account_id="account_id",
+        base_model="baseModel",
+    )
+    print(deployment.disable_deployment_size_validation)
 
 
 asyncio.run(main())
@@ -76,15 +82,15 @@ You can enable this by installing `aiohttp`:
 
 ```sh
 # install from the production repo
-pip install 'fireworks_ai[aiohttp] @ git+ssh://git@github.com/fw-ai-external/python-sdk.git'
+pip install 'fireworks-ai[aiohttp] @ git+ssh://git@github.com/fw-ai-external/python-sdk.git'
 ```
 
 Then you can enable it by instantiating the client with `http_client=DefaultAioHttpClient()`:
 
 ```python
 import asyncio
-from fireworks_ai import DefaultAioHttpClient
-from fireworks_ai import AsyncFireworks
+from fireworks import DefaultAioHttpClient
+from fireworks import AsyncFireworks
 
 
 async def main() -> None:
@@ -92,8 +98,11 @@ async def main() -> None:
         api_key="My API Key",
         http_client=DefaultAioHttpClient(),
     ) as client:
-        accounts = await client.accounts.list()
-        print(accounts.accounts)
+        deployment = await client.deployments.create(
+            account_id="account_id",
+            base_model="baseModel",
+        )
+        print(deployment.disable_deployment_size_validation)
 
 
 asyncio.run(main())
@@ -113,15 +122,16 @@ Typed requests and responses provide autocomplete and documentation within your 
 Nested parameters are dictionaries, typed using `TypedDict`, for example:
 
 ```python
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 client = Fireworks()
 
-batch_inference_job = client.batch_inference_jobs.create(
+deployment = client.deployments.create(
     account_id="account_id",
-    inference_parameters={},
+    base_model="baseModel",
+    autoscaling_policy={},
 )
-print(batch_inference_job.inference_parameters)
+print(deployment.autoscaling_policy)
 ```
 
 ## File uploads
@@ -130,7 +140,7 @@ Request parameters that correspond to file uploads can be passed as `bytes`, or 
 
 ```python
 from pathlib import Path
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 client = Fireworks()
 
@@ -145,27 +155,30 @@ The async client uses the exact same interface. If you pass a [`PathLike`](https
 
 ## Handling errors
 
-When the library is unable to connect to the API (for example, due to network connection problems or a timeout), a subclass of `fireworks_ai.APIConnectionError` is raised.
+When the library is unable to connect to the API (for example, due to network connection problems or a timeout), a subclass of `fireworks.APIConnectionError` is raised.
 
 When the API returns a non-success status code (that is, 4xx or 5xx
-response), a subclass of `fireworks_ai.APIStatusError` is raised, containing `status_code` and `response` properties.
+response), a subclass of `fireworks.APIStatusError` is raised, containing `status_code` and `response` properties.
 
-All errors inherit from `fireworks_ai.APIError`.
+All errors inherit from `fireworks.APIError`.
 
 ```python
-import fireworks_ai
-from fireworks_ai import Fireworks
+import fireworks
+from fireworks import Fireworks
 
 client = Fireworks()
 
 try:
-    client.accounts.list()
-except fireworks_ai.APIConnectionError as e:
+    client.deployments.create(
+        account_id="account_id",
+        base_model="baseModel",
+    )
+except fireworks.APIConnectionError as e:
     print("The server could not be reached")
     print(e.__cause__)  # an underlying Exception, likely raised within httpx.
-except fireworks_ai.RateLimitError as e:
+except fireworks.RateLimitError as e:
     print("A 429 status code was received; we should back off a bit.")
-except fireworks_ai.APIStatusError as e:
+except fireworks.APIStatusError as e:
     print("Another non-200-range status code was received")
     print(e.status_code)
     print(e.response)
@@ -193,7 +206,7 @@ Connection errors (for example, due to a network connectivity problem), 408 Requ
 You can use the `max_retries` option to configure or disable retry settings:
 
 ```python
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 # Configure the default for all requests:
 client = Fireworks(
@@ -202,7 +215,10 @@ client = Fireworks(
 )
 
 # Or, configure per-request:
-client.with_options(max_retries=5).accounts.list()
+client.with_options(max_retries=5).deployments.create(
+    account_id="account_id",
+    base_model="baseModel",
+)
 ```
 
 ### Timeouts
@@ -211,7 +227,7 @@ By default requests time out after 1 minute. You can configure this with a `time
 which accepts a float or an [`httpx.Timeout`](https://www.python-httpx.org/advanced/timeouts/#fine-tuning-the-configuration) object:
 
 ```python
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 # Configure the default for all requests:
 client = Fireworks(
@@ -225,7 +241,10 @@ client = Fireworks(
 )
 
 # Override per-request:
-client.with_options(timeout=5.0).accounts.list()
+client.with_options(timeout=5.0).deployments.create(
+    account_id="account_id",
+    base_model="baseModel",
+)
 ```
 
 On timeout, an `APITimeoutError` is thrown.
@@ -263,19 +282,22 @@ if response.my_field is None:
 The "raw" Response object can be accessed by prefixing `.with_raw_response.` to any HTTP method call, e.g.,
 
 ```py
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 client = Fireworks()
-response = client.accounts.with_raw_response.list()
+response = client.deployments.with_raw_response.create(
+    account_id="account_id",
+    base_model="baseModel",
+)
 print(response.headers.get('X-My-Header'))
 
-account = response.parse()  # get the object that `accounts.list()` would have returned
-print(account.accounts)
+deployment = response.parse()  # get the object that `deployments.create()` would have returned
+print(deployment.disable_deployment_size_validation)
 ```
 
-These methods return an [`APIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks_ai/_response.py) object.
+These methods return an [`APIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks/_response.py) object.
 
-The async client returns an [`AsyncAPIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks_ai/_response.py) with the same structure, the only difference being `await`able methods for reading the response content.
+The async client returns an [`AsyncAPIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks/_response.py) with the same structure, the only difference being `await`able methods for reading the response content.
 
 #### `.with_streaming_response`
 
@@ -284,7 +306,10 @@ The above interface eagerly reads the full response body when you make the reque
 To stream the response body, use `.with_streaming_response` instead, which requires a context manager and only reads the response body once you call `.read()`, `.text()`, `.json()`, `.iter_bytes()`, `.iter_text()`, `.iter_lines()` or `.parse()`. In the async client, these are async methods.
 
 ```python
-with client.accounts.with_streaming_response.list() as response:
+with client.deployments.with_streaming_response.create(
+    account_id="account_id",
+    base_model="baseModel",
+) as response:
     print(response.headers.get("X-My-Header"))
 
     for line in response.iter_lines():
@@ -337,7 +362,7 @@ You can directly override the [httpx client](https://www.python-httpx.org/api/#c
 
 ```python
 import httpx
-from fireworks_ai import Fireworks, DefaultHttpxClient
+from fireworks import Fireworks, DefaultHttpxClient
 
 client = Fireworks(
     # Or use the `FIREWORKS_BASE_URL` env var
@@ -360,7 +385,7 @@ client.with_options(http_client=DefaultHttpxClient(...))
 By default the library closes underlying HTTP connections whenever the client is [garbage collected](https://docs.python.org/3/reference/datamodel.html#object.__del__). You can manually close the client using the `.close()` method if desired, or with a context manager that closes when exiting.
 
 ```py
-from fireworks_ai import Fireworks
+from fireworks import Fireworks
 
 with Fireworks() as client:
   # make requests here
@@ -388,8 +413,8 @@ If you've upgraded to the latest version but aren't seeing any new features you 
 You can determine the version that is being used at runtime with:
 
 ```py
-import fireworks_ai
-print(fireworks_ai.__version__)
+import fireworks
+print(fireworks.__version__)
 ```
 
 ## Requirements

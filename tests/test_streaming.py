@@ -5,8 +5,8 @@ from typing import Iterator, AsyncIterator
 import httpx
 import pytest
 
-from fireworks_ai import Fireworks, AsyncFireworks
-from fireworks_ai._streaming import Stream, AsyncStream, ServerSentEvent
+from fireworks import Fireworks, AsyncFireworks
+from fireworks._streaming import Stream, AsyncStream, ServerSentEvent
 
 
 @pytest.mark.asyncio

@@ -7,16 +7,13 @@ from typing import Any, cast
 
 import pytest
 
+from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks_ai import Fireworks, AsyncFireworks
-from fireworks_ai.types import (
-    DeploymentGetResponse,
+from fireworks.types import (
+    Deployment,
     DeploymentListResponse,
-    DeploymentCreateResponse,
-    DeploymentUpdateResponse,
-    DeploymentUndeleteResponse,
 )
-from fireworks_ai._utils import parse_datetime
+from fireworks._utils import parse_datetime
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -31,7 +28,7 @@ class TestDeployments:
             account_id="account_id",
             base_model="baseModel",
         )
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -78,7 +75,7 @@ class TestDeployments:
             },
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -91,7 +88,7 @@ class TestDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = response.parse()
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -104,7 +101,7 @@ class TestDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = response.parse()
-            assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -125,7 +122,7 @@ class TestDeployments:
             account_id="account_id",
             base_model="baseModel",
         )
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -168,7 +165,7 @@ class TestDeployments:
             },
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -182,7 +179,7 @@ class TestDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = response.parse()
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -196,7 +193,7 @@ class TestDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = response.parse()
-            assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -343,7 +340,7 @@ class TestDeployments:
             deployment_id="deployment_id",
             account_id="account_id",
         )
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -353,7 +350,7 @@ class TestDeployments:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -366,7 +363,7 @@ class TestDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = response.parse()
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -379,7 +376,7 @@ class TestDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = response.parse()
-            assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -406,7 +403,7 @@ class TestDeployments:
             account_id="account_id",
             body={},
         )
-        assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -420,7 +417,7 @@ class TestDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = response.parse()
-        assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -434,7 +431,7 @@ class TestDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = response.parse()
-            assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -468,7 +465,7 @@ class TestAsyncDeployments:
             account_id="account_id",
             base_model="baseModel",
         )
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -515,7 +512,7 @@ class TestAsyncDeployments:
             },
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -528,7 +525,7 @@ class TestAsyncDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = await response.parse()
-        assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -541,7 +538,7 @@ class TestAsyncDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = await response.parse()
-            assert_matches_type(DeploymentCreateResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -562,7 +559,7 @@ class TestAsyncDeployments:
             account_id="account_id",
             base_model="baseModel",
         )
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -605,7 +602,7 @@ class TestAsyncDeployments:
             },
             precision="PRECISION_UNSPECIFIED",
         )
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -619,7 +616,7 @@ class TestAsyncDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = await response.parse()
-        assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -633,7 +630,7 @@ class TestAsyncDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = await response.parse()
-            assert_matches_type(DeploymentUpdateResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -780,7 +777,7 @@ class TestAsyncDeployments:
             deployment_id="deployment_id",
             account_id="account_id",
         )
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -790,7 +787,7 @@ class TestAsyncDeployments:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -803,7 +800,7 @@ class TestAsyncDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = await response.parse()
-        assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -816,7 +813,7 @@ class TestAsyncDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = await response.parse()
-            assert_matches_type(DeploymentGetResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -843,7 +840,7 @@ class TestAsyncDeployments:
             account_id="account_id",
             body={},
         )
-        assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -857,7 +854,7 @@ class TestAsyncDeployments:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment = await response.parse()
-        assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+        assert_matches_type(Deployment, deployment, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -871,7 +868,7 @@ class TestAsyncDeployments:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment = await response.parse()
-            assert_matches_type(DeploymentUndeleteResponse, deployment, path=["response"])
+            assert_matches_type(Deployment, deployment, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

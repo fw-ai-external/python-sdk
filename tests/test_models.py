@@ -7,9 +7,9 @@ import pytest
 import pydantic
 from pydantic import Field
 
-from fireworks_ai._utils import PropertyInfo
-from fireworks_ai._compat import PYDANTIC_V1, parse_obj, model_dump, model_json
-from fireworks_ai._models import BaseModel, construct_type
+from fireworks._utils import PropertyInfo
+from fireworks._compat import PYDANTIC_V1, parse_obj, model_dump, model_json
+from fireworks._models import BaseModel, construct_type
 
 
 class BasicModel(BaseModel):
