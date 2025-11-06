@@ -51,8 +51,6 @@ class TestReinforcementFineTuningJobs:
                 "top_p": 0,
             },
             mcp_server="mcpServer",
-            output_metrics="outputMetrics",
-            output_stats="outputStats",
             training_config={
                 "accelerator_count": 0,
                 "base_model": "baseModel",
@@ -331,8 +329,6 @@ class TestAsyncReinforcementFineTuningJobs:
                 "top_p": 0,
             },
             mcp_server="mcpServer",
-            output_metrics="outputMetrics",
-            output_stats="outputStats",
             training_config={
                 "accelerator_count": 0,
                 "base_model": "baseModel",

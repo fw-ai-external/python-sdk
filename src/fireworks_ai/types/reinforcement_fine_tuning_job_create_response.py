@@ -125,6 +125,8 @@ class TrainingConfig(BaseModel):
             "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
+            "US_WASHINGTON_4",
+            "US_GEORGIA_3",
         ]
     ] = None
     """The region where the fine-tuning job is located."""
@@ -208,6 +210,7 @@ class ReinforcementFineTuningJobCreateResponse(BaseModel):
             "JOB_STATE_RE_QUEUEING",
             "JOB_STATE_CREATING_INPUT_DATASET",
             "JOB_STATE_IDLE",
+            "JOB_STATE_CANCELLING",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in."""

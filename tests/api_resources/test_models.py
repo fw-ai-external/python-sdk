@@ -590,6 +590,70 @@ class TestModels:
                 account_id="account_id",
             )
 
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_validate_upload(self, client: Fireworks) -> None:
+        model = client.models.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        )
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_validate_upload_with_all_params(self, client: Fireworks) -> None:
+        model = client.models.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+            config_only=True,
+            skip_hf_config_validation=True,
+            trust_remote_code=True,
+        )
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_validate_upload(self, client: Fireworks) -> None:
+        response = client.models.with_raw_response.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        model = response.parse()
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_validate_upload(self, client: Fireworks) -> None:
+        with client.models.with_streaming_response.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            model = response.parse()
+            assert_matches_type(object, model, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_validate_upload(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.models.with_raw_response.validate_upload(
+                model_id="model_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `model_id` but received ''"):
+            client.models.with_raw_response.validate_upload(
+                model_id="",
+                account_id="account_id",
+            )
+
 
 class TestAsyncModels:
     parametrize = pytest.mark.parametrize(
@@ -1158,6 +1222,70 @@ class TestAsyncModels:
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `model_id` but received ''"):
             await async_client.models.with_raw_response.prepare(
+                model_id="",
+                account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_validate_upload(self, async_client: AsyncFireworks) -> None:
+        model = await async_client.models.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        )
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_validate_upload_with_all_params(self, async_client: AsyncFireworks) -> None:
+        model = await async_client.models.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+            config_only=True,
+            skip_hf_config_validation=True,
+            trust_remote_code=True,
+        )
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_validate_upload(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.models.with_raw_response.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        model = await response.parse()
+        assert_matches_type(object, model, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_validate_upload(self, async_client: AsyncFireworks) -> None:
+        async with async_client.models.with_streaming_response.validate_upload(
+            model_id="model_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            model = await response.parse()
+            assert_matches_type(object, model, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_validate_upload(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.models.with_raw_response.validate_upload(
+                model_id="model_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `model_id` but received ''"):
+            await async_client.models.with_raw_response.validate_upload(
                 model_id="",
                 account_id="account_id",
             )

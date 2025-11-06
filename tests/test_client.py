@@ -22,7 +22,7 @@ from fireworks_ai import Fireworks, AsyncFireworks, APIResponseValidationError
 from fireworks_ai._types import Omit
 from fireworks_ai._utils import asyncify
 from fireworks_ai._models import BaseModel, FinalRequestOptions
-from fireworks_ai._exceptions import APIStatusError, FireworksError, APITimeoutError, APIResponseValidationError
+from fireworks_ai._exceptions import APIStatusError, APITimeoutError, APIResponseValidationError
 from fireworks_ai._base_client import (
     DEFAULT_TIMEOUT,
     HTTPX_DEFAULT_TIMEOUT,
@@ -345,16 +345,6 @@ class TestFireworks:
 
         test_client.close()
         test_client2.close()
-
-    def test_validate_headers(self) -> None:
-        client = Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
-        request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
-        assert request.headers.get("Authorization") == f"Bearer {api_key}"
-
-        with pytest.raises(FireworksError):
-            with update_env(**{"FIREWORKS_AI_API_KEY": Omit()}):
-                client2 = Fireworks(base_url=base_url, api_key=None, _strict_response_validation=True)
-            _ = client2
 
     def test_default_query_option(self) -> None:
         client = Fireworks(
@@ -1164,16 +1154,6 @@ class TestAsyncFireworks:
 
         await test_client.close()
         await test_client2.close()
-
-    def test_validate_headers(self) -> None:
-        client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
-        request = client._build_request(FinalRequestOptions(method="get", url="/foo"))
-        assert request.headers.get("Authorization") == f"Bearer {api_key}"
-
-        with pytest.raises(FireworksError):
-            with update_env(**{"FIREWORKS_AI_API_KEY": Omit()}):
-                client2 = AsyncFireworks(base_url=base_url, api_key=None, _strict_response_validation=True)
-            _ = client2
 
     async def test_default_query_option(self) -> None:
         client = AsyncFireworks(

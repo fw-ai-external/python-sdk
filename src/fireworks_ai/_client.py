@@ -107,6 +107,7 @@ class Fireworks(SyncAPIClient):
 
         if base_url is None:
             base_url = os.environ.get("FIREWORKS_BASE_URL")
+        self._base_url_overridden = base_url is not None
         if base_url is None:
             base_url = f"https://api.fireworks.ai"
 
@@ -190,7 +191,7 @@ class Fireworks(SyncAPIClient):
             params = set_default_query
 
         http_client = http_client or self._client
-        return self.__class__(
+        client = self.__class__(
             api_key=api_key or self.api_key,
             base_url=base_url or self.base_url,
             timeout=self.timeout if isinstance(timeout, NotGiven) else timeout,
@@ -200,6 +201,8 @@ class Fireworks(SyncAPIClient):
             default_query=params,
             **_extra_kwargs,
         )
+        client._base_url_overridden = self._base_url_overridden or base_url is not None
+        return client
 
     # Alias for `copy` for nicer inline usage, e.g.
     # client.with_options(timeout=10).foo.create(...)
@@ -293,6 +296,7 @@ class AsyncFireworks(AsyncAPIClient):
 
         if base_url is None:
             base_url = os.environ.get("FIREWORKS_BASE_URL")
+        self._base_url_overridden = base_url is not None
         if base_url is None:
             base_url = f"https://api.fireworks.ai"
 
@@ -378,7 +382,7 @@ class AsyncFireworks(AsyncAPIClient):
             params = set_default_query
 
         http_client = http_client or self._client
-        return self.__class__(
+        client = self.__class__(
             api_key=api_key or self.api_key,
             base_url=base_url or self.base_url,
             timeout=self.timeout if isinstance(timeout, NotGiven) else timeout,
@@ -388,6 +392,8 @@ class AsyncFireworks(AsyncAPIClient):
             default_query=params,
             **_extra_kwargs,
         )
+        client._base_url_overridden = self._base_url_overridden or base_url is not None
+        return client
 
     # Alias for `copy` for nicer inline usage, e.g.
     # client.with_options(timeout=10).foo.create(...)

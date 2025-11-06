@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Mapping, cast
 from typing_extensions import Literal
 
 import httpx
@@ -12,11 +12,12 @@ from ..types import (
     dataset_list_params,
     dataset_create_params,
     dataset_update_params,
+    dataset_upload_params,
     dataset_validate_upload_params,
     dataset_get_upload_endpoint_params,
 )
-from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._types import Body, Omit, Query, Headers, NotGiven, FileTypes, omit, not_given
+from .._utils import extract_files, maybe_transform, deepcopy_minimal, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -30,6 +31,7 @@ from ..types.dataset_get_response import DatasetGetResponse
 from ..types.dataset_list_response import DatasetListResponse
 from ..types.dataset_create_response import DatasetCreateResponse
 from ..types.dataset_update_response import DatasetUpdateResponse
+from ..types.dataset_upload_response import DatasetUploadResponse
 from ..types.dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse
 
 __all__ = ["DatasetsResource", "AsyncDatasetsResource"]
@@ -85,7 +87,9 @@ class DatasetsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/datasets",
+            f"/v1/accounts/{account_id}/datasets"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -143,7 +147,9 @@ class DatasetsResource(SyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             body=maybe_transform(
                 {
                     "display_name": display_name,
@@ -214,7 +220,9 @@ class DatasetsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/datasets",
+            f"/v1/accounts/{account_id}/datasets"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -263,7 +271,9 @@ class DatasetsResource(SyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -304,7 +314,9 @@ class DatasetsResource(SyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -351,7 +363,9 @@ class DatasetsResource(SyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint",
             body=maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -363,6 +377,55 @@ class DatasetsResource(SyncAPIResource):
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
             cast_to=DatasetGetUploadEndpointResponse,
+        )
+
+    def upload(
+        self,
+        dataset_id: str,
+        *,
+        account_id: str,
+        file: FileTypes | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DatasetUploadResponse:
+        """
+        Provides a streamlined way to upload a dataset file in a single API request.
+        This path can handle file sizes up to 150Mb. For larger file sizes use
+        [Get Dataset Upload Endpoint](get-dataset-upload-endpoint).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dataset_id:
+            raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
+        body = deepcopy_minimal({"file": file})
+        files = extract_files(cast(Mapping[str, object], body), paths=[["file"]])
+        # It should be noted that the actual Content-Type header that will be
+        # sent to the server will contain a `boundary` parameter, e.g.
+        # multipart/form-data; boundary=---abc--
+        extra_headers = {"Content-Type": "multipart/form-data", **(extra_headers or {})}
+        return self._post(
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:upload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:upload",
+            body=maybe_transform(body, dataset_upload_params.DatasetUploadParams),
+            files=files,
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=DatasetUploadResponse,
         )
 
     def validate_upload(
@@ -395,7 +458,9 @@ class DatasetsResource(SyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload",
             body=maybe_transform(body, dataset_validate_upload_params.DatasetValidateUploadParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -454,7 +519,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/datasets",
+            f"/v1/accounts/{account_id}/datasets"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -512,7 +579,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             body=await async_maybe_transform(
                 {
                     "display_name": display_name,
@@ -583,7 +652,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/datasets",
+            f"/v1/accounts/{account_id}/datasets"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -632,7 +703,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -673,7 +746,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -720,7 +795,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint",
             body=await async_maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -732,6 +809,55 @@ class AsyncDatasetsResource(AsyncAPIResource):
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
             cast_to=DatasetGetUploadEndpointResponse,
+        )
+
+    async def upload(
+        self,
+        dataset_id: str,
+        *,
+        account_id: str,
+        file: FileTypes | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DatasetUploadResponse:
+        """
+        Provides a streamlined way to upload a dataset file in a single API request.
+        This path can handle file sizes up to 150Mb. For larger file sizes use
+        [Get Dataset Upload Endpoint](get-dataset-upload-endpoint).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dataset_id:
+            raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
+        body = deepcopy_minimal({"file": file})
+        files = extract_files(cast(Mapping[str, object], body), paths=[["file"]])
+        # It should be noted that the actual Content-Type header that will be
+        # sent to the server will contain a `boundary` parameter, e.g.
+        # multipart/form-data; boundary=---abc--
+        extra_headers = {"Content-Type": "multipart/form-data", **(extra_headers or {})}
+        return await self._post(
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:upload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:upload",
+            body=await async_maybe_transform(body, dataset_upload_params.DatasetUploadParams),
+            files=files,
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=DatasetUploadResponse,
         )
 
     async def validate_upload(
@@ -764,7 +890,9 @@ class AsyncDatasetsResource(AsyncAPIResource):
         if not dataset_id:
             raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload",
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload",
             body=await async_maybe_transform(body, dataset_validate_upload_params.DatasetValidateUploadParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -795,6 +923,9 @@ class DatasetsResourceWithRawResponse:
         self.get_upload_endpoint = to_raw_response_wrapper(
             datasets.get_upload_endpoint,
         )
+        self.upload = to_raw_response_wrapper(
+            datasets.upload,
+        )
         self.validate_upload = to_raw_response_wrapper(
             datasets.validate_upload,
         )
@@ -821,6 +952,9 @@ class AsyncDatasetsResourceWithRawResponse:
         )
         self.get_upload_endpoint = async_to_raw_response_wrapper(
             datasets.get_upload_endpoint,
+        )
+        self.upload = async_to_raw_response_wrapper(
+            datasets.upload,
         )
         self.validate_upload = async_to_raw_response_wrapper(
             datasets.validate_upload,
@@ -849,6 +983,9 @@ class DatasetsResourceWithStreamingResponse:
         self.get_upload_endpoint = to_streamed_response_wrapper(
             datasets.get_upload_endpoint,
         )
+        self.upload = to_streamed_response_wrapper(
+            datasets.upload,
+        )
         self.validate_upload = to_streamed_response_wrapper(
             datasets.validate_upload,
         )
@@ -875,6 +1012,9 @@ class AsyncDatasetsResourceWithStreamingResponse:
         )
         self.get_upload_endpoint = async_to_streamed_response_wrapper(
             datasets.get_upload_endpoint,
+        )
+        self.upload = async_to_streamed_response_wrapper(
+            datasets.upload,
         )
         self.validate_upload = async_to_streamed_response_wrapper(
             datasets.validate_upload,
