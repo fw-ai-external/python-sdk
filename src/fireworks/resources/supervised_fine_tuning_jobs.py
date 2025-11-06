@@ -22,6 +22,7 @@ from .._response import (
     async_to_streamed_response_wrapper,
 )
 from .._base_client import make_request_options
+from ..types.shared_params.wandb_config import WandbConfig
 from ..types.supervised_fine_tuning_job import SupervisedFineTuningJob
 from ..types.supervised_fine_tuning_job_list_response import SupervisedFineTuningJobListResponse
 
@@ -101,7 +102,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "US_GEORGIA_3",
         ]
         | Omit = omit,
-        wandb_config: supervised_fine_tuning_job_create_params.WandbConfig | Omit = omit,
+        wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -445,7 +446,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "US_GEORGIA_3",
         ]
         | Omit = omit,
-        wandb_config: supervised_fine_tuning_job_create_params.WandbConfig | Omit = omit,
+        wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.

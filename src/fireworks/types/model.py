@@ -7,84 +7,13 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .type_date import TypeDate
+from .peft_details import PeftDetails
+from .shared.status import Status
+from .base_model_details import BaseModelDetails
+from .conversation_config import ConversationConfig
 
-__all__ = [
-    "Model",
-    "BaseModelDetails",
-    "ConversationConfig",
-    "DeployedModelRef",
-    "DeprecationDate",
-    "PeftDetails",
-    "Status",
-]
-
-
-class BaseModelDetails(BaseModel):
-    checkpoint_format: Optional[Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE"]] = FieldInfo(
-        alias="checkpointFormat", default=None
-    )
-
-    default_precision: Optional[
-        Literal[
-            "PRECISION_UNSPECIFIED",
-            "FP16",
-            "FP8",
-            "FP8_MM",
-            "FP8_AR",
-            "FP8_MM_KV_ATTN",
-            "FP8_KV",
-            "FP8_MM_V2",
-            "FP8_V2",
-            "FP8_MM_KV_ATTN_V2",
-            "NF4",
-            "FP4",
-            "BF16",
-            "FP4_BLOCKSCALED_MM",
-            "FP4_MX_MOE",
-        ]
-    ] = FieldInfo(alias="defaultPrecision", default=None)
-    """Default precision of the model."""
-
-    api_model_type: Optional[str] = FieldInfo(alias="modelType", default=None)
-    """The type of the model."""
-
-    moe: Optional[bool] = None
-    """If true, this is a Mixture of Experts (MoE) model.
-
-    For serverless models, this affects the price per token.
-    """
-
-    parameter_count: Optional[str] = FieldInfo(alias="parameterCount", default=None)
-    """The number of model parameters.
-
-    For serverless models, this determines the price per token.
-    """
-
-    supports_fireattention: Optional[bool] = FieldInfo(alias="supportsFireattention", default=None)
-    """Whether this model supports fireattention."""
-
-    supports_mtp: Optional[bool] = FieldInfo(alias="supportsMtp", default=None)
-    """If true, this model supports MTP."""
-
-    tunable: Optional[bool] = None
-    """If true, this model is available for fine-tuning."""
-
-    world_size: Optional[int] = FieldInfo(alias="worldSize", default=None)
-    """
-    The default number of GPUs the model is served with. If not specified, the
-    default is 1.
-    """
-
-
-class ConversationConfig(BaseModel):
-    style: str
-    """The chat template to use."""
-
-    system: Optional[str] = None
-    """The system prompt (if the chat style supports it)."""
-
-    template: Optional[str] = None
-    """The Jinja template (if style is "jinja")."""
+__all__ = ["Model", "DeployedModelRef"]
 
 
 class DeployedModelRef(BaseModel):
@@ -105,69 +34,6 @@ class DeployedModelRef(BaseModel):
 
     state: Optional[Literal["STATE_UNSPECIFIED", "UNDEPLOYING", "DEPLOYING", "DEPLOYED", "UPDATING"]] = None
     """The state of the deployed model."""
-
-
-class DeprecationDate(BaseModel):
-    day: Optional[int] = None
-    """Day of a month.
-
-    Must be from 1 to 31 and valid for the year and month, or 0 to specify a year by
-    itself or a year and month where the day isn't significant.
-    """
-
-    month: Optional[int] = None
-    """Month of a year.
-
-    Must be from 1 to 12, or 0 to specify a year without a month and day.
-    """
-
-    year: Optional[int] = None
-    """Year of the date.
-
-    Must be from 1 to 9999, or 0 to specify a date without a year.
-    """
-
-
-class PeftDetails(BaseModel):
-    base_model: str = FieldInfo(alias="baseModel")
-
-    r: int
-    """The rank of the update matrices. Must be between 4 and 64, inclusive."""
-
-    target_modules: List[str] = FieldInfo(alias="targetModules")
-
-    base_model_type: Optional[str] = FieldInfo(alias="baseModelType", default=None)
-    """The type of the model."""
-
-    merge_addon_model_name: Optional[str] = FieldInfo(alias="mergeAddonModelName", default=None)
-
-
-class Status(BaseModel):
-    code: Optional[
-        Literal[
-            "OK",
-            "CANCELLED",
-            "UNKNOWN",
-            "INVALID_ARGUMENT",
-            "DEADLINE_EXCEEDED",
-            "NOT_FOUND",
-            "ALREADY_EXISTS",
-            "PERMISSION_DENIED",
-            "UNAUTHENTICATED",
-            "RESOURCE_EXHAUSTED",
-            "FAILED_PRECONDITION",
-            "ABORTED",
-            "OUT_OF_RANGE",
-            "UNIMPLEMENTED",
-            "INTERNAL",
-            "UNAVAILABLE",
-            "DATA_LOSS",
-        ]
-    ] = None
-    """The status code."""
-
-    message: Optional[str] = None
-    """A developer-facing error message in English."""
 
 
 class Model(BaseModel):
@@ -214,7 +80,7 @@ class Model(BaseModel):
     deployed_model_refs: Optional[List[DeployedModelRef]] = FieldInfo(alias="deployedModelRefs", default=None)
     """Populated from GetModel API call only."""
 
-    deprecation_date: Optional[DeprecationDate] = FieldInfo(alias="deprecationDate", default=None)
+    deprecation_date: Optional[TypeDate] = FieldInfo(alias="deprecationDate", default=None)
     """
     If specified, this is the date when the serverless deployment of the model will
     be taken down.

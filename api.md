@@ -1,3 +1,9 @@
+# Shared Types
+
+```python
+from fireworks.types import InferenceParameters, Status, WandbConfig
+```
+
 # Accounts
 
 Types:
@@ -33,6 +39,9 @@ Types:
 ```python
 from fireworks.types import (
     Dataset,
+    EvaluationResult,
+    Splitted,
+    Transformed,
     DatasetListResponse,
     DatasetGetUploadEndpointResponse,
     DatasetUploadResponse,
@@ -71,7 +80,13 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import Deployment, DeploymentListResponse
+from fireworks.types import (
+    AutoTune,
+    AutoscalingPolicy,
+    Deployment,
+    Placement,
+    DeploymentListResponse,
+)
 ```
 
 Methods:
@@ -89,7 +104,11 @@ Types:
 
 ```python
 from fireworks.types import (
+    BaseModelDetails,
+    ConversationConfig,
     Model,
+    PeftDetails,
+    TypeDate,
     ModelListResponse,
     ModelGetDownloadEndpointResponse,
     ModelGetUploadEndpointResponse,
