@@ -18,21 +18,27 @@ from .transformed import Transformed as Transformed
 from .peft_details import PeftDetails as PeftDetails
 from .api_key_param import APIKeyParam as APIKeyParam
 from .dataset_param import DatasetParam as DatasetParam
-from .deployed_model import DeployedModel as DeployedModel
 from .splitted_param import SplittedParam as SplittedParam
 from .auto_tune_param import AutoTuneParam as AutoTuneParam
+from .lora_get_params import LoraGetParams as LoraGetParams
 from .placement_param import PlacementParam as PlacementParam
 from .type_date_param import TypeDateParam as TypeDateParam
 from .user_get_params import UserGetParams as UserGetParams
+from .lora_list_params import LoraListParams as LoraListParams
+from .lora_load_params import LoraLoadParams as LoraLoadParams
 from .model_get_params import ModelGetParams as ModelGetParams
 from .user_list_params import UserListParams as UserListParams
 from .evaluation_result import EvaluationResult as EvaluationResult
+from .lora_get_response import LoraGetResponse as LoraGetResponse
 from .model_list_params import ModelListParams as ModelListParams
 from .transformed_param import TransformedParam as TransformedParam
 from .account_get_params import AccountGetParams as AccountGetParams
 from .autoscaling_policy import AutoscalingPolicy as AutoscalingPolicy
 from .base_model_details import BaseModelDetails as BaseModelDetails
 from .dataset_get_params import DatasetGetParams as DatasetGetParams
+from .lora_list_response import LoraListResponse as LoraListResponse
+from .lora_load_response import LoraLoadResponse as LoraLoadResponse
+from .lora_update_params import LoraUpdateParams as LoraUpdateParams
 from .peft_details_param import PeftDetailsParam as PeftDetailsParam
 from .user_create_params import UserCreateParams as UserCreateParams
 from .user_list_response import UserListResponse as UserListResponse
@@ -45,6 +51,7 @@ from .dataset_list_params import DatasetListParams as DatasetListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
+from .lora_update_response import LoraUpdateResponse as LoraUpdateResponse
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
 from .account_list_response import AccountListResponse as AccountListResponse
 from .api_key_create_params import APIKeyCreateParams as APIKeyCreateParams
@@ -65,13 +72,8 @@ from .deployment_delete_params import DeploymentDeleteParams as DeploymentDelete
 from .deployment_list_response import DeploymentListResponse as DeploymentListResponse
 from .deployment_update_params import DeploymentUpdateParams as DeploymentUpdateParams
 from .conversation_config_param import ConversationConfigParam as ConversationConfigParam
-from .deployed_model_get_params import DeployedModelGetParams as DeployedModelGetParams
-from .deployed_model_list_params import DeployedModelListParams as DeployedModelListParams
 from .deployment_undelete_params import DeploymentUndeleteParams as DeploymentUndeleteParams
 from .supervised_fine_tuning_job import SupervisedFineTuningJob as SupervisedFineTuningJob
-from .deployed_model_create_params import DeployedModelCreateParams as DeployedModelCreateParams
-from .deployed_model_list_response import DeployedModelListResponse as DeployedModelListResponse
-from .deployed_model_update_params import DeployedModelUpdateParams as DeployedModelUpdateParams
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
 from .reinforcement_fine_tuning_job import ReinforcementFineTuningJob as ReinforcementFineTuningJob
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
@@ -98,12 +100,21 @@ from .supervised_fine_tuning_job_create_params import (
 from .supervised_fine_tuning_job_list_response import (
     SupervisedFineTuningJobListResponse as SupervisedFineTuningJobListResponse,
 )
+from .supervised_fine_tuning_job_resume_params import (
+    SupervisedFineTuningJobResumeParams as SupervisedFineTuningJobResumeParams,
+)
 from .reinforcement_fine_tuning_job_list_params import (
     ReinforcementFineTuningJobListParams as ReinforcementFineTuningJobListParams,
+)
+from .reinforcement_fine_tuning_job_cancel_params import (
+    ReinforcementFineTuningJobCancelParams as ReinforcementFineTuningJobCancelParams,
 )
 from .reinforcement_fine_tuning_job_create_params import (
     ReinforcementFineTuningJobCreateParams as ReinforcementFineTuningJobCreateParams,
 )
 from .reinforcement_fine_tuning_job_list_response import (
     ReinforcementFineTuningJobListResponse as ReinforcementFineTuningJobListResponse,
+)
+from .reinforcement_fine_tuning_job_resume_params import (
+    ReinforcementFineTuningJobResumeParams as ReinforcementFineTuningJobResumeParams,
 )

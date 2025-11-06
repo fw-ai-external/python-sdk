@@ -38,8 +38,9 @@ client = Fireworks(
 deployment = client.deployments.create(
     account_id="my-account-id",
     base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    display_name="for-evals",
 )
-print(deployment.disable_deployment_size_validation)
+print(deployment.state)
 ```
 
 While you can provide an `api_key` keyword argument,
@@ -65,8 +66,9 @@ async def main() -> None:
     deployment = await client.deployments.create(
         account_id="my-account-id",
         base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+        display_name="for-evals",
     )
-    print(deployment.disable_deployment_size_validation)
+    print(deployment.state)
 
 
 asyncio.run(main())
@@ -101,8 +103,9 @@ async def main() -> None:
         deployment = await client.deployments.create(
             account_id="my-account-id",
             base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+            display_name="for-evals",
         )
-        print(deployment.disable_deployment_size_validation)
+        print(deployment.state)
 
 
 asyncio.run(main())
@@ -172,6 +175,7 @@ try:
     client.deployments.create(
         account_id="my-account-id",
         base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+        display_name="for-evals",
     )
 except fireworks.APIConnectionError as e:
     print("The server could not be reached")
@@ -218,6 +222,7 @@ client = Fireworks(
 client.with_options(max_retries=5).deployments.create(
     account_id="my-account-id",
     base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    display_name="for-evals",
 )
 ```
 
@@ -244,6 +249,7 @@ client = Fireworks(
 client.with_options(timeout=5.0).deployments.create(
     account_id="my-account-id",
     base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    display_name="for-evals",
 )
 ```
 
@@ -288,11 +294,12 @@ client = Fireworks()
 response = client.deployments.with_raw_response.create(
     account_id="my-account-id",
     base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    display_name="for-evals",
 )
 print(response.headers.get('X-My-Header'))
 
 deployment = response.parse()  # get the object that `deployments.create()` would have returned
-print(deployment.disable_deployment_size_validation)
+print(deployment.state)
 ```
 
 These methods return an [`APIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks/_response.py) object.
@@ -309,6 +316,7 @@ To stream the response body, use `.with_streaming_response` instead, which requi
 with client.deployments.with_streaming_response.create(
     account_id="my-account-id",
     base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    display_name="for-evals",
 ) as response:
     print(response.headers.get("X-My-Header"))
 

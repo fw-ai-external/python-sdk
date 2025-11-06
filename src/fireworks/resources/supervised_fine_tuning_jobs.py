@@ -10,6 +10,7 @@ from ..types import (
     supervised_fine_tuning_job_get_params,
     supervised_fine_tuning_job_list_params,
     supervised_fine_tuning_job_create_params,
+    supervised_fine_tuning_job_resume_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -372,6 +373,48 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             cast_to=SupervisedFineTuningJob,
         )
 
+    def resume(
+        self,
+        supervised_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> SupervisedFineTuningJob:
+        """
+        Resume Supervised Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not supervised_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
+            )
+        return self._post(
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume",
+            body=maybe_transform(body, supervised_fine_tuning_job_resume_params.SupervisedFineTuningJobResumeParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=SupervisedFineTuningJob,
+        )
+
 
 class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
     @cached_property
@@ -716,6 +759,50 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             cast_to=SupervisedFineTuningJob,
         )
 
+    async def resume(
+        self,
+        supervised_fine_tuning_job_id: str,
+        *,
+        account_id: str,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> SupervisedFineTuningJob:
+        """
+        Resume Supervised Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not supervised_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
+            )
+        return await self._post(
+            f"/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume",
+            body=await async_maybe_transform(
+                body, supervised_fine_tuning_job_resume_params.SupervisedFineTuningJobResumeParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=SupervisedFineTuningJob,
+        )
+
 
 class SupervisedFineTuningJobsResourceWithRawResponse:
     def __init__(self, supervised_fine_tuning_jobs: SupervisedFineTuningJobsResource) -> None:
@@ -732,6 +819,9 @@ class SupervisedFineTuningJobsResourceWithRawResponse:
         )
         self.get = to_raw_response_wrapper(
             supervised_fine_tuning_jobs.get,
+        )
+        self.resume = to_raw_response_wrapper(
+            supervised_fine_tuning_jobs.resume,
         )
 
 
@@ -751,6 +841,9 @@ class AsyncSupervisedFineTuningJobsResourceWithRawResponse:
         self.get = async_to_raw_response_wrapper(
             supervised_fine_tuning_jobs.get,
         )
+        self.resume = async_to_raw_response_wrapper(
+            supervised_fine_tuning_jobs.resume,
+        )
 
 
 class SupervisedFineTuningJobsResourceWithStreamingResponse:
@@ -769,6 +862,9 @@ class SupervisedFineTuningJobsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.get,
         )
+        self.resume = to_streamed_response_wrapper(
+            supervised_fine_tuning_jobs.resume,
+        )
 
 
 class AsyncSupervisedFineTuningJobsResourceWithStreamingResponse:
@@ -786,4 +882,7 @@ class AsyncSupervisedFineTuningJobsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.get,
+        )
+        self.resume = async_to_streamed_response_wrapper(
+            supervised_fine_tuning_jobs.resume,
         )

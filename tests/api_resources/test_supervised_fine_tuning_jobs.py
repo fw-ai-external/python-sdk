@@ -289,6 +289,65 @@ class TestSupervisedFineTuningJobs:
                 account_id="account_id",
             )
 
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_resume(self, client: Fireworks) -> None:
+        supervised_fine_tuning_job = client.supervised_fine_tuning_jobs.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_resume(self, client: Fireworks) -> None:
+        response = client.supervised_fine_tuning_jobs.with_raw_response.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        supervised_fine_tuning_job = response.parse()
+        assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_resume(self, client: Fireworks) -> None:
+        with client.supervised_fine_tuning_jobs.with_streaming_response.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            supervised_fine_tuning_job = response.parse()
+            assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_resume(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.supervised_fine_tuning_jobs.with_raw_response.resume(
+                supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `supervised_fine_tuning_job_id` but received ''"
+        ):
+            client.supervised_fine_tuning_jobs.with_raw_response.resume(
+                supervised_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
+            )
+
 
 class TestAsyncSupervisedFineTuningJobs:
     parametrize = pytest.mark.parametrize(
@@ -562,4 +621,63 @@ class TestAsyncSupervisedFineTuningJobs:
             await async_client.supervised_fine_tuning_jobs.with_raw_response.get(
                 supervised_fine_tuning_job_id="",
                 account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_resume(self, async_client: AsyncFireworks) -> None:
+        supervised_fine_tuning_job = await async_client.supervised_fine_tuning_jobs.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_resume(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.supervised_fine_tuning_jobs.with_raw_response.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        supervised_fine_tuning_job = await response.parse()
+        assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_resume(self, async_client: AsyncFireworks) -> None:
+        async with async_client.supervised_fine_tuning_jobs.with_streaming_response.resume(
+            supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            supervised_fine_tuning_job = await response.parse()
+            assert_matches_type(SupervisedFineTuningJob, supervised_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_resume(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.supervised_fine_tuning_jobs.with_raw_response.resume(
+                supervised_fine_tuning_job_id="supervised_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `supervised_fine_tuning_job_id` but received ''"
+        ):
+            await async_client.supervised_fine_tuning_jobs.with_raw_response.resume(
+                supervised_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
             )
