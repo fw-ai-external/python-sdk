@@ -6,10 +6,10 @@ from typing_extensions import Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["DeployedModelListParams"]
+__all__ = ["LoraListParams"]
 
 
-class DeployedModelListParams(TypedDict, total=False):
+class LoraListParams(TypedDict, total=False):
     filter: str
     """
     Only depoyed models satisfying the provided filter (if specified) will be

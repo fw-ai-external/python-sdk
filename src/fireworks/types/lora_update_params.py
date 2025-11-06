@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["DeployedModelCreateParams"]
+__all__ = ["LoraUpdateParams"]
 
 
-class DeployedModelCreateParams(TypedDict, total=False):
-    replace_merged_addon: Annotated[bool, PropertyInfo(alias="replaceMergedAddon")]
-    """
-    Merges new addon to the base model, while unmerging/deleting any existing addon
-    in the deployment. Must be specified for hot reload deployments
-    """
+class LoraUpdateParams(TypedDict, total=False):
+    account_id: Required[str]
 
     default: bool
     """

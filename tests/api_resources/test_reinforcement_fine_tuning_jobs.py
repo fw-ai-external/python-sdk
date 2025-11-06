@@ -228,6 +228,65 @@ class TestReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
+    def test_method_cancel(self, client: Fireworks) -> None:
+        reinforcement_fine_tuning_job = client.reinforcement_fine_tuning_jobs.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_cancel(self, client: Fireworks) -> None:
+        response = client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_job = response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_cancel(self, client: Fireworks) -> None:
+        with client.reinforcement_fine_tuning_jobs.with_streaming_response.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_job = response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_cancel(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+                reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received ''"
+        ):
+            client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+                reinforcement_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
     def test_method_get(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_job = client.reinforcement_fine_tuning_jobs.get(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -288,6 +347,65 @@ class TestReinforcementFineTuningJobs:
             client.reinforcement_fine_tuning_jobs.with_raw_response.get(
                 reinforcement_fine_tuning_job_id="",
                 account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_resume(self, client: Fireworks) -> None:
+        reinforcement_fine_tuning_job = client.reinforcement_fine_tuning_jobs.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_resume(self, client: Fireworks) -> None:
+        response = client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_job = response.parse()
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_resume(self, client: Fireworks) -> None:
+        with client.reinforcement_fine_tuning_jobs.with_streaming_response.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_job = response.parse()
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_resume(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+                reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received ''"
+        ):
+            client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+                reinforcement_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
             )
 
 
@@ -504,6 +622,65 @@ class TestAsyncReinforcementFineTuningJobs:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
+    async def test_method_cancel(self, async_client: AsyncFireworks) -> None:
+        reinforcement_fine_tuning_job = await async_client.reinforcement_fine_tuning_jobs.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_cancel(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_job = await response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_cancel(self, async_client: AsyncFireworks) -> None:
+        async with async_client.reinforcement_fine_tuning_jobs.with_streaming_response.cancel(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_job = await response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_cancel(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+                reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received ''"
+        ):
+            await async_client.reinforcement_fine_tuning_jobs.with_raw_response.cancel(
+                reinforcement_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_job = await async_client.reinforcement_fine_tuning_jobs.get(
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
@@ -564,4 +741,63 @@ class TestAsyncReinforcementFineTuningJobs:
             await async_client.reinforcement_fine_tuning_jobs.with_raw_response.get(
                 reinforcement_fine_tuning_job_id="",
                 account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_resume(self, async_client: AsyncFireworks) -> None:
+        reinforcement_fine_tuning_job = await async_client.reinforcement_fine_tuning_jobs.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_resume(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_job = await response.parse()
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_resume(self, async_client: AsyncFireworks) -> None:
+        async with async_client.reinforcement_fine_tuning_jobs.with_streaming_response.resume(
+            reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_job = await response.parse()
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_resume(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+                reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(
+            ValueError, match=r"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received ''"
+        ):
+            await async_client.reinforcement_fine_tuning_jobs.with_raw_response.resume(
+                reinforcement_fine_tuning_job_id="",
+                account_id="account_id",
+                body={},
             )
