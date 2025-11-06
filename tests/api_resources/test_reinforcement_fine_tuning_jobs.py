@@ -7,12 +7,11 @@ from typing import Any, cast
 
 import pytest
 
+from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks_ai import Fireworks, AsyncFireworks
-from fireworks_ai.types import (
-    ReinforcementFineTuningJobGetResponse,
+from fireworks.types import (
+    ReinforcementFineTuningJob,
     ReinforcementFineTuningJobListResponse,
-    ReinforcementFineTuningJobCreateResponse,
 )
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
@@ -29,7 +28,7 @@ class TestReinforcementFineTuningJobs:
             dataset="dataset",
             evaluator="evaluator",
         )
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -74,7 +73,7 @@ class TestReinforcementFineTuningJobs:
                 "run_id": "runId",
             },
         )
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -88,7 +87,7 @@ class TestReinforcementFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -102,9 +101,7 @@ class TestReinforcementFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
-            assert_matches_type(
-                ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"]
-            )
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -236,7 +233,7 @@ class TestReinforcementFineTuningJobs:
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
         )
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -246,7 +243,7 @@ class TestReinforcementFineTuningJobs:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -259,7 +256,7 @@ class TestReinforcementFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -272,7 +269,7 @@ class TestReinforcementFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
-            assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -307,7 +304,7 @@ class TestAsyncReinforcementFineTuningJobs:
             dataset="dataset",
             evaluator="evaluator",
         )
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -352,7 +349,7 @@ class TestAsyncReinforcementFineTuningJobs:
                 "run_id": "runId",
             },
         )
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -366,7 +363,7 @@ class TestAsyncReinforcementFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
-        assert_matches_type(ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -380,9 +377,7 @@ class TestAsyncReinforcementFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
-            assert_matches_type(
-                ReinforcementFineTuningJobCreateResponse, reinforcement_fine_tuning_job, path=["response"]
-            )
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -514,7 +509,7 @@ class TestAsyncReinforcementFineTuningJobs:
             reinforcement_fine_tuning_job_id="reinforcement_fine_tuning_job_id",
             account_id="account_id",
         )
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -524,7 +519,7 @@ class TestAsyncReinforcementFineTuningJobs:
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -537,7 +532,7 @@ class TestAsyncReinforcementFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
-        assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -550,7 +545,7 @@ class TestAsyncReinforcementFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
-            assert_matches_type(ReinforcementFineTuningJobGetResponse, reinforcement_fine_tuning_job, path=["response"])
+            assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

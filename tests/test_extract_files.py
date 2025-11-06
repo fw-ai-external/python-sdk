@@ -4,8 +4,8 @@ from typing import Sequence
 
 import pytest
 
-from fireworks_ai._types import FileTypes
-from fireworks_ai._utils import extract_files
+from fireworks._types import FileTypes
+from fireworks._utils import extract_files
 
 
 def test_removes_files_from_input() -> None:

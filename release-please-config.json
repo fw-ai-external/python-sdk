@@ -61,6 +61,6 @@
   ],
   "release-type": "python",
   "extra-files": [
-    "src/fireworks_ai/_version.py"
+    "src/fireworks/_version.py"
   ]
 }
