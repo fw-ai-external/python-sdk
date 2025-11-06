@@ -2,29 +2,14 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Required, Annotated, TypedDict
+from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
+from .splitted_param import SplittedParam
+from .transformed_param import TransformedParam
+from .evaluation_result_param import EvaluationResultParam
 
-__all__ = ["DatasetParam", "EvaluationResult", "Splitted", "Transformed"]
-
-
-class EvaluationResult(TypedDict, total=False):
-    evaluation_job_id: Required[Annotated[str, PropertyInfo(alias="evaluationJobId")]]
-
-
-class Splitted(TypedDict, total=False):
-    source_dataset_id: Required[Annotated[str, PropertyInfo(alias="sourceDatasetId")]]
-
-
-class Transformed(TypedDict, total=False):
-    source_dataset_id: Required[Annotated[str, PropertyInfo(alias="sourceDatasetId")]]
-
-    filter: str
-
-    original_format: Annotated[
-        Literal["FORMAT_UNSPECIFIED", "CHAT", "COMPLETION", "RL"], PropertyInfo(alias="originalFormat")
-    ]
+__all__ = ["DatasetParam"]
 
 
 class DatasetParam(TypedDict, total=False):
@@ -32,7 +17,7 @@ class DatasetParam(TypedDict, total=False):
 
     eval_protocol: Annotated[object, PropertyInfo(alias="evalProtocol")]
 
-    evaluation_result: Annotated[EvaluationResult, PropertyInfo(alias="evaluationResult")]
+    evaluation_result: Annotated[EvaluationResultParam, PropertyInfo(alias="evaluationResult")]
 
     example_count: Annotated[str, PropertyInfo(alias="exampleCount")]
 
@@ -46,8 +31,8 @@ class DatasetParam(TypedDict, total=False):
     job). Used for lineage tracking to understand dataset provenance.
     """
 
-    splitted: Splitted
+    splitted: SplittedParam
 
-    transformed: Transformed
+    transformed: TransformedParam
 
     user_uploaded: Annotated[object, PropertyInfo(alias="userUploaded")]

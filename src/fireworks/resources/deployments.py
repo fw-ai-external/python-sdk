@@ -28,6 +28,9 @@ from .._response import (
 )
 from .._base_client import make_request_options
 from ..types.deployment import Deployment
+from ..types.auto_tune_param import AutoTuneParam
+from ..types.placement_param import PlacementParam
+from ..types.autoscaling_policy_param import AutoscalingPolicyParam
 from ..types.deployment_list_response import DeploymentListResponse
 
 __all__ = ["DeploymentsResource", "AsyncDeploymentsResource"]
@@ -78,8 +81,8 @@ class DeploymentsResource(SyncAPIResource):
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
-        autoscaling_policy: deployment_create_params.AutoscalingPolicy | Omit = omit,
-        auto_tune: deployment_create_params.AutoTune | Omit = omit,
+        autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
+        auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
         deployment_template: str | Omit = omit,
         description: str | Omit = omit,
@@ -100,7 +103,7 @@ class DeploymentsResource(SyncAPIResource):
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
-        placement: deployment_create_params.Placement | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -293,8 +296,8 @@ class DeploymentsResource(SyncAPIResource):
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
-        autoscaling_policy: deployment_update_params.AutoscalingPolicy | Omit = omit,
-        auto_tune: deployment_update_params.AutoTune | Omit = omit,
+        autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
+        auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
         deployment_template: str | Omit = omit,
         description: str | Omit = omit,
@@ -315,7 +318,7 @@ class DeploymentsResource(SyncAPIResource):
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
-        placement: deployment_update_params.Placement | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -724,8 +727,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
-        autoscaling_policy: deployment_create_params.AutoscalingPolicy | Omit = omit,
-        auto_tune: deployment_create_params.AutoTune | Omit = omit,
+        autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
+        auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
         deployment_template: str | Omit = omit,
         description: str | Omit = omit,
@@ -746,7 +749,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
-        placement: deployment_create_params.Placement | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -939,8 +942,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
-        autoscaling_policy: deployment_update_params.AutoscalingPolicy | Omit = omit,
-        auto_tune: deployment_update_params.AutoTune | Omit = omit,
+        autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
+        auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
         deployment_template: str | Omit = omit,
         description: str | Omit = omit,
@@ -961,7 +964,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
-        placement: deployment_update_params.Placement | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",

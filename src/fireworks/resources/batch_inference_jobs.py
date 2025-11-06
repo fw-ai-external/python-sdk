@@ -6,7 +6,11 @@ from typing_extensions import Literal
 
 import httpx
 
-from ..types import batch_inference_job_get_params, batch_inference_job_list_params, batch_inference_job_create_params
+from ..types import (
+    batch_inference_job_get_params,
+    batch_inference_job_list_params,
+    batch_inference_job_create_params,
+)
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
 from .._compat import cached_property
@@ -20,6 +24,7 @@ from .._response import (
 from .._base_client import make_request_options
 from ..types.batch_inference_job import BatchInferenceJob
 from ..types.batch_inference_job_list_response import BatchInferenceJobListResponse
+from ..types.shared_params.inference_parameters import InferenceParameters
 
 __all__ = ["BatchInferenceJobsResource", "AsyncBatchInferenceJobsResource"]
 
@@ -51,7 +56,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
         batch_inference_job_id: str | Omit = omit,
         continued_from_job_name: str | Omit = omit,
         display_name: str | Omit = omit,
-        inference_parameters: batch_inference_job_create_params.InferenceParameters | Omit = omit,
+        inference_parameters: InferenceParameters | Omit = omit,
         input_dataset_id: str | Omit = omit,
         model: str | Omit = omit,
         output_dataset_id: str | Omit = omit,
@@ -331,7 +336,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         batch_inference_job_id: str | Omit = omit,
         continued_from_job_name: str | Omit = omit,
         display_name: str | Omit = omit,
-        inference_parameters: batch_inference_job_create_params.InferenceParameters | Omit = omit,
+        inference_parameters: InferenceParameters | Omit = omit,
         input_dataset_id: str | Omit = omit,
         model: str | Omit = omit,
         output_dataset_id: str | Omit = omit,

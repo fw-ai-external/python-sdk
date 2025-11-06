@@ -30,8 +30,11 @@ from .._response import (
 from .._base_client import make_request_options
 from ..types.dataset import Dataset
 from ..types.dataset_param import DatasetParam
+from ..types.splitted_param import SplittedParam
+from ..types.transformed_param import TransformedParam
 from ..types.dataset_list_response import DatasetListResponse
 from ..types.dataset_upload_response import DatasetUploadResponse
+from ..types.evaluation_result_param import EvaluationResultParam
 from ..types.dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse
 
 __all__ = ["DatasetsResource", "AsyncDatasetsResource"]
@@ -112,13 +115,13 @@ class DatasetsResource(SyncAPIResource):
         account_id: str,
         display_name: str | Omit = omit,
         eval_protocol: object | Omit = omit,
-        evaluation_result: dataset_update_params.EvaluationResult | Omit = omit,
+        evaluation_result: EvaluationResultParam | Omit = omit,
         example_count: str | Omit = omit,
         external_url: str | Omit = omit,
         format: Literal["FORMAT_UNSPECIFIED", "CHAT", "COMPLETION", "RL"] | Omit = omit,
         source_job_name: str | Omit = omit,
-        splitted: dataset_update_params.Splitted | Omit = omit,
-        transformed: dataset_update_params.Transformed | Omit = omit,
+        splitted: SplittedParam | Omit = omit,
+        transformed: TransformedParam | Omit = omit,
         user_uploaded: object | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -544,13 +547,13 @@ class AsyncDatasetsResource(AsyncAPIResource):
         account_id: str,
         display_name: str | Omit = omit,
         eval_protocol: object | Omit = omit,
-        evaluation_result: dataset_update_params.EvaluationResult | Omit = omit,
+        evaluation_result: EvaluationResultParam | Omit = omit,
         example_count: str | Omit = omit,
         external_url: str | Omit = omit,
         format: Literal["FORMAT_UNSPECIFIED", "CHAT", "COMPLETION", "RL"] | Omit = omit,
         source_job_name: str | Omit = omit,
-        splitted: dataset_update_params.Splitted | Omit = omit,
-        transformed: dataset_update_params.Transformed | Omit = omit,
+        splitted: SplittedParam | Omit = omit,
+        transformed: TransformedParam | Omit = omit,
         user_uploaded: object | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.

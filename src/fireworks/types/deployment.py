@@ -1,136 +1,18 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .auto_tune import AutoTune
+from .placement import Placement
+from .shared.status import Status
+from .autoscaling_policy import AutoscalingPolicy
 
-__all__ = ["Deployment", "AutoscalingPolicy", "AutoTune", "Placement", "Status"]
-
-
-class AutoscalingPolicy(BaseModel):
-    load_targets: Optional[Dict[str, float]] = FieldInfo(alias="loadTargets", default=None)
-
-    scale_down_window: Optional[str] = FieldInfo(alias="scaleDownWindow", default=None)
-    """
-    The duration the autoscaler will wait before scaling down a deployment after
-    observing decreased load. Default is 10m.
-    """
-
-    scale_to_zero_window: Optional[str] = FieldInfo(alias="scaleToZeroWindow", default=None)
-    """
-    The duration after which there are no requests that the deployment will be
-    scaled down to zero replicas, if min_replica_count==0. Default is 1h. This must
-    be at least 5 minutes.
-    """
-
-    scale_up_window: Optional[str] = FieldInfo(alias="scaleUpWindow", default=None)
-    """
-    The duration the autoscaler will wait before scaling up a deployment after
-    observing increased load. Default is 30s.
-    """
-
-
-class AutoTune(BaseModel):
-    long_prompt: Optional[bool] = FieldInfo(alias="longPrompt", default=None)
-    """If true, this deployment is optimized for long prompt lengths."""
-
-
-class Placement(BaseModel):
-    multi_region: Optional[Literal["MULTI_REGION_UNSPECIFIED", "GLOBAL", "US"]] = FieldInfo(
-        alias="multiRegion", default=None
-    )
-    """The multi-region where the deployment must be placed."""
-
-    region: Optional[
-        Literal[
-            "REGION_UNSPECIFIED",
-            "US_IOWA_1",
-            "US_VIRGINIA_1",
-            "US_ILLINOIS_1",
-            "AP_TOKYO_1",
-            "US_ARIZONA_1",
-            "US_TEXAS_1",
-            "US_ILLINOIS_2",
-            "EU_FRANKFURT_1",
-            "US_TEXAS_2",
-            "EU_ICELAND_1",
-            "EU_ICELAND_2",
-            "US_WASHINGTON_1",
-            "US_WASHINGTON_2",
-            "US_WASHINGTON_3",
-            "AP_TOKYO_2",
-            "US_CALIFORNIA_1",
-            "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_GEORGIA_1",
-            "US_GEORGIA_2",
-            "US_WASHINGTON_4",
-            "US_GEORGIA_3",
-        ]
-    ] = None
-    """The region where the deployment must be placed."""
-
-    regions: Optional[
-        List[
-            Literal[
-                "REGION_UNSPECIFIED",
-                "US_IOWA_1",
-                "US_VIRGINIA_1",
-                "US_ILLINOIS_1",
-                "AP_TOKYO_1",
-                "US_ARIZONA_1",
-                "US_TEXAS_1",
-                "US_ILLINOIS_2",
-                "EU_FRANKFURT_1",
-                "US_TEXAS_2",
-                "EU_ICELAND_1",
-                "EU_ICELAND_2",
-                "US_WASHINGTON_1",
-                "US_WASHINGTON_2",
-                "US_WASHINGTON_3",
-                "AP_TOKYO_2",
-                "US_CALIFORNIA_1",
-                "US_UTAH_1",
-                "US_TEXAS_3",
-                "US_GEORGIA_1",
-                "US_GEORGIA_2",
-                "US_WASHINGTON_4",
-                "US_GEORGIA_3",
-            ]
-        ]
-    ] = None
-
-
-class Status(BaseModel):
-    code: Optional[
-        Literal[
-            "OK",
-            "CANCELLED",
-            "UNKNOWN",
-            "INVALID_ARGUMENT",
-            "DEADLINE_EXCEEDED",
-            "NOT_FOUND",
-            "ALREADY_EXISTS",
-            "PERMISSION_DENIED",
-            "UNAUTHENTICATED",
-            "RESOURCE_EXHAUSTED",
-            "FAILED_PRECONDITION",
-            "ABORTED",
-            "OUT_OF_RANGE",
-            "UNIMPLEMENTED",
-            "INTERNAL",
-            "UNAVAILABLE",
-            "DATA_LOSS",
-        ]
-    ] = None
-    """The status code."""
-
-    message: Optional[str] = None
-    """A developer-facing error message in English."""
+__all__ = ["Deployment"]
 
 
 class Deployment(BaseModel):
