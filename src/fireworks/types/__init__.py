@@ -23,6 +23,7 @@ from .user_list_response import UserListResponse as UserListResponse
 from .user_update_params import UserUpdateParams as UserUpdateParams
 from .account_list_params import AccountListParams as AccountListParams
 from .api_key_list_params import APIKeyListParams as APIKeyListParams
+from .batch_inference_job import BatchInferenceJob as BatchInferenceJob
 from .dataset_list_params import DatasetListParams as DatasetListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse

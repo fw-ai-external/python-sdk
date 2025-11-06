@@ -4,14 +4,14 @@ from typing import List, Optional
 
 from pydantic import Field as FieldInfo
 
-from .account import Account
 from .._models import BaseModel
+from .batch_inference_job import BatchInferenceJob
 
 __all__ = ["BatchInferenceJobListResponse"]
 
 
 class BatchInferenceJobListResponse(BaseModel):
-    batch_inference_jobs: Optional[List[Account]] = FieldInfo(alias="batchInferenceJobs", default=None)
+    batch_inference_jobs: Optional[List[BatchInferenceJob]] = FieldInfo(alias="batchInferenceJobs", default=None)
 
     next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
     """
