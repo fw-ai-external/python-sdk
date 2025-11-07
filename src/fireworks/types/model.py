@@ -12,28 +12,9 @@ from .peft_details import PeftDetails
 from .shared.status import Status
 from .base_model_details import BaseModelDetails
 from .conversation_config import ConversationConfig
+from .shared.deployed_model_ref import DeployedModelRef
 
-__all__ = ["Model", "DeployedModelRef"]
-
-
-class DeployedModelRef(BaseModel):
-    default: Optional[bool] = None
-    """
-    If true, this is the default target when querying this model without the
-    `#<deployment>` suffix. The first deployment a model is deployed to will have
-    this field set to true automatically.
-    """
-
-    deployment: Optional[str] = None
-    """The resource name of the base deployment the model is deployed to."""
-
-    name: Optional[str] = None
-
-    public: Optional[bool] = None
-    """If true, the deployed model will be publicly reachable."""
-
-    state: Optional[Literal["STATE_UNSPECIFIED", "UNDEPLOYING", "DEPLOYING", "DEPLOYED", "UPDATING"]] = None
-    """The state of the deployed model."""
+__all__ = ["Model"]
 
 
 class Model(BaseModel):

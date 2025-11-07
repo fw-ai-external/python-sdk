@@ -16,10 +16,8 @@ from .._response import (
     async_to_streamed_response_wrapper,
 )
 from .._base_client import make_request_options
-from ..types.lora_get_response import LoraGetResponse
 from ..types.lora_list_response import LoraListResponse
-from ..types.lora_load_response import LoraLoadResponse
-from ..types.lora_update_response import LoraUpdateResponse
+from ..types.shared.deployed_model import DeployedModel
 
 __all__ = ["LoraResource", "AsyncLoraResource"]
 
@@ -62,7 +60,7 @@ class LoraResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraUpdateResponse:
+    ) -> DeployedModel:
         """
         Update LoRA
 
@@ -108,7 +106,7 @@ class LoraResource(SyncAPIResource):
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
-            cast_to=LoraUpdateResponse,
+            cast_to=DeployedModel,
         )
 
     def list(
@@ -194,7 +192,7 @@ class LoraResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraGetResponse:
+    ) -> DeployedModel:
         """Get LoRA
 
         Args:
@@ -226,7 +224,7 @@ class LoraResource(SyncAPIResource):
                 timeout=timeout,
                 query=maybe_transform({"read_mask": read_mask}, lora_get_params.LoraGetParams),
             ),
-            cast_to=LoraGetResponse,
+            cast_to=DeployedModel,
         )
 
     def load(
@@ -247,7 +245,7 @@ class LoraResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraLoadResponse:
+    ) -> DeployedModel:
         """
         Load LoRA
 
@@ -298,7 +296,7 @@ class LoraResource(SyncAPIResource):
                 timeout=timeout,
                 query=maybe_transform({"replace_merged_addon": replace_merged_addon}, lora_load_params.LoraLoadParams),
             ),
-            cast_to=LoraLoadResponse,
+            cast_to=DeployedModel,
         )
 
     def unload(
@@ -378,7 +376,7 @@ class AsyncLoraResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraUpdateResponse:
+    ) -> DeployedModel:
         """
         Update LoRA
 
@@ -424,7 +422,7 @@ class AsyncLoraResource(AsyncAPIResource):
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
-            cast_to=LoraUpdateResponse,
+            cast_to=DeployedModel,
         )
 
     async def list(
@@ -510,7 +508,7 @@ class AsyncLoraResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraGetResponse:
+    ) -> DeployedModel:
         """Get LoRA
 
         Args:
@@ -542,7 +540,7 @@ class AsyncLoraResource(AsyncAPIResource):
                 timeout=timeout,
                 query=await async_maybe_transform({"read_mask": read_mask}, lora_get_params.LoraGetParams),
             ),
-            cast_to=LoraGetResponse,
+            cast_to=DeployedModel,
         )
 
     async def load(
@@ -563,7 +561,7 @@ class AsyncLoraResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> LoraLoadResponse:
+    ) -> DeployedModel:
         """
         Load LoRA
 
@@ -616,7 +614,7 @@ class AsyncLoraResource(AsyncAPIResource):
                     {"replace_merged_addon": replace_merged_addon}, lora_load_params.LoraLoadParams
                 ),
             ),
-            cast_to=LoraLoadResponse,
+            cast_to=DeployedModel,
         )
 
     async def unload(

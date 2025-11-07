@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from .user import User as User
 from .model import Model as Model
-from .shared import Status as Status, WandbConfig as WandbConfig, InferenceParameters as InferenceParameters
+from .shared import (
+    Status as Status,
+    WandbConfig as WandbConfig,
+    DeployedModel as DeployedModel,
+    DeployedModelRef as DeployedModelRef,
+    InferenceParameters as InferenceParameters,
+)
 from .account import Account as Account
 from .api_key import APIKey as APIKey
 from .dataset import Dataset as Dataset
@@ -29,7 +35,6 @@ from .lora_load_params import LoraLoadParams as LoraLoadParams
 from .model_get_params import ModelGetParams as ModelGetParams
 from .user_list_params import UserListParams as UserListParams
 from .evaluation_result import EvaluationResult as EvaluationResult
-from .lora_get_response import LoraGetResponse as LoraGetResponse
 from .model_list_params import ModelListParams as ModelListParams
 from .transformed_param import TransformedParam as TransformedParam
 from .account_get_params import AccountGetParams as AccountGetParams
@@ -37,7 +42,6 @@ from .autoscaling_policy import AutoscalingPolicy as AutoscalingPolicy
 from .base_model_details import BaseModelDetails as BaseModelDetails
 from .dataset_get_params import DatasetGetParams as DatasetGetParams
 from .lora_list_response import LoraListResponse as LoraListResponse
-from .lora_load_response import LoraLoadResponse as LoraLoadResponse
 from .lora_update_params import LoraUpdateParams as LoraUpdateParams
 from .peft_details_param import PeftDetailsParam as PeftDetailsParam
 from .user_create_params import UserCreateParams as UserCreateParams
@@ -51,7 +55,6 @@ from .dataset_list_params import DatasetListParams as DatasetListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
-from .lora_update_response import LoraUpdateResponse as LoraUpdateResponse
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
 from .account_list_response import AccountListResponse as AccountListResponse
 from .api_key_create_params import APIKeyCreateParams as APIKeyCreateParams

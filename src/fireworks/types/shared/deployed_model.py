@@ -6,13 +6,13 @@ from typing_extensions import Literal
 
 from pydantic import Field as FieldInfo
 
-from .._models import BaseModel
-from .shared.status import Status
+from .status import Status
+from ..._models import BaseModel
 
-__all__ = ["LoraLoadResponse"]
+__all__ = ["DeployedModel"]
 
 
-class LoraLoadResponse(BaseModel):
+class DeployedModel(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the resource."""
 
