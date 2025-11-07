@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .user import User as User
 from .model import Model as Model
+from .secret import Secret as Secret
 from .shared import (
     Status as Status,
     WandbConfig as WandbConfig,
@@ -37,6 +38,7 @@ from .model_get_params import ModelGetParams as ModelGetParams
 from .user_list_params import UserListParams as UserListParams
 from .evaluation_result import EvaluationResult as EvaluationResult
 from .model_list_params import ModelListParams as ModelListParams
+from .secret_get_params import SecretGetParams as SecretGetParams
 from .transformed_param import TransformedParam as TransformedParam
 from .account_get_params import AccountGetParams as AccountGetParams
 from .autoscaling_policy import AutoscalingPolicy as AutoscalingPolicy
@@ -46,6 +48,7 @@ from .dpo_job_get_params import DpoJobGetParams as DpoJobGetParams
 from .lora_list_response import LoraListResponse as LoraListResponse
 from .lora_update_params import LoraUpdateParams as LoraUpdateParams
 from .peft_details_param import PeftDetailsParam as PeftDetailsParam
+from .secret_list_params import SecretListParams as SecretListParams
 from .user_create_params import UserCreateParams as UserCreateParams
 from .user_list_response import UserListResponse as UserListResponse
 from .user_update_params import UserUpdateParams as UserUpdateParams
@@ -59,6 +62,9 @@ from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
+from .secret_create_params import SecretCreateParams as SecretCreateParams
+from .secret_list_response import SecretListResponse as SecretListResponse
+from .secret_update_params import SecretUpdateParams as SecretUpdateParams
 from .account_list_response import AccountListResponse as AccountListResponse
 from .api_key_create_params import APIKeyCreateParams as APIKeyCreateParams
 from .api_key_delete_params import APIKeyDeleteParams as APIKeyDeleteParams
