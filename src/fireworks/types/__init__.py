@@ -14,6 +14,7 @@ from .shared import (
 from .account import Account as Account
 from .api_key import APIKey as APIKey
 from .dataset import Dataset as Dataset
+from .dpo_job import DpoJob as DpoJob
 from .splitted import Splitted as Splitted
 from .auto_tune import AutoTune as AutoTune
 from .placement import Placement as Placement
@@ -41,6 +42,7 @@ from .account_get_params import AccountGetParams as AccountGetParams
 from .autoscaling_policy import AutoscalingPolicy as AutoscalingPolicy
 from .base_model_details import BaseModelDetails as BaseModelDetails
 from .dataset_get_params import DatasetGetParams as DatasetGetParams
+from .dpo_job_get_params import DpoJobGetParams as DpoJobGetParams
 from .lora_list_response import LoraListResponse as LoraListResponse
 from .lora_update_params import LoraUpdateParams as LoraUpdateParams
 from .peft_details_param import PeftDetailsParam as PeftDetailsParam
@@ -52,6 +54,7 @@ from .api_key_list_params import APIKeyListParams as APIKeyListParams
 from .batch_inference_job import BatchInferenceJob as BatchInferenceJob
 from .conversation_config import ConversationConfig as ConversationConfig
 from .dataset_list_params import DatasetListParams as DatasetListParams
+from .dpo_job_list_params import DpoJobListParams as DpoJobListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
@@ -65,6 +68,8 @@ from .dataset_list_response import DatasetListResponse as DatasetListResponse
 from .dataset_update_params import DatasetUpdateParams as DatasetUpdateParams
 from .dataset_upload_params import DatasetUploadParams as DatasetUploadParams
 from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
+from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
+from .dpo_job_list_response import DpoJobListResponse as DpoJobListResponse
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .dataset_upload_response import DatasetUploadResponse as DatasetUploadResponse
 from .evaluation_result_param import EvaluationResultParam as EvaluationResultParam
@@ -108,6 +113,9 @@ from .supervised_fine_tuning_job_resume_params import (
 )
 from .reinforcement_fine_tuning_job_list_params import (
     ReinforcementFineTuningJobListParams as ReinforcementFineTuningJobListParams,
+)
+from .dpo_job_get_metrics_file_endpoint_response import (
+    DpoJobGetMetricsFileEndpointResponse as DpoJobGetMetricsFileEndpointResponse,
 )
 from .reinforcement_fine_tuning_job_cancel_params import (
     ReinforcementFineTuningJobCancelParams as ReinforcementFineTuningJobCancelParams,
