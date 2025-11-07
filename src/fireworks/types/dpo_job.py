@@ -9,9 +9,8 @@ from pydantic import Field as FieldInfo
 from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
-from .shared.inference_parameters import InferenceParameters
 
-__all__ = ["ReinforcementFineTuningJob", "TrainingConfig"]
+__all__ = ["DpoJob", "TrainingConfig"]
 
 
 class TrainingConfig(BaseModel):
@@ -90,40 +89,20 @@ class TrainingConfig(BaseModel):
     """
 
 
-class ReinforcementFineTuningJob(BaseModel):
+class DpoJob(BaseModel):
     dataset: str
     """The name of the dataset used for training."""
 
-    evaluator: str
-    """The evaluator resource name to use for RLOR fine-tuning job."""
-
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
-    """The completed time for the reinforcement fine-tuning job."""
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
-    """The email address of the user who initiated this fine-tuning job."""
+    """The email address of the user who initiated this dpo job."""
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
-    eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
-    """Whether to auto-carve the dataset for eval."""
-
-    evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
-    """The name of a separate dataset to use for evaluation."""
-
-    inference_parameters: Optional[InferenceParameters] = FieldInfo(alias="inferenceParameters", default=None)
-    """BIJ parameters."""
-
-    mcp_server: Optional[str] = FieldInfo(alias="mcpServer", default=None)
-
     name: Optional[str] = None
-
-    output_metrics: Optional[str] = FieldInfo(alias="outputMetrics", default=None)
-
-    output_stats: Optional[str] = FieldInfo(alias="outputStats", default=None)
-    """The output dataset's aggregated stats for the evaluation job."""
 
     state: Optional[
         Literal[
@@ -154,4 +133,4 @@ class ReinforcementFineTuningJob(BaseModel):
     """Common training configurations."""
 
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
-    """The Weights & Biases team/user account for logging training progress."""
+    """The Weights & Biases team/user account for logging job progress."""

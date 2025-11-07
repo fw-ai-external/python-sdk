@@ -194,3 +194,19 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">get</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_get_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
+
+# DpoJobs
+
+Types:
+
+```python
+from fireworks.types import DpoJob, DpoJobListResponse, DpoJobGetMetricsFileEndpointResponse
+```
+
+Methods:
+
+- <code title="post /v1/accounts/{account_id}/dpoJobs">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">create</a>(account_id, \*\*<a href="src/fireworks/types/dpo_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/dpo_job.py">DpoJob</a></code>
+- <code title="get /v1/accounts/{account_id}/dpoJobs">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">list</a>(account_id, \*\*<a href="src/fireworks/types/dpo_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/dpo_job_list_response.py">DpoJobListResponse</a></code>
+- <code title="delete /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">delete</a>(dpo_job_id, \*, account_id) -> object</code>
+- <code title="get /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">get</a>(dpo_job_id, \*, account_id, \*\*<a href="src/fireworks/types/dpo_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/dpo_job.py">DpoJob</a></code>
+- <code title="get /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">get_metrics_file_endpoint</a>(dpo_job_id, \*, account_id) -> <a href="./src/fireworks/types/dpo_job_get_metrics_file_endpoint_response.py">DpoJobGetMetricsFileEndpointResponse</a></code>

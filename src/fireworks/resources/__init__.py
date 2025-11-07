@@ -48,6 +48,14 @@ from .datasets import (
     DatasetsResourceWithStreamingResponse,
     AsyncDatasetsResourceWithStreamingResponse,
 )
+from .dpo_jobs import (
+    DpoJobsResource,
+    AsyncDpoJobsResource,
+    DpoJobsResourceWithRawResponse,
+    AsyncDpoJobsResourceWithRawResponse,
+    DpoJobsResourceWithStreamingResponse,
+    AsyncDpoJobsResourceWithStreamingResponse,
+)
 from .deployments import (
     DeploymentsResource,
     AsyncDeploymentsResource,
@@ -142,4 +150,10 @@ __all__ = [
     "AsyncLoraResourceWithRawResponse",
     "LoraResourceWithStreamingResponse",
     "AsyncLoraResourceWithStreamingResponse",
+    "DpoJobsResource",
+    "AsyncDpoJobsResource",
+    "DpoJobsResourceWithRawResponse",
+    "AsyncDpoJobsResourceWithRawResponse",
+    "DpoJobsResourceWithStreamingResponse",
+    "AsyncDpoJobsResourceWithStreamingResponse",
 ]
