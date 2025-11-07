@@ -1,7 +1,13 @@
 # Shared Types
 
 ```python
-from fireworks.types import InferenceParameters, Status, WandbConfig
+from fireworks.types import (
+    DeployedModel,
+    DeployedModelRef,
+    InferenceParameters,
+    Status,
+    WandbConfig,
+)
 ```
 
 # Accounts
@@ -178,13 +184,13 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import LoraUpdateResponse, LoraListResponse, LoraGetResponse, LoraLoadResponse
+from fireworks.types import LoraListResponse
 ```
 
 Methods:
 
-- <code title="patch /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">update</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_update_params.py">params</a>) -> <a href="./src/fireworks/types/lora_update_response.py">LoraUpdateResponse</a></code>
+- <code title="patch /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">update</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_update_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="get /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">list</a>(account_id, \*\*<a href="src/fireworks/types/lora_list_params.py">params</a>) -> <a href="./src/fireworks/types/lora_list_response.py">LoraListResponse</a></code>
-- <code title="get /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">get</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_get_params.py">params</a>) -> <a href="./src/fireworks/types/lora_get_response.py">LoraGetResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/lora_load_response.py">LoraLoadResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">get</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_get_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
+- <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
