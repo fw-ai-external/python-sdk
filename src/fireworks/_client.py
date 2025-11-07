@@ -25,6 +25,7 @@ from .resources import (
     lora,
     users,
     models,
+    secrets,
     accounts,
     api_keys,
     datasets,
@@ -65,6 +66,7 @@ class Fireworks(SyncAPIClient):
     users: users.UsersResource
     api_keys: api_keys.APIKeysResource
     lora: lora.LoraResource
+    secrets: secrets.SecretsResource
     dpo_jobs: dpo_jobs.DpoJobsResource
     with_raw_response: FireworksWithRawResponse
     with_streaming_response: FireworksWithStreamedResponse
@@ -134,6 +136,7 @@ class Fireworks(SyncAPIClient):
         self.users = users.UsersResource(self)
         self.api_keys = api_keys.APIKeysResource(self)
         self.lora = lora.LoraResource(self)
+        self.secrets = secrets.SecretsResource(self)
         self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
         self.with_raw_response = FireworksWithRawResponse(self)
         self.with_streaming_response = FireworksWithStreamedResponse(self)
@@ -256,6 +259,7 @@ class AsyncFireworks(AsyncAPIClient):
     users: users.AsyncUsersResource
     api_keys: api_keys.AsyncAPIKeysResource
     lora: lora.AsyncLoraResource
+    secrets: secrets.AsyncSecretsResource
     dpo_jobs: dpo_jobs.AsyncDpoJobsResource
     with_raw_response: AsyncFireworksWithRawResponse
     with_streaming_response: AsyncFireworksWithStreamedResponse
@@ -327,6 +331,7 @@ class AsyncFireworks(AsyncAPIClient):
         self.users = users.AsyncUsersResource(self)
         self.api_keys = api_keys.AsyncAPIKeysResource(self)
         self.lora = lora.AsyncLoraResource(self)
+        self.secrets = secrets.AsyncSecretsResource(self)
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
         self.with_raw_response = AsyncFireworksWithRawResponse(self)
         self.with_streaming_response = AsyncFireworksWithStreamedResponse(self)
@@ -458,6 +463,7 @@ class FireworksWithRawResponse:
         self.users = users.UsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithRawResponse(client.api_keys)
         self.lora = lora.LoraResourceWithRawResponse(client.lora)
+        self.secrets = secrets.SecretsResourceWithRawResponse(client.secrets)
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
 
 
@@ -483,6 +489,7 @@ class AsyncFireworksWithRawResponse:
         self.users = users.AsyncUsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithRawResponse(client.api_keys)
         self.lora = lora.AsyncLoraResourceWithRawResponse(client.lora)
+        self.secrets = secrets.AsyncSecretsResourceWithRawResponse(client.secrets)
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
 
 
@@ -508,6 +515,7 @@ class FireworksWithStreamedResponse:
         self.users = users.UsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithStreamingResponse(client.api_keys)
         self.lora = lora.LoraResourceWithStreamingResponse(client.lora)
+        self.secrets = secrets.SecretsResourceWithStreamingResponse(client.secrets)
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
 
 
@@ -533,6 +541,7 @@ class AsyncFireworksWithStreamedResponse:
         self.users = users.AsyncUsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithStreamingResponse(client.api_keys)
         self.lora = lora.AsyncLoraResourceWithStreamingResponse(client.lora)
+        self.secrets = secrets.AsyncSecretsResourceWithStreamingResponse(client.secrets)
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)
 
 

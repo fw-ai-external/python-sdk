@@ -24,6 +24,14 @@ from .models import (
     ModelsResourceWithStreamingResponse,
     AsyncModelsResourceWithStreamingResponse,
 )
+from .secrets import (
+    SecretsResource,
+    AsyncSecretsResource,
+    SecretsResourceWithRawResponse,
+    AsyncSecretsResourceWithRawResponse,
+    SecretsResourceWithStreamingResponse,
+    AsyncSecretsResourceWithStreamingResponse,
+)
 from .accounts import (
     AccountsResource,
     AsyncAccountsResource,
@@ -150,6 +158,12 @@ __all__ = [
     "AsyncLoraResourceWithRawResponse",
     "LoraResourceWithStreamingResponse",
     "AsyncLoraResourceWithStreamingResponse",
+    "SecretsResource",
+    "AsyncSecretsResource",
+    "SecretsResourceWithRawResponse",
+    "AsyncSecretsResourceWithRawResponse",
+    "SecretsResourceWithStreamingResponse",
+    "AsyncSecretsResourceWithStreamingResponse",
     "DpoJobsResource",
     "AsyncDpoJobsResource",
     "DpoJobsResourceWithRawResponse",

@@ -195,6 +195,22 @@ Methods:
 - <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
 
+# Secrets
+
+Types:
+
+```python
+from fireworks.types import Secret, SecretListResponse
+```
+
+Methods:
+
+- <code title="post /v1/accounts/{account_id}/secrets">client.secrets.<a href="./src/fireworks/resources/secrets.py">create</a>(account_id, \*\*<a href="src/fireworks/types/secret_create_params.py">params</a>) -> <a href="./src/fireworks/types/secret.py">Secret</a></code>
+- <code title="patch /v1/accounts/{account_id}/secrets/{secret_id}">client.secrets.<a href="./src/fireworks/resources/secrets.py">update</a>(secret_id, \*, account_id, \*\*<a href="src/fireworks/types/secret_update_params.py">params</a>) -> <a href="./src/fireworks/types/secret.py">Secret</a></code>
+- <code title="get /v1/accounts/{account_id}/secrets">client.secrets.<a href="./src/fireworks/resources/secrets.py">list</a>(account_id, \*\*<a href="src/fireworks/types/secret_list_params.py">params</a>) -> <a href="./src/fireworks/types/secret_list_response.py">SecretListResponse</a></code>
+- <code title="delete /v1/accounts/{account_id}/secrets/{secret_id}">client.secrets.<a href="./src/fireworks/resources/secrets.py">delete</a>(secret_id, \*, account_id) -> object</code>
+- <code title="get /v1/accounts/{account_id}/secrets/{secret_id}">client.secrets.<a href="./src/fireworks/resources/secrets.py">get</a>(secret_id, \*, account_id, \*\*<a href="src/fireworks/types/secret_get_params.py">params</a>) -> <a href="./src/fireworks/types/secret.py">Secret</a></code>
+
 # DpoJobs
 
 Types:
