@@ -56,18 +56,18 @@ __all__ = [
 
 
 class Fireworks(SyncAPIClient):
-    accounts: accounts.AccountsResource
     batch_inference_jobs: batch_inference_jobs.BatchInferenceJobsResource
-    datasets: datasets.DatasetsResource
     deployments: deployments.DeploymentsResource
     models: models.ModelsResource
-    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
+    lora: lora.LoraResource
+    datasets: datasets.DatasetsResource
     supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource
+    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
+    dpo_jobs: dpo_jobs.DpoJobsResource
+    accounts: accounts.AccountsResource
     users: users.UsersResource
     api_keys: api_keys.APIKeysResource
-    lora: lora.LoraResource
     secrets: secrets.SecretsResource
-    dpo_jobs: dpo_jobs.DpoJobsResource
     with_raw_response: FireworksWithRawResponse
     with_streaming_response: FireworksWithStreamedResponse
 
@@ -126,18 +126,18 @@ class Fireworks(SyncAPIClient):
             _strict_response_validation=_strict_response_validation,
         )
 
-        self.accounts = accounts.AccountsResource(self)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResource(self)
-        self.datasets = datasets.DatasetsResource(self)
         self.deployments = deployments.DeploymentsResource(self)
         self.models = models.ModelsResource(self)
-        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource(self)
+        self.lora = lora.LoraResource(self)
+        self.datasets = datasets.DatasetsResource(self)
         self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource(self)
+        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource(self)
+        self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
+        self.accounts = accounts.AccountsResource(self)
         self.users = users.UsersResource(self)
         self.api_keys = api_keys.APIKeysResource(self)
-        self.lora = lora.LoraResource(self)
         self.secrets = secrets.SecretsResource(self)
-        self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
         self.with_raw_response = FireworksWithRawResponse(self)
         self.with_streaming_response = FireworksWithStreamedResponse(self)
 
@@ -249,18 +249,18 @@ class Fireworks(SyncAPIClient):
 
 
 class AsyncFireworks(AsyncAPIClient):
-    accounts: accounts.AsyncAccountsResource
     batch_inference_jobs: batch_inference_jobs.AsyncBatchInferenceJobsResource
-    datasets: datasets.AsyncDatasetsResource
     deployments: deployments.AsyncDeploymentsResource
     models: models.AsyncModelsResource
-    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
+    lora: lora.AsyncLoraResource
+    datasets: datasets.AsyncDatasetsResource
     supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource
+    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
+    dpo_jobs: dpo_jobs.AsyncDpoJobsResource
+    accounts: accounts.AsyncAccountsResource
     users: users.AsyncUsersResource
     api_keys: api_keys.AsyncAPIKeysResource
-    lora: lora.AsyncLoraResource
     secrets: secrets.AsyncSecretsResource
-    dpo_jobs: dpo_jobs.AsyncDpoJobsResource
     with_raw_response: AsyncFireworksWithRawResponse
     with_streaming_response: AsyncFireworksWithStreamedResponse
 
@@ -319,20 +319,20 @@ class AsyncFireworks(AsyncAPIClient):
             _strict_response_validation=_strict_response_validation,
         )
 
-        self.accounts = accounts.AsyncAccountsResource(self)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResource(self)
-        self.datasets = datasets.AsyncDatasetsResource(self)
         self.deployments = deployments.AsyncDeploymentsResource(self)
         self.models = models.AsyncModelsResource(self)
+        self.lora = lora.AsyncLoraResource(self)
+        self.datasets = datasets.AsyncDatasetsResource(self)
+        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource(self)
         self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource(
             self
         )
-        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource(self)
+        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
+        self.accounts = accounts.AsyncAccountsResource(self)
         self.users = users.AsyncUsersResource(self)
         self.api_keys = api_keys.AsyncAPIKeysResource(self)
-        self.lora = lora.AsyncLoraResource(self)
         self.secrets = secrets.AsyncSecretsResource(self)
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
         self.with_raw_response = AsyncFireworksWithRawResponse(self)
         self.with_streaming_response = AsyncFireworksWithStreamedResponse(self)
 
@@ -445,104 +445,104 @@ class AsyncFireworks(AsyncAPIClient):
 
 class FireworksWithRawResponse:
     def __init__(self, client: Fireworks) -> None:
-        self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse(
             client.batch_inference_jobs
         )
-        self.datasets = datasets.DatasetsResourceWithRawResponse(client.datasets)
         self.deployments = deployments.DeploymentsResourceWithRawResponse(client.deployments)
         self.models = models.ModelsResourceWithRawResponse(client.models)
+        self.lora = lora.LoraResourceWithRawResponse(client.lora)
+        self.datasets = datasets.DatasetsResourceWithRawResponse(client.datasets)
+        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse(
+            client.supervised_fine_tuning_jobs
+        )
         self.reinforcement_fine_tuning_jobs = (
             reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithRawResponse(
                 client.reinforcement_fine_tuning_jobs
             )
         )
-        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse(
-            client.supervised_fine_tuning_jobs
-        )
+        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
+        self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
         self.users = users.UsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithRawResponse(client.api_keys)
-        self.lora = lora.LoraResourceWithRawResponse(client.lora)
         self.secrets = secrets.SecretsResourceWithRawResponse(client.secrets)
-        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
 
 
 class AsyncFireworksWithRawResponse:
     def __init__(self, client: AsyncFireworks) -> None:
-        self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse(
             client.batch_inference_jobs
         )
-        self.datasets = datasets.AsyncDatasetsResourceWithRawResponse(client.datasets)
         self.deployments = deployments.AsyncDeploymentsResourceWithRawResponse(client.deployments)
         self.models = models.AsyncModelsResourceWithRawResponse(client.models)
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
+        self.lora = lora.AsyncLoraResourceWithRawResponse(client.lora)
+        self.datasets = datasets.AsyncDatasetsResourceWithRawResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithRawResponse(
                 client.supervised_fine_tuning_jobs
             )
         )
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
+        self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
         self.users = users.AsyncUsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithRawResponse(client.api_keys)
-        self.lora = lora.AsyncLoraResourceWithRawResponse(client.lora)
         self.secrets = secrets.AsyncSecretsResourceWithRawResponse(client.secrets)
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
 
 
 class FireworksWithStreamedResponse:
     def __init__(self, client: Fireworks) -> None:
-        self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse(
             client.batch_inference_jobs
         )
-        self.datasets = datasets.DatasetsResourceWithStreamingResponse(client.datasets)
         self.deployments = deployments.DeploymentsResourceWithStreamingResponse(client.deployments)
         self.models = models.ModelsResourceWithStreamingResponse(client.models)
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
+        self.lora = lora.LoraResourceWithStreamingResponse(client.lora)
+        self.datasets = datasets.DatasetsResourceWithStreamingResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithStreamingResponse(
                 client.supervised_fine_tuning_jobs
             )
         )
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
+        self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
         self.users = users.UsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithStreamingResponse(client.api_keys)
-        self.lora = lora.LoraResourceWithStreamingResponse(client.lora)
         self.secrets = secrets.SecretsResourceWithStreamingResponse(client.secrets)
-        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
 
 
 class AsyncFireworksWithStreamedResponse:
     def __init__(self, client: AsyncFireworks) -> None:
-        self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse(
             client.batch_inference_jobs
         )
-        self.datasets = datasets.AsyncDatasetsResourceWithStreamingResponse(client.datasets)
         self.deployments = deployments.AsyncDeploymentsResourceWithStreamingResponse(client.deployments)
         self.models = models.AsyncModelsResourceWithStreamingResponse(client.models)
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
+        self.lora = lora.AsyncLoraResourceWithStreamingResponse(client.lora)
+        self.datasets = datasets.AsyncDatasetsResourceWithStreamingResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithStreamingResponse(
                 client.supervised_fine_tuning_jobs
             )
         )
+        self.reinforcement_fine_tuning_jobs = (
+            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)
+        self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
         self.users = users.AsyncUsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithStreamingResponse(client.api_keys)
-        self.lora = lora.AsyncLoraResourceWithStreamingResponse(client.lora)
         self.secrets = secrets.AsyncSecretsResourceWithStreamingResponse(client.secrets)
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)
 
 
 Client = Fireworks
