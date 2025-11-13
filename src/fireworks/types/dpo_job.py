@@ -14,12 +14,6 @@ __all__ = ["DpoJob", "TrainingConfig"]
 
 
 class TrainingConfig(BaseModel):
-    accelerator_count: Optional[int] = FieldInfo(alias="acceleratorCount", default=None)
-    """
-    The number of accelerators used for the fine-tuning job. If not specified, the
-    default is the estimated minimum required by the base model.
-    """
-
     base_model: Optional[str] = FieldInfo(alias="baseModel", default=None)
     """
     The name of the base model to be fine-tuned Only one of 'base_model' or

@@ -45,12 +45,6 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
 
 class TrainingConfig(TypedDict, total=False):
-    accelerator_count: Annotated[int, PropertyInfo(alias="acceleratorCount")]
-    """
-    The number of accelerators used for the fine-tuning job. If not specified, the
-    default is the estimated minimum required by the base model.
-    """
-
     base_model: Annotated[str, PropertyInfo(alias="baseModel")]
     """
     The name of the base model to be fine-tuned Only one of 'base_model' or

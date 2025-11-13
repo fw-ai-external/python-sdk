@@ -37,7 +37,7 @@ class TestSecrets:
             account_id="account_id",
             key_name="keyName",
             name="name",
-            value="value",
+            value="sk-1234567890abcdef",
         )
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -98,7 +98,7 @@ class TestSecrets:
             secret_id="secret_id",
             account_id="account_id",
             key_name="keyName",
-            value="value",
+            value="sk-1234567890abcdef",
         )
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -341,7 +341,7 @@ class TestAsyncSecrets:
             account_id="account_id",
             key_name="keyName",
             name="name",
-            value="value",
+            value="sk-1234567890abcdef",
         )
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -402,7 +402,7 @@ class TestAsyncSecrets:
             secret_id="secret_id",
             account_id="account_id",
             key_name="keyName",
-            value="value",
+            value="sk-1234567890abcdef",
         )
         assert_matches_type(Secret, secret, path=["response"])
 

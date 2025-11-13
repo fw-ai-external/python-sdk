@@ -44,9 +44,9 @@ class Deployment(BaseModel):
     """
 
     active_model_version: Optional[str] = FieldInfo(alias="activeModelVersion", default=None)
-    """The active model version for this deployment.
-
-    Used to enable a specific model version.
+    """
+    The model version that is currently active and applied to running replicas of a
+    deployment.
     """
 
     autoscaling_policy: Optional[AutoscalingPolicy] = FieldInfo(alias="autoscalingPolicy", default=None)
@@ -241,6 +241,12 @@ class Deployment(BaseModel):
 
     status: Optional[Status] = None
     """Detailed status information regarding the most recent operation."""
+
+    target_model_version: Optional[str] = FieldInfo(alias="targetModelVersion", default=None)
+    """
+    The target model version that is being rolled out to the deployment. In a ready
+    steady state, the target model version is the same as the active model version.
+    """
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the deployment."""

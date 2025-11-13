@@ -51,7 +51,6 @@ class TestReinforcementFineTuningJobs:
             },
             mcp_server="mcpServer",
             training_config={
-                "accelerator_count": 0,
                 "base_model": "baseModel",
                 "batch_size": 0,
                 "epochs": 0,
@@ -445,7 +444,6 @@ class TestAsyncReinforcementFineTuningJobs:
             },
             mcp_server="mcpServer",
             training_config={
-                "accelerator_count": 0,
                 "base_model": "baseModel",
                 "batch_size": 0,
                 "epochs": 0,

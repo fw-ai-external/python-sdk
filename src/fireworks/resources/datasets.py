@@ -16,6 +16,7 @@ from ..types import (
     dataset_upload_params,
     dataset_validate_upload_params,
     dataset_get_upload_endpoint_params,
+    dataset_get_download_endpoint_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, FileTypes, omit, not_given
 from .._utils import extract_files, maybe_transform, deepcopy_minimal, async_maybe_transform
@@ -36,6 +37,7 @@ from ..types.dataset_list_response import DatasetListResponse
 from ..types.dataset_upload_response import DatasetUploadResponse
 from ..types.evaluation_result_param import EvaluationResultParam
 from ..types.dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse
+from ..types.dataset_get_download_endpoint_response import DatasetGetDownloadEndpointResponse
 
 __all__ = ["DatasetsResource", "AsyncDatasetsResource"]
 
@@ -328,6 +330,62 @@ class DatasetsResource(SyncAPIResource):
                 query=maybe_transform({"read_mask": read_mask}, dataset_get_params.DatasetGetParams),
             ),
             cast_to=Dataset,
+        )
+
+    def get_download_endpoint(
+        self,
+        dataset_id: str,
+        *,
+        account_id: str,
+        download_lineage: bool | Omit = omit,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DatasetGetDownloadEndpointResponse:
+        """
+        Get Dataset Download Endpoint
+
+        Args:
+          download_lineage: If true, downloads entire lineage chain (all related datasets). Filenames will
+              be prefixed with dataset IDs to avoid collisions.
+
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dataset_id:
+            raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
+        return self._get(
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {
+                        "download_lineage": download_lineage,
+                        "read_mask": read_mask,
+                    },
+                    dataset_get_download_endpoint_params.DatasetGetDownloadEndpointParams,
+                ),
+            ),
+            cast_to=DatasetGetDownloadEndpointResponse,
         )
 
     def get_upload_endpoint(
@@ -762,6 +820,62 @@ class AsyncDatasetsResource(AsyncAPIResource):
             cast_to=Dataset,
         )
 
+    async def get_download_endpoint(
+        self,
+        dataset_id: str,
+        *,
+        account_id: str,
+        download_lineage: bool | Omit = omit,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DatasetGetDownloadEndpointResponse:
+        """
+        Get Dataset Download Endpoint
+
+        Args:
+          download_lineage: If true, downloads entire lineage chain (all related datasets). Filenames will
+              be prefixed with dataset IDs to avoid collisions.
+
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dataset_id:
+            raise ValueError(f"Expected a non-empty value for `dataset_id` but received {dataset_id!r}")
+        return await self._get(
+            f"/v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {
+                        "download_lineage": download_lineage,
+                        "read_mask": read_mask,
+                    },
+                    dataset_get_download_endpoint_params.DatasetGetDownloadEndpointParams,
+                ),
+            ),
+            cast_to=DatasetGetDownloadEndpointResponse,
+        )
+
     async def get_upload_endpoint(
         self,
         dataset_id: str,
@@ -923,6 +1037,9 @@ class DatasetsResourceWithRawResponse:
         self.get = to_raw_response_wrapper(
             datasets.get,
         )
+        self.get_download_endpoint = to_raw_response_wrapper(
+            datasets.get_download_endpoint,
+        )
         self.get_upload_endpoint = to_raw_response_wrapper(
             datasets.get_upload_endpoint,
         )
@@ -952,6 +1069,9 @@ class AsyncDatasetsResourceWithRawResponse:
         )
         self.get = async_to_raw_response_wrapper(
             datasets.get,
+        )
+        self.get_download_endpoint = async_to_raw_response_wrapper(
+            datasets.get_download_endpoint,
         )
         self.get_upload_endpoint = async_to_raw_response_wrapper(
             datasets.get_upload_endpoint,
@@ -983,6 +1103,9 @@ class DatasetsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             datasets.get,
         )
+        self.get_download_endpoint = to_streamed_response_wrapper(
+            datasets.get_download_endpoint,
+        )
         self.get_upload_endpoint = to_streamed_response_wrapper(
             datasets.get_upload_endpoint,
         )
@@ -1012,6 +1135,9 @@ class AsyncDatasetsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             datasets.get,
+        )
+        self.get_download_endpoint = async_to_streamed_response_wrapper(
+            datasets.get_download_endpoint,
         )
         self.get_upload_endpoint = async_to_streamed_response_wrapper(
             datasets.get_upload_endpoint,

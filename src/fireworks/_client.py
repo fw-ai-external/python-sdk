@@ -32,8 +32,10 @@ from .resources import (
     dpo_jobs,
     deployments,
     batch_inference_jobs,
+    deployment_shape_versions,
     supervised_fine_tuning_jobs,
     reinforcement_fine_tuning_jobs,
+    reinforcement_fine_tuning_steps,
 )
 from ._streaming import Stream as Stream, AsyncStream as AsyncStream
 from ._exceptions import APIStatusError, FireworksError
@@ -60,9 +62,11 @@ class Fireworks(SyncAPIClient):
     deployments: deployments.DeploymentsResource
     models: models.ModelsResource
     lora: lora.LoraResource
+    deployment_shape_versions: deployment_shape_versions.DeploymentShapeVersionsResource
     datasets: datasets.DatasetsResource
     supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource
     reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
+    reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResource
     dpo_jobs: dpo_jobs.DpoJobsResource
     accounts: accounts.AccountsResource
     users: users.UsersResource
@@ -130,9 +134,13 @@ class Fireworks(SyncAPIClient):
         self.deployments = deployments.DeploymentsResource(self)
         self.models = models.ModelsResource(self)
         self.lora = lora.LoraResource(self)
+        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResource(self)
         self.datasets = datasets.DatasetsResource(self)
         self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource(self)
         self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource(self)
+        self.reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResource(
+            self
+        )
         self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
         self.accounts = accounts.AccountsResource(self)
         self.users = users.UsersResource(self)
@@ -253,9 +261,11 @@ class AsyncFireworks(AsyncAPIClient):
     deployments: deployments.AsyncDeploymentsResource
     models: models.AsyncModelsResource
     lora: lora.AsyncLoraResource
+    deployment_shape_versions: deployment_shape_versions.AsyncDeploymentShapeVersionsResource
     datasets: datasets.AsyncDatasetsResource
     supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource
     reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
+    reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource
     dpo_jobs: dpo_jobs.AsyncDpoJobsResource
     accounts: accounts.AsyncAccountsResource
     users: users.AsyncUsersResource
@@ -323,10 +333,14 @@ class AsyncFireworks(AsyncAPIClient):
         self.deployments = deployments.AsyncDeploymentsResource(self)
         self.models = models.AsyncModelsResource(self)
         self.lora = lora.AsyncLoraResource(self)
+        self.deployment_shape_versions = deployment_shape_versions.AsyncDeploymentShapeVersionsResource(self)
         self.datasets = datasets.AsyncDatasetsResource(self)
         self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource(self)
         self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource(
             self
+        )
+        self.reinforcement_fine_tuning_steps = (
+            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource(self)
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
         self.accounts = accounts.AsyncAccountsResource(self)
@@ -451,6 +465,9 @@ class FireworksWithRawResponse:
         self.deployments = deployments.DeploymentsResourceWithRawResponse(client.deployments)
         self.models = models.ModelsResourceWithRawResponse(client.models)
         self.lora = lora.LoraResourceWithRawResponse(client.lora)
+        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResourceWithRawResponse(
+            client.deployment_shape_versions
+        )
         self.datasets = datasets.DatasetsResourceWithRawResponse(client.datasets)
         self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse(
             client.supervised_fine_tuning_jobs
@@ -458,6 +475,11 @@ class FireworksWithRawResponse:
         self.reinforcement_fine_tuning_jobs = (
             reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithRawResponse(
                 client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.reinforcement_fine_tuning_steps = (
+            reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithRawResponse(
+                client.reinforcement_fine_tuning_steps
             )
         )
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
@@ -475,6 +497,9 @@ class AsyncFireworksWithRawResponse:
         self.deployments = deployments.AsyncDeploymentsResourceWithRawResponse(client.deployments)
         self.models = models.AsyncModelsResourceWithRawResponse(client.models)
         self.lora = lora.AsyncLoraResourceWithRawResponse(client.lora)
+        self.deployment_shape_versions = deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithRawResponse(
+            client.deployment_shape_versions
+        )
         self.datasets = datasets.AsyncDatasetsResourceWithRawResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithRawResponse(
@@ -484,6 +509,11 @@ class AsyncFireworksWithRawResponse:
         self.reinforcement_fine_tuning_jobs = (
             reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse(
                 client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.reinforcement_fine_tuning_steps = (
+            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithRawResponse(
+                client.reinforcement_fine_tuning_steps
             )
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
@@ -501,6 +531,9 @@ class FireworksWithStreamedResponse:
         self.deployments = deployments.DeploymentsResourceWithStreamingResponse(client.deployments)
         self.models = models.ModelsResourceWithStreamingResponse(client.models)
         self.lora = lora.LoraResourceWithStreamingResponse(client.lora)
+        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResourceWithStreamingResponse(
+            client.deployment_shape_versions
+        )
         self.datasets = datasets.DatasetsResourceWithStreamingResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithStreamingResponse(
@@ -510,6 +543,11 @@ class FireworksWithStreamedResponse:
         self.reinforcement_fine_tuning_jobs = (
             reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse(
                 client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.reinforcement_fine_tuning_steps = (
+            reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_steps
             )
         )
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
@@ -527,6 +565,11 @@ class AsyncFireworksWithStreamedResponse:
         self.deployments = deployments.AsyncDeploymentsResourceWithStreamingResponse(client.deployments)
         self.models = models.AsyncModelsResourceWithStreamingResponse(client.models)
         self.lora = lora.AsyncLoraResourceWithStreamingResponse(client.lora)
+        self.deployment_shape_versions = (
+            deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithStreamingResponse(
+                client.deployment_shape_versions
+            )
+        )
         self.datasets = datasets.AsyncDatasetsResourceWithStreamingResponse(client.datasets)
         self.supervised_fine_tuning_jobs = (
             supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithStreamingResponse(
@@ -536,6 +579,11 @@ class AsyncFireworksWithStreamedResponse:
         self.reinforcement_fine_tuning_jobs = (
             reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
                 client.reinforcement_fine_tuning_jobs
+            )
+        )
+        self.reinforcement_fine_tuning_steps = (
+            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithStreamingResponse(
+                client.reinforcement_fine_tuning_steps
             )
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)

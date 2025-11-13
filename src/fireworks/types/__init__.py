@@ -78,6 +78,7 @@ from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
 from .dpo_job_list_response import DpoJobListResponse as DpoJobListResponse
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .dataset_upload_response import DatasetUploadResponse as DatasetUploadResponse
+from .deployment_scale_params import DeploymentScaleParams as DeploymentScaleParams
 from .evaluation_result_param import EvaluationResultParam as EvaluationResultParam
 from .autoscaling_policy_param import AutoscalingPolicyParam as AutoscalingPolicyParam
 from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsParam
@@ -92,6 +93,7 @@ from .model_validate_upload_params import ModelValidateUploadParams as ModelVali
 from .reinforcement_fine_tuning_job import ReinforcementFineTuningJob as ReinforcementFineTuningJob
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
 from .dataset_validate_upload_params import DatasetValidateUploadParams as DatasetValidateUploadParams
+from .reinforcement_fine_tuning_step import ReinforcementFineTuningStep as ReinforcementFineTuningStep
 from .batch_inference_job_list_params import BatchInferenceJobListParams as BatchInferenceJobListParams
 from .model_get_upload_endpoint_params import ModelGetUploadEndpointParams as ModelGetUploadEndpointParams
 from .batch_inference_job_create_params import BatchInferenceJobCreateParams as BatchInferenceJobCreateParams
@@ -99,9 +101,21 @@ from .batch_inference_job_list_response import BatchInferenceJobListResponse as 
 from .dataset_get_upload_endpoint_params import DatasetGetUploadEndpointParams as DatasetGetUploadEndpointParams
 from .model_get_download_endpoint_params import ModelGetDownloadEndpointParams as ModelGetDownloadEndpointParams
 from .model_get_upload_endpoint_response import ModelGetUploadEndpointResponse as ModelGetUploadEndpointResponse
+from .deployment_shape_version_get_params import DeploymentShapeVersionGetParams as DeploymentShapeVersionGetParams
+from .dataset_get_download_endpoint_params import DatasetGetDownloadEndpointParams as DatasetGetDownloadEndpointParams
 from .dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse as DatasetGetUploadEndpointResponse
+from .deployment_shape_version_list_params import DeploymentShapeVersionListParams as DeploymentShapeVersionListParams
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
+from .deployment_shape_version_get_response import (
+    DeploymentShapeVersionGetResponse as DeploymentShapeVersionGetResponse,
+)
 from .supervised_fine_tuning_job_get_params import SupervisedFineTuningJobGetParams as SupervisedFineTuningJobGetParams
+from .dataset_get_download_endpoint_response import (
+    DatasetGetDownloadEndpointResponse as DatasetGetDownloadEndpointResponse,
+)
+from .deployment_shape_version_list_response import (
+    DeploymentShapeVersionListResponse as DeploymentShapeVersionListResponse,
+)
 from .supervised_fine_tuning_job_list_params import (
     SupervisedFineTuningJobListParams as SupervisedFineTuningJobListParams,
 )
@@ -120,8 +134,14 @@ from .supervised_fine_tuning_job_resume_params import (
 from .reinforcement_fine_tuning_job_list_params import (
     ReinforcementFineTuningJobListParams as ReinforcementFineTuningJobListParams,
 )
+from .reinforcement_fine_tuning_step_get_params import (
+    ReinforcementFineTuningStepGetParams as ReinforcementFineTuningStepGetParams,
+)
 from .dpo_job_get_metrics_file_endpoint_response import (
     DpoJobGetMetricsFileEndpointResponse as DpoJobGetMetricsFileEndpointResponse,
+)
+from .reinforcement_fine_tuning_step_list_params import (
+    ReinforcementFineTuningStepListParams as ReinforcementFineTuningStepListParams,
 )
 from .reinforcement_fine_tuning_job_cancel_params import (
     ReinforcementFineTuningJobCancelParams as ReinforcementFineTuningJobCancelParams,
@@ -134,4 +154,10 @@ from .reinforcement_fine_tuning_job_list_response import (
 )
 from .reinforcement_fine_tuning_job_resume_params import (
     ReinforcementFineTuningJobResumeParams as ReinforcementFineTuningJobResumeParams,
+)
+from .reinforcement_fine_tuning_step_create_params import (
+    ReinforcementFineTuningStepCreateParams as ReinforcementFineTuningStepCreateParams,
+)
+from .reinforcement_fine_tuning_step_list_response import (
+    ReinforcementFineTuningStepListResponse as ReinforcementFineTuningStepListResponse,
 )

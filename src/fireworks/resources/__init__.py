@@ -80,6 +80,14 @@ from .batch_inference_jobs import (
     BatchInferenceJobsResourceWithStreamingResponse,
     AsyncBatchInferenceJobsResourceWithStreamingResponse,
 )
+from .deployment_shape_versions import (
+    DeploymentShapeVersionsResource,
+    AsyncDeploymentShapeVersionsResource,
+    DeploymentShapeVersionsResourceWithRawResponse,
+    AsyncDeploymentShapeVersionsResourceWithRawResponse,
+    DeploymentShapeVersionsResourceWithStreamingResponse,
+    AsyncDeploymentShapeVersionsResourceWithStreamingResponse,
+)
 from .supervised_fine_tuning_jobs import (
     SupervisedFineTuningJobsResource,
     AsyncSupervisedFineTuningJobsResource,
@@ -95,6 +103,14 @@ from .reinforcement_fine_tuning_jobs import (
     AsyncReinforcementFineTuningJobsResourceWithRawResponse,
     ReinforcementFineTuningJobsResourceWithStreamingResponse,
     AsyncReinforcementFineTuningJobsResourceWithStreamingResponse,
+)
+from .reinforcement_fine_tuning_steps import (
+    ReinforcementFineTuningStepsResource,
+    AsyncReinforcementFineTuningStepsResource,
+    ReinforcementFineTuningStepsResourceWithRawResponse,
+    AsyncReinforcementFineTuningStepsResourceWithRawResponse,
+    ReinforcementFineTuningStepsResourceWithStreamingResponse,
+    AsyncReinforcementFineTuningStepsResourceWithStreamingResponse,
 )
 
 __all__ = [
@@ -122,6 +138,12 @@ __all__ = [
     "AsyncLoraResourceWithRawResponse",
     "LoraResourceWithStreamingResponse",
     "AsyncLoraResourceWithStreamingResponse",
+    "DeploymentShapeVersionsResource",
+    "AsyncDeploymentShapeVersionsResource",
+    "DeploymentShapeVersionsResourceWithRawResponse",
+    "AsyncDeploymentShapeVersionsResourceWithRawResponse",
+    "DeploymentShapeVersionsResourceWithStreamingResponse",
+    "AsyncDeploymentShapeVersionsResourceWithStreamingResponse",
     "DatasetsResource",
     "AsyncDatasetsResource",
     "DatasetsResourceWithRawResponse",
@@ -140,6 +162,12 @@ __all__ = [
     "AsyncReinforcementFineTuningJobsResourceWithRawResponse",
     "ReinforcementFineTuningJobsResourceWithStreamingResponse",
     "AsyncReinforcementFineTuningJobsResourceWithStreamingResponse",
+    "ReinforcementFineTuningStepsResource",
+    "AsyncReinforcementFineTuningStepsResource",
+    "ReinforcementFineTuningStepsResourceWithRawResponse",
+    "AsyncReinforcementFineTuningStepsResourceWithRawResponse",
+    "ReinforcementFineTuningStepsResourceWithStreamingResponse",
+    "AsyncReinforcementFineTuningStepsResourceWithStreamingResponse",
     "DpoJobsResource",
     "AsyncDpoJobsResource",
     "DpoJobsResourceWithRawResponse",

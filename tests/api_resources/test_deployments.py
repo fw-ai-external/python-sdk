@@ -74,6 +74,7 @@ class TestDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
 
@@ -164,6 +165,7 @@ class TestDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
 
@@ -397,6 +399,68 @@ class TestDeployments:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
+    def test_method_scale(self, client: Fireworks) -> None:
+        deployment = client.deployments.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        )
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_scale_with_all_params(self, client: Fireworks) -> None:
+        deployment = client.deployments.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+            replica_count=0,
+        )
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_scale(self, client: Fireworks) -> None:
+        response = client.deployments.with_raw_response.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        deployment = response.parse()
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_scale(self, client: Fireworks) -> None:
+        with client.deployments.with_streaming_response.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            deployment = response.parse()
+            assert_matches_type(object, deployment, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_scale(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.deployments.with_raw_response.scale(
+                deployment_id="deployment_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployment_id` but received ''"):
+            client.deployments.with_raw_response.scale(
+                deployment_id="",
+                account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
     def test_method_undelete(self, client: Fireworks) -> None:
         deployment = client.deployments.undelete(
             deployment_id="deployment_id",
@@ -511,6 +575,7 @@ class TestAsyncDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
 
@@ -601,6 +666,7 @@ class TestAsyncDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
 
@@ -828,6 +894,68 @@ class TestAsyncDeployments:
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployment_id` but received ''"):
             await async_client.deployments.with_raw_response.get(
+                deployment_id="",
+                account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_scale(self, async_client: AsyncFireworks) -> None:
+        deployment = await async_client.deployments.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        )
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_scale_with_all_params(self, async_client: AsyncFireworks) -> None:
+        deployment = await async_client.deployments.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+            replica_count=0,
+        )
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_scale(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.deployments.with_raw_response.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        deployment = await response.parse()
+        assert_matches_type(object, deployment, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_scale(self, async_client: AsyncFireworks) -> None:
+        async with async_client.deployments.with_streaming_response.scale(
+            deployment_id="deployment_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            deployment = await response.parse()
+            assert_matches_type(object, deployment, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_scale(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.deployments.with_raw_response.scale(
+                deployment_id="deployment_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `deployment_id` but received ''"):
+            await async_client.deployments.with_raw_response.scale(
                 deployment_id="",
                 account_id="account_id",
             )

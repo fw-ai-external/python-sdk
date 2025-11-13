@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import httpx
 
-from ..types import secret_get_params, secret_list_params, secret_create_params, secret_update_params
-from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
+from ..types import (
+    reinforcement_fine_tuning_step_get_params,
+    reinforcement_fine_tuning_step_list_params,
+    reinforcement_fine_tuning_step_create_params,
+)
+from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
@@ -16,52 +20,70 @@ from .._response import (
     async_to_streamed_response_wrapper,
 )
 from .._base_client import make_request_options
-from ..types.secret import Secret
-from ..types.secret_list_response import SecretListResponse
+from ..types.shared_params.wandb_config import WandbConfig
+from ..types.reinforcement_fine_tuning_step import ReinforcementFineTuningStep
+from ..types.reinforcement_fine_tuning_step_list_response import ReinforcementFineTuningStepListResponse
 
-__all__ = ["SecretsResource", "AsyncSecretsResource"]
+__all__ = ["ReinforcementFineTuningStepsResource", "AsyncReinforcementFineTuningStepsResource"]
 
 
-class SecretsResource(SyncAPIResource):
+class ReinforcementFineTuningStepsResource(SyncAPIResource):
     @cached_property
-    def with_raw_response(self) -> SecretsResourceWithRawResponse:
+    def with_raw_response(self) -> ReinforcementFineTuningStepsResourceWithRawResponse:
         """
         This property can be used as a prefix for any HTTP method call to return
         the raw response object instead of the parsed content.
 
         For more information, see https://www.github.com/fw-ai-external/python-sdk#accessing-raw-response-data-eg-headers
         """
-        return SecretsResourceWithRawResponse(self)
+        return ReinforcementFineTuningStepsResourceWithRawResponse(self)
 
     @cached_property
-    def with_streaming_response(self) -> SecretsResourceWithStreamingResponse:
+    def with_streaming_response(self) -> ReinforcementFineTuningStepsResourceWithStreamingResponse:
         """
         An alternative to `.with_raw_response` that doesn't eagerly read the response body.
 
         For more information, see https://www.github.com/fw-ai-external/python-sdk#with_streaming_response
         """
-        return SecretsResourceWithStreamingResponse(self)
+        return ReinforcementFineTuningStepsResourceWithStreamingResponse(self)
 
     def create(
         self,
         account_id: str,
         *,
-        key_name: str,
-        name: str,
-        value: str | Omit = omit,
+        rlor_trainer_job_id: str | Omit = omit,
+        dataset: str | Omit = omit,
+        display_name: str | Omit = omit,
+        eval_auto_carveout: bool | Omit = omit,
+        evaluation_dataset: str | Omit = omit,
+        reward_weights: SequenceNotStr[str] | Omit = omit,
+        training_config: reinforcement_fine_tuning_step_create_params.TrainingConfig | Omit = omit,
+        wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Args:
-          value: The secret value.
+    ) -> ReinforcementFineTuningStep:
+        """
+        Create Reinforcement Fine-tuning Step
 
-        This field is INPUT_ONLY and will not be returned in GET or
-              LIST responses for security reasons. The value is only accepted when creating or
-              updating secrets.
+        Args:
+          rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
+
+          dataset: The name of the dataset used for training.
+
+          eval_auto_carveout: Whether to auto-carve the dataset for eval.
+
+          evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          reward_weights: A list of reward metrics to use for training in format of
+              "<reward_name>=<weight>".
+
+          training_config: Common training configurations.
+
+          wandb_config: The Weights & Biases team/user account for logging training progress.
 
           extra_headers: Send extra headers
 
@@ -74,71 +96,32 @@ class SecretsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/secrets"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             body=maybe_transform(
                 {
-                    "key_name": key_name,
-                    "name": name,
-                    "value": value,
+                    "dataset": dataset,
+                    "display_name": display_name,
+                    "eval_auto_carveout": eval_auto_carveout,
+                    "evaluation_dataset": evaluation_dataset,
+                    "reward_weights": reward_weights,
+                    "training_config": training_config,
+                    "wandb_config": wandb_config,
                 },
-                secret_create_params.SecretCreateParams,
+                reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
             ),
             options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {"rlor_trainer_job_id": rlor_trainer_job_id},
+                    reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
+                ),
             ),
-            cast_to=Secret,
-        )
-
-    def update(
-        self,
-        secret_id: str,
-        *,
-        account_id: str,
-        key_name: str,
-        value: str | Omit = omit,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
-        # The extra values given here take precedence over values defined on the client or passed to this method.
-        extra_headers: Headers | None = None,
-        extra_query: Query | None = None,
-        extra_body: Body | None = None,
-        timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Args:
-          value: The secret value.
-
-        This field is INPUT_ONLY and will not be returned in GET or
-              LIST responses for security reasons. The value is only accepted when creating or
-              updating secrets.
-
-          extra_headers: Send extra headers
-
-          extra_query: Add additional query parameters to the request
-
-          extra_body: Add additional JSON properties to the request
-
-          timeout: Override the client-level default timeout for this request, in seconds
-        """
-        if not account_id:
-            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
-        return self._patch(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
-            body=maybe_transform(
-                {
-                    "key_name": key_name,
-                    "value": value,
-                },
-                secret_update_params.SecretUpdateParams,
-            ),
-            options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
-            ),
-            cast_to=Secret,
+            cast_to=ReinforcementFineTuningStep,
         )
 
     def list(
@@ -156,17 +139,25 @@ class SecretsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SecretListResponse:
-        """Lists all secrets for an account.
-
-        Note that the `value` field is not returned in
-        the response for security reasons. Only the `name` and `key_name` fields are
-        included for each secret.
+    ) -> ReinforcementFineTuningStepListResponse:
+        """
+        List Reinforcement Fine-tuning Steps
 
         Args:
-          filter: Unused but required to use existing ListRequest functionality.
+          filter: Filter criteria for the returned jobs. See https://google.aip.dev/160 for the
+              filter syntax specification.
 
-          order_by: Unused but required to use existing ListRequest functionality.
+          order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
+              order is ascending. To specify a descending order for a field, append a " desc"
+              suffix. e.g. "foo desc,bar" Subfields are specified with a "." character. e.g.
+              "foo.bar" If not specified, the default order is by "name".
+
+          page_size: The maximum number of fine-tuning jobs to return. The maximum page_size is 200,
+              values above 200 will be coerced to 200. If unspecified, the default is 50.
+
+          page_token: A page token, received from a previous ListRlorTuningJobs call. Provide this to
+              retrieve the subsequent page. When paginating, all other parameters provided to
+              ListRlorTuningJobs must match the call that provided the page token.
 
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
               returned.
@@ -182,9 +173,9 @@ class SecretsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/secrets"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -198,15 +189,15 @@ class SecretsResource(SyncAPIResource):
                         "page_token": page_token,
                         "read_mask": read_mask,
                     },
-                    secret_list_params.SecretListParams,
+                    reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=SecretListResponse,
+            cast_to=ReinforcementFineTuningStepListResponse,
         )
 
     def delete(
         self,
-        secret_id: str,
+        rlor_trainer_job_id: str,
         *,
         account_id: str,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -217,6 +208,8 @@ class SecretsResource(SyncAPIResource):
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> object:
         """
+        Delete Reinforcement Fine-tuning Step
+
         Args:
           extra_headers: Send extra headers
 
@@ -228,12 +221,14 @@ class SecretsResource(SyncAPIResource):
         """
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
         return self._delete(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -242,7 +237,7 @@ class SecretsResource(SyncAPIResource):
 
     def get(
         self,
-        secret_id: str,
+        rlor_trainer_job_id: str,
         *,
         account_id: str,
         read_mask: str | Omit = omit,
@@ -252,12 +247,9 @@ class SecretsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Retrieves a secret by name.
-
-        Note that the `value` field is not returned in the
-        response for security reasons. Only the `name` and `key_name` fields are
-        included.
+    ) -> ReinforcementFineTuningStep:
+        """
+        Get Reinforcement Fine-tuning Step
 
         Args:
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
@@ -273,63 +265,85 @@ class SecretsResource(SyncAPIResource):
         """
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
         return self._get(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=maybe_transform({"read_mask": read_mask}, secret_get_params.SecretGetParams),
+                query=maybe_transform(
+                    {"read_mask": read_mask},
+                    reinforcement_fine_tuning_step_get_params.ReinforcementFineTuningStepGetParams,
+                ),
             ),
-            cast_to=Secret,
+            cast_to=ReinforcementFineTuningStep,
         )
 
 
-class AsyncSecretsResource(AsyncAPIResource):
+class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
     @cached_property
-    def with_raw_response(self) -> AsyncSecretsResourceWithRawResponse:
+    def with_raw_response(self) -> AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         """
         This property can be used as a prefix for any HTTP method call to return
         the raw response object instead of the parsed content.
 
         For more information, see https://www.github.com/fw-ai-external/python-sdk#accessing-raw-response-data-eg-headers
         """
-        return AsyncSecretsResourceWithRawResponse(self)
+        return AsyncReinforcementFineTuningStepsResourceWithRawResponse(self)
 
     @cached_property
-    def with_streaming_response(self) -> AsyncSecretsResourceWithStreamingResponse:
+    def with_streaming_response(self) -> AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         """
         An alternative to `.with_raw_response` that doesn't eagerly read the response body.
 
         For more information, see https://www.github.com/fw-ai-external/python-sdk#with_streaming_response
         """
-        return AsyncSecretsResourceWithStreamingResponse(self)
+        return AsyncReinforcementFineTuningStepsResourceWithStreamingResponse(self)
 
     async def create(
         self,
         account_id: str,
         *,
-        key_name: str,
-        name: str,
-        value: str | Omit = omit,
+        rlor_trainer_job_id: str | Omit = omit,
+        dataset: str | Omit = omit,
+        display_name: str | Omit = omit,
+        eval_auto_carveout: bool | Omit = omit,
+        evaluation_dataset: str | Omit = omit,
+        reward_weights: SequenceNotStr[str] | Omit = omit,
+        training_config: reinforcement_fine_tuning_step_create_params.TrainingConfig | Omit = omit,
+        wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Args:
-          value: The secret value.
+    ) -> ReinforcementFineTuningStep:
+        """
+        Create Reinforcement Fine-tuning Step
 
-        This field is INPUT_ONLY and will not be returned in GET or
-              LIST responses for security reasons. The value is only accepted when creating or
-              updating secrets.
+        Args:
+          rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
+
+          dataset: The name of the dataset used for training.
+
+          eval_auto_carveout: Whether to auto-carve the dataset for eval.
+
+          evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          reward_weights: A list of reward metrics to use for training in format of
+              "<reward_name>=<weight>".
+
+          training_config: Common training configurations.
+
+          wandb_config: The Weights & Biases team/user account for logging training progress.
 
           extra_headers: Send extra headers
 
@@ -342,71 +356,32 @@ class AsyncSecretsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/secrets"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             body=await async_maybe_transform(
                 {
-                    "key_name": key_name,
-                    "name": name,
-                    "value": value,
+                    "dataset": dataset,
+                    "display_name": display_name,
+                    "eval_auto_carveout": eval_auto_carveout,
+                    "evaluation_dataset": evaluation_dataset,
+                    "reward_weights": reward_weights,
+                    "training_config": training_config,
+                    "wandb_config": wandb_config,
                 },
-                secret_create_params.SecretCreateParams,
+                reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
             ),
             options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {"rlor_trainer_job_id": rlor_trainer_job_id},
+                    reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
+                ),
             ),
-            cast_to=Secret,
-        )
-
-    async def update(
-        self,
-        secret_id: str,
-        *,
-        account_id: str,
-        key_name: str,
-        value: str | Omit = omit,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
-        # The extra values given here take precedence over values defined on the client or passed to this method.
-        extra_headers: Headers | None = None,
-        extra_query: Query | None = None,
-        extra_body: Body | None = None,
-        timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Args:
-          value: The secret value.
-
-        This field is INPUT_ONLY and will not be returned in GET or
-              LIST responses for security reasons. The value is only accepted when creating or
-              updating secrets.
-
-          extra_headers: Send extra headers
-
-          extra_query: Add additional query parameters to the request
-
-          extra_body: Add additional JSON properties to the request
-
-          timeout: Override the client-level default timeout for this request, in seconds
-        """
-        if not account_id:
-            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
-        return await self._patch(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
-            body=await async_maybe_transform(
-                {
-                    "key_name": key_name,
-                    "value": value,
-                },
-                secret_update_params.SecretUpdateParams,
-            ),
-            options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
-            ),
-            cast_to=Secret,
+            cast_to=ReinforcementFineTuningStep,
         )
 
     async def list(
@@ -424,17 +399,25 @@ class AsyncSecretsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SecretListResponse:
-        """Lists all secrets for an account.
-
-        Note that the `value` field is not returned in
-        the response for security reasons. Only the `name` and `key_name` fields are
-        included for each secret.
+    ) -> ReinforcementFineTuningStepListResponse:
+        """
+        List Reinforcement Fine-tuning Steps
 
         Args:
-          filter: Unused but required to use existing ListRequest functionality.
+          filter: Filter criteria for the returned jobs. See https://google.aip.dev/160 for the
+              filter syntax specification.
 
-          order_by: Unused but required to use existing ListRequest functionality.
+          order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
+              order is ascending. To specify a descending order for a field, append a " desc"
+              suffix. e.g. "foo desc,bar" Subfields are specified with a "." character. e.g.
+              "foo.bar" If not specified, the default order is by "name".
+
+          page_size: The maximum number of fine-tuning jobs to return. The maximum page_size is 200,
+              values above 200 will be coerced to 200. If unspecified, the default is 50.
+
+          page_token: A page token, received from a previous ListRlorTuningJobs call. Provide this to
+              retrieve the subsequent page. When paginating, all other parameters provided to
+              ListRlorTuningJobs must match the call that provided the page token.
 
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
               returned.
@@ -450,9 +433,9 @@ class AsyncSecretsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/secrets"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -466,15 +449,15 @@ class AsyncSecretsResource(AsyncAPIResource):
                         "page_token": page_token,
                         "read_mask": read_mask,
                     },
-                    secret_list_params.SecretListParams,
+                    reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=SecretListResponse,
+            cast_to=ReinforcementFineTuningStepListResponse,
         )
 
     async def delete(
         self,
-        secret_id: str,
+        rlor_trainer_job_id: str,
         *,
         account_id: str,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -485,6 +468,8 @@ class AsyncSecretsResource(AsyncAPIResource):
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> object:
         """
+        Delete Reinforcement Fine-tuning Step
+
         Args:
           extra_headers: Send extra headers
 
@@ -496,12 +481,14 @@ class AsyncSecretsResource(AsyncAPIResource):
         """
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
         return await self._delete(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -510,7 +497,7 @@ class AsyncSecretsResource(AsyncAPIResource):
 
     async def get(
         self,
-        secret_id: str,
+        rlor_trainer_job_id: str,
         *,
         account_id: str,
         read_mask: str | Omit = omit,
@@ -520,12 +507,9 @@ class AsyncSecretsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> Secret:
-        """Retrieves a secret by name.
-
-        Note that the `value` field is not returned in the
-        response for security reasons. Only the `name` and `key_name` fields are
-        included.
+    ) -> ReinforcementFineTuningStep:
+        """
+        Get Reinforcement Fine-tuning Step
 
         Args:
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
@@ -541,102 +525,95 @@ class AsyncSecretsResource(AsyncAPIResource):
         """
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not secret_id:
-            raise ValueError(f"Expected a non-empty value for `secret_id` but received {secret_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
         return await self._get(
-            f"/v1/accounts/{account_id}/secrets/{secret_id}"
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
             if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets/{secret_id}",
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform({"read_mask": read_mask}, secret_get_params.SecretGetParams),
+                query=await async_maybe_transform(
+                    {"read_mask": read_mask},
+                    reinforcement_fine_tuning_step_get_params.ReinforcementFineTuningStepGetParams,
+                ),
             ),
-            cast_to=Secret,
+            cast_to=ReinforcementFineTuningStep,
         )
 
 
-class SecretsResourceWithRawResponse:
-    def __init__(self, secrets: SecretsResource) -> None:
-        self._secrets = secrets
+class ReinforcementFineTuningStepsResourceWithRawResponse:
+    def __init__(self, reinforcement_fine_tuning_steps: ReinforcementFineTuningStepsResource) -> None:
+        self._reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps
 
         self.create = to_raw_response_wrapper(
-            secrets.create,
-        )
-        self.update = to_raw_response_wrapper(
-            secrets.update,
+            reinforcement_fine_tuning_steps.create,
         )
         self.list = to_raw_response_wrapper(
-            secrets.list,
+            reinforcement_fine_tuning_steps.list,
         )
         self.delete = to_raw_response_wrapper(
-            secrets.delete,
+            reinforcement_fine_tuning_steps.delete,
         )
         self.get = to_raw_response_wrapper(
-            secrets.get,
+            reinforcement_fine_tuning_steps.get,
         )
 
 
-class AsyncSecretsResourceWithRawResponse:
-    def __init__(self, secrets: AsyncSecretsResource) -> None:
-        self._secrets = secrets
+class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
+    def __init__(self, reinforcement_fine_tuning_steps: AsyncReinforcementFineTuningStepsResource) -> None:
+        self._reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps
 
         self.create = async_to_raw_response_wrapper(
-            secrets.create,
-        )
-        self.update = async_to_raw_response_wrapper(
-            secrets.update,
+            reinforcement_fine_tuning_steps.create,
         )
         self.list = async_to_raw_response_wrapper(
-            secrets.list,
+            reinforcement_fine_tuning_steps.list,
         )
         self.delete = async_to_raw_response_wrapper(
-            secrets.delete,
+            reinforcement_fine_tuning_steps.delete,
         )
         self.get = async_to_raw_response_wrapper(
-            secrets.get,
+            reinforcement_fine_tuning_steps.get,
         )
 
 
-class SecretsResourceWithStreamingResponse:
-    def __init__(self, secrets: SecretsResource) -> None:
-        self._secrets = secrets
+class ReinforcementFineTuningStepsResourceWithStreamingResponse:
+    def __init__(self, reinforcement_fine_tuning_steps: ReinforcementFineTuningStepsResource) -> None:
+        self._reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps
 
         self.create = to_streamed_response_wrapper(
-            secrets.create,
-        )
-        self.update = to_streamed_response_wrapper(
-            secrets.update,
+            reinforcement_fine_tuning_steps.create,
         )
         self.list = to_streamed_response_wrapper(
-            secrets.list,
+            reinforcement_fine_tuning_steps.list,
         )
         self.delete = to_streamed_response_wrapper(
-            secrets.delete,
+            reinforcement_fine_tuning_steps.delete,
         )
         self.get = to_streamed_response_wrapper(
-            secrets.get,
+            reinforcement_fine_tuning_steps.get,
         )
 
 
-class AsyncSecretsResourceWithStreamingResponse:
-    def __init__(self, secrets: AsyncSecretsResource) -> None:
-        self._secrets = secrets
+class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
+    def __init__(self, reinforcement_fine_tuning_steps: AsyncReinforcementFineTuningStepsResource) -> None:
+        self._reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps
 
         self.create = async_to_streamed_response_wrapper(
-            secrets.create,
-        )
-        self.update = async_to_streamed_response_wrapper(
-            secrets.update,
+            reinforcement_fine_tuning_steps.create,
         )
         self.list = async_to_streamed_response_wrapper(
-            secrets.list,
+            reinforcement_fine_tuning_steps.list,
         )
         self.delete = async_to_streamed_response_wrapper(
-            secrets.delete,
+            reinforcement_fine_tuning_steps.delete,
         )
         self.get = async_to_streamed_response_wrapper(
-            secrets.get,
+            reinforcement_fine_tuning_steps.get,
         )

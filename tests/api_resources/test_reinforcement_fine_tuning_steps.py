@@ -10,34 +10,35 @@ import pytest
 from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
-    DpoJob,
-    DpoJobListResponse,
-    DpoJobGetMetricsFileEndpointResponse,
+    ReinforcementFineTuningStep,
+    ReinforcementFineTuningStepListResponse,
 )
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
 
-class TestDpoJobs:
+class TestReinforcementFineTuningSteps:
     parametrize = pytest.mark.parametrize("client", [False, True], indirect=True, ids=["loose", "strict"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_create(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.create(
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
-            dataset="dataset",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_create_with_all_params(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.create(
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
+            rlor_trainer_job_id="rlorTrainerJobId",
             dataset="dataset",
-            dpo_job_id="dpoJobId",
             display_name="displayName",
+            eval_auto_carveout=True,
+            evaluation_dataset="evaluationDataset",
+            reward_weights=["string"],
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -60,33 +61,31 @@ class TestDpoJobs:
                 "run_id": "runId",
             },
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_create(self, client: Fireworks) -> None:
-        response = client.dpo_jobs.with_raw_response.create(
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.create(
             account_id="account_id",
-            dataset="dataset",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = response.parse()
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = response.parse()
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_create(self, client: Fireworks) -> None:
-        with client.dpo_jobs.with_streaming_response.create(
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.create(
             account_id="account_id",
-            dataset="dataset",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = response.parse()
-            assert_matches_type(DpoJob, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = response.parse()
+            assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -94,23 +93,22 @@ class TestDpoJobs:
     @parametrize
     def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.dpo_jobs.with_raw_response.create(
+            client.reinforcement_fine_tuning_steps.with_raw_response.create(
                 account_id="",
-                dataset="dataset",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_list(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.list(
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
         )
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_list_with_all_params(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.list(
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
             filter="filter",
             order_by="orderBy",
@@ -118,31 +116,33 @@ class TestDpoJobs:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_list(self, client: Fireworks) -> None:
-        response = client.dpo_jobs.with_raw_response.list(
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.list(
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = response.parse()
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = response.parse()
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_list(self, client: Fireworks) -> None:
-        with client.dpo_jobs.with_streaming_response.list(
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.list(
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = response.parse()
-            assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = response.parse()
+            assert_matches_type(
+                ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"]
+            )
 
         assert cast(Any, response.is_closed) is True
 
@@ -150,44 +150,44 @@ class TestDpoJobs:
     @parametrize
     def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.dpo_jobs.with_raw_response.list(
+            client.reinforcement_fine_tuning_steps.with_raw_response.list(
                 account_id="",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_delete(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.delete(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
-        assert_matches_type(object, dpo_job, path=["response"])
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_delete(self, client: Fireworks) -> None:
-        response = client.dpo_jobs.with_raw_response.delete(
-            dpo_job_id="dpo_job_id",
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = response.parse()
-        assert_matches_type(object, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_delete(self, client: Fireworks) -> None:
-        with client.dpo_jobs.with_streaming_response.delete(
-            dpo_job_id="dpo_job_id",
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = response.parse()
-            assert_matches_type(object, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -195,61 +195,61 @@ class TestDpoJobs:
     @parametrize
     def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.dpo_jobs.with_raw_response.delete(
-                dpo_job_id="dpo_job_id",
+            client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+                rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
             )
 
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            client.dpo_jobs.with_raw_response.delete(
-                dpo_job_id="",
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+                rlor_trainer_job_id="",
                 account_id="account_id",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_get(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.get(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_method_get_with_all_params(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.get(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_raw_response_get(self, client: Fireworks) -> None:
-        response = client.dpo_jobs.with_raw_response.get(
-            dpo_job_id="dpo_job_id",
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = response.parse()
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = response.parse()
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     def test_streaming_response_get(self, client: Fireworks) -> None:
-        with client.dpo_jobs.with_streaming_response.get(
-            dpo_job_id="dpo_job_id",
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = response.parse()
-            assert_matches_type(DpoJob, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = response.parse()
+            assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -257,71 +257,19 @@ class TestDpoJobs:
     @parametrize
     def test_path_params_get(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.dpo_jobs.with_raw_response.get(
-                dpo_job_id="dpo_job_id",
+            client.reinforcement_fine_tuning_steps.with_raw_response.get(
+                rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
             )
 
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            client.dpo_jobs.with_raw_response.get(
-                dpo_job_id="",
-                account_id="account_id",
-            )
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_method_get_metrics_file_endpoint(self, client: Fireworks) -> None:
-        dpo_job = client.dpo_jobs.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        )
-        assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_raw_response_get_metrics_file_endpoint(self, client: Fireworks) -> None:
-        response = client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = response.parse()
-        assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_streaming_response_get_metrics_file_endpoint(self, client: Fireworks) -> None:
-        with client.dpo_jobs.with_streaming_response.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            dpo_job = response.parse()
-            assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    def test_path_params_get_metrics_file_endpoint(self, client: Fireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-                dpo_job_id="dpo_job_id",
-                account_id="",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-                dpo_job_id="",
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            client.reinforcement_fine_tuning_steps.with_raw_response.get(
+                rlor_trainer_job_id="",
                 account_id="account_id",
             )
 
 
-class TestAsyncDpoJobs:
+class TestAsyncReinforcementFineTuningSteps:
     parametrize = pytest.mark.parametrize(
         "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
     )
@@ -329,20 +277,22 @@ class TestAsyncDpoJobs:
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_create(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.create(
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
-            dataset="dataset",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.create(
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
+            rlor_trainer_job_id="rlorTrainerJobId",
             dataset="dataset",
-            dpo_job_id="dpoJobId",
             display_name="displayName",
+            eval_auto_carveout=True,
+            evaluation_dataset="evaluationDataset",
+            reward_weights=["string"],
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -365,33 +315,31 @@ class TestAsyncDpoJobs:
                 "run_id": "runId",
             },
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.dpo_jobs.with_raw_response.create(
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.create(
             account_id="account_id",
-            dataset="dataset",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = await response.parse()
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = await response.parse()
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
-        async with async_client.dpo_jobs.with_streaming_response.create(
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.create(
             account_id="account_id",
-            dataset="dataset",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = await response.parse()
-            assert_matches_type(DpoJob, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = await response.parse()
+            assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -399,23 +347,22 @@ class TestAsyncDpoJobs:
     @parametrize
     async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.create(
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.create(
                 account_id="",
-                dataset="dataset",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_list(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.list(
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
         )
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.list(
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
             filter="filter",
             order_by="orderBy",
@@ -423,31 +370,33 @@ class TestAsyncDpoJobs:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.dpo_jobs.with_raw_response.list(
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.list(
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = await response.parse()
-        assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = await response.parse()
+        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
-        async with async_client.dpo_jobs.with_streaming_response.list(
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.list(
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = await response.parse()
-            assert_matches_type(DpoJobListResponse, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = await response.parse()
+            assert_matches_type(
+                ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"]
+            )
 
         assert cast(Any, response.is_closed) is True
 
@@ -455,44 +404,44 @@ class TestAsyncDpoJobs:
     @parametrize
     async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.list(
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.list(
                 account_id="",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_delete(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.delete(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
-        assert_matches_type(object, dpo_job, path=["response"])
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.dpo_jobs.with_raw_response.delete(
-            dpo_job_id="dpo_job_id",
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = await response.parse()
-        assert_matches_type(object, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = await response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
-        async with async_client.dpo_jobs.with_streaming_response.delete(
-            dpo_job_id="dpo_job_id",
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.delete(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = await response.parse()
-            assert_matches_type(object, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = await response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -500,61 +449,61 @@ class TestAsyncDpoJobs:
     @parametrize
     async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.delete(
-                dpo_job_id="dpo_job_id",
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+                rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
             )
 
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.delete(
-                dpo_job_id="",
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
+                rlor_trainer_job_id="",
                 account_id="account_id",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.get(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_method_get_with_all_params(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.get(
-            dpo_job_id="dpo_job_id",
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             read_mask="readMask",
         )
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_raw_response_get(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.dpo_jobs.with_raw_response.get(
-            dpo_job_id="dpo_job_id",
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         )
 
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = await response.parse()
-        assert_matches_type(DpoJob, dpo_job, path=["response"])
+        reinforcement_fine_tuning_step = await response.parse()
+        assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
     async def test_streaming_response_get(self, async_client: AsyncFireworks) -> None:
-        async with async_client.dpo_jobs.with_streaming_response.get(
-            dpo_job_id="dpo_job_id",
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.get(
+            rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
-            dpo_job = await response.parse()
-            assert_matches_type(DpoJob, dpo_job, path=["response"])
+            reinforcement_fine_tuning_step = await response.parse()
+            assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -562,65 +511,13 @@ class TestAsyncDpoJobs:
     @parametrize
     async def test_path_params_get(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.get(
-                dpo_job_id="dpo_job_id",
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.get(
+                rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
             )
 
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.get(
-                dpo_job_id="",
-                account_id="account_id",
-            )
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_method_get_metrics_file_endpoint(self, async_client: AsyncFireworks) -> None:
-        dpo_job = await async_client.dpo_jobs.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        )
-        assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_raw_response_get_metrics_file_endpoint(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        dpo_job = await response.parse()
-        assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_streaming_response_get_metrics_file_endpoint(self, async_client: AsyncFireworks) -> None:
-        async with async_client.dpo_jobs.with_streaming_response.get_metrics_file_endpoint(
-            dpo_job_id="dpo_job_id",
-            account_id="account_id",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            dpo_job = await response.parse()
-            assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Prism tests are disabled")
-    @parametrize
-    async def test_path_params_get_metrics_file_endpoint(self, async_client: AsyncFireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-                dpo_job_id="dpo_job_id",
-                account_id="",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
-            await async_client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
-                dpo_job_id="",
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.get(
+                rlor_trainer_job_id="",
                 account_id="account_id",
             )
