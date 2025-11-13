@@ -72,9 +72,9 @@ class DeploymentCreateParams(TypedDict, total=False):
     """
 
     active_model_version: Annotated[str, PropertyInfo(alias="activeModelVersion")]
-    """The active model version for this deployment.
-
-    Used to enable a specific model version.
+    """
+    The model version that is currently active and applied to running replicas of a
+    deployment.
     """
 
     autoscaling_policy: Annotated[AutoscalingPolicyParam, PropertyInfo(alias="autoscalingPolicy")]
@@ -192,3 +192,9 @@ class DeploymentCreateParams(TypedDict, total=False):
         "FP4_MX_MOE",
     ]
     """The precision with which the model should be served."""
+
+    target_model_version: Annotated[str, PropertyInfo(alias="targetModelVersion")]
+    """
+    The target model version that is being rolled out to the deployment. In a ready
+    steady state, the target model version is the same as the active model version.
+    """

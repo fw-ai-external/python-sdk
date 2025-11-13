@@ -46,6 +46,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/deployments">client.deployments.<a href="./src/fireworks/resources/deployments.py">list</a>(account_id, \*\*<a href="src/fireworks/types/deployment_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_list_response.py">DeploymentListResponse</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployments/{deployment_id}">client.deployments.<a href="./src/fireworks/resources/deployments.py">delete</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_delete_params.py">params</a>) -> object</code>
 - <code title="get /v1/accounts/{account_id}/deployments/{deployment_id}">client.deployments.<a href="./src/fireworks/resources/deployments.py">get</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">Deployment</a></code>
+- <code title="patch /v1/accounts/{account_id}/deployments/{deployment_id}:scale">client.deployments.<a href="./src/fireworks/resources/deployments.py">scale</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_scale_params.py">params</a>) -> object</code>
 - <code title="post /v1/accounts/{account_id}/deployments/{deployment_id}:undelete">client.deployments.<a href="./src/fireworks/resources/deployments.py">undelete</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_undelete_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">Deployment</a></code>
 
 # Models
@@ -93,6 +94,19 @@ Methods:
 - <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
 
+# DeploymentShapeVersions
+
+Types:
+
+```python
+from fireworks.types import DeploymentShapeVersionListResponse, DeploymentShapeVersionGetResponse
+```
+
+Methods:
+
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">list</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_list_response.py">DeploymentShapeVersionListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">get</a>(version_id, \*, account_id, deployment_shape_id, \*\*<a href="src/fireworks/types/deployment_shape_version_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_get_response.py">DeploymentShapeVersionGetResponse</a></code>
+
 # Datasets
 
 Types:
@@ -104,6 +118,7 @@ from fireworks.types import (
     Splitted,
     Transformed,
     DatasetListResponse,
+    DatasetGetDownloadEndpointResponse,
     DatasetGetUploadEndpointResponse,
     DatasetUploadResponse,
 )
@@ -116,6 +131,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/datasets">client.datasets.<a href="./src/fireworks/resources/datasets.py">list</a>(account_id, \*\*<a href="src/fireworks/types/dataset_list_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_list_response.py">DatasetListResponse</a></code>
 - <code title="delete /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks/resources/datasets.py">delete</a>(dataset_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks/resources/datasets.py">get</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_get_params.py">params</a>) -> <a href="./src/fireworks/types/dataset.py">Dataset</a></code>
+- <code title="get /v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint">client.datasets.<a href="./src/fireworks/resources/datasets.py">get_download_endpoint</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_get_download_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_get_download_endpoint_response.py">DatasetGetDownloadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:getUploadEndpoint">client.datasets.<a href="./src/fireworks/resources/datasets.py">get_upload_endpoint</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_get_upload_endpoint_response.py">DatasetGetUploadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:upload">client.datasets.<a href="./src/fireworks/resources/datasets.py">upload</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_upload_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_upload_response.py">DatasetUploadResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/datasets/{dataset_id}:validateUpload">client.datasets.<a href="./src/fireworks/resources/datasets.py">validate_upload</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_validate_upload_params.py">params</a>) -> object</code>
@@ -152,6 +168,21 @@ Methods:
 - <code title="post /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">cancel</a>(reinforcement_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_cancel_params.py">params</a>) -> object</code>
 - <code title="get /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">get</a>(reinforcement_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job.py">ReinforcementFineTuningJob</a></code>
 - <code title="post /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">resume</a>(reinforcement_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_resume_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job.py">ReinforcementFineTuningJob</a></code>
+
+# ReinforcementFineTuningSteps
+
+Types:
+
+```python
+from fireworks.types import ReinforcementFineTuningStep, ReinforcementFineTuningStepListResponse
+```
+
+Methods:
+
+- <code title="post /v1/accounts/{account_id}/rlorTrainerJobs">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">create</a>(account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_create_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
+- <code title="get /v1/accounts/{account_id}/rlorTrainerJobs">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">list</a>(account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_list_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step_list_response.py">ReinforcementFineTuningStepListResponse</a></code>
+- <code title="delete /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">delete</a>(rlor_trainer_job_id, \*, account_id) -> object</code>
+- <code title="get /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">get</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_get_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
 
 # DpoJobs
 

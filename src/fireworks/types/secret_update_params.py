@@ -15,3 +15,8 @@ class SecretUpdateParams(TypedDict, total=False):
     key_name: Required[Annotated[str, PropertyInfo(alias="keyName")]]
 
     value: str
+    """The secret value.
+
+    This field is INPUT_ONLY and will not be returned in GET or LIST responses for
+    security reasons. The value is only accepted when creating or updating secrets.
+    """

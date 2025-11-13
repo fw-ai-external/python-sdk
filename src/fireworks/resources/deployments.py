@@ -11,6 +11,7 @@ import httpx
 from ..types import (
     deployment_get_params,
     deployment_list_params,
+    deployment_scale_params,
     deployment_create_params,
     deployment_delete_params,
     deployment_update_params,
@@ -122,6 +123,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -154,8 +156,8 @@ class DeploymentsResource(SyncAPIResource):
           accelerator_type: The type of accelerator to use. If not specified, the default is
               NVIDIA_A100_80GB.
 
-          active_model_version: The active model version for this deployment. Used to enable a specific model
-              version.
+          active_model_version: The model version that is currently active and applied to running replicas of a
+              deployment.
 
           auto_tune: The performance profile to use for this deployment.
 
@@ -212,6 +214,9 @@ class DeploymentsResource(SyncAPIResource):
 
           precision: The precision with which the model should be served.
 
+          target_model_version: The target model version that is being rolled out to the deployment. In a ready
+              steady state, the target model version is the same as the active model version.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -253,6 +258,7 @@ class DeploymentsResource(SyncAPIResource):
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "target_model_version": target_model_version,
                 },
                 deployment_create_params.DeploymentCreateParams,
             ),
@@ -337,6 +343,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -354,8 +361,8 @@ class DeploymentsResource(SyncAPIResource):
           accelerator_type: The type of accelerator to use. If not specified, the default is
               NVIDIA_A100_80GB.
 
-          active_model_version: The active model version for this deployment. Used to enable a specific model
-              version.
+          active_model_version: The model version that is currently active and applied to running replicas of a
+              deployment.
 
           auto_tune: The performance profile to use for this deployment.
 
@@ -412,6 +419,9 @@ class DeploymentsResource(SyncAPIResource):
 
           precision: The precision with which the model should be served.
 
+          target_model_version: The target model version that is being rolled out to the deployment. In a ready
+              steady state, the target model version is the same as the active model version.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -455,6 +465,7 @@ class DeploymentsResource(SyncAPIResource):
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "target_model_version": target_model_version,
                 },
                 deployment_update_params.DeploymentUpdateParams,
             ),
@@ -641,6 +652,48 @@ class DeploymentsResource(SyncAPIResource):
             cast_to=Deployment,
         )
 
+    def scale(
+        self,
+        deployment_id: str,
+        *,
+        account_id: str,
+        replica_count: int | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Scale Deployment to a specific number of replicas or to zero
+
+        Args:
+          replica_count: The desired number of replicas.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not deployment_id:
+            raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
+        return self._patch(
+            f"/v1/accounts/{account_id}/deployments/{deployment_id}:scale"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+            body=maybe_transform({"replica_count": replica_count}, deployment_scale_params.DeploymentScaleParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     def undelete(
         self,
         deployment_id: str,
@@ -768,6 +821,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -800,8 +854,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           accelerator_type: The type of accelerator to use. If not specified, the default is
               NVIDIA_A100_80GB.
 
-          active_model_version: The active model version for this deployment. Used to enable a specific model
-              version.
+          active_model_version: The model version that is currently active and applied to running replicas of a
+              deployment.
 
           auto_tune: The performance profile to use for this deployment.
 
@@ -858,6 +912,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           precision: The precision with which the model should be served.
 
+          target_model_version: The target model version that is being rolled out to the deployment. In a ready
+              steady state, the target model version is the same as the active model version.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -899,6 +956,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "target_model_version": target_model_version,
                 },
                 deployment_create_params.DeploymentCreateParams,
             ),
@@ -983,6 +1041,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -1000,8 +1059,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           accelerator_type: The type of accelerator to use. If not specified, the default is
               NVIDIA_A100_80GB.
 
-          active_model_version: The active model version for this deployment. Used to enable a specific model
-              version.
+          active_model_version: The model version that is currently active and applied to running replicas of a
+              deployment.
 
           auto_tune: The performance profile to use for this deployment.
 
@@ -1058,6 +1117,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           precision: The precision with which the model should be served.
 
+          target_model_version: The target model version that is being rolled out to the deployment. In a ready
+              steady state, the target model version is the same as the active model version.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -1101,6 +1163,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "target_model_version": target_model_version,
                 },
                 deployment_update_params.DeploymentUpdateParams,
             ),
@@ -1287,6 +1350,50 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             cast_to=Deployment,
         )
 
+    async def scale(
+        self,
+        deployment_id: str,
+        *,
+        account_id: str,
+        replica_count: int | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Scale Deployment to a specific number of replicas or to zero
+
+        Args:
+          replica_count: The desired number of replicas.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not deployment_id:
+            raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
+        return await self._patch(
+            f"/v1/accounts/{account_id}/deployments/{deployment_id}:scale"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+            body=await async_maybe_transform(
+                {"replica_count": replica_count}, deployment_scale_params.DeploymentScaleParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def undelete(
         self,
         deployment_id: str,
@@ -1347,6 +1454,9 @@ class DeploymentsResourceWithRawResponse:
         self.get = to_raw_response_wrapper(
             deployments.get,
         )
+        self.scale = to_raw_response_wrapper(
+            deployments.scale,
+        )
         self.undelete = to_raw_response_wrapper(
             deployments.undelete,
         )
@@ -1370,6 +1480,9 @@ class AsyncDeploymentsResourceWithRawResponse:
         )
         self.get = async_to_raw_response_wrapper(
             deployments.get,
+        )
+        self.scale = async_to_raw_response_wrapper(
+            deployments.scale,
         )
         self.undelete = async_to_raw_response_wrapper(
             deployments.undelete,
@@ -1395,6 +1508,9 @@ class DeploymentsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             deployments.get,
         )
+        self.scale = to_streamed_response_wrapper(
+            deployments.scale,
+        )
         self.undelete = to_streamed_response_wrapper(
             deployments.undelete,
         )
@@ -1418,6 +1534,9 @@ class AsyncDeploymentsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             deployments.get,
+        )
+        self.scale = async_to_streamed_response_wrapper(
+            deployments.scale,
         )
         self.undelete = async_to_streamed_response_wrapper(
             deployments.undelete,
