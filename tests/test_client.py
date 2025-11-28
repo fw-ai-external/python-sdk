@@ -1510,12 +1510,18 @@ class TestAsyncFireworks:
 
         respx_mock.get("/foo").mock(return_value=httpx.Response(200, text="my-custom-format"))
 
-        strict_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True)
+        strict_client = AsyncFireworks(
+            base_url=base_url, api_key=api_key, _strict_response_validation=True,
+            http_client=DefaultAsyncHttpxClient()
+        )
 
         with pytest.raises(APIResponseValidationError):
             await strict_client.get("/foo", cast_to=Model)
 
-        non_strict_client = AsyncFireworks(base_url=base_url, api_key=api_key, _strict_response_validation=False)
+        non_strict_client = AsyncFireworks(
+            base_url=base_url, api_key=api_key, _strict_response_validation=False,
+            http_client=DefaultAsyncHttpxClient()
+        )
 
         response = await non_strict_client.get("/foo", cast_to=Model)
         assert isinstance(response, str)  # type: ignore[unreachable]

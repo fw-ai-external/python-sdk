@@ -10,7 +10,7 @@ import httpx
 import pytest
 from pytest_asyncio import is_async_test
 
-from fireworks import Fireworks, AsyncFireworks, DefaultAioHttpClient
+from fireworks import Fireworks, AsyncFireworks, DefaultAioHttpClient, DefaultAsyncHttpxClient
 from fireworks._utils import is_dict
 
 if TYPE_CHECKING:
@@ -64,7 +64,9 @@ async def async_client(request: FixtureRequest) -> AsyncIterator[AsyncFireworks]
 
     # defaults
     strict = True
-    http_client: None | httpx.AsyncClient = None
+    # Use httpx by default for tests to ensure compatibility with respx_mock.
+    # Production code defaults to aiohttp, but tests need httpx for mocking.
+    http_client: httpx.AsyncClient = DefaultAsyncHttpxClient()
 
     if isinstance(param, bool):
         strict = param
