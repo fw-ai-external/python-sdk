@@ -1345,6 +1345,18 @@ class AsyncHttpxClientWrapper(DefaultAsyncHttpxClient):
             pass
 
 
+class AsyncAioHttpClientWrapper(DefaultAioHttpClient):
+    def __del__(self) -> None:
+        if self.is_closed:
+            return
+
+        try:
+            # TODO(someday): support non asyncio runtimes here
+            asyncio.get_running_loop().create_task(self.aclose())
+        except Exception:
+            pass
+
+
 class AsyncAPIClient(BaseClient[httpx.AsyncClient, AsyncStream[Any]]):
     _client: httpx.AsyncClient
     _default_stream_cls: type[AsyncStream[Any]] | None = None
@@ -1389,7 +1401,7 @@ class AsyncAPIClient(BaseClient[httpx.AsyncClient, AsyncStream[Any]]):
             custom_headers=custom_headers,
             _strict_response_validation=_strict_response_validation,
         )
-        self._client = http_client or AsyncHttpxClientWrapper(
+        self._client = http_client or AsyncAioHttpClientWrapper(
             base_url=base_url,
             # cast to a valid type because mypy doesn't understand our type narrowing
             timeout=cast(Timeout, timeout),
