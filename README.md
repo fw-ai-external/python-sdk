@@ -5,9 +5,8 @@
 
 The Fireworks AI Python SDK library provides convenient access to the Fireworks REST API from any Python 3.9+
 application. The library includes type definitions for all request params and response fields,
-and offers both synchronous and asynchronous clients powered by [httpx](https://github.com/encode/httpx).
-
-It is generated with [Stainless](https://www.stainless.com/).
+and offers both synchronous and asynchronous clients. The synchronous client uses [httpx](https://github.com/encode/httpx),
+while the asynchronous client uses [aiohttp](https://github.com/aio-libs/aiohttp) by default for improved concurrency performance.
 
 ## Documentation
 
@@ -75,41 +74,6 @@ asyncio.run(main())
 ```
 
 Functionality between the synchronous and asynchronous clients is otherwise identical.
-
-### With aiohttp
-
-By default, the async client uses `httpx` for HTTP requests. However, for improved concurrency performance you may also use `aiohttp` as the HTTP backend.
-
-You can enable this by installing `aiohttp`:
-
-```sh
-# install from the production repo
-pip install 'fireworks-ai[aiohttp] @ git+ssh://git@github.com/fw-ai-external/python-sdk.git'
-```
-
-Then you can enable it by instantiating the client with `http_client=DefaultAioHttpClient()`:
-
-```python
-import asyncio
-from fireworks import DefaultAioHttpClient
-from fireworks import AsyncFireworks
-
-
-async def main() -> None:
-    async with AsyncFireworks(
-        api_key="My API Key",
-        http_client=DefaultAioHttpClient(),
-    ) as client:
-        deployment = await client.deployments.create(
-            account_id="my-account-id",
-            base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-            display_name="for-evals",
-        )
-        print(deployment.state)
-
-
-asyncio.run(main())
-```
 
 ## Using types
 
