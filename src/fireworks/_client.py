@@ -30,6 +30,7 @@ from .resources import (
     api_keys,
     datasets,
     dpo_jobs,
+    completions,
     deployments,
     batch_inference_jobs,
     deployment_shape_versions,
@@ -44,6 +45,7 @@ from ._base_client import (
     SyncAPIClient,
     AsyncAPIClient,
 )
+from .resources.chat import chat
 
 __all__ = [
     "Timeout",
@@ -58,6 +60,8 @@ __all__ = [
 
 
 class Fireworks(SyncAPIClient):
+    chat: chat.ChatResource
+    completions: completions.CompletionsResource
     batch_inference_jobs: batch_inference_jobs.BatchInferenceJobsResource
     deployments: deployments.DeploymentsResource
     models: models.ModelsResource
@@ -130,6 +134,10 @@ class Fireworks(SyncAPIClient):
             _strict_response_validation=_strict_response_validation,
         )
 
+        self._default_stream_cls = Stream
+
+        self.chat = chat.ChatResource(self)
+        self.completions = completions.CompletionsResource(self)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResource(self)
         self.deployments = deployments.DeploymentsResource(self)
         self.models = models.ModelsResource(self)
@@ -257,6 +265,8 @@ class Fireworks(SyncAPIClient):
 
 
 class AsyncFireworks(AsyncAPIClient):
+    chat: chat.AsyncChatResource
+    completions: completions.AsyncCompletionsResource
     batch_inference_jobs: batch_inference_jobs.AsyncBatchInferenceJobsResource
     deployments: deployments.AsyncDeploymentsResource
     models: models.AsyncModelsResource
@@ -329,6 +339,10 @@ class AsyncFireworks(AsyncAPIClient):
             _strict_response_validation=_strict_response_validation,
         )
 
+        self._default_stream_cls = AsyncStream
+
+        self.chat = chat.AsyncChatResource(self)
+        self.completions = completions.AsyncCompletionsResource(self)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResource(self)
         self.deployments = deployments.AsyncDeploymentsResource(self)
         self.models = models.AsyncModelsResource(self)
@@ -459,6 +473,8 @@ class AsyncFireworks(AsyncAPIClient):
 
 class FireworksWithRawResponse:
     def __init__(self, client: Fireworks) -> None:
+        self.chat = chat.ChatResourceWithRawResponse(client.chat)
+        self.completions = completions.CompletionsResourceWithRawResponse(client.completions)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse(
             client.batch_inference_jobs
         )
@@ -491,6 +507,8 @@ class FireworksWithRawResponse:
 
 class AsyncFireworksWithRawResponse:
     def __init__(self, client: AsyncFireworks) -> None:
+        self.chat = chat.AsyncChatResourceWithRawResponse(client.chat)
+        self.completions = completions.AsyncCompletionsResourceWithRawResponse(client.completions)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse(
             client.batch_inference_jobs
         )
@@ -525,6 +543,8 @@ class AsyncFireworksWithRawResponse:
 
 class FireworksWithStreamedResponse:
     def __init__(self, client: Fireworks) -> None:
+        self.chat = chat.ChatResourceWithStreamingResponse(client.chat)
+        self.completions = completions.CompletionsResourceWithStreamingResponse(client.completions)
         self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse(
             client.batch_inference_jobs
         )
@@ -559,6 +579,8 @@ class FireworksWithStreamedResponse:
 
 class AsyncFireworksWithStreamedResponse:
     def __init__(self, client: AsyncFireworks) -> None:
+        self.chat = chat.AsyncChatResourceWithStreamingResponse(client.chat)
+        self.completions = completions.AsyncCompletionsResourceWithStreamingResponse(client.completions)
         self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse(
             client.batch_inference_jobs
         )

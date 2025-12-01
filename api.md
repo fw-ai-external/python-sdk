@@ -2,13 +2,45 @@
 
 ```python
 from fireworks.types import (
+    ChatCompletionMessageToolCall,
+    ChatCompletionMessageToolCallFunction,
+    ChatCompletionTool,
+    ChatMessage,
+    Choice,
     DeployedModel,
     DeployedModelRef,
     InferenceParameters,
     Status,
+    TrainingConfig,
     WandbConfig,
 )
 ```
+
+# Chat
+
+## Completions
+
+Types:
+
+```python
+from fireworks.types.chat import ChatCompletionChunk, CompletionCreateResponse
+```
+
+Methods:
+
+- <code title="post /v1/chat/completions">client.chat.completions.<a href="./src/fireworks/resources/chat/completions.py">create</a>(\*\*<a href="src/fireworks/types/chat/completion_create_params.py">params</a>) -> <a href="./src/fireworks/types/chat/completion_create_response.py">CompletionCreateResponse</a></code>
+
+# Completions
+
+Types:
+
+```python
+from fireworks.types import CompletionChunk, CompletionCreateResponse
+```
+
+Methods:
+
+- <code title="post /v1/completions">client.completions.<a href="./src/fireworks/resources/completions.py">create</a>(\*\*<a href="src/fireworks/types/completion_create_params.py">params</a>) -> <a href="./src/fireworks/types/completion_create_response.py">CompletionCreateResponse</a></code>
 
 # BatchInferenceJobs
 

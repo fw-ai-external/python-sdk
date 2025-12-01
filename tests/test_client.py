@@ -22,6 +22,7 @@ from fireworks import Fireworks, AsyncFireworks, APIResponseValidationError
 from fireworks._types import Omit
 from fireworks._utils import asyncify
 from fireworks._models import BaseModel, FinalRequestOptions
+from fireworks._streaming import Stream, AsyncStream
 from fireworks._exceptions import APIStatusError, APITimeoutError, APIResponseValidationError
 from fireworks._base_client import (
     DEFAULT_TIMEOUT,
@@ -670,6 +671,17 @@ class TestFireworks:
     def test_client_max_retries_validation(self) -> None:
         with pytest.raises(TypeError, match=r"max_retries cannot be None"):
             Fireworks(base_url=base_url, api_key=api_key, _strict_response_validation=True, max_retries=cast(Any, None))
+
+    @pytest.mark.respx(base_url=base_url)
+    def test_default_stream_cls(self, respx_mock: MockRouter, client: Fireworks) -> None:
+        class Model(BaseModel):
+            name: str
+
+        respx_mock.post("/foo").mock(return_value=httpx.Response(200, json={"foo": "bar"}))
+
+        stream = client.post("/foo", cast_to=Model, stream=True, stream_cls=Stream[Model])
+        assert isinstance(stream, Stream)
+        stream.response.close()
 
     @pytest.mark.respx(base_url=base_url)
     def test_received_text_for_expected_json(self, respx_mock: MockRouter) -> None:
@@ -1502,6 +1514,17 @@ class TestAsyncFireworks:
             AsyncFireworks(
                 base_url=base_url, api_key=api_key, _strict_response_validation=True, max_retries=cast(Any, None)
             )
+
+    @pytest.mark.respx(base_url=base_url)
+    async def test_default_stream_cls(self, respx_mock: MockRouter, async_client: AsyncFireworks) -> None:
+        class Model(BaseModel):
+            name: str
+
+        respx_mock.post("/foo").mock(return_value=httpx.Response(200, json={"foo": "bar"}))
+
+        stream = await async_client.post("/foo", cast_to=Model, stream=True, stream_cls=AsyncStream[Model])
+        assert isinstance(stream, AsyncStream)
+        await stream.response.aclose()
 
     @pytest.mark.respx(base_url=base_url)
     async def test_received_text_for_expected_json(self, respx_mock: MockRouter) -> None:

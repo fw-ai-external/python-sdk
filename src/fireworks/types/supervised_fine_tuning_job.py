@@ -10,7 +10,27 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "HiddenStatesGenConfig"]
+__all__ = ["SupervisedFineTuningJob", "EstimatedCost", "HiddenStatesGenConfig"]
+
+
+class EstimatedCost(BaseModel):
+    currency_code: Optional[str] = FieldInfo(alias="currencyCode", default=None)
+    """The three-letter currency code defined in ISO 4217."""
+
+    nanos: Optional[int] = None
+    """
+    Number of nano (10^-9) units of the amount. The value must be between
+    -999,999,999 and +999,999,999 inclusive. If `units` is positive, `nanos` must be
+    positive or zero. If `units` is zero, `nanos` can be positive, zero, or
+    negative. If `units` is negative, `nanos` must be negative or zero. For example
+    $-1.75 is represented as `units`=-1 and `nanos`=-750,000,000.
+    """
+
+    units: Optional[str] = None
+    """
+    The whole units of the amount. For example if `currencyCode` is `"USD"`, then 1
+    unit is one US dollar.
+    """
 
 
 class HiddenStatesGenConfig(BaseModel):
@@ -59,6 +79,9 @@ class SupervisedFineTuningJob(BaseModel):
 
     epochs: Optional[int] = None
     """The number of epochs to train for."""
+
+    estimated_cost: Optional[EstimatedCost] = FieldInfo(alias="estimatedCost", default=None)
+    """The estimated cost of the job."""
 
     eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
     """Whether to auto-carve the dataset for eval."""
@@ -154,9 +177,14 @@ class SupervisedFineTuningJob(BaseModel):
             "JOB_STATE_IDLE",
             "JOB_STATE_CANCELLING",
             "JOB_STATE_EARLY_STOPPED",
+            "JOB_STATE_PAUSED",
         ]
     ] = None
-    """JobState represents the state an asynchronous job can be in."""
+    """JobState represents the state an asynchronous job can be in.
+
+    - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
+      intervention.
+    """
 
     status: Optional[Status] = None
 

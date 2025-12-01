@@ -48,6 +48,11 @@ class Snapshot(BaseModel):
     Must be fewer than 1000 characters long.
     """
 
+    disable_deployment_size_validation: Optional[bool] = FieldInfo(
+        alias="disableDeploymentSizeValidation", default=None
+    )
+    """If true, the deployment size validation is disabled."""
+
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
     """Human-readable display name of the deployment shape.
 
@@ -108,9 +113,9 @@ class Snapshot(BaseModel):
     ] = None
     """The precision with which the model should be served."""
 
-    preset_type: Optional[
-        Literal["PRESET_TYPE_UNSPECIFIED", "MINIMAL", "FAST", "THROUGHPUT", "REINFORCEMENT_FINE_TUNING"]
-    ] = FieldInfo(alias="presetType", default=None)
+    preset_type: Optional[Literal["PRESET_TYPE_UNSPECIFIED", "MINIMAL", "FAST", "THROUGHPUT", "FULL_PRECISION"]] = (
+        FieldInfo(alias="presetType", default=None)
+    )
     """Type of deployment shape for different deployment configurations."""
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)

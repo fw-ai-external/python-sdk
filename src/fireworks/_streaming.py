@@ -56,7 +56,11 @@ class Stream(Generic[_T]):
 
         try:
             for sse in iterator:
-                yield process_data(data=sse.json(), cast_to=cast_to, response=response)
+                if sse.data.startswith("[DONE]"):
+                    break
+
+                if sse.event is None:
+                    yield process_data(data=sse.json(), cast_to=cast_to, response=response)
         finally:
             # Ensure the response is closed even if the consumer doesn't read all data
             response.close()
@@ -120,7 +124,11 @@ class AsyncStream(Generic[_T]):
 
         try:
             async for sse in iterator:
-                yield process_data(data=sse.json(), cast_to=cast_to, response=response)
+                if sse.data.startswith("[DONE]"):
+                    break
+
+                if sse.event is None:
+                    yield process_data(data=sse.json(), cast_to=cast_to, response=response)
         finally:
             # Ensure the response is closed even if the consumer doesn't read all data
             await response.aclose()

@@ -38,10 +38,7 @@ class Deployment(BaseModel):
             "AMD_MI325X_256GB",
         ]
     ] = FieldInfo(alias="acceleratorType", default=None)
-    """
-    The type of accelerator to use. If not specified, the default is
-    NVIDIA_A100_80GB.
-    """
+    """The type of accelerator to use."""
 
     active_model_version: Optional[str] = FieldInfo(alias="activeModelVersion", default=None)
     """
@@ -139,6 +136,9 @@ class Deployment(BaseModel):
     enable_addons: Optional[bool] = FieldInfo(alias="enableAddons", default=None)
     """If true, PEFT addons are enabled for this deployment."""
 
+    enable_hot_load: Optional[bool] = FieldInfo(alias="enableHotLoad", default=None)
+    """Whether to use hot load for this deployment."""
+
     enable_hot_reload_latest_addon: Optional[bool] = FieldInfo(alias="enableHotReloadLatestAddon", default=None)
     """
     Allows up to 1 addon at a time to be loaded, and will merge it into the base
@@ -153,6 +153,10 @@ class Deployment(BaseModel):
 
     expire_time: Optional[datetime] = FieldInfo(alias="expireTime", default=None)
     """The time at which this deployment will automatically be deleted."""
+
+    hot_load_bucket_type: Optional[Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"]] = FieldInfo(
+        alias="hotLoadBucketType", default=None
+    )
 
     max_replica_count: Optional[int] = FieldInfo(alias="maxReplicaCount", default=None)
     """

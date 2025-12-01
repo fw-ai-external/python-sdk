@@ -41,10 +41,7 @@ class DeploymentUpdateParams(TypedDict, total=False):
         ],
         PropertyInfo(alias="acceleratorType"),
     ]
-    """
-    The type of accelerator to use. If not specified, the default is
-    NVIDIA_A100_80GB.
-    """
+    """The type of accelerator to use."""
 
     active_model_version: Annotated[str, PropertyInfo(alias="activeModelVersion")]
     """
@@ -116,6 +113,9 @@ class DeploymentUpdateParams(TypedDict, total=False):
     enable_addons: Annotated[bool, PropertyInfo(alias="enableAddons")]
     """If true, PEFT addons are enabled for this deployment."""
 
+    enable_hot_load: Annotated[bool, PropertyInfo(alias="enableHotLoad")]
+    """Whether to use hot load for this deployment."""
+
     enable_hot_reload_latest_addon: Annotated[bool, PropertyInfo(alias="enableHotReloadLatestAddon")]
     """
     Allows up to 1 addon at a time to be loaded, and will merge it into the base
@@ -130,6 +130,10 @@ class DeploymentUpdateParams(TypedDict, total=False):
 
     expire_time: Annotated[Union[str, datetime], PropertyInfo(alias="expireTime", format="iso8601")]
     """The time at which this deployment will automatically be deleted."""
+
+    hot_load_bucket_type: Annotated[
+        Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"], PropertyInfo(alias="hotLoadBucketType")
+    ]
 
     max_replica_count: Annotated[int, PropertyInfo(alias="maxReplicaCount")]
     """

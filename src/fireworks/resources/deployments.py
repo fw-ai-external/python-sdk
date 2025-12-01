@@ -97,10 +97,12 @@ class DeploymentsResource(SyncAPIResource):
         draft_model: str | Omit = omit,
         draft_token_count: int | Omit = omit,
         enable_addons: bool | Omit = omit,
+        enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
@@ -153,8 +155,7 @@ class DeploymentsResource(SyncAPIResource):
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
-          accelerator_type: The type of accelerator to use. If not specified, the default is
-              NVIDIA_A100_80GB.
+          accelerator_type: The type of accelerator to use.
 
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
@@ -192,6 +193,8 @@ class DeploymentsResource(SyncAPIResource):
               behavior.
 
           enable_addons: If true, PEFT addons are enabled for this deployment.
+
+          enable_hot_load: Whether to use hot load for this deployment.
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
@@ -249,10 +252,12 @@ class DeploymentsResource(SyncAPIResource):
                     "draft_model": draft_model,
                     "draft_token_count": draft_token_count,
                     "enable_addons": enable_addons,
+                    "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
                     "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
+                    "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
@@ -317,10 +322,12 @@ class DeploymentsResource(SyncAPIResource):
         draft_model: str | Omit = omit,
         draft_token_count: int | Omit = omit,
         enable_addons: bool | Omit = omit,
+        enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
@@ -358,8 +365,7 @@ class DeploymentsResource(SyncAPIResource):
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
-          accelerator_type: The type of accelerator to use. If not specified, the default is
-              NVIDIA_A100_80GB.
+          accelerator_type: The type of accelerator to use.
 
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
@@ -397,6 +403,8 @@ class DeploymentsResource(SyncAPIResource):
               behavior.
 
           enable_addons: If true, PEFT addons are enabled for this deployment.
+
+          enable_hot_load: Whether to use hot load for this deployment.
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
@@ -456,10 +464,12 @@ class DeploymentsResource(SyncAPIResource):
                     "draft_model": draft_model,
                     "draft_token_count": draft_token_count,
                     "enable_addons": enable_addons,
+                    "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
                     "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
+                    "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
@@ -795,10 +805,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         draft_model: str | Omit = omit,
         draft_token_count: int | Omit = omit,
         enable_addons: bool | Omit = omit,
+        enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
@@ -851,8 +863,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
-          accelerator_type: The type of accelerator to use. If not specified, the default is
-              NVIDIA_A100_80GB.
+          accelerator_type: The type of accelerator to use.
 
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
@@ -890,6 +901,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               behavior.
 
           enable_addons: If true, PEFT addons are enabled for this deployment.
+
+          enable_hot_load: Whether to use hot load for this deployment.
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
@@ -947,10 +960,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "draft_model": draft_model,
                     "draft_token_count": draft_token_count,
                     "enable_addons": enable_addons,
+                    "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
                     "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
+                    "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
@@ -1015,10 +1030,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         draft_model: str | Omit = omit,
         draft_token_count: int | Omit = omit,
         enable_addons: bool | Omit = omit,
+        enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
@@ -1056,8 +1073,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
-          accelerator_type: The type of accelerator to use. If not specified, the default is
-              NVIDIA_A100_80GB.
+          accelerator_type: The type of accelerator to use.
 
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
@@ -1095,6 +1111,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               behavior.
 
           enable_addons: If true, PEFT addons are enabled for this deployment.
+
+          enable_hot_load: Whether to use hot load for this deployment.
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
@@ -1154,10 +1172,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "draft_model": draft_model,
                     "draft_token_count": draft_token_count,
                     "enable_addons": enable_addons,
+                    "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
                     "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
+                    "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
