@@ -34,12 +34,16 @@ client = Fireworks(
     api_key=os.environ.get("FIREWORKS_API_KEY"),  # This is the default and can be omitted
 )
 
-deployment = client.deployments.create(
-    account_id="my-account-id",
-    base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    display_name="for-evals",
+completion = client.chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
-print(deployment.state)
+print(completion.id)
 ```
 
 While you can provide an `api_key` keyword argument,
@@ -62,18 +66,66 @@ client = AsyncFireworks(
 
 
 async def main() -> None:
-    deployment = await client.deployments.create(
-        account_id="my-account-id",
-        base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-        display_name="for-evals",
+    completion = await client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": "How do LLMs work?",
+            }
+        ],
+        model="accounts/fireworks/models/kimi-k2-instruct-0905",
     )
-    print(deployment.state)
+    print(completion.id)
 
 
 asyncio.run(main())
 ```
 
 Functionality between the synchronous and asynchronous clients is otherwise identical.
+
+## Streaming responses
+
+We provide support for streaming responses using Server Side Events (SSE).
+
+```python
+from fireworks import Fireworks
+
+client = Fireworks()
+
+stream = client.chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    stream=True,
+)
+for completion in stream:
+    print(completion.id)
+```
+
+The async client uses the exact same interface.
+
+```python
+from fireworks import AsyncFireworks
+
+client = AsyncFireworks()
+
+stream = await client.chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    stream=True,
+)
+async for completion in stream:
+    print(completion.id)
+```
 
 ## Using types
 
@@ -93,12 +145,12 @@ from fireworks import Fireworks
 
 client = Fireworks()
 
-deployment = client.deployments.create(
-    account_id="account_id",
-    base_model="baseModel",
-    autoscaling_policy={},
+completion = client.chat.completions.create(
+    messages=[{"role": "role"}],
+    model="model",
+    response_format={"type": "json_object"},
 )
-print(deployment.autoscaling_policy)
+print(completion.response_format)
 ```
 
 ## File uploads
@@ -136,10 +188,14 @@ from fireworks import Fireworks
 client = Fireworks()
 
 try:
-    client.deployments.create(
-        account_id="my-account-id",
-        base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-        display_name="for-evals",
+    client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": "How do LLMs work?",
+            }
+        ],
+        model="accounts/fireworks/models/kimi-k2-instruct-0905",
     )
 except fireworks.APIConnectionError as e:
     print("The server could not be reached")
@@ -183,10 +239,14 @@ client = Fireworks(
 )
 
 # Or, configure per-request:
-client.with_options(max_retries=5).deployments.create(
-    account_id="my-account-id",
-    base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    display_name="for-evals",
+client.with_options(max_retries=5).chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 ```
 
@@ -210,10 +270,14 @@ client = Fireworks(
 )
 
 # Override per-request:
-client.with_options(timeout=5.0).deployments.create(
-    account_id="my-account-id",
-    base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    display_name="for-evals",
+client.with_options(timeout=5.0).chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 ```
 
@@ -255,15 +319,17 @@ The "raw" Response object can be accessed by prefixing `.with_raw_response.` to 
 from fireworks import Fireworks
 
 client = Fireworks()
-response = client.deployments.with_raw_response.create(
-    account_id="my-account-id",
-    base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    display_name="for-evals",
+response = client.chat.completions.with_raw_response.create(
+    messages=[{
+        "role": "user",
+        "content": "How do LLMs work?",
+    }],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 print(response.headers.get('X-My-Header'))
 
-deployment = response.parse()  # get the object that `deployments.create()` would have returned
-print(deployment.state)
+completion = response.parse()  # get the object that `chat.completions.create()` would have returned
+print(completion.id)
 ```
 
 These methods return an [`APIResponse`](https://github.com/fw-ai-external/python-sdk/tree/main/src/fireworks/_response.py) object.
@@ -277,10 +343,14 @@ The above interface eagerly reads the full response body when you make the reque
 To stream the response body, use `.with_streaming_response` instead, which requires a context manager and only reads the response body once you call `.read()`, `.text()`, `.json()`, `.iter_bytes()`, `.iter_text()`, `.iter_lines()` or `.parse()`. In the async client, these are async methods.
 
 ```python
-with client.deployments.with_streaming_response.create(
-    account_id="my-account-id",
-    base_model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    display_name="for-evals",
+with client.chat.completions.with_streaming_response.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "How do LLMs work?",
+        }
+    ],
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 ) as response:
     print(response.headers.get("X-My-Header"))
 
