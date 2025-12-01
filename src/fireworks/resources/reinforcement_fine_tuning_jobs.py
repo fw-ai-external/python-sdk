@@ -24,6 +24,7 @@ from .._response import (
 from .._base_client import make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.reinforcement_fine_tuning_job import ReinforcementFineTuningJob
+from ..types.shared_params.training_config import TrainingConfig
 from ..types.shared_params.inference_parameters import InferenceParameters
 from ..types.reinforcement_fine_tuning_job_list_response import ReinforcementFineTuningJobListResponse
 
@@ -57,12 +58,13 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         dataset: str,
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
+        chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
-        training_config: reinforcement_fine_tuning_job_create_params.TrainingConfig | Omit = omit,
+        training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -81,6 +83,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
 
           reinforcement_fine_tuning_job_id: ID of the reinforcement fine-tuning job, a random UUID will be generated if not
               specified.
+
+          chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
+              range is 1-10,000.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
@@ -110,6 +115,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 {
                     "dataset": dataset,
                     "evaluator": evaluator,
+                    "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
@@ -412,12 +418,13 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         dataset: str,
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
+        chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
-        training_config: reinforcement_fine_tuning_job_create_params.TrainingConfig | Omit = omit,
+        training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -436,6 +443,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
 
           reinforcement_fine_tuning_job_id: ID of the reinforcement fine-tuning job, a random UUID will be generated if not
               specified.
+
+          chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
+              range is 1-10,000.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
@@ -465,6 +475,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 {
                     "dataset": dataset,
                     "evaluator": evaluator,
+                    "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,

@@ -6,11 +6,17 @@ from .user import User as User
 from .model import Model as Model
 from .secret import Secret as Secret
 from .shared import (
+    Choice as Choice,
     Status as Status,
+    ChatMessage as ChatMessage,
     WandbConfig as WandbConfig,
     DeployedModel as DeployedModel,
+    TrainingConfig as TrainingConfig,
     DeployedModelRef as DeployedModelRef,
+    ChatCompletionTool as ChatCompletionTool,
     InferenceParameters as InferenceParameters,
+    ChatCompletionMessageToolCall as ChatCompletionMessageToolCall,
+    ChatCompletionMessageToolCallFunction as ChatCompletionMessageToolCallFunction,
 )
 from .account import Account as Account
 from .api_key import APIKey as APIKey
@@ -32,6 +38,7 @@ from .lora_get_params import LoraGetParams as LoraGetParams
 from .placement_param import PlacementParam as PlacementParam
 from .type_date_param import TypeDateParam as TypeDateParam
 from .user_get_params import UserGetParams as UserGetParams
+from .completion_chunk import CompletionChunk as CompletionChunk
 from .lora_list_params import LoraListParams as LoraListParams
 from .lora_load_params import LoraLoadParams as LoraLoadParams
 from .model_get_params import ModelGetParams as ModelGetParams
@@ -82,11 +89,13 @@ from .deployment_scale_params import DeploymentScaleParams as DeploymentScalePar
 from .evaluation_result_param import EvaluationResultParam as EvaluationResultParam
 from .autoscaling_policy_param import AutoscalingPolicyParam as AutoscalingPolicyParam
 from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsParam
+from .completion_create_params import CompletionCreateParams as CompletionCreateParams
 from .deployment_create_params import DeploymentCreateParams as DeploymentCreateParams
 from .deployment_delete_params import DeploymentDeleteParams as DeploymentDeleteParams
 from .deployment_list_response import DeploymentListResponse as DeploymentListResponse
 from .deployment_update_params import DeploymentUpdateParams as DeploymentUpdateParams
 from .conversation_config_param import ConversationConfigParam as ConversationConfigParam
+from .completion_create_response import CompletionCreateResponse as CompletionCreateResponse
 from .deployment_undelete_params import DeploymentUndeleteParams as DeploymentUndeleteParams
 from .supervised_fine_tuning_job import SupervisedFineTuningJob as SupervisedFineTuningJob
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams

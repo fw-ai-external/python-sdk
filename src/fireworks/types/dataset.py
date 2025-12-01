@@ -16,6 +16,9 @@ __all__ = ["Dataset"]
 
 
 class Dataset(BaseModel):
+    average_turn_count: Optional[float] = FieldInfo(alias="averageTurnCount", default=None)
+    """An estimate of the average number of turns per sample in the dataset."""
+
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
     """The email address of the user who initiated this fine-tuning job."""
 

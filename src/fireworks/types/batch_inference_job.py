@@ -132,6 +132,7 @@ class BatchInferenceJob(BaseModel):
             "JOB_STATE_IDLE",
             "JOB_STATE_CANCELLING",
             "JOB_STATE_EARLY_STOPPED",
+            "JOB_STATE_PAUSED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in."""

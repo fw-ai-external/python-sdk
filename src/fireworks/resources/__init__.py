@@ -1,5 +1,13 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
+from .chat import (
+    ChatResource,
+    AsyncChatResource,
+    ChatResourceWithRawResponse,
+    AsyncChatResourceWithRawResponse,
+    ChatResourceWithStreamingResponse,
+    AsyncChatResourceWithStreamingResponse,
+)
 from .lora import (
     LoraResource,
     AsyncLoraResource,
@@ -64,6 +72,14 @@ from .dpo_jobs import (
     DpoJobsResourceWithStreamingResponse,
     AsyncDpoJobsResourceWithStreamingResponse,
 )
+from .completions import (
+    CompletionsResource,
+    AsyncCompletionsResource,
+    CompletionsResourceWithRawResponse,
+    AsyncCompletionsResourceWithRawResponse,
+    CompletionsResourceWithStreamingResponse,
+    AsyncCompletionsResourceWithStreamingResponse,
+)
 from .deployments import (
     DeploymentsResource,
     AsyncDeploymentsResource,
@@ -114,6 +130,18 @@ from .reinforcement_fine_tuning_steps import (
 )
 
 __all__ = [
+    "ChatResource",
+    "AsyncChatResource",
+    "ChatResourceWithRawResponse",
+    "AsyncChatResourceWithRawResponse",
+    "ChatResourceWithStreamingResponse",
+    "AsyncChatResourceWithStreamingResponse",
+    "CompletionsResource",
+    "AsyncCompletionsResource",
+    "CompletionsResourceWithRawResponse",
+    "AsyncCompletionsResourceWithRawResponse",
+    "CompletionsResourceWithStreamingResponse",
+    "AsyncCompletionsResourceWithStreamingResponse",
     "BatchInferenceJobsResource",
     "AsyncBatchInferenceJobsResource",
     "BatchInferenceJobsResourceWithRawResponse",

@@ -21,6 +21,7 @@ from .._response import (
 )
 from .._base_client import make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
+from ..types.shared_params.training_config import TrainingConfig
 from ..types.reinforcement_fine_tuning_step import ReinforcementFineTuningStep
 from ..types.reinforcement_fine_tuning_step_list_response import ReinforcementFineTuningStepListResponse
 
@@ -57,7 +58,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
-        training_config: reinforcement_fine_tuning_step_create_params.TrainingConfig | Omit = omit,
+        training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -317,7 +318,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
-        training_config: reinforcement_fine_tuning_step_create_params.TrainingConfig | Omit = omit,
+        training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
