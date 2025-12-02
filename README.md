@@ -17,7 +17,7 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 
 ```sh
 # install from PyPI
-pip install fireworks-ai
+pip install --pre fireworks-ai
 ```
 
 ## Usage
@@ -89,7 +89,7 @@ You can enable this by installing `aiohttp`:
 
 ```sh
 # install from PyPI
-pip install fireworks-ai[aiohttp]
+pip install --pre fireworks-ai[aiohttp]
 ```
 
 Then you can enable it by instantiating the client with `http_client=DefaultAioHttpClient()`:
