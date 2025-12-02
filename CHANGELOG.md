@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.3 (2025-12-02)
+
+Full Changelog: [v1.0.0-alpha.2...v1.0.0-alpha.3](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.2...v1.0.0-alpha.3)
+
+### Features
+
+* try send_as_path ([1c7ed63](https://github.com/fw-ai-external/python-sdk/commit/1c7ed63dac60bb88d70148e0142c496ff1c409c1))
+
+
+### Documentation
+
+* add account_id configuration section and update examples ([f1ca3af](https://github.com/fw-ai-external/python-sdk/commit/f1ca3af4a1f388a841cc36defdc780560f4d7587))
+
 ## 1.0.0-alpha.2 (2025-12-02)
 
 Full Changelog: [v1.0.0-alpha.1...v1.0.0-alpha.2](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.1...v1.0.0-alpha.2)
