@@ -80,6 +80,71 @@ asyncio.run(main())
 
 Functionality between the synchronous and asynchronous clients is otherwise identical.
 
+## Configuring account ID
+
+Many Fireworks API methods require an `account_id` parameter (e.g., dataset operations, fine-tuning jobs, deployments). You can configure this at the client level to avoid passing it to every method call.
+
+### Setting account ID on the client
+
+```python
+from fireworks import Fireworks
+
+# Pass account_id during client initialization
+client = Fireworks(
+    account_id="my-account-id",
+)
+
+# Now you can omit account_id from method calls
+dataset = client.datasets.create(
+    dataset_id="my-dataset",
+    dataset={"exampleCount": "100"},
+)
+
+# Instead of having to pass it every time:
+# dataset = client.datasets.create(
+#     account_id="my-account-id",  # No longer needed!
+#     dataset_id="my-dataset",
+#     dataset={"exampleCount": "100"},
+# )
+```
+
+### Using environment variables
+
+You can also set the account ID using the `FIREWORKS_ACCOUNT_ID` environment variable:
+
+```bash
+export FIREWORKS_ACCOUNT_ID="my-account-id"
+```
+
+```python
+from fireworks import Fireworks
+
+# account_id is automatically read from FIREWORKS_ACCOUNT_ID
+client = Fireworks()
+
+# All methods that need account_id will use the configured value
+datasets = client.datasets.list()
+```
+
+### Precedence
+
+The `account_id` is resolved in the following order:
+1. Explicitly passed to the method call (highest priority)
+2. Set on the client during initialization
+3. Read from `FIREWORKS_ACCOUNT_ID` environment variable
+
+This means you can still override the client-level `account_id` for specific calls if needed:
+
+```python
+client = Fireworks(account_id="default-account")
+
+# Uses "default-account"
+client.datasets.list()
+
+# Override for this specific call
+client.datasets.list(account_id="other-account")
+```
+
 ## Streaming responses
 
 We provide support for streaming responses using Server Side Events (SSE).
@@ -293,7 +358,6 @@ client = Fireworks()
 
 client.datasets.upload(
     dataset_id="dataset_id",
-    account_id="account_id",
     file=Path("/path/to/file"),
 )
 ```
@@ -315,7 +379,6 @@ from fireworks import Fireworks
 
 client = Fireworks()
 
-account_id = "your-account-id"
 dataset_id = "my-dataset"
 file_path = Path("/path/to/your-dataset.jsonl")
 
@@ -325,7 +388,6 @@ with open(file_path) as f:
 
 # Step 1: Create the dataset record
 dataset = client.datasets.create(
-    account_id=account_id,
     dataset_id=dataset_id,
     dataset={"exampleCount": str(example_count)},
 )
@@ -333,7 +395,6 @@ print(f"Created dataset: {dataset.name}")
 
 # Step 2: Upload the file
 upload_response = client.datasets.upload(
-    account_id=account_id,
     dataset_id=dataset_id,
     file=file_path,
 )
@@ -341,7 +402,7 @@ print(f"Upload response: {upload_response}")
 
 # Step 3: Poll until dataset is ready
 while True:
-    dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+    dataset = client.datasets.get(dataset_id=dataset_id)
     print(f"Dataset state: {dataset.state}")
     if dataset.state == "READY":
         print("Dataset is ready!")
@@ -364,7 +425,6 @@ from fireworks import Fireworks
 
 client = Fireworks()
 
-account_id = "your-account-id"
 dataset_id = "my-large-dataset"
 file_path = Path("/path/to/your-large-dataset.jsonl")
 file_size = file_path.stat().st_size
@@ -376,7 +436,6 @@ with open(file_path) as f:
 
 # Step 1: Create the dataset record
 dataset = client.datasets.create(
-    account_id=account_id,
     dataset_id=dataset_id,
     dataset={"exampleCount": str(example_count)},
 )
@@ -384,7 +443,6 @@ print(f"Created dataset: {dataset.name}")
 
 # Step 2: Get signed upload URL
 upload_endpoint = client.datasets.get_upload_endpoint(
-    account_id=account_id,
     dataset_id=dataset_id,
     filename_to_size={file_name: str(file_size)},
 )
@@ -408,7 +466,6 @@ print("File uploaded to signed URL")
 
 # Step 4: Validate the upload
 client.datasets.validate_upload(
-    account_id=account_id,
     dataset_id=dataset_id,
     body={},
 )
@@ -416,7 +473,7 @@ print("Upload validated")
 
 # Step 5: Poll until dataset is ready
 while True:
-    dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+    dataset = client.datasets.get(dataset_id=dataset_id)
     print(f"Dataset state: {dataset.state}")
     if dataset.state == "READY":
         print("Dataset is ready!")
@@ -444,15 +501,15 @@ You can view and manage your datasets in the [Fireworks Dashboard](https://app.f
 
 ```python
 # List all datasets
-datasets = client.datasets.list(account_id=account_id)
+datasets = client.datasets.list()
 for ds in datasets.datasets:
     print(f"{ds.name}: {ds.state}")
 
 # Get a specific dataset
-dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+dataset = client.datasets.get(dataset_id=dataset_id)
 
 # Delete a dataset
-client.datasets.delete(account_id=account_id, dataset_id=dataset_id)
+client.datasets.delete(dataset_id=dataset_id)
 ```
 
 ## Handling errors
