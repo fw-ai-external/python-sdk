@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0-alpha.2 (2025-12-02)
+
+Full Changelog: [v1.0.0-alpha.1...v1.0.0-alpha.2](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.1...v1.0.0-alpha.2)
+
+### Documentation
+
+* add dataset upload documentation with complete workflow examples ([821046d](https://github.com/fw-ai-external/python-sdk/commit/821046dc40cf1c9bf4c468bf5dd2ed02e21f6188))
+* add link to Fireworks Dashboard for viewing datasets ([d69db06](https://github.com/fw-ai-external/python-sdk/commit/d69db060892d2f151e13316597d5fcb7afda5c75))
+* improve examples to print meaningful response content ([f801de8](https://github.com/fw-ai-external/python-sdk/commit/f801de8187ef6a41136a3df23e1955bae1595d65))
+
 ## 1.0.0-alpha.1 (2025-12-02)
 
 Full Changelog: [v0.0.1...v1.0.0-alpha.1](https://github.com/fw-ai-external/python-sdk/compare/v0.0.1...v1.0.0-alpha.1)
