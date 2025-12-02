@@ -1351,8 +1351,25 @@ class AsyncAioHttpClientWrapper(DefaultAioHttpClient):
             return
 
         try:
-            # TODO(someday): support non asyncio runtimes here
-            asyncio.get_running_loop().create_task(self.aclose())
+            # Try to schedule async cleanup if we have a running loop
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.aclose())
+        except RuntimeError:
+            # No running loop - attempt synchronous cleanup of the aiohttp connector
+            # This prevents "Unclosed connector" warnings when the client is garbage
+            # collected after the event loop has stopped
+            try:
+                transport = self._transport
+                client = getattr(transport, "client", None)
+                if client is None:
+                    return
+                connector = getattr(client, "connector", None)
+                if connector is not None and not connector.closed:
+                    # _close() is synchronous and closes all connections
+                    # It returns awaitables we ignore since there's no loop
+                    connector._close()
+            except Exception:
+                pass
         except Exception:
             pass
 
