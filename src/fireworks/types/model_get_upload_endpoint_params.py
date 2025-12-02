@@ -11,7 +11,7 @@ __all__ = ["ModelGetUploadEndpointParams"]
 
 
 class ModelGetUploadEndpointParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     filename_to_size: Required[Annotated[Dict[str, str], PropertyInfo(alias="filenameToSize")]]
     """A mapping from the file name to its size in bytes."""

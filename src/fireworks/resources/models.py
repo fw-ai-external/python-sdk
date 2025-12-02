@@ -64,8 +64,8 @@ class ModelsResource(SyncAPIResource):
 
     def create(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         model_id: str,
         cluster: str | Omit = omit,
         model: ModelParam | Omit = omit,
@@ -96,6 +96,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
@@ -120,7 +122,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         base_model_details: BaseModelDetailsParam | Omit = omit,
         context_length: int | Omit = omit,
         conversation_config: ConversationConfigParam | Omit = omit,
@@ -221,6 +223,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -262,8 +266,8 @@ class ModelsResource(SyncAPIResource):
 
     def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -306,6 +310,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
@@ -335,7 +341,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -355,6 +361,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -373,7 +381,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -398,6 +406,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -420,7 +430,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -444,6 +454,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -468,7 +480,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         filename_to_size: Dict[str, str],
         enable_resumable_upload: bool | Omit = omit,
         read_mask: str | Omit = omit,
@@ -498,6 +510,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -524,7 +538,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -563,6 +577,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -588,7 +604,7 @@ class ModelsResource(SyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         config_only: bool | Omit = omit,
         skip_hf_config_validation: bool | Omit = omit,
         trust_remote_code: bool | Omit = omit,
@@ -617,6 +633,8 @@ class ModelsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -665,8 +683,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
     async def create(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         model_id: str,
         cluster: str | Omit = omit,
         model: ModelParam | Omit = omit,
@@ -697,6 +715,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
@@ -721,7 +741,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         base_model_details: BaseModelDetailsParam | Omit = omit,
         context_length: int | Omit = omit,
         conversation_config: ConversationConfigParam | Omit = omit,
@@ -822,6 +842,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -863,8 +885,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
     async def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -907,6 +929,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
@@ -936,7 +960,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -956,6 +980,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -974,7 +1000,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -999,6 +1025,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -1021,7 +1049,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -1045,6 +1073,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -1069,7 +1099,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         filename_to_size: Dict[str, str],
         enable_resumable_upload: bool | Omit = omit,
         read_mask: str | Omit = omit,
@@ -1099,6 +1129,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -1125,7 +1157,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -1164,6 +1196,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:
@@ -1189,7 +1223,7 @@ class AsyncModelsResource(AsyncAPIResource):
         self,
         model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         config_only: bool | Omit = omit,
         skip_hf_config_validation: bool | Omit = omit,
         trust_remote_code: bool | Omit = omit,
@@ -1218,6 +1252,8 @@ class AsyncModelsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not model_id:

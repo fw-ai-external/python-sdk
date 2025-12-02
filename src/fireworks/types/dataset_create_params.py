@@ -11,6 +11,8 @@ __all__ = ["DatasetCreateParams"]
 
 
 class DatasetCreateParams(TypedDict, total=False):
+    account_id: str
+
     dataset: Required[DatasetParam]
 
     dataset_id: Required[Annotated[str, PropertyInfo(alias="datasetId")]]

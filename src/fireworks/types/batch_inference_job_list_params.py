@@ -10,6 +10,8 @@ __all__ = ["BatchInferenceJobListParams"]
 
 
 class BatchInferenceJobListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Only jobs satisfying the provided filter (if specified) will be returned.
 

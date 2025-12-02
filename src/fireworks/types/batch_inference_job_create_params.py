@@ -11,6 +11,8 @@ __all__ = ["BatchInferenceJobCreateParams"]
 
 
 class BatchInferenceJobCreateParams(TypedDict, total=False):
+    account_id: str
+
     batch_inference_job_id: Annotated[str, PropertyInfo(alias="batchInferenceJobId")]
     """ID of the batch inference job."""
 

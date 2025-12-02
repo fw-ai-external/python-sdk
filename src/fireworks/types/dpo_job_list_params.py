@@ -10,6 +10,8 @@ __all__ = ["DpoJobListParams"]
 
 
 class DpoJobListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Filter criteria for the returned jobs.
 

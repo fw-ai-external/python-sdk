@@ -81,11 +81,13 @@ class Fireworks(SyncAPIClient):
 
     # client options
     api_key: str
+    account_id: str | None
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
+        account_id: str | None = None,
         base_url: str | httpx.URL | None = None,
         timeout: float | Timeout | None | NotGiven = not_given,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -107,7 +109,9 @@ class Fireworks(SyncAPIClient):
     ) -> None:
         """Construct a new synchronous Fireworks client instance.
 
-        This automatically infers the `api_key` argument from the `FIREWORKS_API_KEY` environment variable if it is not provided.
+        This automatically infers the following arguments from their corresponding environment variables if they are not provided:
+        - `api_key` from `FIREWORKS_API_KEY`
+        - `account_id` from `FIREWORKS_ACCOUNT_ID`
         """
         if api_key is None:
             api_key = os.environ.get("FIREWORKS_API_KEY")
@@ -116,6 +120,10 @@ class Fireworks(SyncAPIClient):
                 "The api_key client option must be set either by passing api_key to the client or by setting the FIREWORKS_API_KEY environment variable"
             )
         self.api_key = api_key
+
+        if account_id is None:
+            account_id = os.environ.get("FIREWORKS_ACCOUNT_ID")
+        self.account_id = account_id
 
         if base_url is None:
             base_url = os.environ.get("FIREWORKS_BASE_URL")
@@ -181,6 +189,7 @@ class Fireworks(SyncAPIClient):
         self,
         *,
         api_key: str | None = None,
+        account_id: str | None = None,
         base_url: str | httpx.URL | None = None,
         timeout: float | Timeout | None | NotGiven = not_given,
         http_client: httpx.Client | None = None,
@@ -215,6 +224,7 @@ class Fireworks(SyncAPIClient):
         http_client = http_client or self._client
         client = self.__class__(
             api_key=api_key or self.api_key,
+            account_id=account_id or self.account_id,
             base_url=base_url or self.base_url,
             timeout=self.timeout if isinstance(timeout, NotGiven) else timeout,
             http_client=http_client,
@@ -229,6 +239,15 @@ class Fireworks(SyncAPIClient):
     # Alias for `copy` for nicer inline usage, e.g.
     # client.with_options(timeout=10).foo.create(...)
     with_options = copy
+
+    def _get_account_id_path_param(self) -> str:
+        from_client = self.account_id
+        if from_client is not None:
+            return from_client
+
+        raise ValueError(
+            "Missing account_id argument; Please provide it at the client level, e.g. Fireworks(account_id='abcd') or per method."
+        )
 
     @override
     def _make_status_error(
@@ -286,11 +305,13 @@ class AsyncFireworks(AsyncAPIClient):
 
     # client options
     api_key: str
+    account_id: str | None
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
+        account_id: str | None = None,
         base_url: str | httpx.URL | None = None,
         timeout: float | Timeout | None | NotGiven = not_given,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -312,7 +333,9 @@ class AsyncFireworks(AsyncAPIClient):
     ) -> None:
         """Construct a new async AsyncFireworks client instance.
 
-        This automatically infers the `api_key` argument from the `FIREWORKS_API_KEY` environment variable if it is not provided.
+        This automatically infers the following arguments from their corresponding environment variables if they are not provided:
+        - `api_key` from `FIREWORKS_API_KEY`
+        - `account_id` from `FIREWORKS_ACCOUNT_ID`
         """
         if api_key is None:
             api_key = os.environ.get("FIREWORKS_API_KEY")
@@ -321,6 +344,10 @@ class AsyncFireworks(AsyncAPIClient):
                 "The api_key client option must be set either by passing api_key to the client or by setting the FIREWORKS_API_KEY environment variable"
             )
         self.api_key = api_key
+
+        if account_id is None:
+            account_id = os.environ.get("FIREWORKS_ACCOUNT_ID")
+        self.account_id = account_id
 
         if base_url is None:
             base_url = os.environ.get("FIREWORKS_BASE_URL")
@@ -388,6 +415,7 @@ class AsyncFireworks(AsyncAPIClient):
         self,
         *,
         api_key: str | None = None,
+        account_id: str | None = None,
         base_url: str | httpx.URL | None = None,
         timeout: float | Timeout | None | NotGiven = not_given,
         http_client: httpx.AsyncClient | None = None,
@@ -422,6 +450,7 @@ class AsyncFireworks(AsyncAPIClient):
         http_client = http_client or self._client
         client = self.__class__(
             api_key=api_key or self.api_key,
+            account_id=account_id or self.account_id,
             base_url=base_url or self.base_url,
             timeout=self.timeout if isinstance(timeout, NotGiven) else timeout,
             http_client=http_client,
@@ -436,6 +465,15 @@ class AsyncFireworks(AsyncAPIClient):
     # Alias for `copy` for nicer inline usage, e.g.
     # client.with_options(timeout=10).foo.create(...)
     with_options = copy
+
+    def _get_account_id_path_param(self) -> str:
+        from_client = self.account_id
+        if from_client is not None:
+            return from_client
+
+        raise ValueError(
+            "Missing account_id argument; Please provide it at the client level, e.g. AsyncFireworks(account_id='abcd') or per method."
+        )
 
     @override
     def _make_status_error(

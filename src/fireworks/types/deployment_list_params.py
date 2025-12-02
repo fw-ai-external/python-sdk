@@ -10,6 +10,8 @@ __all__ = ["DeploymentListParams"]
 
 
 class DeploymentListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Only deployment satisfying the provided filter (if specified) will be returned.
 

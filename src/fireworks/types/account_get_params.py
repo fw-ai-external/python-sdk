@@ -10,6 +10,8 @@ __all__ = ["AccountGetParams"]
 
 
 class AccountGetParams(TypedDict, total=False):
+    account_id: str
+
     read_mask: Annotated[str, PropertyInfo(alias="readMask")]
     """The fields to be returned in the response.
 
