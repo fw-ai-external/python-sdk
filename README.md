@@ -298,6 +298,159 @@ client.datasets.upload(
 
 The async client uses the exact same interface. If you pass a [`PathLike`](https://docs.python.org/3/library/os.html#os.PathLike) instance, the file contents will be read asynchronously automatically.
 
+## Uploading datasets
+
+The SDK provides two methods for uploading datasets to Fireworks, depending on file size.
+
+### Option 1: Direct upload (files < 150MB) - Recommended
+
+For files under 150MB, use the streamlined direct upload approach. This uses only SDK methods with no additional dependencies:
+
+```python
+import time
+from pathlib import Path
+from fireworks import Fireworks
+
+client = Fireworks()
+
+account_id = "your-account-id"
+dataset_id = "my-dataset"
+file_path = Path("/path/to/your-dataset.jsonl")
+
+# Count lines in the dataset file (optional, for bookkeeping)
+with open(file_path) as f:
+    example_count = sum(1 for line in f if line.strip())
+
+# Step 1: Create the dataset record
+dataset = client.datasets.create(
+    account_id=account_id,
+    dataset_id=dataset_id,
+    dataset={"exampleCount": str(example_count)},
+)
+print(f"Created dataset: {dataset.name}")
+
+# Step 2: Upload the file
+upload_response = client.datasets.upload(
+    account_id=account_id,
+    dataset_id=dataset_id,
+    file=file_path,
+)
+print(f"Upload response: {upload_response}")
+
+# Step 3: Poll until dataset is ready
+while True:
+    dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+    print(f"Dataset state: {dataset.state}")
+    if dataset.state == "READY":
+        print("Dataset is ready!")
+        break
+    elif dataset.state == "UPLOADING":
+        time.sleep(2)
+    else:
+        raise Exception(f"Unexpected dataset state: {dataset.state}")
+```
+
+### Option 2: Signed URL upload (files > 150MB)
+
+For larger files, use the signed URL approach. This requires an HTTP client (like `httpx` or `requests`) to upload to the signed URL:
+
+```python
+import time
+from pathlib import Path
+import httpx  # or use requests
+from fireworks import Fireworks
+
+client = Fireworks()
+
+account_id = "your-account-id"
+dataset_id = "my-large-dataset"
+file_path = Path("/path/to/your-large-dataset.jsonl")
+file_size = file_path.stat().st_size
+file_name = file_path.name
+
+# Count lines in the dataset file (optional, for bookkeeping)
+with open(file_path) as f:
+    example_count = sum(1 for line in f if line.strip())
+
+# Step 1: Create the dataset record
+dataset = client.datasets.create(
+    account_id=account_id,
+    dataset_id=dataset_id,
+    dataset={"exampleCount": str(example_count)},
+)
+print(f"Created dataset: {dataset.name}")
+
+# Step 2: Get signed upload URL
+upload_endpoint = client.datasets.get_upload_endpoint(
+    account_id=account_id,
+    dataset_id=dataset_id,
+    filename_to_size={file_name: str(file_size)},
+)
+signed_url = upload_endpoint.filename_to_signed_urls[file_name]
+print(f"Got signed URL for upload")
+
+# Step 3: Upload directly to the signed URL (requires external HTTP client)
+with open(file_path, "rb") as f:
+    file_content = f.read()
+
+response = httpx.put(
+    signed_url,
+    content=file_content,
+    headers={
+        "Content-Type": "application/octet-stream",
+        "x-goog-content-length-range": f"{file_size},{file_size}",
+    },
+)
+response.raise_for_status()
+print("File uploaded to signed URL")
+
+# Step 4: Validate the upload
+client.datasets.validate_upload(
+    account_id=account_id,
+    dataset_id=dataset_id,
+    body={},
+)
+print("Upload validated")
+
+# Step 5: Poll until dataset is ready
+while True:
+    dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+    print(f"Dataset state: {dataset.state}")
+    if dataset.state == "READY":
+        print("Dataset is ready!")
+        break
+    elif dataset.state == "UPLOADING":
+        time.sleep(2)
+    else:
+        raise Exception(f"Unexpected dataset state: {dataset.state}")
+```
+
+> **Note:** The `httpx` library is already a dependency of the SDK, so no additional installation is needed.
+
+### Dataset file format
+
+Dataset files should be in JSONL format (JSON Lines), where each line is a valid JSON object. For chat-based fine-tuning, use the following format:
+
+```json
+{"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"}, {"role": "assistant", "content": "Hi there! How can I help you today?"}]}
+{"messages": [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "2+2 equals 4."}]}
+```
+
+### Managing datasets
+
+```python
+# List all datasets
+datasets = client.datasets.list(account_id=account_id)
+for ds in datasets.datasets:
+    print(f"{ds.name}: {ds.state}")
+
+# Get a specific dataset
+dataset = client.datasets.get(account_id=account_id, dataset_id=dataset_id)
+
+# Delete a dataset
+client.datasets.delete(account_id=account_id, dataset_id=dataset_id)
+```
+
 ## Handling errors
 
 When the library is unable to connect to the API (for example, due to network connection problems or a timeout), a subclass of `fireworks.APIConnectionError` is raised.
