@@ -438,6 +438,8 @@ Dataset files should be in JSONL format (JSON Lines), where each line is a valid
 
 ### Managing datasets
 
+You can view and manage your datasets in the [Fireworks Dashboard](https://app.fireworks.ai/dashboard/datasets).
+
 ```python
 # List all datasets
 datasets = client.datasets.list(account_id=account_id)
