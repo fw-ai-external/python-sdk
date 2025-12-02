@@ -10,7 +10,7 @@ __all__ = ["DeploymentShapeVersionGetParams"]
 
 
 class DeploymentShapeVersionGetParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     deployment_shape_id: Required[str]
 

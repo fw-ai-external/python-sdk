@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Required, Annotated, TypedDict
+from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .type_date_param import TypeDateParam
@@ -14,7 +14,7 @@ __all__ = ["ModelUpdateParams"]
 
 
 class ModelUpdateParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     base_model_details: Annotated[BaseModelDetailsParam, PropertyInfo(alias="baseModelDetails")]
     """Base model details. Required if kind is HF_BASE_MODEL.

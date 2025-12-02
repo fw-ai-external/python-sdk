@@ -11,7 +11,7 @@ __all__ = ["APIKeyCreateParams"]
 
 
 class APIKeyCreateParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     api_key: Required[Annotated[APIKeyParam, PropertyInfo(alias="apiKey")]]
     """The API key to be created."""

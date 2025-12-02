@@ -46,7 +46,7 @@ class LoraResource(SyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         default: bool | Omit = omit,
         deployment: str | Omit = omit,
         description: str | Omit = omit,
@@ -83,6 +83,8 @@ class LoraResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:
@@ -111,8 +113,8 @@ class LoraResource(SyncAPIResource):
 
     def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -155,6 +157,8 @@ class LoraResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
@@ -184,7 +188,7 @@ class LoraResource(SyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -209,6 +213,8 @@ class LoraResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:
@@ -229,8 +235,8 @@ class LoraResource(SyncAPIResource):
 
     def load(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         replace_merged_addon: bool | Omit = omit,
         default: bool | Omit = omit,
         deployment: str | Omit = omit,
@@ -271,6 +277,8 @@ class LoraResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
@@ -303,7 +311,7 @@ class LoraResource(SyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -323,6 +331,8 @@ class LoraResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:
@@ -362,7 +372,7 @@ class AsyncLoraResource(AsyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         default: bool | Omit = omit,
         deployment: str | Omit = omit,
         description: str | Omit = omit,
@@ -399,6 +409,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:
@@ -427,8 +439,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
     async def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -471,6 +483,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
@@ -500,7 +514,7 @@ class AsyncLoraResource(AsyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -525,6 +539,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:
@@ -545,8 +561,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
     async def load(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         replace_merged_addon: bool | Omit = omit,
         default: bool | Omit = omit,
         deployment: str | Omit = omit,
@@ -587,6 +603,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
@@ -621,7 +639,7 @@ class AsyncLoraResource(AsyncAPIResource):
         self,
         deployed_model_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -641,6 +659,8 @@ class AsyncLoraResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployed_model_id:

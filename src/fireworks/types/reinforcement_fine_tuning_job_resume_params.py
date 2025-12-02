@@ -8,6 +8,6 @@ __all__ = ["ReinforcementFineTuningJobResumeParams"]
 
 
 class ReinforcementFineTuningJobResumeParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     body: Required[object]

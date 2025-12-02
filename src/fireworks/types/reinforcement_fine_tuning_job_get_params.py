@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Required, Annotated, TypedDict
+from typing_extensions import Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
@@ -10,7 +10,7 @@ __all__ = ["ReinforcementFineTuningJobGetParams"]
 
 
 class ReinforcementFineTuningJobGetParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     read_mask: Annotated[str, PropertyInfo(alias="readMask")]
     """The fields to be returned in the response.

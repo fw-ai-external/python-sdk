@@ -13,6 +13,8 @@ __all__ = ["ReinforcementFineTuningJobCreateParams"]
 
 
 class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
+    account_id: str
+
     dataset: Required[str]
     """The name of the dataset used for training."""
 

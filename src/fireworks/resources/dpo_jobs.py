@@ -47,8 +47,8 @@ class DpoJobsResource(SyncAPIResource):
 
     def create(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         dataset: str,
         dpo_job_id: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -79,6 +79,8 @@ class DpoJobsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
@@ -106,8 +108,8 @@ class DpoJobsResource(SyncAPIResource):
 
     def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -149,6 +151,8 @@ class DpoJobsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get(
@@ -178,7 +182,7 @@ class DpoJobsResource(SyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -196,6 +200,8 @@ class DpoJobsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:
@@ -214,7 +220,7 @@ class DpoJobsResource(SyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -237,6 +243,8 @@ class DpoJobsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:
@@ -259,7 +267,7 @@ class DpoJobsResource(SyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -277,6 +285,8 @@ class DpoJobsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:
@@ -314,8 +324,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
     async def create(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         dataset: str,
         dpo_job_id: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -346,6 +356,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
@@ -373,8 +385,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
     async def list(
         self,
-        account_id: str,
         *,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -416,6 +428,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._get(
@@ -445,7 +459,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -463,6 +477,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:
@@ -481,7 +497,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -504,6 +520,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:
@@ -526,7 +544,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         self,
         dpo_job_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -544,6 +562,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not dpo_job_id:

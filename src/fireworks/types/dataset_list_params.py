@@ -10,6 +10,8 @@ __all__ = ["DatasetListParams"]
 
 
 class DatasetListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Only model satisfying the provided filter (if specified) will be returned.
 

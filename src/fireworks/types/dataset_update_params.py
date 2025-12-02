@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Required, Annotated, TypedDict
+from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .splitted_param import SplittedParam
@@ -13,7 +13,7 @@ __all__ = ["DatasetUpdateParams"]
 
 
 class DatasetUpdateParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
