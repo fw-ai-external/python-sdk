@@ -40,7 +40,7 @@ completion = client.chat.completions.create(
     ],
     model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
-print(completion.id)
+print(completion.choices[0].message.content)
 ```
 
 While you can provide an `api_key` keyword argument,
@@ -72,7 +72,7 @@ async def main() -> None:
         ],
         model="accounts/fireworks/models/kimi-k2-instruct-0905",
     )
-    print(completion.id)
+    print(completion.choices[0].message.content)
 
 
 asyncio.run(main())
@@ -99,8 +99,9 @@ stream = client.chat.completions.create(
     model="accounts/fireworks/models/kimi-k2-instruct-0905",
     stream=True,
 )
-for completion in stream:
-    print(completion.id)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
 ```
 
 The async client uses the exact same interface.
@@ -120,8 +121,9 @@ stream = await client.chat.completions.create(
     model="accounts/fireworks/models/kimi-k2-instruct-0905",
     stream=True,
 )
-async for completion in stream:
-    print(completion.id)
+async for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
 ```
 
 ## Reasoning models
