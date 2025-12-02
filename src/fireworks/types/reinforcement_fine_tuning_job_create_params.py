@@ -1,0 +1,51 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
+from __future__ import annotations
+
+from typing_extensions import Required, Annotated, TypedDict
+
+from .._utils import PropertyInfo
+from .shared_params.wandb_config import WandbConfig
+from .shared_params.training_config import TrainingConfig
+from .shared_params.inference_parameters import InferenceParameters
+
+__all__ = ["ReinforcementFineTuningJobCreateParams"]
+
+
+class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
+    dataset: Required[str]
+    """The name of the dataset used for training."""
+
+    evaluator: Required[str]
+    """The evaluator resource name to use for RLOR fine-tuning job."""
+
+    reinforcement_fine_tuning_job_id: Annotated[str, PropertyInfo(alias="reinforcementFineTuningJobId")]
+    """
+    ID of the reinforcement fine-tuning job, a random UUID will be generated if not
+    specified.
+    """
+
+    chunk_size: Annotated[int, PropertyInfo(alias="chunkSize")]
+    """Data chunking for rollout, default size 200, enabled when dataset > 300.
+
+    Valid range is 1-10,000.
+    """
+
+    display_name: Annotated[str, PropertyInfo(alias="displayName")]
+
+    eval_auto_carveout: Annotated[bool, PropertyInfo(alias="evalAutoCarveout")]
+    """Whether to auto-carve the dataset for eval."""
+
+    evaluation_dataset: Annotated[str, PropertyInfo(alias="evaluationDataset")]
+    """The name of a separate dataset to use for evaluation."""
+
+    inference_parameters: Annotated[InferenceParameters, PropertyInfo(alias="inferenceParameters")]
+    """BIJ parameters."""
+
+    mcp_server: Annotated[str, PropertyInfo(alias="mcpServer")]
+
+    training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
+    """Common training configurations."""
+
+    wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
+    """The Weights & Biases team/user account for logging training progress."""
