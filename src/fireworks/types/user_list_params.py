@@ -10,6 +10,8 @@ __all__ = ["UserListParams"]
 
 
 class UserListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Only users satisfying the provided filter (if specified) will be returned.
 

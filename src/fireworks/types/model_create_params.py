@@ -11,6 +11,8 @@ __all__ = ["ModelCreateParams"]
 
 
 class ModelCreateParams(TypedDict, total=False):
+    account_id: str
+
     model_id: Required[Annotated[str, PropertyInfo(alias="modelId")]]
     """ID of the model."""
 

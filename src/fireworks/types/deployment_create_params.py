@@ -16,6 +16,8 @@ __all__ = ["DeploymentCreateParams"]
 
 
 class DeploymentCreateParams(TypedDict, total=False):
+    account_id: str
+
     base_model: Required[Annotated[str, PropertyInfo(alias="baseModel")]]
 
     deployment_id: Annotated[str, PropertyInfo(alias="deploymentId")]

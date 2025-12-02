@@ -10,6 +10,8 @@ __all__ = ["LoraListParams"]
 
 
 class LoraListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """
     Only depoyed models satisfying the provided filter (if specified) will be

@@ -10,6 +10,8 @@ __all__ = ["SecretListParams"]
 
 
 class SecretListParams(TypedDict, total=False):
+    account_id: str
+
     filter: str
     """Unused but required to use existing ListRequest functionality."""
 

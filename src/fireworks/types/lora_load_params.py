@@ -10,6 +10,8 @@ __all__ = ["LoraLoadParams"]
 
 
 class LoraLoadParams(TypedDict, total=False):
+    account_id: str
+
     replace_merged_addon: Annotated[bool, PropertyInfo(alias="replaceMergedAddon")]
     """
     Merges new addon to the base model, while unmerging/deleting any existing addon

@@ -10,7 +10,7 @@ __all__ = ["APIKeyDeleteParams"]
 
 
 class APIKeyDeleteParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     key_id: Required[Annotated[str, PropertyInfo(alias="keyId")]]
     """The key ID for the API key."""

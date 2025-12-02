@@ -10,7 +10,7 @@ __all__ = ["SecretUpdateParams"]
 
 
 class SecretUpdateParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     key_name: Required[Annotated[str, PropertyInfo(alias="keyName")]]
 

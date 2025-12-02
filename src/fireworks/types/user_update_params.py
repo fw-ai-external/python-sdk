@@ -10,7 +10,7 @@ __all__ = ["UserUpdateParams"]
 
 
 class UserUpdateParams(TypedDict, total=False):
-    account_id: Required[str]
+    account_id: str
 
     role: Required[str]
     """The user's role, e.g. admin or user."""

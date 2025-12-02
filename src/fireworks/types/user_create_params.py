@@ -10,6 +10,8 @@ __all__ = ["UserCreateParams"]
 
 
 class UserCreateParams(TypedDict, total=False):
+    account_id: str
+
     role: Required[str]
     """The user's role, e.g. admin or user."""
 

@@ -46,7 +46,7 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
         self,
         deployment_shape_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -91,6 +91,8 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployment_shape_id:
@@ -124,7 +126,7 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
         self,
         version_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         deployment_shape_id: str,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -149,6 +151,8 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployment_shape_id:
@@ -198,7 +202,7 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
         self,
         deployment_shape_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         filter: str | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
@@ -243,6 +247,8 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployment_shape_id:
@@ -276,7 +282,7 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
         self,
         version_id: str,
         *,
-        account_id: str,
+        account_id: str | None = None,
         deployment_shape_id: str,
         read_mask: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -301,6 +307,8 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         if not deployment_shape_id:

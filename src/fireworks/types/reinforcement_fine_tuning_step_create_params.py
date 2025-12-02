@@ -13,6 +13,8 @@ __all__ = ["ReinforcementFineTuningStepCreateParams"]
 
 
 class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
+    account_id: str
+
     rlor_trainer_job_id: Annotated[str, PropertyInfo(alias="rlorTrainerJobId")]
     """ID of the RLOR trainer job, a random UUID will be generated if not specified."""
 
