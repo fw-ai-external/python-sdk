@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.5 (2025-12-03)
+
+Full Changelog: [v1.0.0-alpha.4...v1.0.0-alpha.5](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.4...v1.0.0-alpha.5)
+
+### Chores
+
+* update lockfile ([58d2c86](https://github.com/fw-ai-external/python-sdk/commit/58d2c86e5856bbc1f3550b6449502a5b302e5c6e))
+
 ## 1.0.0-alpha.4 (2025-12-03)
 
 Full Changelog: [v1.0.0-alpha.3...v1.0.0-alpha.4](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.3...v1.0.0-alpha.4)
