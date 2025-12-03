@@ -241,7 +241,7 @@ async def create_and_upload_dataset(
         )
     logger.info("Dataset file uploaded, waiting for processing...")
 
-    # Poll until dataset is ready (per README instructions)
+    # Poll until dataset is ready
     start_time = time.time()
     while time.time() - start_time < timeout_seconds:
         dataset = await client.datasets.get(
@@ -274,7 +274,7 @@ async def wait_for_training_completion(
     logger.info(f"Waiting for training job {job_id} to complete (timeout: {timeout_seconds}s)...")
     start_time = time.time()
 
-    # Terminal failure states (matching sdks/ raise_if_bad_state)
+    # Terminal failure states
     failure_states = {
         "JOB_STATE_FAILED",
         "JOB_STATE_FAILED_CLEANING_UP",
