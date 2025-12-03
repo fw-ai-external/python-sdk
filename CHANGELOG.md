@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0-alpha.4 (2025-12-03)
+
+Full Changelog: [v1.0.0-alpha.3...v1.0.0-alpha.4](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.3...v1.0.0-alpha.4)
+
+### Bug Fixes
+
+* type errors in example file ([b707bb8](https://github.com/fw-ai-external/python-sdk/commit/b707bb818e8f05d01fa984f9f55a3fc3dd0d6498))
+
+
+### Chores
+
+* remove external reference comments from example file ([6538f6a](https://github.com/fw-ai-external/python-sdk/commit/6538f6a62fbec221dc35743220bf77bd0f86ab3c))
+
+
+### Documentation
+
+* add iterative reinforcement learning workflow example ([56850d7](https://github.com/fw-ai-external/python-sdk/commit/56850d7e7cf0bc813538c01c4d8243726ac6330f))
+
 ## 1.0.0-alpha.3 (2025-12-02)
 
 Full Changelog: [v1.0.0-alpha.2...v1.0.0-alpha.3](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.2...v1.0.0-alpha.3)
