@@ -1,22 +1,24 @@
 [project]
 name = "fireworks-ai"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
 authors = [
 { name = "Fireworks", email = "dhuang@fireworks.ai" },
 ]
+
 dependencies = [
-    "httpx>=0.23.0, <1",
-    "pydantic>=1.9.0, <3",
-    "typing-extensions>=4.10, <5",
-    "anyio>=3.5.0, <5",
-    "distro>=1.7.0, <2",
-    "sniffio",
+  "httpx>=0.23.0, <1",
+  "pydantic>=1.9.0, <3",
+  "typing-extensions>=4.10, <5",
+  "anyio>=3.5.0, <5",
+  "distro>=1.7.0, <2",
+  "sniffio",
     "aiohttp",
     "httpx_aiohttp>=0.1.9",
 ]
+
 requires-python = ">= 3.9"
 classifiers = [
   "Typing :: Typed",
