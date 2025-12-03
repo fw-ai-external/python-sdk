@@ -11,6 +11,7 @@ This script demonstrates an iterative reinforcement learning workflow where:
    - Hot reload the new LoRA adapter onto the deployment
    - Clean up the dataset
 """
+
 from __future__ import annotations
 
 import os
@@ -22,9 +23,10 @@ import logging
 from typing import Any
 from collections import defaultdict
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore[import-not-found]
 
 from fireworks import AsyncFireworks
+from fireworks._compat import model_dump
 
 load_dotenv()
 
@@ -61,9 +63,7 @@ async def wait_for_deployment_ready(
     poll_interval: int = 10,
 ) -> None:
     """Wait for a deployment to be ready."""
-    logger.info(
-        f"Waiting for deployment {deployment_id} to be ready (timeout: {timeout_seconds}s)..."
-    )
+    logger.info(f"Waiting for deployment {deployment_id} to be ready (timeout: {timeout_seconds}s)...")
     start_time = time.time()
     while time.time() - start_time < timeout_seconds:
         deployment = await client.deployments.get(
@@ -81,9 +81,7 @@ async def wait_for_deployment_ready(
 
         await asyncio.sleep(poll_interval)
 
-    raise TimeoutError(
-        f"Deployment did not become ready within {timeout_seconds} seconds"
-    )
+    raise TimeoutError(f"Deployment did not become ready within {timeout_seconds} seconds")
 
 
 async def create_or_get_deployment(
@@ -96,7 +94,7 @@ async def create_or_get_deployment(
     try:
         deployment = await client.deployments.get(deployment_id=deployment_id)
         logger.info(f"Found existing deployment: {deployment.name}")
-        return deployment
+        return model_dump(deployment)
     except Exception:
         logger.info(f"Creating deployment {deployment_id} with hot reload enabled...")
         logger.info(f"  Base model: {base_model}")
@@ -109,7 +107,7 @@ async def create_or_get_deployment(
             accelerator_type="NVIDIA_H100_80GB",
         )
         logger.info(f"Created deployment: {deployment.name}")
-        return deployment
+        return model_dump(deployment)
 
 
 async def generate_rollouts_and_rewards(
@@ -125,14 +123,12 @@ async def generate_rollouts_and_rewards(
     """
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def generate_single_response(
-        prompt_id: int, generation_id: int
-    ) -> dict[str, Any]:
+    async def generate_single_response(prompt_id: int, generation_id: int) -> dict[str, Any]:
         """Generate a single response for a given prompt."""
         async with semaphore:
-            messages = [
-                {"role": "user", "content": f"What is {prompt_id} + {prompt_id}?"}
-            ]
+            from fireworks.types.shared_params.chat_message import ChatMessage
+
+            messages: list[ChatMessage] = [{"role": "user", "content": f"What is {prompt_id} + {prompt_id}?"}]
 
             response = await client.chat.completions.create(
                 model=model,
@@ -148,49 +144,45 @@ async def generate_rollouts_and_rewards(
             return {
                 "prompt_id": prompt_id,
                 "generation_id": generation_id,
-                "messages": messages
-                + [{"role": "assistant", "content": assistant_message}],
+                "messages": messages + [{"role": "assistant", "content": assistant_message}],
                 "evals": {"score": reward},
             }
 
     # Create all generation tasks concurrently
-    coros = []
+    tasks: list[asyncio.Task[dict[str, Any]]] = []
     for prompt_id in range(num_prompts):
         for generation_id in range(num_generations_per_prompt):
-            coro = generate_single_response(prompt_id, generation_id)
-            coros.append(coro)
+            task = asyncio.create_task(generate_single_response(prompt_id, generation_id))
+            tasks.append(task)
 
     # Execute all generations concurrently
-    logger.info(f"Starting {len(coros)} concurrent generations...")
+    logger.info(f"Starting {len(tasks)} concurrent generations...")
     start_time = time.time()
     num_completed = 0
-    results = []
+    results: list[dict[str, Any]] = []
 
-    for coro in asyncio.as_completed(coros):
+    for coro in asyncio.as_completed(tasks):
         result = await coro
         results.append(result)
         num_completed += 1
         if num_completed % 10 == 0:
             elapsed = time.time() - start_time
             rate = num_completed / elapsed if elapsed > 0 else 0
-            logger.info(
-                f"Completed {num_completed}/{len(coros)} generations ({rate:.1f}/s)"
-            )
+            logger.info(f"Completed {num_completed}/{len(tasks)} generations ({rate:.1f}/s)")
 
     total_time = time.time() - start_time
     logger.info(f"All generations completed in {total_time:.1f}s")
 
     # Group results by prompt_id to create dataset rows
-    prompt_generations_map = defaultdict(list)
+    prompt_generations_map: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
     for result in results:
         prompt_generations_map[result["prompt_id"]].append(result)
 
-    dataset_rows = []
+    dataset_rows: list[dict[str, Any]] = []
     for prompt_id in range(num_prompts):
-        prompt_generations = prompt_generations_map[prompt_id]
-        sample_generations = [
-            {"messages": gen["messages"], "evals": gen["evals"]}
-            for gen in prompt_generations
+        prompt_generations: list[dict[str, Any]] = prompt_generations_map[prompt_id]
+        sample_generations: list[dict[str, Any]] = [
+            {"messages": gen["messages"], "evals": gen["evals"]} for gen in prompt_generations
         ]
         dataset_rows.append({"samples": sample_generations})
 
@@ -235,7 +227,7 @@ async def create_and_upload_dataset(
         dataset_id=dataset_id,
         dataset={
             "display_name": f"RL Training Dataset - {dataset_id}",
-            "example_count": example_count(rollouts_filepath),
+            "example_count": str(example_count(rollouts_filepath)),
         },
     )
     logger.info(f"Created dataset: {dataset.name}")
@@ -261,6 +253,8 @@ async def create_and_upload_dataset(
 
         if state == "READY":
             logger.info("Dataset is ready!")
+            if dataset.name is None:
+                raise ValueError("Dataset name is None")
             return dataset.name
         elif state in ("UPLOADING", "STATE_UNSPECIFIED"):
             await asyncio.sleep(poll_interval)
@@ -277,9 +271,7 @@ async def wait_for_training_completion(
     poll_interval: int = 10,
 ) -> dict[str, Any]:
     """Wait for a reinforcement fine-tuning step to complete."""
-    logger.info(
-        f"Waiting for training job {job_id} to complete (timeout: {timeout_seconds}s)..."
-    )
+    logger.info(f"Waiting for training job {job_id} to complete (timeout: {timeout_seconds}s)...")
     start_time = time.time()
 
     # Terminal failure states (matching sdks/ raise_if_bad_state)
@@ -304,7 +296,7 @@ async def wait_for_training_completion(
         if state == "JOB_STATE_COMPLETED":
             total_time = time.time() - start_time
             logger.info(f"Training completed in {total_time:.1f}s!")
-            return job
+            return model_dump(job)
         elif state in failure_states:
             raise Exception(f"Training job entered bad state: {state}")
 
@@ -320,9 +312,7 @@ async def wait_for_model_ready(
     poll_interval: int = 10,
 ) -> None:
     """Wait for a model to be ready after training."""
-    logger.info(
-        f"Waiting for model {model_id} to be ready (timeout: {timeout_seconds}s)..."
-    )
+    logger.info(f"Waiting for model {model_id} to be ready (timeout: {timeout_seconds}s)...")
     start_time = time.time()
 
     while time.time() - start_time < timeout_seconds:
@@ -365,7 +355,7 @@ async def load_lora_adapter(
     logger.info("LoRA adapter loaded successfully")
 
 
-async def run_reinforcement_learning():
+async def run_reinforcement_learning() -> None:
     """Main function to run the iterative reinforcement learning workflow."""
     # Use default production client
     client = AsyncFireworks()
@@ -420,10 +410,10 @@ async def run_reinforcement_learning():
         )
 
         # Create reinforcement fine-tuning step
-        output_model_name = (
-            f"accounts/{ACCOUNT_ID}/models/rl-model-{RUN_ID}-v{step + 1}"
-        )
-        training_config = {
+        output_model_name = f"accounts/{ACCOUNT_ID}/models/rl-model-{RUN_ID}-v{step + 1}"
+        from fireworks.types.shared_params.training_config import TrainingConfig
+
+        training_config: TrainingConfig = {
             "output_model": output_model_name,
             "epochs": 1,
             "learning_rate": 1e-5,
@@ -431,9 +421,7 @@ async def run_reinforcement_learning():
         if step == 0:
             training_config["base_model"] = BASE_MODEL
         else:
-            training_config["warm_start_from"] = (
-                f"accounts/{ACCOUNT_ID}/models/rl-model-{RUN_ID}-v{step}"
-            )
+            training_config["warm_start_from"] = f"accounts/{ACCOUNT_ID}/models/rl-model-{RUN_ID}-v{step}"
 
         job_id = f"rl-job-{RUN_ID}-step-{step + 1}"
         logger.info(f"[Step {step + 1}.3] Starting reinforcement fine-tuning step...")
@@ -464,9 +452,7 @@ async def run_reinforcement_learning():
             model_name=output_model_name,
         )
 
-        logger.info(
-            f"Step {step + 1} completed! Model {output_model_name} is now active."
-        )
+        logger.info(f"Step {step + 1} completed! Model {output_model_name} is now active.")
 
         # Step 8: Clean up dataset
         logger.info(f"[Step {step + 1}.7] Cleaning up dataset...")
