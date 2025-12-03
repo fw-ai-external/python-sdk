@@ -11,17 +11,19 @@ This script demonstrates an iterative reinforcement learning workflow where:
    - Hot reload the new LoRA adapter onto the deployment
    - Clean up the dataset
 """
+from __future__ import annotations
 
-import asyncio
-import json
-import logging
 import os
-import random
+import json
 import time
-from collections import defaultdict
+import random
+import asyncio
+import logging
 from typing import Any
+from collections import defaultdict
 
 from dotenv import load_dotenv
+
 from fireworks import AsyncFireworks
 
 load_dotenv()
