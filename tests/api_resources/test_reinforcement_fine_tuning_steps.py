@@ -38,6 +38,7 @@ class TestReinforcementFineTuningSteps:
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            keep_alive=True,
             reward_weights=["string"],
             training_config={
                 "base_model": "baseModel",
@@ -292,6 +293,7 @@ class TestAsyncReinforcementFineTuningSteps:
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            keep_alive=True,
             reward_weights=["string"],
             training_config={
                 "base_model": "baseModel",

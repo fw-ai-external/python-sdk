@@ -73,7 +73,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -290,15 +290,40 @@ class CompletionsResource(SyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -427,7 +452,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -649,15 +674,40 @@ class CompletionsResource(SyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -780,7 +830,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1002,15 +1052,40 @@ class CompletionsResource(SyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -1132,7 +1207,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1257,7 +1332,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1474,15 +1549,40 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -1611,7 +1711,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1833,15 +1933,40 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -1964,7 +2089,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -2186,15 +2311,40 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           raw_output: Return raw output from the model.
 
-          reasoning_effort: Applicable to reasoning models only, this option controls the reasoning token
-              length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-              integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-              thinking effort and thus longer reasoning tokens. `'none'` means disable
-              thinking. You can alternatively set the option to an integer controlling the
-              hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-              you might have to use fireworks.ai client library to bypass the schema check).
-              Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-              `'high'`) are supported. Integer values will not work with these models.
+          reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
+              reasoning appears in the `reasoning_content` field of the response, separate
+              from the final answer in `content`.
+
+              **Accepted values:**
+
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+                disable it.
+              - **Integer** (Fireworks extension): A positive integer to set a hard token
+                limit on reasoning output (only effective for grammar-based reasoning models).
+
+              **Important:** Boolean values are normalized internally: `true` becomes
+              `'medium'`, and `false` becomes `'none'`. This normalization happens before
+              model-specific validation, so if a model doesn't support `'none'`, passing
+              `false` will produce an error referencing `'none'`.
+
+              **Model-specific behavior:**
+
+              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+                output. `'low'` maps to a default token limit (~3000 tokens).
+              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+                and integers have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
+              - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+                values—using these will return an error (e.g., "Invalid reasoning effort:
+                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+                responses with shorter reasoning.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -2316,7 +2466,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,

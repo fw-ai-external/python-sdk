@@ -146,6 +146,15 @@ class ChoiceRawOutput(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     """Token IDs for the raw completion"""
 
+    grammar: Optional[str] = None
+    """
+    Grammar used for constrained decoding, can be either user provided (directly or
+    JSON schema) or inferred by the chat template
+    """
+
+    images: Optional[List[str]] = None
+    """Images in the prompt"""
+
 
 class Choice(BaseModel):
     """A streamed completion choice.
