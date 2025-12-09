@@ -10,6 +10,11 @@ __all__ = ["WandbConfig"]
 
 
 class WandbConfig(TypedDict, total=False):
+    """
+    WandbConfig is the configuration for the Weights & Biases (wandb) logging which
+    will be used by a training job.
+    """
+
     api_key: Annotated[str, PropertyInfo(alias="apiKey")]
     """The API key for the wandb service."""
 

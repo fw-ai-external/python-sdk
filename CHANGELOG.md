@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0-alpha.5 (2025-12-09)
+
+Full Changelog: [v1.0.0-alpha.4...v1.0.0-alpha.5](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.4...v1.0.0-alpha.5)
+
+### Features
+
+* Update API/SDK ([c47e0fb](https://github.com/fw-ai-external/python-sdk/commit/c47e0fb7a18a05fd4c50d46bf024762f7c83ff00))
+
+
+### Bug Fixes
+
+* **types:** allow pyright to infer TypedDict types within SequenceNotStr ([211cefd](https://github.com/fw-ai-external/python-sdk/commit/211cefd338e16d81c8a40a1acf9e3399a0ebfbd0))
+
+
+### Chores
+
+* add missing docstrings ([ac5bf0c](https://github.com/fw-ai-external/python-sdk/commit/ac5bf0c1229ded12db30d75bffa3540c69280785))
+* **docs:** use environment variables for authentication in code snippets ([1501b2f](https://github.com/fw-ai-external/python-sdk/commit/1501b2fc7f1320a1d4a41fc39e6fdb0bc4d795c6))
+* update lockfile ([58d2c86](https://github.com/fw-ai-external/python-sdk/commit/58d2c86e5856bbc1f3550b6449502a5b302e5c6e))
+
 ## 1.0.0-alpha.4 (2025-12-03)
 
 Full Changelog: [v1.0.0-alpha.3...v1.0.0-alpha.4](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.3...v1.0.0-alpha.4)

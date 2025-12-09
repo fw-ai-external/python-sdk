@@ -10,10 +10,14 @@ __all__ = ["CompletionCreateResponse", "Usage", "UsagePromptTokensDetails"]
 
 
 class UsagePromptTokensDetails(BaseModel):
+    """Details about prompt tokens, including cached tokens"""
+
     cached_tokens: Optional[int] = None
 
 
 class Usage(BaseModel):
+    """Usage statistics for the completion"""
+
     prompt_tokens: int
     """The number of tokens in the prompt"""
 
@@ -28,6 +32,8 @@ class Usage(BaseModel):
 
 
 class CompletionCreateResponse(BaseModel):
+    """The response message from a /v1/completions call."""
+
     id: str
     """A unique identifier of the response"""
 

@@ -33,6 +33,8 @@ class ReinforcementFineTuningStep(BaseModel):
     evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
     """The name of a separate dataset to use for evaluation."""
 
+    keep_alive: Optional[bool] = FieldInfo(alias="keepAlive", default=None)
+
     name: Optional[str] = None
 
     reward_weights: Optional[List[str]] = FieldInfo(alias="rewardWeights", default=None)

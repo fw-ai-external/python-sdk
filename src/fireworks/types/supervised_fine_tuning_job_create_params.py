@@ -101,7 +101,6 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
         "AP_TOKYO_2",
         "US_CALIFORNIA_1",
         "US_UTAH_1",
-        "US_TEXAS_3",
         "US_GEORGIA_1",
         "US_GEORGIA_2",
         "US_WASHINGTON_4",
@@ -120,6 +119,8 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
 
 
 class HiddenStatesGenConfig(TypedDict, total=False):
+    """Config for generating dataset with hidden states for training."""
+
     api_key: Annotated[str, PropertyInfo(alias="apiKey")]
 
     deployed_model: Annotated[str, PropertyInfo(alias="deployedModel")]
@@ -127,8 +128,6 @@ class HiddenStatesGenConfig(TypedDict, total=False):
     input_limit: Annotated[int, PropertyInfo(alias="inputLimit")]
 
     input_offset: Annotated[int, PropertyInfo(alias="inputOffset")]
-
-    max_context_len: Annotated[int, PropertyInfo(alias="maxContextLen")]
 
     max_tokens: Annotated[int, PropertyInfo(alias="maxTokens")]
 

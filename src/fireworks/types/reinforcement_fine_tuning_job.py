@@ -51,6 +51,12 @@ class ReinforcementFineTuningJob(BaseModel):
 
     name: Optional[str] = None
 
+    node_count: Optional[int] = FieldInfo(alias="nodeCount", default=None)
+    """
+    The number of nodes to use for the fine-tuning job. If not specified, the
+    default is 1.
+    """
+
     output_metrics: Optional[str] = FieldInfo(alias="outputMetrics", default=None)
 
     output_stats: Optional[str] = FieldInfo(alias="outputStats", default=None)

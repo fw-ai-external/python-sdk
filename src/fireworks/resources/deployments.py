@@ -201,7 +201,8 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -413,7 +414,8 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -923,7 +925,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -1135,7 +1138,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 

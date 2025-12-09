@@ -16,7 +16,7 @@ class AutoscalingPolicyParam(TypedDict, total=False):
     scale_down_window: Annotated[str, PropertyInfo(alias="scaleDownWindow")]
     """
     The duration the autoscaler will wait before scaling down a deployment after
-    observing decreased load. Default is 10m.
+    observing decreased load. Default is 10m. Must be less than or equal to 1 hour.
     """
 
     scale_to_zero_window: Annotated[str, PropertyInfo(alias="scaleToZeroWindow")]
@@ -29,5 +29,5 @@ class AutoscalingPolicyParam(TypedDict, total=False):
     scale_up_window: Annotated[str, PropertyInfo(alias="scaleUpWindow")]
     """
     The duration the autoscaler will wait before scaling up a deployment after
-    observing increased load. Default is 30s.
+    observing increased load. Default is 30s. Must be less than or equal to 1 hour.
     """

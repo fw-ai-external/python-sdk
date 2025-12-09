@@ -153,7 +153,10 @@ class DeploymentCreateParams(TypedDict, total=False):
     """If true, MTP is enabled for this deployment."""
 
     enable_session_affinity: Annotated[bool, PropertyInfo(alias="enableSessionAffinity")]
-    """Whether to apply sticky routing based on `user` field."""
+    """
+    Whether to apply sticky routing based on `user` field. Serverless will be set to
+    true when creating deployment.
+    """
 
     expire_time: Annotated[Union[str, datetime], PropertyInfo(alias="expireTime", format="iso8601")]
     """The time at which this deployment will automatically be deleted."""

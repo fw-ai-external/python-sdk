@@ -14,6 +14,8 @@ __all__ = ["SupervisedFineTuningJob", "EstimatedCost", "HiddenStatesGenConfig"]
 
 
 class EstimatedCost(BaseModel):
+    """The estimated cost of the job."""
+
     currency_code: Optional[str] = FieldInfo(alias="currencyCode", default=None)
     """The three-letter currency code defined in ISO 4217."""
 
@@ -34,6 +36,8 @@ class EstimatedCost(BaseModel):
 
 
 class HiddenStatesGenConfig(BaseModel):
+    """Config for generating dataset with hidden states for training."""
+
     api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
 
     deployed_model: Optional[str] = FieldInfo(alias="deployedModel", default=None)
@@ -41,8 +45,6 @@ class HiddenStatesGenConfig(BaseModel):
     input_limit: Optional[int] = FieldInfo(alias="inputLimit", default=None)
 
     input_offset: Optional[int] = FieldInfo(alias="inputOffset", default=None)
-
-    max_context_len: Optional[int] = FieldInfo(alias="maxContextLen", default=None)
 
     max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
 
@@ -149,7 +151,6 @@ class SupervisedFineTuningJob(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",

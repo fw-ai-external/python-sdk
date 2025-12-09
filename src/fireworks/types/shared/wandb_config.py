@@ -10,6 +10,11 @@ __all__ = ["WandbConfig"]
 
 
 class WandbConfig(BaseModel):
+    """
+    WandbConfig is the configuration for the Weights & Biases (wandb) logging which
+    will be used by a training job.
+    """
+
     api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
     """The API key for the wandb service."""
 

@@ -9,6 +9,8 @@ __all__ = ["ChatCompletionTool", "Function"]
 
 
 class Function(BaseModel):
+    """Required for function tools."""
+
     name: str
     """The name of the function to be called.
 
