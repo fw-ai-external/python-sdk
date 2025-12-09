@@ -12,7 +12,27 @@ from .placement import Placement
 from .shared.status import Status
 from .autoscaling_policy import AutoscalingPolicy
 
-__all__ = ["Deployment"]
+__all__ = ["Deployment", "ReplicaStats"]
+
+
+class ReplicaStats(BaseModel):
+    """Per-replica deployment status counters.
+
+    Provides visibility into the deployment process
+    by tracking replicas in different stages of the deployment lifecycle.
+    """
+
+    downloading_model_replica_count: Optional[int] = FieldInfo(alias="downloadingModelReplicaCount", default=None)
+    """Number of replicas downloading model weights."""
+
+    initializing_replica_count: Optional[int] = FieldInfo(alias="initializingReplicaCount", default=None)
+    """Number of replicas initializing the model server."""
+
+    pending_scheduling_replica_count: Optional[int] = FieldInfo(alias="pendingSchedulingReplicaCount", default=None)
+    """Number of replicas waiting to be scheduled to a node."""
+
+    ready_replica_count: Optional[int] = FieldInfo(alias="readyReplicaCount", default=None)
+    """Number of replicas that are ready and serving traffic."""
 
 
 class Deployment(BaseModel):
@@ -149,7 +169,10 @@ class Deployment(BaseModel):
     """If true, MTP is enabled for this deployment."""
 
     enable_session_affinity: Optional[bool] = FieldInfo(alias="enableSessionAffinity", default=None)
-    """Whether to apply sticky routing based on `user` field."""
+    """
+    Whether to apply sticky routing based on `user` field. Serverless will be set to
+    true when creating deployment.
+    """
 
     expire_time: Optional[datetime] = FieldInfo(alias="expireTime", default=None)
     """The time at which this deployment will automatically be deleted."""
@@ -224,7 +247,6 @@ class Deployment(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
@@ -237,6 +259,13 @@ class Deployment(BaseModel):
     """
 
     replica_count: Optional[int] = FieldInfo(alias="replicaCount", default=None)
+
+    replica_stats: Optional[ReplicaStats] = FieldInfo(alias="replicaStats", default=None)
+    """Per-replica deployment status counters.
+
+    Provides visibility into the deployment process by tracking replicas in
+    different stages of the deployment lifecycle.
+    """
 
     state: Optional[Literal["STATE_UNSPECIFIED", "CREATING", "READY", "DELETING", "FAILED", "UPDATING", "DELETED"]] = (
         None

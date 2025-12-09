@@ -64,7 +64,6 @@ class TrainingConfig(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",

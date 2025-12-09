@@ -46,8 +46,6 @@ class HiddenStatesGenConfig(BaseModel):
 
     input_offset: Optional[int] = FieldInfo(alias="inputOffset", default=None)
 
-    max_context_len: Optional[int] = FieldInfo(alias="maxContextLen", default=None)
-
     max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
 
     max_workers: Optional[int] = FieldInfo(alias="maxWorkers", default=None)
@@ -153,7 +151,6 @@ class SupervisedFineTuningJob(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",

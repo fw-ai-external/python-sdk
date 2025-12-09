@@ -64,6 +64,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
+        node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -92,6 +93,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           training_config: Common training configurations.
 
@@ -123,6 +127,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
+                    "node_count": node_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -436,6 +441,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
+        node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -464,6 +470,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           training_config: Common training configurations.
 
@@ -495,6 +504,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
+                    "node_count": node_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

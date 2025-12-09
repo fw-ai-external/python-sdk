@@ -51,6 +51,7 @@ class TestReinforcementFineTuningJobs:
                 "top_p": 0,
             },
             mcp_server="mcpServer",
+            node_count=0,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -445,6 +446,7 @@ class TestAsyncReinforcementFineTuningJobs:
                 "top_p": 0,
             },
             mcp_server="mcpServer",
+            node_count=0,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,

@@ -29,6 +29,8 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     evaluation_dataset: Annotated[str, PropertyInfo(alias="evaluationDataset")]
     """The name of a separate dataset to use for evaluation."""
 
+    keep_alive: Annotated[bool, PropertyInfo(alias="keepAlive")]
+
     reward_weights: Annotated[SequenceNotStr[str], PropertyInfo(alias="rewardWeights")]
     """
     A list of reward metrics to use for training in format of
