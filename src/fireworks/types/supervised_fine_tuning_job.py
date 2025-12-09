@@ -14,6 +14,8 @@ __all__ = ["SupervisedFineTuningJob", "EstimatedCost", "HiddenStatesGenConfig"]
 
 
 class EstimatedCost(BaseModel):
+    """The estimated cost of the job."""
+
     currency_code: Optional[str] = FieldInfo(alias="currencyCode", default=None)
     """The three-letter currency code defined in ISO 4217."""
 
@@ -34,6 +36,8 @@ class EstimatedCost(BaseModel):
 
 
 class HiddenStatesGenConfig(BaseModel):
+    """Config for generating dataset with hidden states for training."""
+
     api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
 
     deployed_model: Optional[str] = FieldInfo(alias="deployedModel", default=None)

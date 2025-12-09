@@ -514,6 +514,8 @@ class PredictionPredictedOutputContentUnionMember1(TypedDict, total=False):
 
 
 class PredictionPredictedOutput(TypedDict, total=False):
+    """OpenAI-compatible struct for the "speculation" field."""
+
     content: Required[Union[str, Iterable[PredictionPredictedOutputContentUnionMember1]]]
 
     type: Literal["content"]
@@ -523,6 +525,17 @@ Prediction: TypeAlias = Union[PredictionPredictedOutput, str]
 
 
 class ResponseFormat(TypedDict, total=False):
+    """Allows to force the model to produce specific output format.
+
+    Setting to `{ "type": "json_object" }` enables JSON mode, which guarantees the message the model generates is valid JSON.
+
+    If `"type"` is `"json_schema"`, a JSON schema must be provided. E.g., `response_format = {"type": "json_schema", "json_schema": <json_schema>}`.
+
+    Important: when using JSON mode, it's crucial to also instruct the model to produce JSON via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly "stuck" request.
+
+    Also note that the message content may be partially cut off if `finish_reason="length"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length. In this case the return value might not be a valid JSON.
+    """
+
     type: Required[Literal["json_object", "json_schema", "grammar", "text"]]
 
     grammar: Optional[str]

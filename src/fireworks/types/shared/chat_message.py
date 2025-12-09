@@ -23,6 +23,8 @@ class ContentUnionMember1(BaseModel):
 
 
 class ChatMessage(BaseModel):
+    """A chat completion message."""
+
     role: str
     """The role of the messages author. One of `system`, `user`, or `assistant`."""
 

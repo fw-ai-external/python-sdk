@@ -12,6 +12,8 @@ __all__ = ["DeploymentShapeVersionListResponse", "DeploymentShapeVersion", "Depl
 
 
 class DeploymentShapeVersionSnapshot(BaseModel):
+    """Full snapshot of the Deployment Shape at this version."""
+
     base_model: str = FieldInfo(alias="baseModel")
 
     accelerator_count: Optional[int] = FieldInfo(alias="acceleratorCount", default=None)

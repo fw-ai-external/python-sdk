@@ -26,6 +26,8 @@ __all__ = [
 
 
 class ChoiceDelta(BaseModel):
+    """The message delta"""
+
     content: Optional[str] = None
     """The contents of the chunk message"""
 
@@ -44,6 +46,8 @@ class ChoiceDelta(BaseModel):
 
 
 class ChoiceLogprobsLogProbs(BaseModel):
+    """Legacy log probabilities format"""
+
     text_offset: Optional[List[int]] = None
 
     token_ids: Optional[List[int]] = None
@@ -90,6 +94,8 @@ class ChoiceLogprobsNewLogProbsContent(BaseModel):
 
 
 class ChoiceLogprobsNewLogProbs(BaseModel):
+    """OpenAI-compatible log probabilities format"""
+
     content: Optional[List[ChoiceLogprobsNewLogProbsContent]] = None
 
 
@@ -131,10 +137,17 @@ class ChoiceRawOutputCompletionLogprobsContent(BaseModel):
 
 
 class ChoiceRawOutputCompletionLogprobs(BaseModel):
+    """OpenAI-compatible log probabilities format"""
+
     content: Optional[List[ChoiceRawOutputCompletionLogprobsContent]] = None
 
 
 class ChoiceRawOutput(BaseModel):
+    """
+    Extension of OpenAI that returns low-level interaction of what the model
+    sees, including the formatted prompt and function calls
+    """
+
     completion: str
     """Raw completion produced by the model before any tool calls are parsed"""
 
@@ -157,6 +170,8 @@ class ChoiceRawOutput(BaseModel):
 
 
 class Choice(BaseModel):
+    """A streamed chat completion choice."""
+
     delta: ChoiceDelta
     """The message delta"""
 
@@ -188,10 +203,14 @@ class Choice(BaseModel):
 
 
 class UsagePromptTokensDetails(BaseModel):
+    """Details about prompt tokens, including cached tokens"""
+
     cached_tokens: Optional[int] = None
 
 
 class Usage(BaseModel):
+    """Usage statistics."""
+
     prompt_tokens: int
     """The number of tokens in the prompt"""
 
@@ -206,6 +225,8 @@ class Usage(BaseModel):
 
 
 class ChatCompletionChunk(BaseModel):
+    """The streamed response message from a /v1/chat/completions call."""
+
     id: str
     """A unique identifier of the response"""
 

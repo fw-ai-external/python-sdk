@@ -25,6 +25,8 @@ class ContentUnionMember1(TypedDict, total=False):
 
 
 class ChatMessage(TypedDict, total=False):
+    """A chat completion message."""
+
     role: Required[str]
     """The role of the messages author. One of `system`, `user`, or `assistant`."""
 

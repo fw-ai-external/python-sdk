@@ -14,6 +14,8 @@ __all__ = ["BatchInferenceJob", "JobProgress"]
 
 
 class JobProgress(BaseModel):
+    """Job progress."""
+
     cached_input_token_count: Optional[int] = FieldInfo(alias="cachedInputTokenCount", default=None)
     """The number of input tokens that hit the prompt cache."""
 
