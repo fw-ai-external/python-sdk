@@ -20,6 +20,8 @@ __all__ = [
 
 
 class LogprobsLogProbs(BaseModel):
+    """Legacy log probabilities format"""
+
     text_offset: Optional[List[int]] = None
 
     token_ids: Optional[List[int]] = None
@@ -66,6 +68,8 @@ class LogprobsNewLogProbsContent(BaseModel):
 
 
 class LogprobsNewLogProbs(BaseModel):
+    """OpenAI-compatible log probabilities format"""
+
     content: Optional[List[LogprobsNewLogProbsContent]] = None
 
 
@@ -107,10 +111,17 @@ class RawOutputCompletionLogprobsContent(BaseModel):
 
 
 class RawOutputCompletionLogprobs(BaseModel):
+    """OpenAI-compatible log probabilities format"""
+
     content: Optional[List[RawOutputCompletionLogprobsContent]] = None
 
 
 class RawOutput(BaseModel):
+    """
+    Extension of OpenAI that returns low-level interaction of what the model
+    sees, including the formatted prompt and function calls
+    """
+
     completion: str
     """Raw completion produced by the model before any tool calls are parsed"""
 
@@ -133,6 +144,8 @@ class RawOutput(BaseModel):
 
 
 class Choice(BaseModel):
+    """A completion choice."""
+
     index: int
     """The index of the completion choice"""
 

@@ -10,6 +10,8 @@ __all__ = ["InferenceParameters"]
 
 
 class InferenceParameters(TypedDict, total=False):
+    """Parameters for the inference requests."""
+
     extra_body: Annotated[str, PropertyInfo(alias="extraBody")]
     """
     Additional parameters for the inference request as a JSON string. For example:

@@ -9,6 +9,8 @@ __all__ = ["ChatCompletionTool", "Function"]
 
 
 class Function(TypedDict, total=False):
+    """Required for function tools."""
+
     name: Required[str]
     """The name of the function to be called.
 

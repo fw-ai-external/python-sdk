@@ -120,6 +120,8 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
 
 
 class HiddenStatesGenConfig(TypedDict, total=False):
+    """Config for generating dataset with hidden states for training."""
+
     api_key: Annotated[str, PropertyInfo(alias="apiKey")]
 
     deployed_model: Annotated[str, PropertyInfo(alias="deployedModel")]
