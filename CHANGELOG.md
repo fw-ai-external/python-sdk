@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.7 (2025-12-10)
+
+Full Changelog: [v1.0.0-alpha.6...v1.0.0-alpha.7](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.6...v1.0.0-alpha.7)
+
+### Features
+
+* Remove methods from SDK ([2d73091](https://github.com/fw-ai-external/python-sdk/commit/2d730913dbc2c1f05547d891256d62f5d9067015))
+
 ## 1.0.0-alpha.6 (2025-12-10)
 
 Full Changelog: [v1.0.0-alpha.5...v1.0.0-alpha.6](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.5...v1.0.0-alpha.6)

@@ -1,4 +1,4 @@
-configured_endpoints: 85
+configured_endpoints: 79
 openapi_spec_url: https://storage.googleapis.com/stainless-sdk-openapi-specs/fireworks-ai%2Ffireworks-ai-b5d8d14e7fdce6467cd572f82fa36ad1e03c4f72399911b0f9fe9562b4b515ae.yml
 openapi_spec_hash: 623f422a37686f01de7de6a06230292e
-config_hash: 6fdb644a18e2f7562f39800f8a387f1c
+config_hash: 33e7a5c40701951d4a9642ef6bcc8868
