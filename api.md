@@ -256,28 +256,14 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import (
-    EvaluatorCreateResponse,
-    EvaluatorListResponse,
-    EvaluatorGetResponse,
-    EvaluatorGetBuildLogEndpointResponse,
-    EvaluatorGetSourceCodeEndpointResponse,
-    EvaluatorGetUploadEndpointResponse,
-    EvaluatorPreviewResponse,
-)
+from fireworks.types import EvaluatorListResponse, EvaluatorGetResponse
 ```
 
 Methods:
 
-- <code title="post /v1/accounts/{account_id}/evaluatorsV2">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_create_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_create_response.py">EvaluatorCreateResponse</a></code>
 - <code title="get /v1/accounts/{account_id}/evaluators">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_list_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_list_response.py">EvaluatorListResponse</a></code>
 - <code title="delete /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">delete</a>(evaluator_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_response.py">EvaluatorGetResponse</a></code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_build_log_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_build_log_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_build_log_endpoint_response.py">EvaluatorGetBuildLogEndpointResponse</a></code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_source_code_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_source_code_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_source_code_endpoint_response.py">EvaluatorGetSourceCodeEndpointResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_upload_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_upload_endpoint_response.py">EvaluatorGetUploadEndpointResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/evaluators:previewEvaluator">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">preview</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_preview_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_preview_response.py">EvaluatorPreviewResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">validate_upload</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_validate_upload_params.py">params</a>) -> object</code>
 
 # Accounts
 
