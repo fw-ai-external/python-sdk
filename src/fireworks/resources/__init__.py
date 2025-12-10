@@ -72,6 +72,14 @@ from .dpo_jobs import (
     DpoJobsResourceWithStreamingResponse,
     AsyncDpoJobsResourceWithStreamingResponse,
 )
+from .evaluators import (
+    EvaluatorsResource,
+    AsyncEvaluatorsResource,
+    EvaluatorsResourceWithRawResponse,
+    AsyncEvaluatorsResourceWithRawResponse,
+    EvaluatorsResourceWithStreamingResponse,
+    AsyncEvaluatorsResourceWithStreamingResponse,
+)
 from .completions import (
     CompletionsResource,
     AsyncCompletionsResource,
@@ -87,6 +95,14 @@ from .deployments import (
     AsyncDeploymentsResourceWithRawResponse,
     DeploymentsResourceWithStreamingResponse,
     AsyncDeploymentsResourceWithStreamingResponse,
+)
+from .evaluation_jobs import (
+    EvaluationJobsResource,
+    AsyncEvaluationJobsResource,
+    EvaluationJobsResourceWithRawResponse,
+    AsyncEvaluationJobsResourceWithRawResponse,
+    EvaluationJobsResourceWithStreamingResponse,
+    AsyncEvaluationJobsResourceWithStreamingResponse,
 )
 from .batch_inference_jobs import (
     BatchInferenceJobsResource,
@@ -202,6 +218,18 @@ __all__ = [
     "AsyncDpoJobsResourceWithRawResponse",
     "DpoJobsResourceWithStreamingResponse",
     "AsyncDpoJobsResourceWithStreamingResponse",
+    "EvaluationJobsResource",
+    "AsyncEvaluationJobsResource",
+    "EvaluationJobsResourceWithRawResponse",
+    "AsyncEvaluationJobsResourceWithRawResponse",
+    "EvaluationJobsResourceWithStreamingResponse",
+    "AsyncEvaluationJobsResourceWithStreamingResponse",
+    "EvaluatorsResource",
+    "AsyncEvaluatorsResource",
+    "EvaluatorsResourceWithRawResponse",
+    "AsyncEvaluatorsResourceWithRawResponse",
+    "EvaluatorsResourceWithStreamingResponse",
+    "AsyncEvaluatorsResourceWithStreamingResponse",
     "AccountsResource",
     "AsyncAccountsResource",
     "AccountsResourceWithRawResponse",

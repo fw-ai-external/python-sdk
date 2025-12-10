@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.6 (2025-12-10)
+
+Full Changelog: [v1.0.0-alpha.5...v1.0.0-alpha.6](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.5...v1.0.0-alpha.6)
+
+### Features
+
+* add evaluator job / evaluator CRUD APIs to API/SDK ([1f677b8](https://github.com/fw-ai-external/python-sdk/commit/1f677b87c8330c0c0e1d768319c15fbce5930f5d))
+
 ## 1.0.0-alpha.5 (2025-12-09)
 
 Full Changelog: [v1.0.0-alpha.4...v1.0.0-alpha.5](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.4...v1.0.0-alpha.5)
