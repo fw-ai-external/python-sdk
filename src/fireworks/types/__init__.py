@@ -68,6 +68,7 @@ from .dpo_job_list_params import DpoJobListParams as DpoJobListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_list_response import ModelListResponse as ModelListResponse
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
+from .evaluator_get_params import EvaluatorGetParams as EvaluatorGetParams
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
 from .secret_create_params import SecretCreateParams as SecretCreateParams
 from .secret_list_response import SecretListResponse as SecretListResponse
@@ -83,10 +84,14 @@ from .dataset_upload_params import DatasetUploadParams as DatasetUploadParams
 from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
 from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
 from .dpo_job_list_response import DpoJobListResponse as DpoJobListResponse
+from .evaluator_list_params import EvaluatorListParams as EvaluatorListParams
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
+from .evaluator_get_response import EvaluatorGetResponse as EvaluatorGetResponse
 from .dataset_upload_response import DatasetUploadResponse as DatasetUploadResponse
 from .deployment_scale_params import DeploymentScaleParams as DeploymentScaleParams
 from .evaluation_result_param import EvaluationResultParam as EvaluationResultParam
+from .evaluator_create_params import EvaluatorCreateParams as EvaluatorCreateParams
+from .evaluator_list_response import EvaluatorListResponse as EvaluatorListResponse
 from .autoscaling_policy_param import AutoscalingPolicyParam as AutoscalingPolicyParam
 from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsParam
 from .completion_create_params import CompletionCreateParams as CompletionCreateParams
@@ -94,16 +99,26 @@ from .deployment_create_params import DeploymentCreateParams as DeploymentCreate
 from .deployment_delete_params import DeploymentDeleteParams as DeploymentDeleteParams
 from .deployment_list_response import DeploymentListResponse as DeploymentListResponse
 from .deployment_update_params import DeploymentUpdateParams as DeploymentUpdateParams
+from .evaluator_preview_params import EvaluatorPreviewParams as EvaluatorPreviewParams
 from .conversation_config_param import ConversationConfigParam as ConversationConfigParam
+from .evaluation_job_get_params import EvaluationJobGetParams as EvaluationJobGetParams
+from .evaluator_create_response import EvaluatorCreateResponse as EvaluatorCreateResponse
 from .completion_create_response import CompletionCreateResponse as CompletionCreateResponse
 from .deployment_undelete_params import DeploymentUndeleteParams as DeploymentUndeleteParams
+from .evaluation_job_list_params import EvaluationJobListParams as EvaluationJobListParams
+from .evaluator_preview_response import EvaluatorPreviewResponse as EvaluatorPreviewResponse
 from .supervised_fine_tuning_job import SupervisedFineTuningJob as SupervisedFineTuningJob
+from .evaluation_job_get_response import EvaluationJobGetResponse as EvaluationJobGetResponse
+from .evaluation_job_create_params import EvaluationJobCreateParams as EvaluationJobCreateParams
+from .evaluation_job_list_response import EvaluationJobListResponse as EvaluationJobListResponse
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
 from .reinforcement_fine_tuning_job import ReinforcementFineTuningJob as ReinforcementFineTuningJob
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
 from .dataset_validate_upload_params import DatasetValidateUploadParams as DatasetValidateUploadParams
+from .evaluation_job_create_response import EvaluationJobCreateResponse as EvaluationJobCreateResponse
 from .reinforcement_fine_tuning_step import ReinforcementFineTuningStep as ReinforcementFineTuningStep
 from .batch_inference_job_list_params import BatchInferenceJobListParams as BatchInferenceJobListParams
+from .evaluator_validate_upload_params import EvaluatorValidateUploadParams as EvaluatorValidateUploadParams
 from .model_get_upload_endpoint_params import ModelGetUploadEndpointParams as ModelGetUploadEndpointParams
 from .batch_inference_job_create_params import BatchInferenceJobCreateParams as BatchInferenceJobCreateParams
 from .batch_inference_job_list_response import BatchInferenceJobListResponse as BatchInferenceJobListResponse
@@ -114,6 +129,7 @@ from .deployment_shape_version_get_params import DeploymentShapeVersionGetParams
 from .dataset_get_download_endpoint_params import DatasetGetDownloadEndpointParams as DatasetGetDownloadEndpointParams
 from .dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse as DatasetGetUploadEndpointResponse
 from .deployment_shape_version_list_params import DeploymentShapeVersionListParams as DeploymentShapeVersionListParams
+from .evaluator_get_upload_endpoint_params import EvaluatorGetUploadEndpointParams as EvaluatorGetUploadEndpointParams
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
 from .deployment_shape_version_get_response import (
     DeploymentShapeVersionGetResponse as DeploymentShapeVersionGetResponse,
@@ -125,8 +141,14 @@ from .dataset_get_download_endpoint_response import (
 from .deployment_shape_version_list_response import (
     DeploymentShapeVersionListResponse as DeploymentShapeVersionListResponse,
 )
+from .evaluator_get_upload_endpoint_response import (
+    EvaluatorGetUploadEndpointResponse as EvaluatorGetUploadEndpointResponse,
+)
 from .supervised_fine_tuning_job_list_params import (
     SupervisedFineTuningJobListParams as SupervisedFineTuningJobListParams,
+)
+from .evaluator_get_build_log_endpoint_params import (
+    EvaluatorGetBuildLogEndpointParams as EvaluatorGetBuildLogEndpointParams,
 )
 from .reinforcement_fine_tuning_job_get_params import (
     ReinforcementFineTuningJobGetParams as ReinforcementFineTuningJobGetParams,
@@ -140,6 +162,12 @@ from .supervised_fine_tuning_job_list_response import (
 from .supervised_fine_tuning_job_resume_params import (
     SupervisedFineTuningJobResumeParams as SupervisedFineTuningJobResumeParams,
 )
+from .evaluator_get_build_log_endpoint_response import (
+    EvaluatorGetBuildLogEndpointResponse as EvaluatorGetBuildLogEndpointResponse,
+)
+from .evaluator_get_source_code_endpoint_params import (
+    EvaluatorGetSourceCodeEndpointParams as EvaluatorGetSourceCodeEndpointParams,
+)
 from .reinforcement_fine_tuning_job_list_params import (
     ReinforcementFineTuningJobListParams as ReinforcementFineTuningJobListParams,
 )
@@ -151,6 +179,9 @@ from .dpo_job_get_metrics_file_endpoint_response import (
 )
 from .reinforcement_fine_tuning_step_list_params import (
     ReinforcementFineTuningStepListParams as ReinforcementFineTuningStepListParams,
+)
+from .evaluator_get_source_code_endpoint_response import (
+    EvaluatorGetSourceCodeEndpointResponse as EvaluatorGetSourceCodeEndpointResponse,
 )
 from .reinforcement_fine_tuning_job_cancel_params import (
     ReinforcementFineTuningJobCancelParams as ReinforcementFineTuningJobCancelParams,
