@@ -30,8 +30,10 @@ from .resources import (
     api_keys,
     datasets,
     dpo_jobs,
+    evaluators,
     completions,
     deployments,
+    evaluation_jobs,
     batch_inference_jobs,
     deployment_shape_versions,
     supervised_fine_tuning_jobs,
@@ -72,6 +74,8 @@ class Fireworks(SyncAPIClient):
     reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
     reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResource
     dpo_jobs: dpo_jobs.DpoJobsResource
+    evaluation_jobs: evaluation_jobs.EvaluationJobsResource
+    evaluators: evaluators.EvaluatorsResource
     accounts: accounts.AccountsResource
     users: users.UsersResource
     api_keys: api_keys.APIKeysResource
@@ -158,6 +162,8 @@ class Fireworks(SyncAPIClient):
             self
         )
         self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
+        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResource(self)
+        self.evaluators = evaluators.EvaluatorsResource(self)
         self.accounts = accounts.AccountsResource(self)
         self.users = users.UsersResource(self)
         self.api_keys = api_keys.APIKeysResource(self)
@@ -296,6 +302,8 @@ class AsyncFireworks(AsyncAPIClient):
     reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
     reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource
     dpo_jobs: dpo_jobs.AsyncDpoJobsResource
+    evaluation_jobs: evaluation_jobs.AsyncEvaluationJobsResource
+    evaluators: evaluators.AsyncEvaluatorsResource
     accounts: accounts.AsyncAccountsResource
     users: users.AsyncUsersResource
     api_keys: api_keys.AsyncAPIKeysResource
@@ -384,6 +392,8 @@ class AsyncFireworks(AsyncAPIClient):
             reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource(self)
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
+        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResource(self)
+        self.evaluators = evaluators.AsyncEvaluatorsResource(self)
         self.accounts = accounts.AsyncAccountsResource(self)
         self.users = users.AsyncUsersResource(self)
         self.api_keys = api_keys.AsyncAPIKeysResource(self)
@@ -537,6 +547,8 @@ class FireworksWithRawResponse:
             )
         )
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
+        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResourceWithRawResponse(client.evaluation_jobs)
+        self.evaluators = evaluators.EvaluatorsResourceWithRawResponse(client.evaluators)
         self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
         self.users = users.UsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithRawResponse(client.api_keys)
@@ -573,6 +585,8 @@ class AsyncFireworksWithRawResponse:
             )
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
+        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResourceWithRawResponse(client.evaluation_jobs)
+        self.evaluators = evaluators.AsyncEvaluatorsResourceWithRawResponse(client.evaluators)
         self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
         self.users = users.AsyncUsersResourceWithRawResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithRawResponse(client.api_keys)
@@ -609,6 +623,8 @@ class FireworksWithStreamedResponse:
             )
         )
         self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
+        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResourceWithStreamingResponse(client.evaluation_jobs)
+        self.evaluators = evaluators.EvaluatorsResourceWithStreamingResponse(client.evaluators)
         self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
         self.users = users.UsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.APIKeysResourceWithStreamingResponse(client.api_keys)
@@ -647,6 +663,8 @@ class AsyncFireworksWithStreamedResponse:
             )
         )
         self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)
+        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResourceWithStreamingResponse(client.evaluation_jobs)
+        self.evaluators = evaluators.AsyncEvaluatorsResourceWithStreamingResponse(client.evaluators)
         self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
         self.users = users.AsyncUsersResourceWithStreamingResponse(client.users)
         self.api_keys = api_keys.AsyncAPIKeysResourceWithStreamingResponse(client.api_keys)
