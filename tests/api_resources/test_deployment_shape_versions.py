@@ -13,6 +13,7 @@ from fireworks.types import (
     DeploymentShapeVersionGetResponse,
     DeploymentShapeVersionListResponse,
 )
+from fireworks.pagination import SyncCursorDeploymentShapeVersions, AsyncCursorDeploymentShapeVersions
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -27,7 +28,11 @@ class TestDeploymentShapeVersions:
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
         )
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -41,7 +46,11 @@ class TestDeploymentShapeVersions:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -54,7 +63,11 @@ class TestDeploymentShapeVersions:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment_shape_version = response.parse()
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -67,7 +80,11 @@ class TestDeploymentShapeVersions:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment_shape_version = response.parse()
-            assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+            assert_matches_type(
+                SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+                deployment_shape_version,
+                path=["response"],
+            )
 
         assert cast(Any, response.is_closed) is True
 
@@ -174,7 +191,11 @@ class TestAsyncDeploymentShapeVersions:
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
         )
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            AsyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -188,7 +209,11 @@ class TestAsyncDeploymentShapeVersions:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            AsyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -201,7 +226,11 @@ class TestAsyncDeploymentShapeVersions:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         deployment_shape_version = await response.parse()
-        assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+        assert_matches_type(
+            AsyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+            deployment_shape_version,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -214,7 +243,11 @@ class TestAsyncDeploymentShapeVersions:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             deployment_shape_version = await response.parse()
-            assert_matches_type(DeploymentShapeVersionListResponse, deployment_shape_version, path=["response"])
+            assert_matches_type(
+                AsyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse],
+                deployment_shape_version,
+                path=["response"],
+            )
 
         assert cast(Any, response.is_closed) is True
 
