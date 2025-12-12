@@ -19,11 +19,11 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorReinforcementFineTuningSteps, AsyncCursorReinforcementFineTuningSteps
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.reinforcement_fine_tuning_step import ReinforcementFineTuningStep
-from ..types.reinforcement_fine_tuning_step_list_response import ReinforcementFineTuningStepListResponse
 
 __all__ = ["ReinforcementFineTuningStepsResource", "AsyncReinforcementFineTuningStepsResource"]
 
@@ -144,7 +144,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningStepListResponse:
+    ) -> SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]:
         """
         List Reinforcement Fine-tuning Steps
 
@@ -179,10 +179,11 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            page=SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -199,7 +200,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningStepListResponse,
+            model=ReinforcementFineTuningStep,
         )
 
     def delete(
@@ -399,7 +400,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=ReinforcementFineTuningStep,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -414,7 +415,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningStepListResponse:
+    ) -> AsyncPaginator[
+        ReinforcementFineTuningStep, AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]
+    ]:
         """
         List Reinforcement Fine-tuning Steps
 
@@ -449,16 +452,17 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            page=AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -469,7 +473,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningStepListResponse,
+            model=ReinforcementFineTuningStep,
         )
 
     async def delete(

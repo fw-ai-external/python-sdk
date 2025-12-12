@@ -15,7 +15,7 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from ..pagination import SyncCursorDeployedModels, AsyncCursorDeployedModels
+from ..pagination import SyncCursorLora, AsyncCursorLora
 from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared.deployed_model import DeployedModel
 
@@ -126,7 +126,7 @@ class LoraResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SyncCursorDeployedModels[DeployedModel]:
+    ) -> SyncCursorLora[DeployedModel]:
         """
         List LoRAs
 
@@ -165,7 +165,7 @@ class LoraResource(SyncAPIResource):
             f"/v1/accounts/{account_id}/deployedModels"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
-            page=SyncCursorDeployedModels[DeployedModel],
+            page=SyncCursorLora[DeployedModel],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -453,7 +453,7 @@ class AsyncLoraResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> AsyncPaginator[DeployedModel, AsyncCursorDeployedModels[DeployedModel]]:
+    ) -> AsyncPaginator[DeployedModel, AsyncCursorLora[DeployedModel]]:
         """
         List LoRAs
 
@@ -492,7 +492,7 @@ class AsyncLoraResource(AsyncAPIResource):
             f"/v1/accounts/{account_id}/deployedModels"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
-            page=AsyncCursorDeployedModels[DeployedModel],
+            page=AsyncCursorLora[DeployedModel],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

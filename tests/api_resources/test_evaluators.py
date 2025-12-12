@@ -10,6 +10,7 @@ import pytest
 from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import EvaluatorGetResponse, EvaluatorListResponse
+from fireworks.pagination import SyncCursorEvaluators, AsyncCursorEvaluators
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -23,7 +24,7 @@ class TestEvaluators:
         evaluator = client.evaluators.list(
             account_id="account_id",
         )
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(SyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -36,7 +37,7 @@ class TestEvaluators:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(SyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -48,7 +49,7 @@ class TestEvaluators:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         evaluator = response.parse()
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(SyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -60,7 +61,7 @@ class TestEvaluators:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             evaluator = response.parse()
-            assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+            assert_matches_type(SyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -198,7 +199,7 @@ class TestAsyncEvaluators:
         evaluator = await async_client.evaluators.list(
             account_id="account_id",
         )
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(AsyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -211,7 +212,7 @@ class TestAsyncEvaluators:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(AsyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -223,7 +224,7 @@ class TestAsyncEvaluators:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         evaluator = await response.parse()
-        assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+        assert_matches_type(AsyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -235,7 +236,7 @@ class TestAsyncEvaluators:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             evaluator = await response.parse()
-            assert_matches_type(EvaluatorListResponse, evaluator, path=["response"])
+            assert_matches_type(AsyncCursorEvaluators[EvaluatorListResponse], evaluator, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

@@ -11,8 +11,8 @@ from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
     ReinforcementFineTuningStep,
-    ReinforcementFineTuningStepListResponse,
 )
+from fireworks.pagination import SyncCursorReinforcementFineTuningSteps, AsyncCursorReinforcementFineTuningSteps
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -104,7 +104,11 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
         )
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -117,7 +121,11 @@ class TestReinforcementFineTuningSteps:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -129,7 +137,11 @@ class TestReinforcementFineTuningSteps:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_step = response.parse()
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -142,7 +154,9 @@ class TestReinforcementFineTuningSteps:
 
             reinforcement_fine_tuning_step = response.parse()
             assert_matches_type(
-                ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"]
+                SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+                reinforcement_fine_tuning_step,
+                path=["response"],
             )
 
         assert cast(Any, response.is_closed) is True
@@ -359,7 +373,11 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
         )
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -372,7 +390,11 @@ class TestAsyncReinforcementFineTuningSteps:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -384,7 +406,11 @@ class TestAsyncReinforcementFineTuningSteps:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_step = await response.parse()
-        assert_matches_type(ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"])
+        assert_matches_type(
+            AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+            reinforcement_fine_tuning_step,
+            path=["response"],
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -397,7 +423,9 @@ class TestAsyncReinforcementFineTuningSteps:
 
             reinforcement_fine_tuning_step = await response.parse()
             assert_matches_type(
-                ReinforcementFineTuningStepListResponse, reinforcement_fine_tuning_step, path=["response"]
+                AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
+                reinforcement_fine_tuning_step,
+                path=["response"],
             )
 
         assert cast(Any, response.is_closed) is True
