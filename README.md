@@ -249,9 +249,7 @@ All list methods support pagination and follow the same pattern.
 
 ## Reasoning models
 
-See this [guide on reasoning](https://docs.fireworks.ai/guides/reasoning) for
-detailed information on how to use reasoning models with the Fireworks Python
-SDK.
+For detailed information on how to use reasoning models with the Fireworks Python SDK, see the [guide on reasoning](https://docs.fireworks.ai/guides/reasoning).
 
 ## Using types
 
