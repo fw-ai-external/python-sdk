@@ -15,9 +15,9 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorSecrets, AsyncCursorSecrets
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.secret import Secret
-from ..types.secret_list_response import SecretListResponse
 
 __all__ = ["SecretsResource", "AsyncSecretsResource"]
 
@@ -160,7 +160,7 @@ class SecretsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SecretListResponse:
+    ) -> SyncCursorSecrets[Secret]:
         """Lists all secrets for an account.
 
         Note that the `value` field is not returned in
@@ -187,10 +187,11 @@ class SecretsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/secrets"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            page=SyncCursorSecrets[Secret],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -207,7 +208,7 @@ class SecretsResource(SyncAPIResource):
                     secret_list_params.SecretListParams,
                 ),
             ),
-            cast_to=SecretListResponse,
+            model=Secret,
         )
 
     def delete(
@@ -423,7 +424,7 @@ class AsyncSecretsResource(AsyncAPIResource):
             cast_to=Secret,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -438,7 +439,7 @@ class AsyncSecretsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SecretListResponse:
+    ) -> AsyncPaginator[Secret, AsyncCursorSecrets[Secret]]:
         """Lists all secrets for an account.
 
         Note that the `value` field is not returned in
@@ -465,16 +466,17 @@ class AsyncSecretsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/secrets"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/secrets",
+            page=AsyncCursorSecrets[Secret],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -485,7 +487,7 @@ class AsyncSecretsResource(AsyncAPIResource):
                     secret_list_params.SecretListParams,
                 ),
             ),
-            cast_to=SecretListResponse,
+            model=Secret,
         )
 
     async def delete(

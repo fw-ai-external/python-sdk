@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -9,10 +9,10 @@ from pydantic import Field as FieldInfo
 from .._models import BaseModel
 from .shared.status import Status
 
-__all__ = ["EvaluationJobListResponse", "EvaluationJob"]
+__all__ = ["EvaluationJobListResponse"]
 
 
-class EvaluationJob(BaseModel):
+class EvaluationJobListResponse(BaseModel):
     evaluator: str
     """The fully-qualified resource name of the Evaluation used by this job.
 
@@ -76,11 +76,3 @@ class EvaluationJob(BaseModel):
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the evaluation job."""
-
-
-class EvaluationJobListResponse(BaseModel):
-    evaluation_jobs: Optional[List[EvaluationJob]] = FieldInfo(alias="evaluationJobs", default=None)
-
-    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
-
-    total_size: Optional[int] = FieldInfo(alias="totalSize", default=None)

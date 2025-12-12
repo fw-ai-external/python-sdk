@@ -15,9 +15,9 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
+from ..pagination import SyncCursorUsers, AsyncCursorUsers
 from ..types.user import User
-from .._base_client import make_request_options
-from ..types.user_list_response import UserListResponse
+from .._base_client import AsyncPaginator, make_request_options
 
 __all__ = ["UsersResource", "AsyncUsersResource"]
 
@@ -184,7 +184,7 @@ class UsersResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> UserListResponse:
+    ) -> SyncCursorUsers[User]:
         """
         List Users
 
@@ -219,10 +219,11 @@ class UsersResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/users"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            page=SyncCursorUsers[User],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -239,7 +240,7 @@ class UsersResource(SyncAPIResource):
                     user_list_params.UserListParams,
                 ),
             ),
-            cast_to=UserListResponse,
+            model=User,
         )
 
     def get(
@@ -439,7 +440,7 @@ class AsyncUsersResource(AsyncAPIResource):
             cast_to=User,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -454,7 +455,7 @@ class AsyncUsersResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> UserListResponse:
+    ) -> AsyncPaginator[User, AsyncCursorUsers[User]]:
         """
         List Users
 
@@ -489,16 +490,17 @@ class AsyncUsersResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/users"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            page=AsyncCursorUsers[User],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -509,7 +511,7 @@ class AsyncUsersResource(AsyncAPIResource):
                     user_list_params.UserListParams,
                 ),
             ),
-            cast_to=UserListResponse,
+            model=User,
         )
 
     async def get(

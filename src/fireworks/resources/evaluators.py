@@ -15,7 +15,8 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorEvaluators, AsyncCursorEvaluators
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.evaluator_get_response import EvaluatorGetResponse
 from ..types.evaluator_list_response import EvaluatorListResponse
 
@@ -57,7 +58,7 @@ class EvaluatorsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> EvaluatorListResponse:
+    ) -> SyncCursorEvaluators[EvaluatorListResponse]:
         """Args:
           read_mask: The fields to be returned in the response.
 
@@ -76,10 +77,11 @@ class EvaluatorsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/evaluators"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators",
+            page=SyncCursorEvaluators[EvaluatorListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -96,7 +98,7 @@ class EvaluatorsResource(SyncAPIResource):
                     evaluator_list_params.EvaluatorListParams,
                 ),
             ),
-            cast_to=EvaluatorListResponse,
+            model=EvaluatorListResponse,
         )
 
     def delete(
@@ -205,7 +207,7 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         """
         return AsyncEvaluatorsResourceWithStreamingResponse(self)
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -220,7 +222,7 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> EvaluatorListResponse:
+    ) -> AsyncPaginator[EvaluatorListResponse, AsyncCursorEvaluators[EvaluatorListResponse]]:
         """Args:
           read_mask: The fields to be returned in the response.
 
@@ -239,16 +241,17 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/evaluators"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators",
+            page=AsyncCursorEvaluators[EvaluatorListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -259,7 +262,7 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
                     evaluator_list_params.EvaluatorListParams,
                 ),
             ),
-            cast_to=EvaluatorListResponse,
+            model=EvaluatorListResponse,
         )
 
     async def delete(
