@@ -47,13 +47,13 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import BatchInferenceJob, BatchInferenceJobListResponse
+from fireworks.types import BatchInferenceJob
 ```
 
 Methods:
 
 - <code title="post /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job.py">BatchInferenceJob</a></code>
-- <code title="get /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job_list_response.py">BatchInferenceJobListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/batchInferenceJobs">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job.py">SyncCursorBatchInferenceJobs[BatchInferenceJob]</a></code>
 - <code title="delete /v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">delete</a>(batch_inference_job_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/batchInferenceJobs/{batch_inference_job_id}">client.batch_inference_jobs.<a href="./src/fireworks/resources/batch_inference_jobs.py">get</a>(batch_inference_job_id, \*, account_id, \*\*<a href="src/fireworks/types/batch_inference_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/batch_inference_job.py">BatchInferenceJob</a></code>
 
@@ -62,20 +62,14 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import (
-    AutoTune,
-    AutoscalingPolicy,
-    Deployment,
-    Placement,
-    DeploymentListResponse,
-)
+from fireworks.types import AutoTune, AutoscalingPolicy, Deployment, Placement
 ```
 
 Methods:
 
 - <code title="post /v1/accounts/{account_id}/deployments">client.deployments.<a href="./src/fireworks/resources/deployments.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/deployment_create_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">Deployment</a></code>
 - <code title="patch /v1/accounts/{account_id}/deployments/{deployment_id}">client.deployments.<a href="./src/fireworks/resources/deployments.py">update</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_update_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">Deployment</a></code>
-- <code title="get /v1/accounts/{account_id}/deployments">client.deployments.<a href="./src/fireworks/resources/deployments.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/deployment_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_list_response.py">DeploymentListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deployments">client.deployments.<a href="./src/fireworks/resources/deployments.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/deployment_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">SyncCursorDeployments[Deployment]</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployments/{deployment_id}">client.deployments.<a href="./src/fireworks/resources/deployments.py">delete</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_delete_params.py">params</a>) -> object</code>
 - <code title="get /v1/accounts/{account_id}/deployments/{deployment_id}">client.deployments.<a href="./src/fireworks/resources/deployments.py">get</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment.py">Deployment</a></code>
 - <code title="patch /v1/accounts/{account_id}/deployments/{deployment_id}:scale">client.deployments.<a href="./src/fireworks/resources/deployments.py">scale</a>(deployment_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_scale_params.py">params</a>) -> object</code>
@@ -92,7 +86,6 @@ from fireworks.types import (
     Model,
     PeftDetails,
     TypeDate,
-    ModelListResponse,
     ModelGetDownloadEndpointResponse,
     ModelGetUploadEndpointResponse,
 )
@@ -102,7 +95,7 @@ Methods:
 
 - <code title="post /v1/accounts/{account_id}/models">client.models.<a href="./src/fireworks/resources/models.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/model_create_params.py">params</a>) -> <a href="./src/fireworks/types/model.py">Model</a></code>
 - <code title="patch /v1/accounts/{account_id}/models/{model_id}">client.models.<a href="./src/fireworks/resources/models.py">update</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_update_params.py">params</a>) -> <a href="./src/fireworks/types/model.py">Model</a></code>
-- <code title="get /v1/accounts/{account_id}/models">client.models.<a href="./src/fireworks/resources/models.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/model_list_params.py">params</a>) -> <a href="./src/fireworks/types/model_list_response.py">ModelListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/models">client.models.<a href="./src/fireworks/resources/models.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/model_list_params.py">params</a>) -> <a href="./src/fireworks/types/model.py">SyncCursorModels[Model]</a></code>
 - <code title="delete /v1/accounts/{account_id}/models/{model_id}">client.models.<a href="./src/fireworks/resources/models.py">delete</a>(model_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/models/{model_id}">client.models.<a href="./src/fireworks/resources/models.py">get</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_get_params.py">params</a>) -> <a href="./src/fireworks/types/model.py">Model</a></code>
 - <code title="get /v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint">client.models.<a href="./src/fireworks/resources/models.py">get_download_endpoint</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_get_download_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/model_get_download_endpoint_response.py">ModelGetDownloadEndpointResponse</a></code>
@@ -112,16 +105,10 @@ Methods:
 
 # Lora
 
-Types:
-
-```python
-from fireworks.types import LoraListResponse
-```
-
 Methods:
 
 - <code title="patch /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">update</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_update_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
-- <code title="get /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/lora_list_params.py">params</a>) -> <a href="./src/fireworks/types/lora_list_response.py">LoraListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/lora_list_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">SyncCursorDeployedModels[DeployedModel]</a></code>
 - <code title="get /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">get</a>(deployed_model_id, \*, account_id, \*\*<a href="src/fireworks/types/lora_get_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(\*, account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
@@ -136,7 +123,7 @@ from fireworks.types import DeploymentShapeVersionListResponse, DeploymentShapeV
 
 Methods:
 
-- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">list</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_list_response.py">DeploymentShapeVersionListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">list</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_list_response.py">SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse]</a></code>
 - <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">get</a>(version_id, \*, account_id, deployment_shape_id, \*\*<a href="src/fireworks/types/deployment_shape_version_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_get_response.py">DeploymentShapeVersionGetResponse</a></code>
 
 # Datasets
@@ -149,7 +136,6 @@ from fireworks.types import (
     EvaluationResult,
     Splitted,
     Transformed,
-    DatasetListResponse,
     DatasetGetDownloadEndpointResponse,
     DatasetGetUploadEndpointResponse,
     DatasetUploadResponse,
@@ -160,7 +146,7 @@ Methods:
 
 - <code title="post /v1/accounts/{account_id}/datasets">client.datasets.<a href="./src/fireworks/resources/datasets.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/dataset_create_params.py">params</a>) -> <a href="./src/fireworks/types/dataset.py">Dataset</a></code>
 - <code title="patch /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks/resources/datasets.py">update</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_update_params.py">params</a>) -> <a href="./src/fireworks/types/dataset.py">Dataset</a></code>
-- <code title="get /v1/accounts/{account_id}/datasets">client.datasets.<a href="./src/fireworks/resources/datasets.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/dataset_list_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_list_response.py">DatasetListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/datasets">client.datasets.<a href="./src/fireworks/resources/datasets.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/dataset_list_params.py">params</a>) -> <a href="./src/fireworks/types/dataset.py">SyncCursorDatasets[Dataset]</a></code>
 - <code title="delete /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks/resources/datasets.py">delete</a>(dataset_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/datasets/{dataset_id}">client.datasets.<a href="./src/fireworks/resources/datasets.py">get</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_get_params.py">params</a>) -> <a href="./src/fireworks/types/dataset.py">Dataset</a></code>
 - <code title="get /v1/accounts/{account_id}/datasets/{dataset_id}:getDownloadEndpoint">client.datasets.<a href="./src/fireworks/resources/datasets.py">get_download_endpoint</a>(dataset_id, \*, account_id, \*\*<a href="src/fireworks/types/dataset_get_download_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/dataset_get_download_endpoint_response.py">DatasetGetDownloadEndpointResponse</a></code>
@@ -173,13 +159,13 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import SupervisedFineTuningJob, SupervisedFineTuningJobListResponse
+from fireworks.types import SupervisedFineTuningJob
 ```
 
 Methods:
 
 - <code title="post /v1/accounts/{account_id}/supervisedFineTuningJobs">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/supervised_fine_tuning_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/supervised_fine_tuning_job.py">SupervisedFineTuningJob</a></code>
-- <code title="get /v1/accounts/{account_id}/supervisedFineTuningJobs">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/supervised_fine_tuning_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/supervised_fine_tuning_job_list_response.py">SupervisedFineTuningJobListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/supervisedFineTuningJobs">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/supervised_fine_tuning_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/supervised_fine_tuning_job.py">SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob]</a></code>
 - <code title="delete /v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">delete</a>(supervised_fine_tuning_job_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">get</a>(supervised_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/supervised_fine_tuning_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/supervised_fine_tuning_job.py">SupervisedFineTuningJob</a></code>
 - <code title="post /v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:resume">client.supervised_fine_tuning_jobs.<a href="./src/fireworks/resources/supervised_fine_tuning_jobs.py">resume</a>(supervised_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/supervised_fine_tuning_job_resume_params.py">params</a>) -> <a href="./src/fireworks/types/supervised_fine_tuning_job.py">SupervisedFineTuningJob</a></code>
@@ -189,13 +175,13 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import ReinforcementFineTuningJob, ReinforcementFineTuningJobListResponse
+from fireworks.types import ReinforcementFineTuningJob
 ```
 
 Methods:
 
 - <code title="post /v1/accounts/{account_id}/reinforcementFineTuningJobs">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_create_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job.py">ReinforcementFineTuningJob</a></code>
-- <code title="get /v1/accounts/{account_id}/reinforcementFineTuningJobs">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job_list_response.py">ReinforcementFineTuningJobListResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/reinforcementFineTuningJobs">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job.py">SyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob]</a></code>
 - <code title="delete /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">delete</a>(reinforcement_fine_tuning_job_id, \*, account_id) -> object</code>
 - <code title="post /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">cancel</a>(reinforcement_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_cancel_params.py">params</a>) -> object</code>
 - <code title="get /v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}">client.reinforcement_fine_tuning_jobs.<a href="./src/fireworks/resources/reinforcement_fine_tuning_jobs.py">get</a>(reinforcement_fine_tuning_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_job.py">ReinforcementFineTuningJob</a></code>

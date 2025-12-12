@@ -28,12 +28,12 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorDatasets, AsyncCursorDatasets
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.dataset import Dataset
 from ..types.dataset_param import DatasetParam
 from ..types.splitted_param import SplittedParam
 from ..types.transformed_param import TransformedParam
-from ..types.dataset_list_response import DatasetListResponse
 from ..types.dataset_upload_response import DatasetUploadResponse
 from ..types.evaluation_result_param import EvaluationResultParam
 from ..types.dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse
@@ -195,7 +195,7 @@ class DatasetsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DatasetListResponse:
+    ) -> SyncCursorDatasets[Dataset]:
         """
         List Datasets
 
@@ -230,10 +230,11 @@ class DatasetsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/datasets"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
+            page=SyncCursorDatasets[Dataset],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -250,7 +251,7 @@ class DatasetsResource(SyncAPIResource):
                     dataset_list_params.DatasetListParams,
                 ),
             ),
-            cast_to=DatasetListResponse,
+            model=Dataset,
         )
 
     def delete(
@@ -686,7 +687,7 @@ class AsyncDatasetsResource(AsyncAPIResource):
             cast_to=Dataset,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -701,7 +702,7 @@ class AsyncDatasetsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DatasetListResponse:
+    ) -> AsyncPaginator[Dataset, AsyncCursorDatasets[Dataset]]:
         """
         List Datasets
 
@@ -736,16 +737,17 @@ class AsyncDatasetsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/datasets"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/datasets",
+            page=AsyncCursorDatasets[Dataset],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -756,7 +758,7 @@ class AsyncDatasetsResource(AsyncAPIResource):
                     dataset_list_params.DatasetListParams,
                 ),
             ),
-            cast_to=DatasetListResponse,
+            model=Dataset,
         )
 
     async def delete(

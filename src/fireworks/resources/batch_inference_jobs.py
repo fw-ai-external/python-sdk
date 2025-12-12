@@ -21,9 +21,9 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorBatchInferenceJobs, AsyncCursorBatchInferenceJobs
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.batch_inference_job import BatchInferenceJob
-from ..types.batch_inference_job_list_response import BatchInferenceJobListResponse
 from ..types.shared_params.inference_parameters import InferenceParameters
 
 __all__ = ["BatchInferenceJobsResource", "AsyncBatchInferenceJobsResource"]
@@ -164,7 +164,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> BatchInferenceJobListResponse:
+    ) -> SyncCursorBatchInferenceJobs[BatchInferenceJob]:
         """
         List Batch Inference Jobs
 
@@ -199,10 +199,11 @@ class BatchInferenceJobsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/batchInferenceJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
+            page=SyncCursorBatchInferenceJobs[BatchInferenceJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -219,7 +220,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
                     batch_inference_job_list_params.BatchInferenceJobListParams,
                 ),
             ),
-            cast_to=BatchInferenceJobListResponse,
+            model=BatchInferenceJob,
         )
 
     def delete(
@@ -437,7 +438,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
             cast_to=BatchInferenceJob,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -452,7 +453,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> BatchInferenceJobListResponse:
+    ) -> AsyncPaginator[BatchInferenceJob, AsyncCursorBatchInferenceJobs[BatchInferenceJob]]:
         """
         List Batch Inference Jobs
 
@@ -487,16 +488,17 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/batchInferenceJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/batchInferenceJobs",
+            page=AsyncCursorBatchInferenceJobs[BatchInferenceJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -507,7 +509,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                     batch_inference_job_list_params.BatchInferenceJobListParams,
                 ),
             ),
-            cast_to=BatchInferenceJobListResponse,
+            model=BatchInferenceJob,
         )
 
     async def delete(

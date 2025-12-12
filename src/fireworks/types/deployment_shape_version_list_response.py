@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -8,10 +8,10 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["DeploymentShapeVersionListResponse", "DeploymentShapeVersion", "DeploymentShapeVersionSnapshot"]
+__all__ = ["DeploymentShapeVersionListResponse", "Snapshot"]
 
 
-class DeploymentShapeVersionSnapshot(BaseModel):
+class Snapshot(BaseModel):
     """Full snapshot of the Deployment Shape at this version."""
 
     base_model: str = FieldInfo(alias="baseModel")
@@ -124,7 +124,7 @@ class DeploymentShapeVersionSnapshot(BaseModel):
     """The update time for the deployment shape."""
 
 
-class DeploymentShapeVersion(BaseModel):
+class DeploymentShapeVersionListResponse(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the deployment shape version.
 
@@ -142,23 +142,8 @@ class DeploymentShapeVersion(BaseModel):
     public: Optional[bool] = None
     """If true, this version will be publicly readable."""
 
-    snapshot: Optional[DeploymentShapeVersionSnapshot] = None
+    snapshot: Optional[Snapshot] = None
     """Full snapshot of the Deployment Shape at this version."""
 
     validated: Optional[bool] = None
     """If true, this version has been validated."""
-
-
-class DeploymentShapeVersionListResponse(BaseModel):
-    deployment_shape_versions: Optional[List[DeploymentShapeVersion]] = FieldInfo(
-        alias="deploymentShapeVersions", default=None
-    )
-
-    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
-    """
-    A token, which can be sent as `page_token` to retrieve the next page. If this
-    field is omitted, there are no subsequent pages.
-    """
-
-    total_size: Optional[int] = FieldInfo(alias="totalSize", default=None)
-    """The total number of deployment shape versions."""
