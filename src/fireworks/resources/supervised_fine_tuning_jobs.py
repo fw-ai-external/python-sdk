@@ -22,10 +22,10 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorSupervisedFineTuningJobs, AsyncCursorSupervisedFineTuningJobs
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.supervised_fine_tuning_job import SupervisedFineTuningJob
-from ..types.supervised_fine_tuning_job_list_response import SupervisedFineTuningJobListResponse
 
 __all__ = ["SupervisedFineTuningJobsResource", "AsyncSupervisedFineTuningJobsResource"]
 
@@ -227,7 +227,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SupervisedFineTuningJobListResponse:
+    ) -> SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob]:
         """
         List Supervised Fine-tuning Jobs
 
@@ -263,10 +263,11 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            page=SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -283,7 +284,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     supervised_fine_tuning_job_list_params.SupervisedFineTuningJobListParams,
                 ),
             ),
-            cast_to=SupervisedFineTuningJobListResponse,
+            model=SupervisedFineTuningJob,
         )
 
     def delete(
@@ -607,7 +608,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             cast_to=SupervisedFineTuningJob,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -622,7 +623,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> SupervisedFineTuningJobListResponse:
+    ) -> AsyncPaginator[SupervisedFineTuningJob, AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob]]:
         """
         List Supervised Fine-tuning Jobs
 
@@ -658,16 +659,17 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/supervisedFineTuningJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/supervisedFineTuningJobs",
+            page=AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -678,7 +680,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     supervised_fine_tuning_job_list_params.SupervisedFineTuningJobListParams,
                 ),
             ),
-            cast_to=SupervisedFineTuningJobListResponse,
+            model=SupervisedFineTuningJob,
         )
 
     async def delete(

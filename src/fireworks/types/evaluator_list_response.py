@@ -9,17 +9,10 @@ from pydantic import Field as FieldInfo
 from .._models import BaseModel
 from .shared.status import Status
 
-__all__ = [
-    "EvaluatorListResponse",
-    "Evaluator",
-    "EvaluatorCriterion",
-    "EvaluatorCriterionCodeSnippets",
-    "EvaluatorRollupSettings",
-    "EvaluatorSource",
-]
+__all__ = ["EvaluatorListResponse", "Criterion", "CriterionCodeSnippets", "RollupSettings", "Source"]
 
 
-class EvaluatorCriterionCodeSnippets(BaseModel):
+class CriterionCodeSnippets(BaseModel):
     entry_file: Optional[str] = FieldInfo(alias="entryFile", default=None)
 
     entry_func: Optional[str] = FieldInfo(alias="entryFunc", default=None)
@@ -29,8 +22,8 @@ class EvaluatorCriterionCodeSnippets(BaseModel):
     language: Optional[str] = None
 
 
-class EvaluatorCriterion(BaseModel):
-    code_snippets: Optional[EvaluatorCriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
+class Criterion(BaseModel):
+    code_snippets: Optional[CriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
 
     description: Optional[str] = None
 
@@ -39,7 +32,7 @@ class EvaluatorCriterion(BaseModel):
     type: Optional[Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]] = None
 
 
-class EvaluatorRollupSettings(BaseModel):
+class RollupSettings(BaseModel):
     """Strategy for metrics reports summary/rollup.
     e.g.
 
@@ -56,7 +49,7 @@ class EvaluatorRollupSettings(BaseModel):
     success_threshold: Optional[float] = FieldInfo(alias="successThreshold", default=None)
 
 
-class EvaluatorSource(BaseModel):
+class Source(BaseModel):
     """Source information for the evaluator codebase."""
 
     github_repository_name: Optional[str] = FieldInfo(alias="githubRepositoryName", default=None)
@@ -69,14 +62,14 @@ class EvaluatorSource(BaseModel):
     """Identifies how the evaluator source code is provided."""
 
 
-class Evaluator(BaseModel):
+class EvaluatorListResponse(BaseModel):
     commit_hash: Optional[str] = FieldInfo(alias="commitHash", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
 
-    criteria: Optional[List[EvaluatorCriterion]] = None
+    criteria: Optional[List[Criterion]] = None
 
     default_dataset: Optional[str] = FieldInfo(alias="defaultDataset", default=None)
 
@@ -96,7 +89,7 @@ class Evaluator(BaseModel):
 
     requirements: Optional[str] = None
 
-    rollup_settings: Optional[EvaluatorRollupSettings] = FieldInfo(alias="rollupSettings", default=None)
+    rollup_settings: Optional[RollupSettings] = FieldInfo(alias="rollupSettings", default=None)
     """Strategy for metrics reports summary/rollup. e.g.
 
     {metric1: 1, metric2: 0.3}, rollup_settings could be criteria_weights: {metric1:
@@ -105,7 +98,7 @@ class Evaluator(BaseModel):
     also report the rollup score and metrics altogether.
     """
 
-    source: Optional[EvaluatorSource] = None
+    source: Optional[Source] = None
     """Source information for the evaluator codebase."""
 
     state: Optional[Literal["STATE_UNSPECIFIED", "ACTIVE", "BUILDING", "BUILD_FAILED"]] = None
@@ -113,11 +106,3 @@ class Evaluator(BaseModel):
     status: Optional[Status] = None
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
-
-
-class EvaluatorListResponse(BaseModel):
-    evaluators: Optional[List[Evaluator]] = None
-
-    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
-
-    total_size: Optional[int] = FieldInfo(alias="totalSize", default=None)

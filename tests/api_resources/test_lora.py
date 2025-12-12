@@ -9,7 +9,7 @@ import pytest
 
 from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks.types import LoraListResponse
+from fireworks.pagination import SyncCursorLora, AsyncCursorLora
 from fireworks.types.shared import DeployedModel
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
@@ -92,7 +92,7 @@ class TestLora:
         lora = client.lora.list(
             account_id="account_id",
         )
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -105,7 +105,7 @@ class TestLora:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -117,7 +117,7 @@ class TestLora:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         lora = response.parse()
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -129,7 +129,7 @@ class TestLora:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             lora = response.parse()
-            assert_matches_type(LoraListResponse, lora, path=["response"])
+            assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -393,7 +393,7 @@ class TestAsyncLora:
         lora = await async_client.lora.list(
             account_id="account_id",
         )
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -406,7 +406,7 @@ class TestAsyncLora:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -418,7 +418,7 @@ class TestAsyncLora:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         lora = await response.parse()
-        assert_matches_type(LoraListResponse, lora, path=["response"])
+        assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -430,7 +430,7 @@ class TestAsyncLora:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             lora = await response.parse()
-            assert_matches_type(LoraListResponse, lora, path=["response"])
+            assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
