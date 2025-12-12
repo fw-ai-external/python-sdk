@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-alpha.8 (2025-12-12)
+
+Full Changelog: [v1.0.0-alpha.7...v1.0.0-alpha.8](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.7...v1.0.0-alpha.8)
+
+### Features
+
+* add pagination ([d2ab4bc](https://github.com/fw-ai-external/python-sdk/commit/d2ab4bc3171b3ac6ae70207df83793b9dc90c49e))
+* Automate SDK Pagination Config ([d098f72](https://github.com/fw-ai-external/python-sdk/commit/d098f72fc6f2099e627eb647a62770a76aadc7de))
+
 ## 1.0.0-alpha.7 (2025-12-10)
 
 Full Changelog: [v1.0.0-alpha.6...v1.0.0-alpha.7](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.6...v1.0.0-alpha.7)
