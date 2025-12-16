@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 from typing_extensions import Self, override
 
 import httpx
@@ -20,26 +20,8 @@ from ._types import (
     not_given,
 )
 from ._utils import is_given, get_async_library
+from ._compat import cached_property
 from ._version import __version__
-from .resources import (
-    lora,
-    users,
-    models,
-    secrets,
-    accounts,
-    api_keys,
-    datasets,
-    dpo_jobs,
-    evaluators,
-    completions,
-    deployments,
-    evaluation_jobs,
-    batch_inference_jobs,
-    deployment_shape_versions,
-    supervised_fine_tuning_jobs,
-    reinforcement_fine_tuning_jobs,
-    reinforcement_fine_tuning_steps,
-)
 from ._streaming import Stream as Stream, AsyncStream as AsyncStream
 from ._exceptions import APIStatusError, FireworksError
 from ._base_client import (
@@ -47,7 +29,58 @@ from ._base_client import (
     SyncAPIClient,
     AsyncAPIClient,
 )
-from .resources.chat import chat
+
+if TYPE_CHECKING:
+    from .resources import (
+        chat,
+        lora,
+        users,
+        models,
+        secrets,
+        accounts,
+        api_keys,
+        datasets,
+        dpo_jobs,
+        evaluators,
+        completions,
+        deployments,
+        evaluation_jobs,
+        batch_inference_jobs,
+        deployment_shape_versions,
+        supervised_fine_tuning_jobs,
+        reinforcement_fine_tuning_jobs,
+        reinforcement_fine_tuning_steps,
+    )
+    from .resources.lora import LoraResource, AsyncLoraResource
+    from .resources.users import UsersResource, AsyncUsersResource
+    from .resources.models import ModelsResource, AsyncModelsResource
+    from .resources.secrets import SecretsResource, AsyncSecretsResource
+    from .resources.accounts import AccountsResource, AsyncAccountsResource
+    from .resources.api_keys import APIKeysResource, AsyncAPIKeysResource
+    from .resources.datasets import DatasetsResource, AsyncDatasetsResource
+    from .resources.dpo_jobs import DpoJobsResource, AsyncDpoJobsResource
+    from .resources.chat.chat import ChatResource, AsyncChatResource
+    from .resources.evaluators import EvaluatorsResource, AsyncEvaluatorsResource
+    from .resources.completions import CompletionsResource, AsyncCompletionsResource
+    from .resources.deployments import DeploymentsResource, AsyncDeploymentsResource
+    from .resources.evaluation_jobs import EvaluationJobsResource, AsyncEvaluationJobsResource
+    from .resources.batch_inference_jobs import BatchInferenceJobsResource, AsyncBatchInferenceJobsResource
+    from .resources.deployment_shape_versions import (
+        DeploymentShapeVersionsResource,
+        AsyncDeploymentShapeVersionsResource,
+    )
+    from .resources.supervised_fine_tuning_jobs import (
+        SupervisedFineTuningJobsResource,
+        AsyncSupervisedFineTuningJobsResource,
+    )
+    from .resources.reinforcement_fine_tuning_jobs import (
+        ReinforcementFineTuningJobsResource,
+        AsyncReinforcementFineTuningJobsResource,
+    )
+    from .resources.reinforcement_fine_tuning_steps import (
+        ReinforcementFineTuningStepsResource,
+        AsyncReinforcementFineTuningStepsResource,
+    )
 
 __all__ = [
     "Timeout",
@@ -62,27 +95,6 @@ __all__ = [
 
 
 class Fireworks(SyncAPIClient):
-    chat: chat.ChatResource
-    completions: completions.CompletionsResource
-    batch_inference_jobs: batch_inference_jobs.BatchInferenceJobsResource
-    deployments: deployments.DeploymentsResource
-    models: models.ModelsResource
-    lora: lora.LoraResource
-    deployment_shape_versions: deployment_shape_versions.DeploymentShapeVersionsResource
-    datasets: datasets.DatasetsResource
-    supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource
-    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource
-    reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResource
-    dpo_jobs: dpo_jobs.DpoJobsResource
-    evaluation_jobs: evaluation_jobs.EvaluationJobsResource
-    evaluators: evaluators.EvaluatorsResource
-    accounts: accounts.AccountsResource
-    users: users.UsersResource
-    api_keys: api_keys.APIKeysResource
-    secrets: secrets.SecretsResource
-    with_raw_response: FireworksWithRawResponse
-    with_streaming_response: FireworksWithStreamedResponse
-
     # client options
     api_key: str
     account_id: str | None
@@ -148,28 +160,121 @@ class Fireworks(SyncAPIClient):
 
         self._default_stream_cls = Stream
 
-        self.chat = chat.ChatResource(self)
-        self.completions = completions.CompletionsResource(self)
-        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResource(self)
-        self.deployments = deployments.DeploymentsResource(self)
-        self.models = models.ModelsResource(self)
-        self.lora = lora.LoraResource(self)
-        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResource(self)
-        self.datasets = datasets.DatasetsResource(self)
-        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResource(self)
-        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResource(self)
-        self.reinforcement_fine_tuning_steps = reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResource(
-            self
-        )
-        self.dpo_jobs = dpo_jobs.DpoJobsResource(self)
-        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResource(self)
-        self.evaluators = evaluators.EvaluatorsResource(self)
-        self.accounts = accounts.AccountsResource(self)
-        self.users = users.UsersResource(self)
-        self.api_keys = api_keys.APIKeysResource(self)
-        self.secrets = secrets.SecretsResource(self)
-        self.with_raw_response = FireworksWithRawResponse(self)
-        self.with_streaming_response = FireworksWithStreamedResponse(self)
+    @cached_property
+    def chat(self) -> ChatResource:
+        from .resources.chat import ChatResource
+
+        return ChatResource(self)
+
+    @cached_property
+    def completions(self) -> CompletionsResource:
+        from .resources.completions import CompletionsResource
+
+        return CompletionsResource(self)
+
+    @cached_property
+    def batch_inference_jobs(self) -> BatchInferenceJobsResource:
+        from .resources.batch_inference_jobs import BatchInferenceJobsResource
+
+        return BatchInferenceJobsResource(self)
+
+    @cached_property
+    def deployments(self) -> DeploymentsResource:
+        from .resources.deployments import DeploymentsResource
+
+        return DeploymentsResource(self)
+
+    @cached_property
+    def models(self) -> ModelsResource:
+        from .resources.models import ModelsResource
+
+        return ModelsResource(self)
+
+    @cached_property
+    def lora(self) -> LoraResource:
+        from .resources.lora import LoraResource
+
+        return LoraResource(self)
+
+    @cached_property
+    def deployment_shape_versions(self) -> DeploymentShapeVersionsResource:
+        from .resources.deployment_shape_versions import DeploymentShapeVersionsResource
+
+        return DeploymentShapeVersionsResource(self)
+
+    @cached_property
+    def datasets(self) -> DatasetsResource:
+        from .resources.datasets import DatasetsResource
+
+        return DatasetsResource(self)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(self) -> SupervisedFineTuningJobsResource:
+        from .resources.supervised_fine_tuning_jobs import SupervisedFineTuningJobsResource
+
+        return SupervisedFineTuningJobsResource(self)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(self) -> ReinforcementFineTuningJobsResource:
+        from .resources.reinforcement_fine_tuning_jobs import ReinforcementFineTuningJobsResource
+
+        return ReinforcementFineTuningJobsResource(self)
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(self) -> ReinforcementFineTuningStepsResource:
+        from .resources.reinforcement_fine_tuning_steps import ReinforcementFineTuningStepsResource
+
+        return ReinforcementFineTuningStepsResource(self)
+
+    @cached_property
+    def dpo_jobs(self) -> DpoJobsResource:
+        from .resources.dpo_jobs import DpoJobsResource
+
+        return DpoJobsResource(self)
+
+    @cached_property
+    def evaluation_jobs(self) -> EvaluationJobsResource:
+        from .resources.evaluation_jobs import EvaluationJobsResource
+
+        return EvaluationJobsResource(self)
+
+    @cached_property
+    def evaluators(self) -> EvaluatorsResource:
+        from .resources.evaluators import EvaluatorsResource
+
+        return EvaluatorsResource(self)
+
+    @cached_property
+    def accounts(self) -> AccountsResource:
+        from .resources.accounts import AccountsResource
+
+        return AccountsResource(self)
+
+    @cached_property
+    def users(self) -> UsersResource:
+        from .resources.users import UsersResource
+
+        return UsersResource(self)
+
+    @cached_property
+    def api_keys(self) -> APIKeysResource:
+        from .resources.api_keys import APIKeysResource
+
+        return APIKeysResource(self)
+
+    @cached_property
+    def secrets(self) -> SecretsResource:
+        from .resources.secrets import SecretsResource
+
+        return SecretsResource(self)
+
+    @cached_property
+    def with_raw_response(self) -> FireworksWithRawResponse:
+        return FireworksWithRawResponse(self)
+
+    @cached_property
+    def with_streaming_response(self) -> FireworksWithStreamedResponse:
+        return FireworksWithStreamedResponse(self)
 
     @property
     @override
@@ -290,27 +395,6 @@ class Fireworks(SyncAPIClient):
 
 
 class AsyncFireworks(AsyncAPIClient):
-    chat: chat.AsyncChatResource
-    completions: completions.AsyncCompletionsResource
-    batch_inference_jobs: batch_inference_jobs.AsyncBatchInferenceJobsResource
-    deployments: deployments.AsyncDeploymentsResource
-    models: models.AsyncModelsResource
-    lora: lora.AsyncLoraResource
-    deployment_shape_versions: deployment_shape_versions.AsyncDeploymentShapeVersionsResource
-    datasets: datasets.AsyncDatasetsResource
-    supervised_fine_tuning_jobs: supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource
-    reinforcement_fine_tuning_jobs: reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource
-    reinforcement_fine_tuning_steps: reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource
-    dpo_jobs: dpo_jobs.AsyncDpoJobsResource
-    evaluation_jobs: evaluation_jobs.AsyncEvaluationJobsResource
-    evaluators: evaluators.AsyncEvaluatorsResource
-    accounts: accounts.AsyncAccountsResource
-    users: users.AsyncUsersResource
-    api_keys: api_keys.AsyncAPIKeysResource
-    secrets: secrets.AsyncSecretsResource
-    with_raw_response: AsyncFireworksWithRawResponse
-    with_streaming_response: AsyncFireworksWithStreamedResponse
-
     # client options
     api_key: str
     account_id: str | None
@@ -376,30 +460,121 @@ class AsyncFireworks(AsyncAPIClient):
 
         self._default_stream_cls = AsyncStream
 
-        self.chat = chat.AsyncChatResource(self)
-        self.completions = completions.AsyncCompletionsResource(self)
-        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResource(self)
-        self.deployments = deployments.AsyncDeploymentsResource(self)
-        self.models = models.AsyncModelsResource(self)
-        self.lora = lora.AsyncLoraResource(self)
-        self.deployment_shape_versions = deployment_shape_versions.AsyncDeploymentShapeVersionsResource(self)
-        self.datasets = datasets.AsyncDatasetsResource(self)
-        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResource(self)
-        self.reinforcement_fine_tuning_jobs = reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResource(
-            self
-        )
-        self.reinforcement_fine_tuning_steps = (
-            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResource(self)
-        )
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResource(self)
-        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResource(self)
-        self.evaluators = evaluators.AsyncEvaluatorsResource(self)
-        self.accounts = accounts.AsyncAccountsResource(self)
-        self.users = users.AsyncUsersResource(self)
-        self.api_keys = api_keys.AsyncAPIKeysResource(self)
-        self.secrets = secrets.AsyncSecretsResource(self)
-        self.with_raw_response = AsyncFireworksWithRawResponse(self)
-        self.with_streaming_response = AsyncFireworksWithStreamedResponse(self)
+    @cached_property
+    def chat(self) -> AsyncChatResource:
+        from .resources.chat import AsyncChatResource
+
+        return AsyncChatResource(self)
+
+    @cached_property
+    def completions(self) -> AsyncCompletionsResource:
+        from .resources.completions import AsyncCompletionsResource
+
+        return AsyncCompletionsResource(self)
+
+    @cached_property
+    def batch_inference_jobs(self) -> AsyncBatchInferenceJobsResource:
+        from .resources.batch_inference_jobs import AsyncBatchInferenceJobsResource
+
+        return AsyncBatchInferenceJobsResource(self)
+
+    @cached_property
+    def deployments(self) -> AsyncDeploymentsResource:
+        from .resources.deployments import AsyncDeploymentsResource
+
+        return AsyncDeploymentsResource(self)
+
+    @cached_property
+    def models(self) -> AsyncModelsResource:
+        from .resources.models import AsyncModelsResource
+
+        return AsyncModelsResource(self)
+
+    @cached_property
+    def lora(self) -> AsyncLoraResource:
+        from .resources.lora import AsyncLoraResource
+
+        return AsyncLoraResource(self)
+
+    @cached_property
+    def deployment_shape_versions(self) -> AsyncDeploymentShapeVersionsResource:
+        from .resources.deployment_shape_versions import AsyncDeploymentShapeVersionsResource
+
+        return AsyncDeploymentShapeVersionsResource(self)
+
+    @cached_property
+    def datasets(self) -> AsyncDatasetsResource:
+        from .resources.datasets import AsyncDatasetsResource
+
+        return AsyncDatasetsResource(self)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(self) -> AsyncSupervisedFineTuningJobsResource:
+        from .resources.supervised_fine_tuning_jobs import AsyncSupervisedFineTuningJobsResource
+
+        return AsyncSupervisedFineTuningJobsResource(self)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(self) -> AsyncReinforcementFineTuningJobsResource:
+        from .resources.reinforcement_fine_tuning_jobs import AsyncReinforcementFineTuningJobsResource
+
+        return AsyncReinforcementFineTuningJobsResource(self)
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(self) -> AsyncReinforcementFineTuningStepsResource:
+        from .resources.reinforcement_fine_tuning_steps import AsyncReinforcementFineTuningStepsResource
+
+        return AsyncReinforcementFineTuningStepsResource(self)
+
+    @cached_property
+    def dpo_jobs(self) -> AsyncDpoJobsResource:
+        from .resources.dpo_jobs import AsyncDpoJobsResource
+
+        return AsyncDpoJobsResource(self)
+
+    @cached_property
+    def evaluation_jobs(self) -> AsyncEvaluationJobsResource:
+        from .resources.evaluation_jobs import AsyncEvaluationJobsResource
+
+        return AsyncEvaluationJobsResource(self)
+
+    @cached_property
+    def evaluators(self) -> AsyncEvaluatorsResource:
+        from .resources.evaluators import AsyncEvaluatorsResource
+
+        return AsyncEvaluatorsResource(self)
+
+    @cached_property
+    def accounts(self) -> AsyncAccountsResource:
+        from .resources.accounts import AsyncAccountsResource
+
+        return AsyncAccountsResource(self)
+
+    @cached_property
+    def users(self) -> AsyncUsersResource:
+        from .resources.users import AsyncUsersResource
+
+        return AsyncUsersResource(self)
+
+    @cached_property
+    def api_keys(self) -> AsyncAPIKeysResource:
+        from .resources.api_keys import AsyncAPIKeysResource
+
+        return AsyncAPIKeysResource(self)
+
+    @cached_property
+    def secrets(self) -> AsyncSecretsResource:
+        from .resources.secrets import AsyncSecretsResource
+
+        return AsyncSecretsResource(self)
+
+    @cached_property
+    def with_raw_response(self) -> AsyncFireworksWithRawResponse:
+        return AsyncFireworksWithRawResponse(self)
+
+    @cached_property
+    def with_streaming_response(self) -> AsyncFireworksWithStreamedResponse:
+        return AsyncFireworksWithStreamedResponse(self)
 
     @property
     @override
@@ -520,155 +695,501 @@ class AsyncFireworks(AsyncAPIClient):
 
 
 class FireworksWithRawResponse:
+    _client: Fireworks
+
     def __init__(self, client: Fireworks) -> None:
-        self.chat = chat.ChatResourceWithRawResponse(client.chat)
-        self.completions = completions.CompletionsResourceWithRawResponse(client.completions)
-        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse(
-            client.batch_inference_jobs
-        )
-        self.deployments = deployments.DeploymentsResourceWithRawResponse(client.deployments)
-        self.models = models.ModelsResourceWithRawResponse(client.models)
-        self.lora = lora.LoraResourceWithRawResponse(client.lora)
-        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResourceWithRawResponse(
-            client.deployment_shape_versions
-        )
-        self.datasets = datasets.DatasetsResourceWithRawResponse(client.datasets)
-        self.supervised_fine_tuning_jobs = supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse(
-            client.supervised_fine_tuning_jobs
-        )
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithRawResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
-        self.reinforcement_fine_tuning_steps = (
-            reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithRawResponse(
-                client.reinforcement_fine_tuning_steps
-            )
-        )
-        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithRawResponse(client.dpo_jobs)
-        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResourceWithRawResponse(client.evaluation_jobs)
-        self.evaluators = evaluators.EvaluatorsResourceWithRawResponse(client.evaluators)
-        self.accounts = accounts.AccountsResourceWithRawResponse(client.accounts)
-        self.users = users.UsersResourceWithRawResponse(client.users)
-        self.api_keys = api_keys.APIKeysResourceWithRawResponse(client.api_keys)
-        self.secrets = secrets.SecretsResourceWithRawResponse(client.secrets)
+        self._client = client
+
+    @cached_property
+    def chat(self) -> chat.ChatResourceWithRawResponse:
+        from .resources.chat import ChatResourceWithRawResponse
+
+        return ChatResourceWithRawResponse(self._client.chat)
+
+    @cached_property
+    def completions(self) -> completions.CompletionsResourceWithRawResponse:
+        from .resources.completions import CompletionsResourceWithRawResponse
+
+        return CompletionsResourceWithRawResponse(self._client.completions)
+
+    @cached_property
+    def batch_inference_jobs(self) -> batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse:
+        from .resources.batch_inference_jobs import BatchInferenceJobsResourceWithRawResponse
+
+        return BatchInferenceJobsResourceWithRawResponse(self._client.batch_inference_jobs)
+
+    @cached_property
+    def deployments(self) -> deployments.DeploymentsResourceWithRawResponse:
+        from .resources.deployments import DeploymentsResourceWithRawResponse
+
+        return DeploymentsResourceWithRawResponse(self._client.deployments)
+
+    @cached_property
+    def models(self) -> models.ModelsResourceWithRawResponse:
+        from .resources.models import ModelsResourceWithRawResponse
+
+        return ModelsResourceWithRawResponse(self._client.models)
+
+    @cached_property
+    def lora(self) -> lora.LoraResourceWithRawResponse:
+        from .resources.lora import LoraResourceWithRawResponse
+
+        return LoraResourceWithRawResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shape_versions(self) -> deployment_shape_versions.DeploymentShapeVersionsResourceWithRawResponse:
+        from .resources.deployment_shape_versions import DeploymentShapeVersionsResourceWithRawResponse
+
+        return DeploymentShapeVersionsResourceWithRawResponse(self._client.deployment_shape_versions)
+
+    @cached_property
+    def datasets(self) -> datasets.DatasetsResourceWithRawResponse:
+        from .resources.datasets import DatasetsResourceWithRawResponse
+
+        return DatasetsResourceWithRawResponse(self._client.datasets)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(
+        self,
+    ) -> supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithRawResponse:
+        from .resources.supervised_fine_tuning_jobs import SupervisedFineTuningJobsResourceWithRawResponse
+
+        return SupervisedFineTuningJobsResourceWithRawResponse(self._client.supervised_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(
+        self,
+    ) -> reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithRawResponse:
+        from .resources.reinforcement_fine_tuning_jobs import ReinforcementFineTuningJobsResourceWithRawResponse
+
+        return ReinforcementFineTuningJobsResourceWithRawResponse(self._client.reinforcement_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(
+        self,
+    ) -> reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithRawResponse:
+        from .resources.reinforcement_fine_tuning_steps import ReinforcementFineTuningStepsResourceWithRawResponse
+
+        return ReinforcementFineTuningStepsResourceWithRawResponse(self._client.reinforcement_fine_tuning_steps)
+
+    @cached_property
+    def dpo_jobs(self) -> dpo_jobs.DpoJobsResourceWithRawResponse:
+        from .resources.dpo_jobs import DpoJobsResourceWithRawResponse
+
+        return DpoJobsResourceWithRawResponse(self._client.dpo_jobs)
+
+    @cached_property
+    def evaluation_jobs(self) -> evaluation_jobs.EvaluationJobsResourceWithRawResponse:
+        from .resources.evaluation_jobs import EvaluationJobsResourceWithRawResponse
+
+        return EvaluationJobsResourceWithRawResponse(self._client.evaluation_jobs)
+
+    @cached_property
+    def evaluators(self) -> evaluators.EvaluatorsResourceWithRawResponse:
+        from .resources.evaluators import EvaluatorsResourceWithRawResponse
+
+        return EvaluatorsResourceWithRawResponse(self._client.evaluators)
+
+    @cached_property
+    def accounts(self) -> accounts.AccountsResourceWithRawResponse:
+        from .resources.accounts import AccountsResourceWithRawResponse
+
+        return AccountsResourceWithRawResponse(self._client.accounts)
+
+    @cached_property
+    def users(self) -> users.UsersResourceWithRawResponse:
+        from .resources.users import UsersResourceWithRawResponse
+
+        return UsersResourceWithRawResponse(self._client.users)
+
+    @cached_property
+    def api_keys(self) -> api_keys.APIKeysResourceWithRawResponse:
+        from .resources.api_keys import APIKeysResourceWithRawResponse
+
+        return APIKeysResourceWithRawResponse(self._client.api_keys)
+
+    @cached_property
+    def secrets(self) -> secrets.SecretsResourceWithRawResponse:
+        from .resources.secrets import SecretsResourceWithRawResponse
+
+        return SecretsResourceWithRawResponse(self._client.secrets)
 
 
 class AsyncFireworksWithRawResponse:
+    _client: AsyncFireworks
+
     def __init__(self, client: AsyncFireworks) -> None:
-        self.chat = chat.AsyncChatResourceWithRawResponse(client.chat)
-        self.completions = completions.AsyncCompletionsResourceWithRawResponse(client.completions)
-        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse(
-            client.batch_inference_jobs
-        )
-        self.deployments = deployments.AsyncDeploymentsResourceWithRawResponse(client.deployments)
-        self.models = models.AsyncModelsResourceWithRawResponse(client.models)
-        self.lora = lora.AsyncLoraResourceWithRawResponse(client.lora)
-        self.deployment_shape_versions = deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithRawResponse(
-            client.deployment_shape_versions
-        )
-        self.datasets = datasets.AsyncDatasetsResourceWithRawResponse(client.datasets)
-        self.supervised_fine_tuning_jobs = (
-            supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithRawResponse(
-                client.supervised_fine_tuning_jobs
-            )
-        )
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
-        self.reinforcement_fine_tuning_steps = (
-            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithRawResponse(
-                client.reinforcement_fine_tuning_steps
-            )
-        )
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithRawResponse(client.dpo_jobs)
-        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResourceWithRawResponse(client.evaluation_jobs)
-        self.evaluators = evaluators.AsyncEvaluatorsResourceWithRawResponse(client.evaluators)
-        self.accounts = accounts.AsyncAccountsResourceWithRawResponse(client.accounts)
-        self.users = users.AsyncUsersResourceWithRawResponse(client.users)
-        self.api_keys = api_keys.AsyncAPIKeysResourceWithRawResponse(client.api_keys)
-        self.secrets = secrets.AsyncSecretsResourceWithRawResponse(client.secrets)
+        self._client = client
+
+    @cached_property
+    def chat(self) -> chat.AsyncChatResourceWithRawResponse:
+        from .resources.chat import AsyncChatResourceWithRawResponse
+
+        return AsyncChatResourceWithRawResponse(self._client.chat)
+
+    @cached_property
+    def completions(self) -> completions.AsyncCompletionsResourceWithRawResponse:
+        from .resources.completions import AsyncCompletionsResourceWithRawResponse
+
+        return AsyncCompletionsResourceWithRawResponse(self._client.completions)
+
+    @cached_property
+    def batch_inference_jobs(self) -> batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse:
+        from .resources.batch_inference_jobs import AsyncBatchInferenceJobsResourceWithRawResponse
+
+        return AsyncBatchInferenceJobsResourceWithRawResponse(self._client.batch_inference_jobs)
+
+    @cached_property
+    def deployments(self) -> deployments.AsyncDeploymentsResourceWithRawResponse:
+        from .resources.deployments import AsyncDeploymentsResourceWithRawResponse
+
+        return AsyncDeploymentsResourceWithRawResponse(self._client.deployments)
+
+    @cached_property
+    def models(self) -> models.AsyncModelsResourceWithRawResponse:
+        from .resources.models import AsyncModelsResourceWithRawResponse
+
+        return AsyncModelsResourceWithRawResponse(self._client.models)
+
+    @cached_property
+    def lora(self) -> lora.AsyncLoraResourceWithRawResponse:
+        from .resources.lora import AsyncLoraResourceWithRawResponse
+
+        return AsyncLoraResourceWithRawResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shape_versions(
+        self,
+    ) -> deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithRawResponse:
+        from .resources.deployment_shape_versions import AsyncDeploymentShapeVersionsResourceWithRawResponse
+
+        return AsyncDeploymentShapeVersionsResourceWithRawResponse(self._client.deployment_shape_versions)
+
+    @cached_property
+    def datasets(self) -> datasets.AsyncDatasetsResourceWithRawResponse:
+        from .resources.datasets import AsyncDatasetsResourceWithRawResponse
+
+        return AsyncDatasetsResourceWithRawResponse(self._client.datasets)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(
+        self,
+    ) -> supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithRawResponse:
+        from .resources.supervised_fine_tuning_jobs import AsyncSupervisedFineTuningJobsResourceWithRawResponse
+
+        return AsyncSupervisedFineTuningJobsResourceWithRawResponse(self._client.supervised_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(
+        self,
+    ) -> reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithRawResponse:
+        from .resources.reinforcement_fine_tuning_jobs import AsyncReinforcementFineTuningJobsResourceWithRawResponse
+
+        return AsyncReinforcementFineTuningJobsResourceWithRawResponse(self._client.reinforcement_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(
+        self,
+    ) -> reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithRawResponse:
+        from .resources.reinforcement_fine_tuning_steps import AsyncReinforcementFineTuningStepsResourceWithRawResponse
+
+        return AsyncReinforcementFineTuningStepsResourceWithRawResponse(self._client.reinforcement_fine_tuning_steps)
+
+    @cached_property
+    def dpo_jobs(self) -> dpo_jobs.AsyncDpoJobsResourceWithRawResponse:
+        from .resources.dpo_jobs import AsyncDpoJobsResourceWithRawResponse
+
+        return AsyncDpoJobsResourceWithRawResponse(self._client.dpo_jobs)
+
+    @cached_property
+    def evaluation_jobs(self) -> evaluation_jobs.AsyncEvaluationJobsResourceWithRawResponse:
+        from .resources.evaluation_jobs import AsyncEvaluationJobsResourceWithRawResponse
+
+        return AsyncEvaluationJobsResourceWithRawResponse(self._client.evaluation_jobs)
+
+    @cached_property
+    def evaluators(self) -> evaluators.AsyncEvaluatorsResourceWithRawResponse:
+        from .resources.evaluators import AsyncEvaluatorsResourceWithRawResponse
+
+        return AsyncEvaluatorsResourceWithRawResponse(self._client.evaluators)
+
+    @cached_property
+    def accounts(self) -> accounts.AsyncAccountsResourceWithRawResponse:
+        from .resources.accounts import AsyncAccountsResourceWithRawResponse
+
+        return AsyncAccountsResourceWithRawResponse(self._client.accounts)
+
+    @cached_property
+    def users(self) -> users.AsyncUsersResourceWithRawResponse:
+        from .resources.users import AsyncUsersResourceWithRawResponse
+
+        return AsyncUsersResourceWithRawResponse(self._client.users)
+
+    @cached_property
+    def api_keys(self) -> api_keys.AsyncAPIKeysResourceWithRawResponse:
+        from .resources.api_keys import AsyncAPIKeysResourceWithRawResponse
+
+        return AsyncAPIKeysResourceWithRawResponse(self._client.api_keys)
+
+    @cached_property
+    def secrets(self) -> secrets.AsyncSecretsResourceWithRawResponse:
+        from .resources.secrets import AsyncSecretsResourceWithRawResponse
+
+        return AsyncSecretsResourceWithRawResponse(self._client.secrets)
 
 
 class FireworksWithStreamedResponse:
+    _client: Fireworks
+
     def __init__(self, client: Fireworks) -> None:
-        self.chat = chat.ChatResourceWithStreamingResponse(client.chat)
-        self.completions = completions.CompletionsResourceWithStreamingResponse(client.completions)
-        self.batch_inference_jobs = batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse(
-            client.batch_inference_jobs
-        )
-        self.deployments = deployments.DeploymentsResourceWithStreamingResponse(client.deployments)
-        self.models = models.ModelsResourceWithStreamingResponse(client.models)
-        self.lora = lora.LoraResourceWithStreamingResponse(client.lora)
-        self.deployment_shape_versions = deployment_shape_versions.DeploymentShapeVersionsResourceWithStreamingResponse(
-            client.deployment_shape_versions
-        )
-        self.datasets = datasets.DatasetsResourceWithStreamingResponse(client.datasets)
-        self.supervised_fine_tuning_jobs = (
-            supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithStreamingResponse(
-                client.supervised_fine_tuning_jobs
-            )
-        )
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
-        )
-        self.reinforcement_fine_tuning_steps = (
-            reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_steps
-            )
-        )
-        self.dpo_jobs = dpo_jobs.DpoJobsResourceWithStreamingResponse(client.dpo_jobs)
-        self.evaluation_jobs = evaluation_jobs.EvaluationJobsResourceWithStreamingResponse(client.evaluation_jobs)
-        self.evaluators = evaluators.EvaluatorsResourceWithStreamingResponse(client.evaluators)
-        self.accounts = accounts.AccountsResourceWithStreamingResponse(client.accounts)
-        self.users = users.UsersResourceWithStreamingResponse(client.users)
-        self.api_keys = api_keys.APIKeysResourceWithStreamingResponse(client.api_keys)
-        self.secrets = secrets.SecretsResourceWithStreamingResponse(client.secrets)
+        self._client = client
+
+    @cached_property
+    def chat(self) -> chat.ChatResourceWithStreamingResponse:
+        from .resources.chat import ChatResourceWithStreamingResponse
+
+        return ChatResourceWithStreamingResponse(self._client.chat)
+
+    @cached_property
+    def completions(self) -> completions.CompletionsResourceWithStreamingResponse:
+        from .resources.completions import CompletionsResourceWithStreamingResponse
+
+        return CompletionsResourceWithStreamingResponse(self._client.completions)
+
+    @cached_property
+    def batch_inference_jobs(self) -> batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse:
+        from .resources.batch_inference_jobs import BatchInferenceJobsResourceWithStreamingResponse
+
+        return BatchInferenceJobsResourceWithStreamingResponse(self._client.batch_inference_jobs)
+
+    @cached_property
+    def deployments(self) -> deployments.DeploymentsResourceWithStreamingResponse:
+        from .resources.deployments import DeploymentsResourceWithStreamingResponse
+
+        return DeploymentsResourceWithStreamingResponse(self._client.deployments)
+
+    @cached_property
+    def models(self) -> models.ModelsResourceWithStreamingResponse:
+        from .resources.models import ModelsResourceWithStreamingResponse
+
+        return ModelsResourceWithStreamingResponse(self._client.models)
+
+    @cached_property
+    def lora(self) -> lora.LoraResourceWithStreamingResponse:
+        from .resources.lora import LoraResourceWithStreamingResponse
+
+        return LoraResourceWithStreamingResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shape_versions(
+        self,
+    ) -> deployment_shape_versions.DeploymentShapeVersionsResourceWithStreamingResponse:
+        from .resources.deployment_shape_versions import DeploymentShapeVersionsResourceWithStreamingResponse
+
+        return DeploymentShapeVersionsResourceWithStreamingResponse(self._client.deployment_shape_versions)
+
+    @cached_property
+    def datasets(self) -> datasets.DatasetsResourceWithStreamingResponse:
+        from .resources.datasets import DatasetsResourceWithStreamingResponse
+
+        return DatasetsResourceWithStreamingResponse(self._client.datasets)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(
+        self,
+    ) -> supervised_fine_tuning_jobs.SupervisedFineTuningJobsResourceWithStreamingResponse:
+        from .resources.supervised_fine_tuning_jobs import SupervisedFineTuningJobsResourceWithStreamingResponse
+
+        return SupervisedFineTuningJobsResourceWithStreamingResponse(self._client.supervised_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(
+        self,
+    ) -> reinforcement_fine_tuning_jobs.ReinforcementFineTuningJobsResourceWithStreamingResponse:
+        from .resources.reinforcement_fine_tuning_jobs import ReinforcementFineTuningJobsResourceWithStreamingResponse
+
+        return ReinforcementFineTuningJobsResourceWithStreamingResponse(self._client.reinforcement_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(
+        self,
+    ) -> reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithStreamingResponse:
+        from .resources.reinforcement_fine_tuning_steps import ReinforcementFineTuningStepsResourceWithStreamingResponse
+
+        return ReinforcementFineTuningStepsResourceWithStreamingResponse(self._client.reinforcement_fine_tuning_steps)
+
+    @cached_property
+    def dpo_jobs(self) -> dpo_jobs.DpoJobsResourceWithStreamingResponse:
+        from .resources.dpo_jobs import DpoJobsResourceWithStreamingResponse
+
+        return DpoJobsResourceWithStreamingResponse(self._client.dpo_jobs)
+
+    @cached_property
+    def evaluation_jobs(self) -> evaluation_jobs.EvaluationJobsResourceWithStreamingResponse:
+        from .resources.evaluation_jobs import EvaluationJobsResourceWithStreamingResponse
+
+        return EvaluationJobsResourceWithStreamingResponse(self._client.evaluation_jobs)
+
+    @cached_property
+    def evaluators(self) -> evaluators.EvaluatorsResourceWithStreamingResponse:
+        from .resources.evaluators import EvaluatorsResourceWithStreamingResponse
+
+        return EvaluatorsResourceWithStreamingResponse(self._client.evaluators)
+
+    @cached_property
+    def accounts(self) -> accounts.AccountsResourceWithStreamingResponse:
+        from .resources.accounts import AccountsResourceWithStreamingResponse
+
+        return AccountsResourceWithStreamingResponse(self._client.accounts)
+
+    @cached_property
+    def users(self) -> users.UsersResourceWithStreamingResponse:
+        from .resources.users import UsersResourceWithStreamingResponse
+
+        return UsersResourceWithStreamingResponse(self._client.users)
+
+    @cached_property
+    def api_keys(self) -> api_keys.APIKeysResourceWithStreamingResponse:
+        from .resources.api_keys import APIKeysResourceWithStreamingResponse
+
+        return APIKeysResourceWithStreamingResponse(self._client.api_keys)
+
+    @cached_property
+    def secrets(self) -> secrets.SecretsResourceWithStreamingResponse:
+        from .resources.secrets import SecretsResourceWithStreamingResponse
+
+        return SecretsResourceWithStreamingResponse(self._client.secrets)
 
 
 class AsyncFireworksWithStreamedResponse:
+    _client: AsyncFireworks
+
     def __init__(self, client: AsyncFireworks) -> None:
-        self.chat = chat.AsyncChatResourceWithStreamingResponse(client.chat)
-        self.completions = completions.AsyncCompletionsResourceWithStreamingResponse(client.completions)
-        self.batch_inference_jobs = batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse(
-            client.batch_inference_jobs
+        self._client = client
+
+    @cached_property
+    def chat(self) -> chat.AsyncChatResourceWithStreamingResponse:
+        from .resources.chat import AsyncChatResourceWithStreamingResponse
+
+        return AsyncChatResourceWithStreamingResponse(self._client.chat)
+
+    @cached_property
+    def completions(self) -> completions.AsyncCompletionsResourceWithStreamingResponse:
+        from .resources.completions import AsyncCompletionsResourceWithStreamingResponse
+
+        return AsyncCompletionsResourceWithStreamingResponse(self._client.completions)
+
+    @cached_property
+    def batch_inference_jobs(self) -> batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse:
+        from .resources.batch_inference_jobs import AsyncBatchInferenceJobsResourceWithStreamingResponse
+
+        return AsyncBatchInferenceJobsResourceWithStreamingResponse(self._client.batch_inference_jobs)
+
+    @cached_property
+    def deployments(self) -> deployments.AsyncDeploymentsResourceWithStreamingResponse:
+        from .resources.deployments import AsyncDeploymentsResourceWithStreamingResponse
+
+        return AsyncDeploymentsResourceWithStreamingResponse(self._client.deployments)
+
+    @cached_property
+    def models(self) -> models.AsyncModelsResourceWithStreamingResponse:
+        from .resources.models import AsyncModelsResourceWithStreamingResponse
+
+        return AsyncModelsResourceWithStreamingResponse(self._client.models)
+
+    @cached_property
+    def lora(self) -> lora.AsyncLoraResourceWithStreamingResponse:
+        from .resources.lora import AsyncLoraResourceWithStreamingResponse
+
+        return AsyncLoraResourceWithStreamingResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shape_versions(
+        self,
+    ) -> deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithStreamingResponse:
+        from .resources.deployment_shape_versions import AsyncDeploymentShapeVersionsResourceWithStreamingResponse
+
+        return AsyncDeploymentShapeVersionsResourceWithStreamingResponse(self._client.deployment_shape_versions)
+
+    @cached_property
+    def datasets(self) -> datasets.AsyncDatasetsResourceWithStreamingResponse:
+        from .resources.datasets import AsyncDatasetsResourceWithStreamingResponse
+
+        return AsyncDatasetsResourceWithStreamingResponse(self._client.datasets)
+
+    @cached_property
+    def supervised_fine_tuning_jobs(
+        self,
+    ) -> supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithStreamingResponse:
+        from .resources.supervised_fine_tuning_jobs import AsyncSupervisedFineTuningJobsResourceWithStreamingResponse
+
+        return AsyncSupervisedFineTuningJobsResourceWithStreamingResponse(self._client.supervised_fine_tuning_jobs)
+
+    @cached_property
+    def reinforcement_fine_tuning_jobs(
+        self,
+    ) -> reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse:
+        from .resources.reinforcement_fine_tuning_jobs import (
+            AsyncReinforcementFineTuningJobsResourceWithStreamingResponse,
         )
-        self.deployments = deployments.AsyncDeploymentsResourceWithStreamingResponse(client.deployments)
-        self.models = models.AsyncModelsResourceWithStreamingResponse(client.models)
-        self.lora = lora.AsyncLoraResourceWithStreamingResponse(client.lora)
-        self.deployment_shape_versions = (
-            deployment_shape_versions.AsyncDeploymentShapeVersionsResourceWithStreamingResponse(
-                client.deployment_shape_versions
-            )
+
+        return AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
+            self._client.reinforcement_fine_tuning_jobs
         )
-        self.datasets = datasets.AsyncDatasetsResourceWithStreamingResponse(client.datasets)
-        self.supervised_fine_tuning_jobs = (
-            supervised_fine_tuning_jobs.AsyncSupervisedFineTuningJobsResourceWithStreamingResponse(
-                client.supervised_fine_tuning_jobs
-            )
+
+    @cached_property
+    def reinforcement_fine_tuning_steps(
+        self,
+    ) -> reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
+        from .resources.reinforcement_fine_tuning_steps import (
+            AsyncReinforcementFineTuningStepsResourceWithStreamingResponse,
         )
-        self.reinforcement_fine_tuning_jobs = (
-            reinforcement_fine_tuning_jobs.AsyncReinforcementFineTuningJobsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_jobs
-            )
+
+        return AsyncReinforcementFineTuningStepsResourceWithStreamingResponse(
+            self._client.reinforcement_fine_tuning_steps
         )
-        self.reinforcement_fine_tuning_steps = (
-            reinforcement_fine_tuning_steps.AsyncReinforcementFineTuningStepsResourceWithStreamingResponse(
-                client.reinforcement_fine_tuning_steps
-            )
-        )
-        self.dpo_jobs = dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse(client.dpo_jobs)
-        self.evaluation_jobs = evaluation_jobs.AsyncEvaluationJobsResourceWithStreamingResponse(client.evaluation_jobs)
-        self.evaluators = evaluators.AsyncEvaluatorsResourceWithStreamingResponse(client.evaluators)
-        self.accounts = accounts.AsyncAccountsResourceWithStreamingResponse(client.accounts)
-        self.users = users.AsyncUsersResourceWithStreamingResponse(client.users)
-        self.api_keys = api_keys.AsyncAPIKeysResourceWithStreamingResponse(client.api_keys)
-        self.secrets = secrets.AsyncSecretsResourceWithStreamingResponse(client.secrets)
+
+    @cached_property
+    def dpo_jobs(self) -> dpo_jobs.AsyncDpoJobsResourceWithStreamingResponse:
+        from .resources.dpo_jobs import AsyncDpoJobsResourceWithStreamingResponse
+
+        return AsyncDpoJobsResourceWithStreamingResponse(self._client.dpo_jobs)
+
+    @cached_property
+    def evaluation_jobs(self) -> evaluation_jobs.AsyncEvaluationJobsResourceWithStreamingResponse:
+        from .resources.evaluation_jobs import AsyncEvaluationJobsResourceWithStreamingResponse
+
+        return AsyncEvaluationJobsResourceWithStreamingResponse(self._client.evaluation_jobs)
+
+    @cached_property
+    def evaluators(self) -> evaluators.AsyncEvaluatorsResourceWithStreamingResponse:
+        from .resources.evaluators import AsyncEvaluatorsResourceWithStreamingResponse
+
+        return AsyncEvaluatorsResourceWithStreamingResponse(self._client.evaluators)
+
+    @cached_property
+    def accounts(self) -> accounts.AsyncAccountsResourceWithStreamingResponse:
+        from .resources.accounts import AsyncAccountsResourceWithStreamingResponse
+
+        return AsyncAccountsResourceWithStreamingResponse(self._client.accounts)
+
+    @cached_property
+    def users(self) -> users.AsyncUsersResourceWithStreamingResponse:
+        from .resources.users import AsyncUsersResourceWithStreamingResponse
+
+        return AsyncUsersResourceWithStreamingResponse(self._client.users)
+
+    @cached_property
+    def api_keys(self) -> api_keys.AsyncAPIKeysResourceWithStreamingResponse:
+        from .resources.api_keys import AsyncAPIKeysResourceWithStreamingResponse
+
+        return AsyncAPIKeysResourceWithStreamingResponse(self._client.api_keys)
+
+    @cached_property
+    def secrets(self) -> secrets.AsyncSecretsResourceWithStreamingResponse:
+        from .resources.secrets import AsyncSecretsResourceWithStreamingResponse
+
+        return AsyncSecretsResourceWithStreamingResponse(self._client.secrets)
 
 
 Client = Fireworks
