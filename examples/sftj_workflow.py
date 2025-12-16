@@ -3,7 +3,7 @@ import json
 import time
 
 import httpx
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore[import-not-found]
 
 from fireworks import Fireworks, ConflictError
 from fireworks.types import Dataset
@@ -26,16 +26,14 @@ SFTJ_BATCH_SIZE = 16384
 SFTJ_MAX_CONTEXT_LENGTH = 16384
 
 
-def create_and_upload_dataset(
-    client: Fireworks, dataset_id: str, file_name: str, example_count: int
-) -> Dataset:
+def create_and_upload_dataset(client: Fireworks, dataset_id: str, file_name: str, example_count: int) -> Dataset:
     """Create a dataset, upload a file, and validate the upload to Fireworks."""
     # Create the dataset (skip if it already exists)
     try:
         dataset = client.datasets.create(
             dataset_id=dataset_id,
             dataset={
-                "exampleCount": example_count,
+                "example_count": str(example_count),
             },
         )
     except ConflictError:
@@ -44,20 +42,28 @@ def create_and_upload_dataset(
         return dataset
 
     # Upload the file
+    file_size = os.path.getsize(file_name)
     upload_endpoint = client.datasets.get_upload_endpoint(
         dataset_id=dataset_id,
         filename_to_size={
-            file_name: os.path.getsize(file_name),
+            file_name: str(file_size),
         },
     )
 
+    if upload_endpoint.filename_to_signed_urls is None:
+        raise ValueError("Failed to get upload endpoint URLs")
+
+    signed_url = upload_endpoint.filename_to_signed_urls.get(file_name)
+    if signed_url is None:
+        raise ValueError(f"Failed to get signed URL for file: {file_name}")
+
     with open(file_name, "rb") as f:
         response = httpx.put(
-            upload_endpoint.filename_to_signed_urls[file_name],
+            signed_url,
             content=f.read(),
             headers={
                 "Content-Type": "application/octet-stream",
-                "x-goog-content-length-range": f"{os.path.getsize(file_name)},{os.path.getsize(file_name)}",
+                "x-goog-content-length-range": f"{file_size},{file_size}",
             },
         )
         response.raise_for_status()
@@ -69,7 +75,7 @@ def create_and_upload_dataset(
 
 
 # 0) write jsonl to a file
-train_dataset = [
+train_data = [
     {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -78,7 +84,7 @@ train_dataset = [
         ]
     }
 ]
-evaluation_dataset = [
+evaluation_data = [
     {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -88,10 +94,10 @@ evaluation_dataset = [
     }
 ]
 with open(TRAIN_FILE_NAME, "w") as f:
-    for item in train_dataset:
+    for item in train_data:
         f.write(json.dumps(item) + "\n")
 with open(EVALUATION_FILE_NAME, "w") as f:
-    for item in evaluation_dataset:
+    for item in evaluation_data:
         f.write(json.dumps(item) + "\n")
 
 # Remember to set the environment variables:
@@ -100,14 +106,17 @@ with open(EVALUATION_FILE_NAME, "w") as f:
 client = Fireworks()
 
 # 1) Upload dataset
-train_dataset = create_and_upload_dataset(
-    client, TRAIN_DATASET_ID, TRAIN_FILE_NAME, len(train_dataset)
-)
+train_dataset = create_and_upload_dataset(client, TRAIN_DATASET_ID, TRAIN_FILE_NAME, len(train_data))
 evaluation_dataset = create_and_upload_dataset(
-    client, EVALUATION_DATASET_ID, EVALUATION_FILE_NAME, len(evaluation_dataset)
+    client, EVALUATION_DATASET_ID, EVALUATION_FILE_NAME, len(evaluation_data)
 )
 
 # 2) Create SFTJ
+if train_dataset.name is None:
+    raise ValueError("Train dataset name is None")
+if evaluation_dataset.name is None:
+    raise ValueError("Evaluation dataset name is None")
+
 sftj = client.supervised_fine_tuning_jobs.create(
     dataset=train_dataset.name,
     evaluation_dataset=evaluation_dataset.name,
@@ -122,13 +131,16 @@ sftj = client.supervised_fine_tuning_jobs.create(
     max_context_length=SFTJ_MAX_CONTEXT_LENGTH,
 )
 
+if sftj.name is None:
+    raise ValueError("SFTJ name is None")
+
 print("Go to the following URL to monitor the SFTJ:")
-print(
-    f"https://app.fireworks.ai/dashboard/fine-tuning/supervised/{sftj.name.split('/')[-1]}"
-)
+print(f"https://app.fireworks.ai/dashboard/fine-tuning/supervised/{sftj.name.split('/')[-1]}")
 
 while sftj.state != "JOB_STATE_COMPLETED":
     time.sleep(5)
+    if sftj.name is None:
+        raise ValueError("SFTJ name is None")
     sftj_id = sftj.name.split("/")[-1]
     sftj = client.supervised_fine_tuning_jobs.get(sftj_id)
     print(f"SFTJ state: {sftj.state}")
