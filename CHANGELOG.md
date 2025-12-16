@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.10 (2025-12-16)
+
+Full Changelog: [v1.0.0-alpha.9...v1.0.0-alpha.10](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.9...v1.0.0-alpha.10)
+
+### Features
+
+* Expose Create Evaluator method as part of Docs/SDK ([050063d](https://github.com/fw-ai-external/python-sdk/commit/050063d763bba40cd229f555e6f6bc22e8a0b7d8))
+
+
+### Chores
+
+* **internal:** add missing files argument to base client ([bcf1a7a](https://github.com/fw-ai-external/python-sdk/commit/bcf1a7a50280d5c7e3ec5492f6770b10e83526ca))
+
 ## 1.0.0-alpha.9 (2025-12-12)
 
 Full Changelog: [v1.0.0-alpha.8...v1.0.0-alpha.9](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.8...v1.0.0-alpha.9)

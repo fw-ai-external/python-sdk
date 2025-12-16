@@ -320,6 +320,63 @@ class TestDpoJobs:
                 account_id="account_id",
             )
 
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_resume(self, client: Fireworks) -> None:
+        dpo_job = client.dpo_jobs.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_resume(self, client: Fireworks) -> None:
+        response = client.dpo_jobs.with_raw_response.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        dpo_job = response.parse()
+        assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_resume(self, client: Fireworks) -> None:
+        with client.dpo_jobs.with_streaming_response.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            dpo_job = response.parse()
+            assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_resume(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.dpo_jobs.with_raw_response.resume(
+                dpo_job_id="dpo_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
+            client.dpo_jobs.with_raw_response.resume(
+                dpo_job_id="",
+                account_id="account_id",
+                body={},
+            )
+
 
 class TestAsyncDpoJobs:
     parametrize = pytest.mark.parametrize(
@@ -623,4 +680,61 @@ class TestAsyncDpoJobs:
             await async_client.dpo_jobs.with_raw_response.get_metrics_file_endpoint(
                 dpo_job_id="",
                 account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_resume(self, async_client: AsyncFireworks) -> None:
+        dpo_job = await async_client.dpo_jobs.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        )
+        assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_resume(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.dpo_jobs.with_raw_response.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        dpo_job = await response.parse()
+        assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_resume(self, async_client: AsyncFireworks) -> None:
+        async with async_client.dpo_jobs.with_streaming_response.resume(
+            dpo_job_id="dpo_job_id",
+            account_id="account_id",
+            body={},
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            dpo_job = await response.parse()
+            assert_matches_type(DpoJob, dpo_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_resume(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.dpo_jobs.with_raw_response.resume(
+                dpo_job_id="dpo_job_id",
+                account_id="",
+                body={},
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `dpo_job_id` but received ''"):
+            await async_client.dpo_jobs.with_raw_response.resume(
+                dpo_job_id="",
+                account_id="account_id",
+                body={},
             )

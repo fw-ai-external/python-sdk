@@ -10,8 +10,15 @@ from fireworks.types import (
     DeployedModel,
     DeployedModelRef,
     InferenceParameters,
+    LogProbs,
+    NewLogProbs,
+    NewLogProbsContent,
+    NewLogProbsContentTopLogProbs,
+    PromptTokensDetails,
+    RawOutput,
     Status,
     TrainingConfig,
+    UsageInfo,
     WandbConfig,
 )
 ```
@@ -88,6 +95,7 @@ from fireworks.types import (
     TypeDate,
     ModelGetDownloadEndpointResponse,
     ModelGetUploadEndpointResponse,
+    ModelValidateUploadResponse,
 )
 ```
 
@@ -101,7 +109,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/models/{model_id}:getDownloadEndpoint">client.models.<a href="./src/fireworks/resources/models.py">get_download_endpoint</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_get_download_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/model_get_download_endpoint_response.py">ModelGetDownloadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/models/{model_id}:getUploadEndpoint">client.models.<a href="./src/fireworks/resources/models.py">get_upload_endpoint</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/model_get_upload_endpoint_response.py">ModelGetUploadEndpointResponse</a></code>
 - <code title="post /v1/accounts/{account_id}/models/{model_id}:prepare">client.models.<a href="./src/fireworks/resources/models.py">prepare</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_prepare_params.py">params</a>) -> object</code>
-- <code title="get /v1/accounts/{account_id}/models/{model_id}:validateUpload">client.models.<a href="./src/fireworks/resources/models.py">validate_upload</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_validate_upload_params.py">params</a>) -> object</code>
+- <code title="get /v1/accounts/{account_id}/models/{model_id}:validateUpload">client.models.<a href="./src/fireworks/resources/models.py">validate_upload</a>(model_id, \*, account_id, \*\*<a href="src/fireworks/types/model_validate_upload_params.py">params</a>) -> <a href="./src/fireworks/types/model_validate_upload_response.py">ModelValidateUploadResponse</a></code>
 
 # Lora
 
@@ -201,6 +209,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/rlorTrainerJobs">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_list_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]</a></code>
 - <code title="delete /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">delete</a>(rlor_trainer_job_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">get</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_get_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
+- <code title="post /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">resume</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_resume_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
 
 # DpoJobs
 
@@ -217,6 +226,7 @@ Methods:
 - <code title="delete /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">delete</a>(dpo_job_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">get</a>(dpo_job_id, \*, account_id, \*\*<a href="src/fireworks/types/dpo_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/dpo_job.py">DpoJob</a></code>
 - <code title="get /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">get_metrics_file_endpoint</a>(dpo_job_id, \*, account_id) -> <a href="./src/fireworks/types/dpo_job_get_metrics_file_endpoint_response.py">DpoJobGetMetricsFileEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume">client.dpo_jobs.<a href="./src/fireworks/resources/dpo_jobs.py">resume</a>(dpo_job_id, \*, account_id, \*\*<a href="src/fireworks/types/dpo_job_resume_params.py">params</a>) -> <a href="./src/fireworks/types/dpo_job.py">DpoJob</a></code>
 
 # EvaluationJobs
 
@@ -242,14 +252,32 @@ Methods:
 Types:
 
 ```python
-from fireworks.types import EvaluatorListResponse, EvaluatorGetResponse
+from fireworks.types import (
+    CodeSnippets,
+    Criterion,
+    EvaluatorSource,
+    RollupSettings,
+    EvaluatorCreateResponse,
+    EvaluatorUpdateResponse,
+    EvaluatorListResponse,
+    EvaluatorGetResponse,
+    EvaluatorGetBuildLogEndpointResponse,
+    EvaluatorGetSourceCodeEndpointResponse,
+    EvaluatorGetUploadEndpointResponse,
+)
 ```
 
 Methods:
 
+- <code title="post /v1/accounts/{account_id}/evaluatorsV2">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_create_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_create_response.py">EvaluatorCreateResponse</a></code>
+- <code title="patch /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">update</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_update_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_update_response.py">EvaluatorUpdateResponse</a></code>
 - <code title="get /v1/accounts/{account_id}/evaluators">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_list_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_list_response.py">SyncCursorEvaluators[EvaluatorListResponse]</a></code>
 - <code title="delete /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">delete</a>(evaluator_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_response.py">EvaluatorGetResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_build_log_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_build_log_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_build_log_endpoint_response.py">EvaluatorGetBuildLogEndpointResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_source_code_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_source_code_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_source_code_endpoint_response.py">EvaluatorGetSourceCodeEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_upload_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_upload_endpoint_response.py">EvaluatorGetUploadEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">validate_upload</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_validate_upload_params.py">params</a>) -> object</code>
 
 # Accounts
 

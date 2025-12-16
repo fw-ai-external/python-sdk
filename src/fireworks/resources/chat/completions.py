@@ -75,7 +75,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -284,8 +283,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -484,7 +481,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -698,8 +694,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -892,7 +886,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -1106,8 +1099,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -1299,7 +1290,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -1354,7 +1344,6 @@ class CompletionsResource(SyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
-                    "prompt_cache_max_len": prompt_cache_max_len,
                     "prompt_truncate_len": prompt_truncate_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
@@ -1434,7 +1423,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -1643,8 +1631,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -1843,7 +1829,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -2057,8 +2042,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -2251,7 +2234,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -2465,8 +2447,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           prompt_truncate_len: The size (in tokens) to which to truncate chat prompts. This includes the system
               prompt (if any), previous user/assistant messages, and the current user message.
               Earlier user/assistant messages will be evicted first to fit the prompt into
@@ -2658,7 +2638,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
@@ -2713,7 +2692,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
-                    "prompt_cache_max_len": prompt_cache_max_len,
                     "prompt_truncate_len": prompt_truncate_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,

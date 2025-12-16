@@ -36,6 +36,7 @@ from ..types.type_date_param import TypeDateParam
 from ..types.peft_details_param import PeftDetailsParam
 from ..types.base_model_details_param import BaseModelDetailsParam
 from ..types.conversation_config_param import ConversationConfigParam
+from ..types.model_validate_upload_response import ModelValidateUploadResponse
 from ..types.model_get_upload_endpoint_response import ModelGetUploadEndpointResponse
 from ..types.model_get_download_endpoint_response import ModelGetDownloadEndpointResponse
 
@@ -615,7 +616,7 @@ class ModelsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
+    ) -> ModelValidateUploadResponse:
         """
         Validate Model Upload
 
@@ -658,7 +659,7 @@ class ModelsResource(SyncAPIResource):
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),
-            cast_to=object,
+            cast_to=ModelValidateUploadResponse,
         )
 
 
@@ -1235,7 +1236,7 @@ class AsyncModelsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
+    ) -> ModelValidateUploadResponse:
         """
         Validate Model Upload
 
@@ -1278,7 +1279,7 @@ class AsyncModelsResource(AsyncAPIResource):
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),
-            cast_to=object,
+            cast_to=ModelValidateUploadResponse,
         )
 
 
