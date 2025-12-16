@@ -1,65 +1,18 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .criterion import Criterion
 from .shared.status import Status
+from .rollup_settings import RollupSettings
+from .evaluator_source import EvaluatorSource
 
-__all__ = ["EvaluatorListResponse", "Criterion", "CriterionCodeSnippets", "RollupSettings", "Source"]
-
-
-class CriterionCodeSnippets(BaseModel):
-    entry_file: Optional[str] = FieldInfo(alias="entryFile", default=None)
-
-    entry_func: Optional[str] = FieldInfo(alias="entryFunc", default=None)
-
-    file_contents: Optional[Dict[str, str]] = FieldInfo(alias="fileContents", default=None)
-
-    language: Optional[str] = None
-
-
-class Criterion(BaseModel):
-    code_snippets: Optional[CriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
-
-    description: Optional[str] = None
-
-    name: Optional[str] = None
-
-    type: Optional[Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]] = None
-
-
-class RollupSettings(BaseModel):
-    """Strategy for metrics reports summary/rollup.
-    e.g.
-
-    {metric1: 1, metric2: 0.3}, rollup_settings could be criteria_weights: {metric1: 0.5, metric2: 0.5}, then final score will be 0.5 * 1 + 0.5 * 0.3 = 0.65
-    If skip_rollup is true, the rollup step will be skipped since the criteria will also report the rollup score and metrics altogether.
-    """
-
-    criteria_weights: Optional[Dict[str, float]] = FieldInfo(alias="criteriaWeights", default=None)
-
-    python_code: Optional[str] = FieldInfo(alias="pythonCode", default=None)
-
-    skip_rollup: Optional[bool] = FieldInfo(alias="skipRollup", default=None)
-
-    success_threshold: Optional[float] = FieldInfo(alias="successThreshold", default=None)
-
-
-class Source(BaseModel):
-    """Source information for the evaluator codebase."""
-
-    github_repository_name: Optional[str] = FieldInfo(alias="githubRepositoryName", default=None)
-    """Normalized GitHub repository name (e.g.
-
-    owner/repository) when the source is GitHub.
-    """
-
-    type: Optional[Literal["TYPE_UNSPECIFIED", "TYPE_UPLOAD", "TYPE_GITHUB", "TYPE_TEMPORARY"]] = None
-    """Identifies how the evaluator source code is provided."""
+__all__ = ["EvaluatorListResponse"]
 
 
 class EvaluatorListResponse(BaseModel):
@@ -98,7 +51,7 @@ class EvaluatorListResponse(BaseModel):
     also report the rollup score and metrics altogether.
     """
 
-    source: Optional[Source] = None
+    source: Optional[EvaluatorSource] = None
     """Source information for the evaluator codebase."""
 
     state: Optional[Literal["STATE_UNSPECIFIED", "ACTIVE", "BUILDING", "BUILD_FAILED"]] = None

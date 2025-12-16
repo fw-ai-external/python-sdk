@@ -71,7 +71,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -286,8 +285,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -450,7 +447,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -670,8 +666,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -828,7 +822,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1048,8 +1041,6 @@ class CompletionsResource(SyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -1205,7 +1196,6 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1255,7 +1245,6 @@ class CompletionsResource(SyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
-                    "prompt_cache_max_len": prompt_cache_max_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
                     "repetition_penalty": repetition_penalty,
@@ -1330,7 +1319,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1545,8 +1533,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -1709,7 +1695,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1929,8 +1914,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -2087,7 +2070,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -2307,8 +2289,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
 
-          prompt_cache_max_len: Maximum length of the prompt to cache.
-
           raw_output: Return raw output from the model.
 
           reasoning_effort: Controls reasoning behavior for supported models. When enabled, the model's
@@ -2464,7 +2444,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
-        prompt_cache_max_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -2514,7 +2493,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
-                    "prompt_cache_max_len": prompt_cache_max_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
                     "repetition_penalty": repetition_penalty,

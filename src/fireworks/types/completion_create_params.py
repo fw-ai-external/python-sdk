@@ -260,9 +260,6 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     prompt_cache_isolation_key: Optional[str]
     """Isolation key for prompt caching to separate cache entries."""
 
-    prompt_cache_max_len: Optional[int]
-    """Maximum length of the prompt to cache."""
-
     raw_output: Optional[bool]
     """Return raw output from the model."""
 
