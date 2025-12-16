@@ -43,6 +43,12 @@ class ReinforcementFineTuningStep(BaseModel):
     "<reward_name>=<weight>".
     """
 
+    rollout_deployment_name: Optional[str] = FieldInfo(alias="rolloutDeploymentName", default=None)
+    """Rollout deployment name associated with this RLOR trainer job. This is optional.
+
+    If not set, trainer will not trigger weight sync to rollout engine.
+    """
+
     state: Optional[
         Literal[
             "JOB_STATE_UNSPECIFIED",

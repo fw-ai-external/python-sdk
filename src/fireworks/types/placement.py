@@ -46,6 +46,7 @@ class Placement(BaseModel):
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
             "US_GEORGIA_3",
+            "NA_BRITISHCOLUMBIA_1",
         ]
     ] = None
     """The region where the deployment must be placed."""
@@ -75,6 +76,7 @@ class Placement(BaseModel):
                 "US_GEORGIA_2",
                 "US_WASHINGTON_4",
                 "US_GEORGIA_3",
+                "NA_BRITISHCOLUMBIA_1",
             ]
         ]
     ] = None

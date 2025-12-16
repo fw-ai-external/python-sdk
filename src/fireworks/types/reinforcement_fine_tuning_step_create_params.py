@@ -37,6 +37,12 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     "<reward_name>=<weight>".
     """
 
+    rollout_deployment_name: Annotated[str, PropertyInfo(alias="rolloutDeploymentName")]
+    """Rollout deployment name associated with this RLOR trainer job. This is optional.
+
+    If not set, trainer will not trigger weight sync to rollout engine.
+    """
+
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 
