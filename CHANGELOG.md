@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.11 (2025-12-16)
+
+Full Changelog: [v1.0.0-alpha.10...v1.0.0-alpha.11](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.10...v1.0.0-alpha.11)
+
+### Chores
+
+* speedup initial import ([2736393](https://github.com/fw-ai-external/python-sdk/commit/2736393d2907825b2cf67e5f139753894663f77f))
+
 ## 1.0.0-alpha.10 (2025-12-16)
 
 Full Changelog: [v1.0.0-alpha.9...v1.0.0-alpha.10](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.9...v1.0.0-alpha.10)
