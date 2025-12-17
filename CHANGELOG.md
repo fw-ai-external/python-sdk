@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.12 (2025-12-17)
+
+Full Changelog: [v1.0.0-alpha.11...v1.0.0-alpha.12](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.11...v1.0.0-alpha.12)
+
+### Bug Fixes
+
+* use async_to_httpx_files in patch method ([5759d42](https://github.com/fw-ai-external/python-sdk/commit/5759d426884811343b4c50c67c8bde0481af9045))
+
 ## 1.0.0-alpha.11 (2025-12-16)
 
 Full Changelog: [v1.0.0-alpha.10...v1.0.0-alpha.11](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.10...v1.0.0-alpha.11)
