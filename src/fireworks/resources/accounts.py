@@ -15,9 +15,9 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorAccounts, AsyncCursorAccounts
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.account import Account
-from ..types.account_list_response import AccountListResponse
 
 __all__ = ["AccountsResource", "AsyncAccountsResource"]
 
@@ -56,7 +56,7 @@ class AccountsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> AccountListResponse:
+    ) -> SyncCursorAccounts[Account]:
         """
         List Accounts
 
@@ -84,8 +84,9 @@ class AccountsResource(SyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
-        return self._get(
+        return self._get_api_list(
             "/v1/accounts" if self._client._base_url_overridden else "https://api.fireworks.ai/v1/accounts",
+            page=SyncCursorAccounts[Account],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -102,7 +103,7 @@ class AccountsResource(SyncAPIResource):
                     account_list_params.AccountListParams,
                 ),
             ),
-            cast_to=AccountListResponse,
+            model=Account,
         )
 
     def get(
@@ -172,7 +173,7 @@ class AsyncAccountsResource(AsyncAPIResource):
         """
         return AsyncAccountsResourceWithStreamingResponse(self)
 
-    async def list(
+    def list(
         self,
         *,
         filter: str | Omit = omit,
@@ -186,7 +187,7 @@ class AsyncAccountsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> AccountListResponse:
+    ) -> AsyncPaginator[Account, AsyncCursorAccounts[Account]]:
         """
         List Accounts
 
@@ -214,14 +215,15 @@ class AsyncAccountsResource(AsyncAPIResource):
 
           timeout: Override the client-level default timeout for this request, in seconds
         """
-        return await self._get(
+        return self._get_api_list(
             "/v1/accounts" if self._client._base_url_overridden else "https://api.fireworks.ai/v1/accounts",
+            page=AsyncCursorAccounts[Account],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -232,7 +234,7 @@ class AsyncAccountsResource(AsyncAPIResource):
                     account_list_params.AccountListParams,
                 ),
             ),
-            cast_to=AccountListResponse,
+            model=Account,
         )
 
     async def get(

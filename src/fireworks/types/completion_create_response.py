@@ -5,29 +5,14 @@ from typing import Dict, List, Optional
 
 from .._models import BaseModel
 from .shared.choice import Choice
+from .shared.usage_info import UsageInfo
 
-__all__ = ["CompletionCreateResponse", "Usage", "UsagePromptTokensDetails"]
-
-
-class UsagePromptTokensDetails(BaseModel):
-    cached_tokens: Optional[int] = None
-
-
-class Usage(BaseModel):
-    prompt_tokens: int
-    """The number of tokens in the prompt"""
-
-    total_tokens: int
-    """The total number of tokens used in the request (prompt + completion)"""
-
-    completion_tokens: Optional[int] = None
-    """The number of tokens in the generated completion"""
-
-    prompt_tokens_details: Optional[UsagePromptTokensDetails] = None
-    """Details about prompt tokens, including cached tokens"""
+__all__ = ["CompletionCreateResponse"]
 
 
 class CompletionCreateResponse(BaseModel):
+    """The response message from a /v1/completions call."""
+
     id: str
     """A unique identifier of the response"""
 
@@ -40,7 +25,7 @@ class CompletionCreateResponse(BaseModel):
     model: str
     """The model used for the completion"""
 
-    usage: Usage
+    usage: UsageInfo
     """Usage statistics for the completion"""
 
     object: Optional[str] = None

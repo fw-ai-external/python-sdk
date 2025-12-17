@@ -46,6 +46,12 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
     mcp_server: Annotated[str, PropertyInfo(alias="mcpServer")]
 
+    node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
+    """
+    The number of nodes to use for the fine-tuning job. If not specified, the
+    default is 1.
+    """
+
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 

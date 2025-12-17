@@ -1,5 +1,83 @@
 # Changelog
 
+## 1.0.0-alpha.12 (2025-12-17)
+
+Full Changelog: [v1.0.0-alpha.11...v1.0.0-alpha.12](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.11...v1.0.0-alpha.12)
+
+### Bug Fixes
+
+* use async_to_httpx_files in patch method ([5759d42](https://github.com/fw-ai-external/python-sdk/commit/5759d426884811343b4c50c67c8bde0481af9045))
+
+## 1.0.0-alpha.11 (2025-12-16)
+
+Full Changelog: [v1.0.0-alpha.10...v1.0.0-alpha.11](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.10...v1.0.0-alpha.11)
+
+### Chores
+
+* speedup initial import ([2736393](https://github.com/fw-ai-external/python-sdk/commit/2736393d2907825b2cf67e5f139753894663f77f))
+
+## 1.0.0-alpha.10 (2025-12-16)
+
+Full Changelog: [v1.0.0-alpha.9...v1.0.0-alpha.10](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.9...v1.0.0-alpha.10)
+
+### Features
+
+* Expose Create Evaluator method as part of Docs/SDK ([050063d](https://github.com/fw-ai-external/python-sdk/commit/050063d763bba40cd229f555e6f6bc22e8a0b7d8))
+
+
+### Chores
+
+* **internal:** add missing files argument to base client ([bcf1a7a](https://github.com/fw-ai-external/python-sdk/commit/bcf1a7a50280d5c7e3ec5492f6770b10e83526ca))
+
+## 1.0.0-alpha.9 (2025-12-12)
+
+Full Changelog: [v1.0.0-alpha.8...v1.0.0-alpha.9](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.8...v1.0.0-alpha.9)
+
+## 1.0.0-alpha.8 (2025-12-12)
+
+Full Changelog: [v1.0.0-alpha.7...v1.0.0-alpha.8](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.7...v1.0.0-alpha.8)
+
+### Features
+
+* add pagination ([d2ab4bc](https://github.com/fw-ai-external/python-sdk/commit/d2ab4bc3171b3ac6ae70207df83793b9dc90c49e))
+* Automate SDK Pagination Config ([d098f72](https://github.com/fw-ai-external/python-sdk/commit/d098f72fc6f2099e627eb647a62770a76aadc7de))
+
+## 1.0.0-alpha.7 (2025-12-10)
+
+Full Changelog: [v1.0.0-alpha.6...v1.0.0-alpha.7](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.6...v1.0.0-alpha.7)
+
+### Features
+
+* Remove methods from SDK ([2d73091](https://github.com/fw-ai-external/python-sdk/commit/2d730913dbc2c1f05547d891256d62f5d9067015))
+
+## 1.0.0-alpha.6 (2025-12-10)
+
+Full Changelog: [v1.0.0-alpha.5...v1.0.0-alpha.6](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.5...v1.0.0-alpha.6)
+
+### Features
+
+* add evaluator job / evaluator CRUD APIs to API/SDK ([1f677b8](https://github.com/fw-ai-external/python-sdk/commit/1f677b87c8330c0c0e1d768319c15fbce5930f5d))
+
+## 1.0.0-alpha.5 (2025-12-09)
+
+Full Changelog: [v1.0.0-alpha.4...v1.0.0-alpha.5](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.4...v1.0.0-alpha.5)
+
+### Features
+
+* Update API/SDK ([c47e0fb](https://github.com/fw-ai-external/python-sdk/commit/c47e0fb7a18a05fd4c50d46bf024762f7c83ff00))
+
+
+### Bug Fixes
+
+* **types:** allow pyright to infer TypedDict types within SequenceNotStr ([211cefd](https://github.com/fw-ai-external/python-sdk/commit/211cefd338e16d81c8a40a1acf9e3399a0ebfbd0))
+
+
+### Chores
+
+* add missing docstrings ([ac5bf0c](https://github.com/fw-ai-external/python-sdk/commit/ac5bf0c1229ded12db30d75bffa3540c69280785))
+* **docs:** use environment variables for authentication in code snippets ([1501b2f](https://github.com/fw-ai-external/python-sdk/commit/1501b2fc7f1320a1d4a41fc39e6fdb0bc4d795c6))
+* update lockfile ([58d2c86](https://github.com/fw-ai-external/python-sdk/commit/58d2c86e5856bbc1f3550b6449502a5b302e5c6e))
+
 ## 1.0.0-alpha.4 (2025-12-03)
 
 Full Changelog: [v1.0.0-alpha.3...v1.0.0-alpha.4](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.3...v1.0.0-alpha.4)

@@ -27,12 +27,12 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorDeployments, AsyncCursorDeployments
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.deployment import Deployment
 from ..types.auto_tune_param import AutoTuneParam
 from ..types.placement_param import PlacementParam
 from ..types.autoscaling_policy_param import AutoscalingPolicyParam
-from ..types.deployment_list_response import DeploymentListResponse
 
 __all__ = ["DeploymentsResource", "AsyncDeploymentsResource"]
 
@@ -201,7 +201,8 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -413,7 +414,8 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -505,7 +507,7 @@ class DeploymentsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DeploymentListResponse:
+    ) -> SyncCursorDeployments[Deployment]:
         """
         List Deployments
 
@@ -542,10 +544,11 @@ class DeploymentsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/deployments"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            page=SyncCursorDeployments[Deployment],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -563,7 +566,7 @@ class DeploymentsResource(SyncAPIResource):
                     deployment_list_params.DeploymentListParams,
                 ),
             ),
-            cast_to=DeploymentListResponse,
+            model=Deployment,
         )
 
     def delete(
@@ -923,7 +926,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -1135,7 +1139,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_mtp: If true, MTP is enabled for this deployment.
 
-          enable_session_affinity: Whether to apply sticky routing based on `user` field.
+          enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
+              true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
 
@@ -1211,7 +1216,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             cast_to=Deployment,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -1227,7 +1232,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DeploymentListResponse:
+    ) -> AsyncPaginator[Deployment, AsyncCursorDeployments[Deployment]]:
         """
         List Deployments
 
@@ -1264,16 +1269,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/deployments"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            page=AsyncCursorDeployments[Deployment],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -1285,7 +1291,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     deployment_list_params.DeploymentListParams,
                 ),
             ),
-            cast_to=DeploymentListResponse,
+            model=Deployment,
         )
 
     async def delete(

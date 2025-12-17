@@ -10,6 +10,8 @@ __all__ = ["InferenceParameters"]
 
 
 class InferenceParameters(BaseModel):
+    """Parameters for the inference requests."""
+
     extra_body: Optional[str] = FieldInfo(alias="extraBody", default=None)
     """
     Additional parameters for the inference request as a JSON string. For example:

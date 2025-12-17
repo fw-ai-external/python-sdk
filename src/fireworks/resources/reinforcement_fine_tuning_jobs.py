@@ -21,12 +21,12 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorReinforcementFineTuningJobs, AsyncCursorReinforcementFineTuningJobs
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.reinforcement_fine_tuning_job import ReinforcementFineTuningJob
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.shared_params.inference_parameters import InferenceParameters
-from ..types.reinforcement_fine_tuning_job_list_response import ReinforcementFineTuningJobListResponse
 
 __all__ = ["ReinforcementFineTuningJobsResource", "AsyncReinforcementFineTuningJobsResource"]
 
@@ -64,6 +64,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
+        node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -92,6 +93,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           training_config: Common training configurations.
 
@@ -123,6 +127,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
+                    "node_count": node_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -156,7 +161,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningJobListResponse:
+    ) -> SyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob]:
         """
         List Reinforcement Fine-tuning Jobs
 
@@ -192,10 +197,11 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            page=SyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -212,7 +218,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     reinforcement_fine_tuning_job_list_params.ReinforcementFineTuningJobListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningJobListResponse,
+            model=ReinforcementFineTuningJob,
         )
 
     def delete(
@@ -436,6 +442,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
         mcp_server: str | Omit = omit,
+        node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -464,6 +471,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           training_config: Common training configurations.
 
@@ -495,6 +505,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "mcp_server": mcp_server,
+                    "node_count": node_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -513,7 +524,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
             cast_to=ReinforcementFineTuningJob,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -528,7 +539,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningJobListResponse:
+    ) -> AsyncPaginator[ReinforcementFineTuningJob, AsyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob]]:
         """
         List Reinforcement Fine-tuning Jobs
 
@@ -564,16 +575,17 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            page=AsyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -584,7 +596,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     reinforcement_fine_tuning_job_list_params.ReinforcementFineTuningJobListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningJobListResponse,
+            model=ReinforcementFineTuningJob,
         )
 
     async def delete(

@@ -28,14 +28,15 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
+from ..pagination import SyncCursorModels, AsyncCursorModels
 from ..types.model import Model
-from .._base_client import make_request_options
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.model_param import ModelParam
 from ..types.type_date_param import TypeDateParam
 from ..types.peft_details_param import PeftDetailsParam
-from ..types.model_list_response import ModelListResponse
 from ..types.base_model_details_param import BaseModelDetailsParam
 from ..types.conversation_config_param import ConversationConfigParam
+from ..types.model_validate_upload_response import ModelValidateUploadResponse
 from ..types.model_get_upload_endpoint_response import ModelGetUploadEndpointResponse
 from ..types.model_get_download_endpoint_response import ModelGetDownloadEndpointResponse
 
@@ -279,7 +280,7 @@ class ModelsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ModelListResponse:
+    ) -> SyncCursorModels[Model]:
         """
         List Models
 
@@ -314,10 +315,11 @@ class ModelsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/models"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
+            page=SyncCursorModels[Model],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -334,7 +336,7 @@ class ModelsResource(SyncAPIResource):
                     model_list_params.ModelListParams,
                 ),
             ),
-            cast_to=ModelListResponse,
+            model=Model,
         )
 
     def delete(
@@ -614,7 +616,7 @@ class ModelsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
+    ) -> ModelValidateUploadResponse:
         """
         Validate Model Upload
 
@@ -657,7 +659,7 @@ class ModelsResource(SyncAPIResource):
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),
-            cast_to=object,
+            cast_to=ModelValidateUploadResponse,
         )
 
 
@@ -883,7 +885,7 @@ class AsyncModelsResource(AsyncAPIResource):
             cast_to=Model,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -898,7 +900,7 @@ class AsyncModelsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ModelListResponse:
+    ) -> AsyncPaginator[Model, AsyncCursorModels[Model]]:
         """
         List Models
 
@@ -933,16 +935,17 @@ class AsyncModelsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/models"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/models",
+            page=AsyncCursorModels[Model],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -953,7 +956,7 @@ class AsyncModelsResource(AsyncAPIResource):
                     model_list_params.ModelListParams,
                 ),
             ),
-            cast_to=ModelListResponse,
+            model=Model,
         )
 
     async def delete(
@@ -1233,7 +1236,7 @@ class AsyncModelsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
+    ) -> ModelValidateUploadResponse:
         """
         Validate Model Upload
 
@@ -1276,7 +1279,7 @@ class AsyncModelsResource(AsyncAPIResource):
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),
-            cast_to=object,
+            cast_to=ModelValidateUploadResponse,
         )
 
 

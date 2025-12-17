@@ -260,23 +260,45 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     prompt_cache_isolation_key: Optional[str]
     """Isolation key for prompt caching to separate cache entries."""
 
-    prompt_cache_max_len: Optional[int]
-    """Maximum length of the prompt to cache."""
-
     raw_output: Optional[bool]
     """Return raw output from the model."""
 
-    reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, None]
-    """
-    Applicable to reasoning models only, this option controls the reasoning token
-    length, and can be set to either `'none'`, `'low'`, `'medium'`, `'high'` or an
-    integer. `'low'`, `'medium'` and `'high'` correspond to progressively higher
-    thinking effort and thus longer reasoning tokens. `'none'` means disable
-    thinking. You can alternatively set the option to an integer controlling the
-    hard-cutoff for reasoning token length (this is not entirely OpenAI compatible,
-    you might have to use fireworks.ai client library to bypass the schema check).
-    Note: For OpenAI GPT OSS models, only the string values (`'low'`, `'medium'`,
-    `'high'`) are supported. Integer values will not work with these models.
+    reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None]
+    """Controls reasoning behavior for supported models.
+
+    When enabled, the model's reasoning appears in the `reasoning_content` field of
+    the response, separate from the final answer in `content`.
+
+    **Accepted values:**
+
+    - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
+      reasoning with varying effort levels; `'none'` to disable reasoning.
+    - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
+      disable it.
+    - **Integer** (Fireworks extension): A positive integer to set a hard token
+      limit on reasoning output (only effective for grammar-based reasoning models).
+
+    **Important:** Boolean values are normalized internally: `true` becomes
+    `'medium'`, and `false` becomes `'none'`. This normalization happens before
+    model-specific validation, so if a model doesn't support `'none'`, passing
+    `false` will produce an error referencing `'none'`.
+
+    **Model-specific behavior:**
+
+    - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
+      `'none'` or `false` to disable. Supports integer token limits to cap reasoning
+      output. `'low'` maps to a default token limit (~3000 tokens).
+    - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
+      off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
+      and integers have no additional effect.
+    - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
+      on. Use `'none'` or `false` to disable; effort levels and integers have no
+      additional effect.
+    - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
+      `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
+      values—using these will return an error (e.g., "Invalid reasoning effort:
+      none"). When omitted, defaults to `'medium'`. Lower effort produces faster
+      responses with shorter reasoning.
     """
 
     repetition_penalty: Optional[float]
@@ -408,6 +430,8 @@ class PredictionPredictedOutputContentUnionMember1(TypedDict, total=False):
 
 
 class PredictionPredictedOutput(TypedDict, total=False):
+    """OpenAI-compatible struct for the "speculation" field."""
+
     content: Required[Union[str, Iterable[PredictionPredictedOutputContentUnionMember1]]]
 
     type: Literal["content"]
@@ -417,6 +441,17 @@ Prediction: TypeAlias = Union[PredictionPredictedOutput, str]
 
 
 class ResponseFormat(TypedDict, total=False):
+    """Allows to force the model to produce specific output format.
+
+    Setting to `{ "type": "json_object" }` enables JSON mode, which guarantees the message the model generates is valid JSON.
+
+    If `"type"` is `"json_schema"`, a JSON schema must be provided. E.g., `response_format = {"type": "json_schema", "json_schema": <json_schema>}`.
+
+    Important: when using JSON mode, it's crucial to also instruct the model to produce JSON via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly "stuck" request.
+
+    Also note that the message content may be partially cut off if `finish_reason="length"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length. In this case the return value might not be a valid JSON.
+    """
+
     type: Required[Literal["json_object", "json_schema", "grammar", "text"]]
 
     grammar: Optional[str]

@@ -11,8 +11,8 @@ from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
     SupervisedFineTuningJob,
-    SupervisedFineTuningJobListResponse,
 )
+from fireworks.pagination import SyncCursorSupervisedFineTuningJobs, AsyncCursorSupervisedFineTuningJobs
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -49,7 +49,6 @@ class TestSupervisedFineTuningJobs:
                 "deployed_model": "deployedModel",
                 "input_limit": 0,
                 "input_offset": 0,
-                "max_context_len": 0,
                 "max_tokens": 0,
                 "max_workers": 0,
                 "output_activations": True,
@@ -122,7 +121,9 @@ class TestSupervisedFineTuningJobs:
         supervised_fine_tuning_job = client.supervised_fine_tuning_jobs.list(
             account_id="account_id",
         )
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -135,7 +136,9 @@ class TestSupervisedFineTuningJobs:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -147,7 +150,9 @@ class TestSupervisedFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         supervised_fine_tuning_job = response.parse()
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -159,7 +164,11 @@ class TestSupervisedFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             supervised_fine_tuning_job = response.parse()
-            assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+            assert_matches_type(
+                SyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob],
+                supervised_fine_tuning_job,
+                path=["response"],
+            )
 
         assert cast(Any, response.is_closed) is True
 
@@ -383,7 +392,6 @@ class TestAsyncSupervisedFineTuningJobs:
                 "deployed_model": "deployedModel",
                 "input_limit": 0,
                 "input_offset": 0,
-                "max_context_len": 0,
                 "max_tokens": 0,
                 "max_workers": 0,
                 "output_activations": True,
@@ -456,7 +464,9 @@ class TestAsyncSupervisedFineTuningJobs:
         supervised_fine_tuning_job = await async_client.supervised_fine_tuning_jobs.list(
             account_id="account_id",
         )
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -469,7 +479,9 @@ class TestAsyncSupervisedFineTuningJobs:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -481,7 +493,9 @@ class TestAsyncSupervisedFineTuningJobs:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         supervised_fine_tuning_job = await response.parse()
-        assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+        assert_matches_type(
+            AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob], supervised_fine_tuning_job, path=["response"]
+        )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -493,7 +507,11 @@ class TestAsyncSupervisedFineTuningJobs:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             supervised_fine_tuning_job = await response.parse()
-            assert_matches_type(SupervisedFineTuningJobListResponse, supervised_fine_tuning_job, path=["response"])
+            assert_matches_type(
+                AsyncCursorSupervisedFineTuningJobs[SupervisedFineTuningJob],
+                supervised_fine_tuning_job,
+                path=["response"],
+            )
 
         assert cast(Any, response.is_closed) is True
 

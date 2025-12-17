@@ -9,11 +9,9 @@ import pytest
 
 from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
-from fireworks.types import (
-    APIKey,
-    APIKeyListResponse,
-)
+from fireworks.types import APIKey
 from fireworks._utils import parse_datetime
+from fireworks.pagination import SyncCursorAPIKeys, AsyncCursorAPIKeys
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -98,7 +96,7 @@ class TestAPIKeys:
             user_id="user_id",
             account_id="account_id",
         )
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -112,7 +110,7 @@ class TestAPIKeys:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -125,7 +123,7 @@ class TestAPIKeys:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         api_key = response.parse()
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -138,7 +136,7 @@ class TestAPIKeys:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             api_key = response.parse()
-            assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+            assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -297,7 +295,7 @@ class TestAsyncAPIKeys:
             user_id="user_id",
             account_id="account_id",
         )
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -311,7 +309,7 @@ class TestAsyncAPIKeys:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -324,7 +322,7 @@ class TestAsyncAPIKeys:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         api_key = await response.parse()
-        assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+        assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -337,7 +335,7 @@ class TestAsyncAPIKeys:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             api_key = await response.parse()
-            assert_matches_type(APIKeyListResponse, api_key, path=["response"])
+            assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

@@ -15,7 +15,7 @@ class AutoscalingPolicy(BaseModel):
     scale_down_window: Optional[str] = FieldInfo(alias="scaleDownWindow", default=None)
     """
     The duration the autoscaler will wait before scaling down a deployment after
-    observing decreased load. Default is 10m.
+    observing decreased load. Default is 10m. Must be less than or equal to 1 hour.
     """
 
     scale_to_zero_window: Optional[str] = FieldInfo(alias="scaleToZeroWindow", default=None)
@@ -28,5 +28,5 @@ class AutoscalingPolicy(BaseModel):
     scale_up_window: Optional[str] = FieldInfo(alias="scaleUpWindow", default=None)
     """
     The duration the autoscaler will wait before scaling up a deployment after
-    observing increased load. Default is 30s.
+    observing increased load. Default is 30s. Must be less than or equal to 1 hour.
     """

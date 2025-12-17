@@ -11,11 +11,11 @@ from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
     Dataset,
-    DatasetListResponse,
     DatasetUploadResponse,
     DatasetGetUploadEndpointResponse,
     DatasetGetDownloadEndpointResponse,
 )
+from fireworks.pagination import SyncCursorDatasets, AsyncCursorDatasets
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -181,7 +181,7 @@ class TestDatasets:
         dataset = client.datasets.list(
             account_id="account_id",
         )
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -194,7 +194,7 @@ class TestDatasets:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -206,7 +206,7 @@ class TestDatasets:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -218,7 +218,7 @@ class TestDatasets:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
-            assert_matches_type(DatasetListResponse, dataset, path=["response"])
+            assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -758,7 +758,7 @@ class TestAsyncDatasets:
         dataset = await async_client.datasets.list(
             account_id="account_id",
         )
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -771,7 +771,7 @@ class TestAsyncDatasets:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -783,7 +783,7 @@ class TestAsyncDatasets:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
-        assert_matches_type(DatasetListResponse, dataset, path=["response"])
+        assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -795,7 +795,7 @@ class TestAsyncDatasets:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
-            assert_matches_type(DatasetListResponse, dataset, path=["response"])
+            assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 

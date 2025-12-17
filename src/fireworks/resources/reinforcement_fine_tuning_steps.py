@@ -8,6 +8,7 @@ from ..types import (
     reinforcement_fine_tuning_step_get_params,
     reinforcement_fine_tuning_step_list_params,
     reinforcement_fine_tuning_step_create_params,
+    reinforcement_fine_tuning_step_resume_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -19,11 +20,11 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorReinforcementFineTuningSteps, AsyncCursorReinforcementFineTuningSteps
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.reinforcement_fine_tuning_step import ReinforcementFineTuningStep
-from ..types.reinforcement_fine_tuning_step_list_response import ReinforcementFineTuningStepListResponse
 
 __all__ = ["ReinforcementFineTuningStepsResource", "AsyncReinforcementFineTuningStepsResource"]
 
@@ -57,7 +58,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        keep_alive: bool | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
+        rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -81,6 +84,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
+
+          rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
+              If not set, trainer will not trigger weight sync to rollout engine.
 
           training_config: Common training configurations.
 
@@ -108,7 +114,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "keep_alive": keep_alive,
                     "reward_weights": reward_weights,
+                    "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -142,7 +150,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningStepListResponse:
+    ) -> SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]:
         """
         List Reinforcement Fine-tuning Steps
 
@@ -177,10 +185,11 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            page=SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -197,7 +206,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningStepListResponse,
+            model=ReinforcementFineTuningStep,
         )
 
     def delete(
@@ -295,6 +304,52 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             cast_to=ReinforcementFineTuningStep,
         )
 
+    def resume(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> ReinforcementFineTuningStep:
+        """
+        Resume Rlor Trainer Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return self._post(
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+            body=maybe_transform(
+                body, reinforcement_fine_tuning_step_resume_params.ReinforcementFineTuningStepResumeParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=ReinforcementFineTuningStep,
+        )
+
 
 class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
     @cached_property
@@ -325,7 +380,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        keep_alive: bool | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
+        rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -349,6 +406,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
+
+          rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
+              If not set, trainer will not trigger weight sync to rollout engine.
 
           training_config: Common training configurations.
 
@@ -376,7 +436,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "keep_alive": keep_alive,
                     "reward_weights": reward_weights,
+                    "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -395,7 +457,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=ReinforcementFineTuningStep,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -410,7 +472,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> ReinforcementFineTuningStepListResponse:
+    ) -> AsyncPaginator[
+        ReinforcementFineTuningStep, AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]
+    ]:
         """
         List Reinforcement Fine-tuning Steps
 
@@ -445,16 +509,17 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/rlorTrainerJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            page=AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -465,7 +530,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     reinforcement_fine_tuning_step_list_params.ReinforcementFineTuningStepListParams,
                 ),
             ),
-            cast_to=ReinforcementFineTuningStepListResponse,
+            model=ReinforcementFineTuningStep,
         )
 
     async def delete(
@@ -563,6 +628,52 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=ReinforcementFineTuningStep,
         )
 
+    async def resume(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> ReinforcementFineTuningStep:
+        """
+        Resume Rlor Trainer Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return await self._post(
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+            body=await async_maybe_transform(
+                body, reinforcement_fine_tuning_step_resume_params.ReinforcementFineTuningStepResumeParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=ReinforcementFineTuningStep,
+        )
+
 
 class ReinforcementFineTuningStepsResourceWithRawResponse:
     def __init__(self, reinforcement_fine_tuning_steps: ReinforcementFineTuningStepsResource) -> None:
@@ -579,6 +690,9 @@ class ReinforcementFineTuningStepsResourceWithRawResponse:
         )
         self.get = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
+        )
+        self.resume = to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.resume,
         )
 
 
@@ -598,6 +712,9 @@ class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         self.get = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
+        self.resume = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.resume,
+        )
 
 
 class ReinforcementFineTuningStepsResourceWithStreamingResponse:
@@ -616,6 +733,9 @@ class ReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
+        self.resume = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.resume,
+        )
 
 
 class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
@@ -633,4 +753,7 @@ class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,
+        )
+        self.resume = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.resume,
         )

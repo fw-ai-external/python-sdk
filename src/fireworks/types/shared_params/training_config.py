@@ -62,11 +62,11 @@ class TrainingConfig(TypedDict, total=False):
         "AP_TOKYO_2",
         "US_CALIFORNIA_1",
         "US_UTAH_1",
-        "US_TEXAS_3",
         "US_GEORGIA_1",
         "US_GEORGIA_2",
         "US_WASHINGTON_4",
         "US_GEORGIA_3",
+        "NA_BRITISHCOLUMBIA_1",
     ]
     """The region where the fine-tuning job is located."""
 

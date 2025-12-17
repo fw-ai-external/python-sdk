@@ -33,12 +33,20 @@ class ReinforcementFineTuningStep(BaseModel):
     evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
     """The name of a separate dataset to use for evaluation."""
 
+    keep_alive: Optional[bool] = FieldInfo(alias="keepAlive", default=None)
+
     name: Optional[str] = None
 
     reward_weights: Optional[List[str]] = FieldInfo(alias="rewardWeights", default=None)
     """
     A list of reward metrics to use for training in format of
     "<reward_name>=<weight>".
+    """
+
+    rollout_deployment_name: Optional[str] = FieldInfo(alias="rolloutDeploymentName", default=None)
+    """Rollout deployment name associated with this RLOR trainer job. This is optional.
+
+    If not set, trainer will not trigger weight sync to rollout engine.
     """
 
     state: Optional[

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-from ..types import dpo_job_get_params, dpo_job_list_params, dpo_job_create_params
+from ..types import dpo_job_get_params, dpo_job_list_params, dpo_job_create_params, dpo_job_resume_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
 from .._compat import cached_property
@@ -15,9 +15,9 @@ from .._response import (
     async_to_raw_response_wrapper,
     async_to_streamed_response_wrapper,
 )
-from .._base_client import make_request_options
+from ..pagination import SyncCursorDpoJobs, AsyncCursorDpoJobs
+from .._base_client import AsyncPaginator, make_request_options
 from ..types.dpo_job import DpoJob
-from ..types.dpo_job_list_response import DpoJobListResponse
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.dpo_job_get_metrics_file_endpoint_response import DpoJobGetMetricsFileEndpointResponse
@@ -121,7 +121,7 @@ class DpoJobsResource(SyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DpoJobListResponse:
+    ) -> SyncCursorDpoJobs[DpoJob]:
         """Args:
           filter: Filter criteria for the returned jobs.
 
@@ -155,10 +155,11 @@ class DpoJobsResource(SyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/dpoJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            page=SyncCursorDpoJobs[DpoJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -175,7 +176,7 @@ class DpoJobsResource(SyncAPIResource):
                     dpo_job_list_params.DpoJobListParams,
                 ),
             ),
-            cast_to=DpoJobListResponse,
+            model=DpoJob,
         )
 
     def delete(
@@ -301,6 +302,48 @@ class DpoJobsResource(SyncAPIResource):
             cast_to=DpoJobGetMetricsFileEndpointResponse,
         )
 
+    def resume(
+        self,
+        dpo_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DpoJob:
+        """
+        Resume Dpo Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dpo_job_id:
+            raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
+        return self._post(
+            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume",
+            body=maybe_transform(body, dpo_job_resume_params.DpoJobResumeParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=DpoJob,
+        )
+
 
 class AsyncDpoJobsResource(AsyncAPIResource):
     @cached_property
@@ -383,7 +426,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
             cast_to=DpoJob,
         )
 
-    async def list(
+    def list(
         self,
         *,
         account_id: str | None = None,
@@ -398,7 +441,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         extra_query: Query | None = None,
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> DpoJobListResponse:
+    ) -> AsyncPaginator[DpoJob, AsyncCursorDpoJobs[DpoJob]]:
         """Args:
           filter: Filter criteria for the returned jobs.
 
@@ -432,16 +475,17 @@ class AsyncDpoJobsResource(AsyncAPIResource):
             account_id = self._client._get_account_id_path_param()
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        return await self._get(
+        return self._get_api_list(
             f"/v1/accounts/{account_id}/dpoJobs"
             if self._client._base_url_overridden
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            page=AsyncCursorDpoJobs[DpoJob],
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=await async_maybe_transform(
+                query=maybe_transform(
                     {
                         "filter": filter,
                         "order_by": order_by,
@@ -452,7 +496,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     dpo_job_list_params.DpoJobListParams,
                 ),
             ),
-            cast_to=DpoJobListResponse,
+            model=DpoJob,
         )
 
     async def delete(
@@ -578,6 +622,48 @@ class AsyncDpoJobsResource(AsyncAPIResource):
             cast_to=DpoJobGetMetricsFileEndpointResponse,
         )
 
+    async def resume(
+        self,
+        dpo_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> DpoJob:
+        """
+        Resume Dpo Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dpo_job_id:
+            raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
+        return await self._post(
+            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume",
+            body=await async_maybe_transform(body, dpo_job_resume_params.DpoJobResumeParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=DpoJob,
+        )
+
 
 class DpoJobsResourceWithRawResponse:
     def __init__(self, dpo_jobs: DpoJobsResource) -> None:
@@ -597,6 +683,9 @@ class DpoJobsResourceWithRawResponse:
         )
         self.get_metrics_file_endpoint = to_raw_response_wrapper(
             dpo_jobs.get_metrics_file_endpoint,
+        )
+        self.resume = to_raw_response_wrapper(
+            dpo_jobs.resume,
         )
 
 
@@ -619,6 +708,9 @@ class AsyncDpoJobsResourceWithRawResponse:
         self.get_metrics_file_endpoint = async_to_raw_response_wrapper(
             dpo_jobs.get_metrics_file_endpoint,
         )
+        self.resume = async_to_raw_response_wrapper(
+            dpo_jobs.resume,
+        )
 
 
 class DpoJobsResourceWithStreamingResponse:
@@ -640,6 +732,9 @@ class DpoJobsResourceWithStreamingResponse:
         self.get_metrics_file_endpoint = to_streamed_response_wrapper(
             dpo_jobs.get_metrics_file_endpoint,
         )
+        self.resume = to_streamed_response_wrapper(
+            dpo_jobs.resume,
+        )
 
 
 class AsyncDpoJobsResourceWithStreamingResponse:
@@ -660,4 +755,7 @@ class AsyncDpoJobsResourceWithStreamingResponse:
         )
         self.get_metrics_file_endpoint = async_to_streamed_response_wrapper(
             dpo_jobs.get_metrics_file_endpoint,
+        )
+        self.resume = async_to_streamed_response_wrapper(
+            dpo_jobs.resume,
         )

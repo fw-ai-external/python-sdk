@@ -11,6 +11,12 @@ __all__ = ["Placement"]
 
 
 class Placement(BaseModel):
+    """The desired geographic region where the deployment must be placed.
+
+    Exactly one field will be
+    specified.
+    """
+
     multi_region: Optional[Literal["MULTI_REGION_UNSPECIFIED", "GLOBAL", "US"]] = FieldInfo(
         alias="multiRegion", default=None
     )
@@ -36,11 +42,11 @@ class Placement(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
             "US_GEORGIA_3",
+            "NA_BRITISHCOLUMBIA_1",
         ]
     ] = None
     """The region where the deployment must be placed."""
@@ -66,11 +72,11 @@ class Placement(BaseModel):
                 "AP_TOKYO_2",
                 "US_CALIFORNIA_1",
                 "US_UTAH_1",
-                "US_TEXAS_3",
                 "US_GEORGIA_1",
                 "US_GEORGIA_2",
                 "US_WASHINGTON_4",
                 "US_GEORGIA_3",
+                "NA_BRITISHCOLUMBIA_1",
             ]
         ]
     ] = None

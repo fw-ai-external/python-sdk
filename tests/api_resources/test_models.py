@@ -11,10 +11,11 @@ from fireworks import Fireworks, AsyncFireworks
 from tests.utils import assert_matches_type
 from fireworks.types import (
     Model,
-    ModelListResponse,
+    ModelValidateUploadResponse,
     ModelGetUploadEndpointResponse,
     ModelGetDownloadEndpointResponse,
 )
+from fireworks.pagination import SyncCursorModels, AsyncCursorModels
 
 base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 
@@ -231,7 +232,7 @@ class TestModels:
         model = client.models.list(
             account_id="account_id",
         )
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -244,7 +245,7 @@ class TestModels:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -256,7 +257,7 @@ class TestModels:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -268,7 +269,7 @@ class TestModels:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
-            assert_matches_type(ModelListResponse, model, path=["response"])
+            assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -595,7 +596,7 @@ class TestModels:
             model_id="model_id",
             account_id="account_id",
         )
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -607,7 +608,7 @@ class TestModels:
             skip_hf_config_validation=True,
             trust_remote_code=True,
         )
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -620,7 +621,7 @@ class TestModels:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -633,7 +634,7 @@ class TestModels:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
-            assert_matches_type(object, model, path=["response"])
+            assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -867,7 +868,7 @@ class TestAsyncModels:
         model = await async_client.models.list(
             account_id="account_id",
         )
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -880,7 +881,7 @@ class TestAsyncModels:
             page_token="pageToken",
             read_mask="readMask",
         )
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -892,7 +893,7 @@ class TestAsyncModels:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
-        assert_matches_type(ModelListResponse, model, path=["response"])
+        assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -904,7 +905,7 @@ class TestAsyncModels:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
-            assert_matches_type(ModelListResponse, model, path=["response"])
+            assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
@@ -1231,7 +1232,7 @@ class TestAsyncModels:
             model_id="model_id",
             account_id="account_id",
         )
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -1243,7 +1244,7 @@ class TestAsyncModels:
             skip_hf_config_validation=True,
             trust_remote_code=True,
         )
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -1256,7 +1257,7 @@ class TestAsyncModels:
         assert response.is_closed is True
         assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
-        assert_matches_type(object, model, path=["response"])
+        assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
@@ -1269,7 +1270,7 @@ class TestAsyncModels:
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
-            assert_matches_type(object, model, path=["response"])
+            assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
         assert cast(Any, response.is_closed) is True
 
