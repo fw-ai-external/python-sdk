@@ -50,6 +50,10 @@ class TestReinforcementFineTuningJobs:
                 "top_k": 0,
                 "top_p": 0,
             },
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
+            },
             mcp_server="mcpServer",
             node_count=0,
             training_config={
@@ -458,6 +462,10 @@ class TestAsyncReinforcementFineTuningJobs:
                 "temperature": 0,
                 "top_k": 0,
                 "top_p": 0,
+            },
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
             },
             mcp_server="mcpServer",
             node_count=0,

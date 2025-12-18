@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing_extensions import Required, Annotated, TypedDict
+from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 from .shared_params.inference_parameters import InferenceParameters
 
-__all__ = ["ReinforcementFineTuningJobCreateParams"]
+__all__ = ["ReinforcementFineTuningJobCreateParams", "LossConfig"]
 
 
 class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
@@ -44,6 +44,12 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     inference_parameters: Annotated[InferenceParameters, PropertyInfo(alias="inferenceParameters")]
     """BIJ parameters."""
 
+    loss_config: Annotated[LossConfig, PropertyInfo(alias="lossConfig")]
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying
+    trainers.
+    """
+
     mcp_server: Annotated[str, PropertyInfo(alias="mcpServer")]
 
     node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
@@ -57,3 +63,17 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
+
+
+class LossConfig(TypedDict, total=False):
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying trainers.
+    """
+
+    kl_beta: Annotated[float, PropertyInfo(alias="klBeta")]
+    """
+    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
+    default is used.
+    """
+
+    method: Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]

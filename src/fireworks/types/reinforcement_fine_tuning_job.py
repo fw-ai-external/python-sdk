@@ -12,7 +12,21 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.inference_parameters import InferenceParameters
 
-__all__ = ["ReinforcementFineTuningJob"]
+__all__ = ["ReinforcementFineTuningJob", "LossConfig"]
+
+
+class LossConfig(BaseModel):
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying trainers.
+    """
+
+    kl_beta: Optional[float] = FieldInfo(alias="klBeta", default=None)
+    """
+    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
+    default is used.
+    """
+
+    method: Optional[Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]] = None
 
 
 class ReinforcementFineTuningJob(BaseModel):
@@ -46,6 +60,12 @@ class ReinforcementFineTuningJob(BaseModel):
 
     inference_parameters: Optional[InferenceParameters] = FieldInfo(alias="inferenceParameters", default=None)
     """BIJ parameters."""
+
+    loss_config: Optional[LossConfig] = FieldInfo(alias="lossConfig", default=None)
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying
+    trainers.
+    """
 
     mcp_server: Optional[str] = FieldInfo(alias="mcpServer", default=None)
 

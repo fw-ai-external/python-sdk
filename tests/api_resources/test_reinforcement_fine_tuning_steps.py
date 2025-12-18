@@ -39,6 +39,10 @@ class TestReinforcementFineTuningSteps:
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
             keep_alive=True,
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
+            },
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
             training_config={
@@ -224,6 +228,68 @@ class TestReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
+    def test_method_execute_train_step(self, client: Fireworks) -> None:
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        )
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_execute_train_step(self, client: Fireworks) -> None:
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_step = response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_execute_train_step(self, client: Fireworks) -> None:
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_step = response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_execute_train_step(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+                rlor_trainer_job_id="rlor_trainer_job_id",
+                account_id="",
+                dataset="dataset",
+                output_model="outputModel",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+                rlor_trainer_job_id="",
+                account_id="account_id",
+                dataset="dataset",
+                output_model="outputModel",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
     def test_method_get(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.get(
             rlor_trainer_job_id="rlor_trainer_job_id",
@@ -366,6 +432,10 @@ class TestAsyncReinforcementFineTuningSteps:
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
             keep_alive=True,
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
+            },
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
             training_config={
@@ -547,6 +617,68 @@ class TestAsyncReinforcementFineTuningSteps:
             await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
                 rlor_trainer_job_id="",
                 account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_execute_train_step(self, async_client: AsyncFireworks) -> None:
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        )
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_execute_train_step(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        reinforcement_fine_tuning_step = await response.parse()
+        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_execute_train_step(self, async_client: AsyncFireworks) -> None:
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.execute_train_step(
+            rlor_trainer_job_id="rlor_trainer_job_id",
+            account_id="account_id",
+            dataset="dataset",
+            output_model="outputModel",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            reinforcement_fine_tuning_step = await response.parse()
+            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_execute_train_step(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+                rlor_trainer_job_id="rlor_trainer_job_id",
+                account_id="",
+                dataset="dataset",
+                output_model="outputModel",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+                rlor_trainer_job_id="",
+                account_id="account_id",
+                dataset="dataset",
+                output_model="outputModel",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
