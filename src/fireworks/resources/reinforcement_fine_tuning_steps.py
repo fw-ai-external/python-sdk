@@ -9,6 +9,7 @@ from ..types import (
     reinforcement_fine_tuning_step_list_params,
     reinforcement_fine_tuning_step_create_params,
     reinforcement_fine_tuning_step_resume_params,
+    reinforcement_fine_tuning_step_execute_train_step_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -59,6 +60,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
+        loss_config: reinforcement_fine_tuning_step_create_params.LossConfig | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -81,6 +83,8 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -115,6 +119,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "keep_alive": keep_alive,
+                    "loss_config": loss_config,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,
@@ -251,6 +256,61 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             cast_to=object,
         )
 
+    def execute_train_step(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        dataset: str,
+        output_model: str,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Execute one training step for keep-alive Reinforcement Fine-tuning Step
+
+        Args:
+          dataset: Dataset to process for this iteration.
+
+          output_model: Output model to materialize when training completes.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return self._post(
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+            body=maybe_transform(
+                {
+                    "dataset": dataset,
+                    "output_model": output_model,
+                },
+                reinforcement_fine_tuning_step_execute_train_step_params.ReinforcementFineTuningStepExecuteTrainStepParams,
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     def get(
         self,
         rlor_trainer_job_id: str,
@@ -381,6 +441,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
+        loss_config: reinforcement_fine_tuning_step_create_params.LossConfig | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -403,6 +464,8 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -437,6 +500,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "keep_alive": keep_alive,
+                    "loss_config": loss_config,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,
@@ -575,6 +639,61 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=object,
         )
 
+    async def execute_train_step(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        dataset: str,
+        output_model: str,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Execute one training step for keep-alive Reinforcement Fine-tuning Step
+
+        Args:
+          dataset: Dataset to process for this iteration.
+
+          output_model: Output model to materialize when training completes.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return await self._post(
+            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+            body=await async_maybe_transform(
+                {
+                    "dataset": dataset,
+                    "output_model": output_model,
+                },
+                reinforcement_fine_tuning_step_execute_train_step_params.ReinforcementFineTuningStepExecuteTrainStepParams,
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def get(
         self,
         rlor_trainer_job_id: str,
@@ -688,6 +807,9 @@ class ReinforcementFineTuningStepsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
+        self.execute_train_step = to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.execute_train_step,
+        )
         self.get = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
@@ -708,6 +830,9 @@ class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         )
         self.delete = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
+        )
+        self.execute_train_step = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.execute_train_step,
         )
         self.get = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
@@ -730,6 +855,9 @@ class ReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
+        self.execute_train_step = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.execute_train_step,
+        )
         self.get = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
@@ -750,6 +878,9 @@ class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
+        )
+        self.execute_train_step = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.execute_train_step,
         )
         self.get = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,

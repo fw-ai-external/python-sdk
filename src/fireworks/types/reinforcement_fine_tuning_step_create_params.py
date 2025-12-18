@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import Literal, Annotated, TypedDict
 
 from .._types import SequenceNotStr
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 
-__all__ = ["ReinforcementFineTuningStepCreateParams"]
+__all__ = ["ReinforcementFineTuningStepCreateParams", "LossConfig"]
 
 
 class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
@@ -31,6 +31,11 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     keep_alive: Annotated[bool, PropertyInfo(alias="keepAlive")]
 
+    loss_config: Annotated[LossConfig, PropertyInfo(alias="lossConfig")]
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying trainer.
+    """
+
     reward_weights: Annotated[SequenceNotStr[str], PropertyInfo(alias="rewardWeights")]
     """
     A list of reward metrics to use for training in format of
@@ -48,3 +53,17 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
+
+
+class LossConfig(TypedDict, total=False):
+    """
+    Reinforcement learning loss method + hyperparameters for the underlying trainer.
+    """
+
+    kl_beta: Annotated[float, PropertyInfo(alias="klBeta")]
+    """
+    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
+    default is used.
+    """
+
+    method: Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]

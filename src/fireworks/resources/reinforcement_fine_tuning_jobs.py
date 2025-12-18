@@ -63,6 +63,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
+        loss_config: reinforcement_fine_tuning_job_create_params.LossConfig | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -93,6 +94,9 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          loss_config: Reinforcement learning loss method + hyperparameters for the underlying
+              trainers.
 
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
@@ -126,6 +130,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
+                    "loss_config": loss_config,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,
@@ -441,6 +446,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: InferenceParameters | Omit = omit,
+        loss_config: reinforcement_fine_tuning_job_create_params.LossConfig | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -471,6 +477,9 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           inference_parameters: BIJ parameters.
+
+          loss_config: Reinforcement learning loss method + hyperparameters for the underlying
+              trainers.
 
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
@@ -504,6 +513,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
+                    "loss_config": loss_config,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,
