@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.13 (2025-12-18)
+
+Full Changelog: [v1.0.0-alpha.12...v1.0.0-alpha.13](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.12...v1.0.0-alpha.13)
+
+### Features
+
+* Updated `stainless.yml` to include execute train step ([617aaf9](https://github.com/fw-ai-external/python-sdk/commit/617aaf92a5bc0acf43d7ec9a883409d248ff8d36))
+
+
+### Chores
+
+* **internal:** add `--fix` argument to lint script ([859cb4f](https://github.com/fw-ai-external/python-sdk/commit/859cb4f846f0d5f975df3eaa9d018457491fc0b9))
+
 ## 1.0.0-alpha.12 (2025-12-17)
 
 Full Changelog: [v1.0.0-alpha.11...v1.0.0-alpha.12](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.11...v1.0.0-alpha.12)

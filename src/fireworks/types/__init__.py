@@ -202,3 +202,6 @@ from .reinforcement_fine_tuning_step_create_params import (
 from .reinforcement_fine_tuning_step_resume_params import (
     ReinforcementFineTuningStepResumeParams as ReinforcementFineTuningStepResumeParams,
 )
+from .reinforcement_fine_tuning_step_execute_train_step_params import (
+    ReinforcementFineTuningStepExecuteTrainStepParams as ReinforcementFineTuningStepExecuteTrainStepParams,
+)
