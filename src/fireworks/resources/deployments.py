@@ -79,6 +79,7 @@ class DeploymentsResource(SyncAPIResource):
             "NVIDIA_H200_141GB",
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
+            "AMD_MI350X_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -307,6 +308,7 @@ class DeploymentsResource(SyncAPIResource):
             "NVIDIA_H200_141GB",
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
+            "AMD_MI350X_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -804,6 +806,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "NVIDIA_H200_141GB",
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
+            "AMD_MI350X_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -1032,6 +1035,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "NVIDIA_H200_141GB",
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
+            "AMD_MI350X_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
