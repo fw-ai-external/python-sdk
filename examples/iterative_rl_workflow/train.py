@@ -7,6 +7,11 @@ This script demonstrates an iterative reinforcement learning workflow using GSM8
 3. Score outputs by comparing with ground truth answers
 4. Run reinforcement fine-tuning steps
 5. Repeat for multiple epochs
+
+Example usage:
+    python gsm8k.py \
+        --base-model accounts/fireworks/models/qwen3-32b \
+        --direct-route-api-key <your-direct-route-api-key>
 """
 
 from __future__ import annotations
@@ -43,14 +48,6 @@ logger = logging.getLogger(__name__)
 # Suppress HTTP request logs from httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Configuration - set these environment variables before running
-FIREWORKS_API_KEY = os.environ.get("FIREWORKS_API_KEY", "")
-BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai")
-ACCOUNT_ID = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
-
-# Base model for training - update this to your desired model
-BASE_MODEL = os.environ.get("FIREWORKS_BASE_MODEL", "accounts/fireworks/models/qwen3-32b")
-
 # Default values (can be overridden via CLI)
 DEFAULT_DEPLOYMENT_ID = "gsm8k-rlor"
 DEFAULT_NUM_EPOCHS = 2
@@ -66,10 +63,17 @@ DEFAULT_DEPLOYMENT_TIMEOUT = 1200
 DEFAULT_DATASET_TIMEOUT = 300
 DEFAULT_TRAINING_TIMEOUT = 7200
 DEFAULT_LORA_TIMEOUT = 300
+DEFAULT_DIRECT_ROUTE_REGION = "US_VIRGINIA_1"
+DEFAULT_LEARNING_RATE = 1e-5
+DEFAULT_LORA_RANK = 8
+DEFAULT_MAX_CONTEXT_LENGTH = 4096
+DEFAULT_BATCH_SIZE = 32768
 
 ROLLOUTS_DIR = "rollouts"
 # Path to the GSM8K dataset file (local or remote via fsspec, e.g., gs://, s3://)
 DATASET_FILE = os.environ.get("DATASET_FILE", "dataset_with_ground_truth.jsonl")
+# Trainer job ID prefix for keep-alive jobs
+TRAINER_JOB_ID_PREFIX = "gsm8k-rlor-trainer"
 
 
 def parse_args() -> argparse.Namespace:
@@ -167,6 +171,48 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_LORA_TIMEOUT,
         help="Timeout in seconds for LoRA adapter to be deployed",
+    )
+    parser.add_argument(
+        "--base-model",
+        type=str,
+        required=True,
+        help="Base model to use for training (e.g., accounts/fireworks/models/qwen3-32b)",
+    )
+    parser.add_argument(
+        "--direct-route-api-key",
+        type=str,
+        required=True,
+        help="API key for direct route access to the deployment",
+    )
+    parser.add_argument(
+        "--direct-route-region",
+        type=str,
+        default=DEFAULT_DIRECT_ROUTE_REGION,
+        help="Region for direct route deployment (e.g., US_VIRGINIA_1)",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=DEFAULT_LEARNING_RATE,
+        help="Learning rate for training",
+    )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=DEFAULT_LORA_RANK,
+        help="LoRA rank for training",
+    )
+    parser.add_argument(
+        "--max-context-length",
+        type=int,
+        default=DEFAULT_MAX_CONTEXT_LENGTH,
+        help="Maximum context length for training",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help="Batch size for training",
     )
     return parser.parse_args()
 
@@ -274,6 +320,7 @@ async def create_or_get_deployment(
     deployment_id: str,
     base_model: str,
     api_key: str,
+    region: str = DEFAULT_DIRECT_ROUTE_REGION,
 ) -> Deployment:
     """Create a deployment with hot reload and direct route enabled, or get existing one."""
     logger.info(f"Checking for existing deployment: {deployment_id}")
@@ -281,7 +328,7 @@ async def create_or_get_deployment(
         deployment = await client.deployments.get(deployment_id=deployment_id)
         logger.info(f"Found existing deployment: {deployment.name}")
         return deployment
-    except Exception:
+    except fireworks.NotFoundError:
         logger.info(f"Creating deployment {deployment_id} with hot reload and direct route enabled...")
         logger.info(f"  Base model: {base_model}")
         deployment = await client.deployments.create(
@@ -299,7 +346,7 @@ async def create_or_get_deployment(
             direct_route_type="INTERNET",
             direct_route_api_keys=[api_key],
             # Direct route requires a specific region
-            placement={"region": "US_VIRGINIA_1"},
+            placement={"region": region},
         )
         logger.info(f"Created deployment: {deployment.name}")
         return deployment
@@ -345,6 +392,7 @@ async def generate_rollouts_and_rewards(
     client: AsyncFireworks,
     model: str,
     prompts: list[dict[str, Any]],
+    base_model: str,
     num_generations_per_prompt: int = DEFAULT_NUM_GENERATIONS_PER_PROMPT,
     concurrency: int = DEFAULT_CONCURRENCY,
     direct_route_url: str | None = None,
@@ -379,7 +427,7 @@ async def generate_rollouts_and_rewards(
             logger.info(f"Using direct route with LoRA model: {lora_model_name}")
         else:
             # First epoch - use the base model
-            inference_model = BASE_MODEL
+            inference_model = base_model
             logger.info(f"Using direct route with base model: {inference_model}")
     else:
         inference_client = client
@@ -785,25 +833,25 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     dataset_timeout = args.dataset_timeout
     training_timeout = args.training_timeout
     lora_timeout = args.lora_timeout
+    base_model = args.base_model
+    direct_route_api_key = args.direct_route_api_key
+    direct_route_region = args.direct_route_region
+    learning_rate = args.learning_rate
+    lora_rank = args.lora_rank
+    max_context_length = args.max_context_length
+    batch_size = args.batch_size
 
-    # Validate required configuration
-    if not FIREWORKS_API_KEY:
-        raise ValueError("FIREWORKS_API_KEY environment variable is required")
-    if not ACCOUNT_ID:
-        raise ValueError("FIREWORKS_ACCOUNT_ID environment variable is required")
+    # Get account ID from environment (SDK will pick it up automatically)
+    account_id = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
 
     # Create client with the specified API key, account ID, and base URL
-    client = AsyncFireworks(
-        api_key=FIREWORKS_API_KEY,
-        account_id=ACCOUNT_ID,
-        base_url=BASE_URL,
-    )
+    client = AsyncFireworks()
 
     logger.info("=" * 60)
-    logger.info("GSM8K RLOR Training Workflow (Keep-Alive Mode)")
+    logger.info("GSM8K RLOR Training Workflow")
     logger.info("=" * 60)
-    logger.info(f"Account: {ACCOUNT_ID}")
-    logger.info(f"Base Model: {BASE_MODEL}")
+    logger.info(f"Account: {account_id}")
+    logger.info(f"Base Model: {base_model}")
     logger.info(f"Deployment ID: {deployment_id}")
     logger.info(f"Run ID: {run_id}")
     logger.info(f"Total Prompts: {total_prompts}")
@@ -813,6 +861,17 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     logger.info(f"Num Generations: {num_generations}")
     logger.info(f"Temperature: {temperature}")
     logger.info(f"Max Tokens: {max_tokens}")
+    logger.info(f"Max Retries: {max_retries}")
+    logger.info(f"Retry Delay: {retry_delay}")
+    logger.info(f"Deployment Timeout: {deployment_timeout}")
+    logger.info(f"Dataset Timeout: {dataset_timeout}")
+    logger.info(f"Training Timeout: {training_timeout}")
+    logger.info(f"LoRA Timeout: {lora_timeout}")
+    logger.info(f"Direct Route Region: {direct_route_region}")
+    logger.info(f"Learning Rate: {learning_rate}")
+    logger.info(f"LoRA Rank: {lora_rank}")
+    logger.info(f"Max Context Length: {max_context_length}")
+    logger.info(f"Batch Size: {batch_size}")
     logger.info("=" * 60)
 
     # Load all GSM8K prompts
@@ -820,7 +879,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     num_chunks = (len(all_prompts) + chunk_size - 1) // chunk_size
     logger.info(f"Will process {num_chunks} chunks per epoch")
 
-    trainer_job_id = f"gsm8k-rlor-trainer-{run_id}"
+    trainer_job_id = f"{TRAINER_JOB_ID_PREFIX}-{run_id}"
 
     # Step 1: Create keep-alive trainer job (ONCE)
     logger.info(f"Creating keep-alive trainer job: {trainer_job_id}")
@@ -830,18 +889,18 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         await client.reinforcement_fine_tuning_steps.delete(trainer_job_id)
         logger.info(f"Deleted existing trainer job: {trainer_job_id}")
         await asyncio.sleep(2)  # Wait for cleanup
-    except Exception:
+    except fireworks.NotFoundError as e:
         pass  # Job doesn't exist, that's fine
 
     # Create new trainer job
     logger.info("Creating new trainer job...")
 
     keep_alive_training_config: TrainingConfig = {
-        "base_model": BASE_MODEL,
-        "learning_rate": 1e-5,
-        "lora_rank": 8,
-        "max_context_length": 4096,
-        "batch_size": 32768,
+        "base_model": base_model,
+        "learning_rate": learning_rate,
+        "lora_rank": lora_rank,
+        "max_context_length": max_context_length,
+        "batch_size": batch_size,
     }
 
     await client.reinforcement_fine_tuning_steps.create(
@@ -849,7 +908,8 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         display_name=f"GSM8K RL Trainer {run_id}",
         training_config=keep_alive_training_config,
         keep_alive=True,
-        # API is poorly documented, this assigns a field for the reward
+        # The documenation for `reward_weights` is poorly documented, it is
+        # actually used to assign a field for the reward
         reward_weights=["score"],
     )
     logger.info(f"Created trainer job: {trainer_job_id}")
@@ -862,14 +922,15 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     await create_or_get_deployment(
         client=client,
         deployment_id=deployment_id,
-        base_model=BASE_MODEL,
-        api_key=FIREWORKS_API_KEY,
+        base_model=base_model,
+        api_key=direct_route_api_key,
+        region=direct_route_region,
     )
     await wait_for_deployment_ready(client=client, deployment_id=deployment_id, timeout_seconds=deployment_timeout)
 
-    direct_route_url = await get_direct_route_url(client=client, deployment_id=deployment_id, account_id=ACCOUNT_ID)
+    direct_route_url = await get_direct_route_url(client=client, deployment_id=deployment_id, account_id=account_id)
 
-    deployment_name = f"accounts/{ACCOUNT_ID}/deployments/{deployment_id}"
+    deployment_name = f"accounts/{account_id}/deployments/{deployment_id}"
     current_lora_model: str | None = None
     step = 0
 
@@ -891,10 +952,11 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
                     client=client,
                     model=deployment_name,
                     prompts=chunk_prompts,
+                    base_model=base_model,
                     num_generations_per_prompt=num_generations,
                     concurrency=concurrency,
                     direct_route_url=direct_route_url,
-                    api_key=FIREWORKS_API_KEY,
+                    api_key=direct_route_api_key,
                     lora_model_name=current_lora_model,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -917,7 +979,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
                 )
 
                 # 3. Execute Train Step
-                output_model_name = f"accounts/{ACCOUNT_ID}/models/gsm8k-rl-model-{run_id}-v{step}"
+                output_model_name = f"accounts/{account_id}/models/gsm8k-rl-model-{run_id}-v{step}"
                 output_model_id = f"gsm8k-rl-model-{run_id}-v{step}"
 
                 logger.info(f"Signalling trainer for step {step} -> {output_model_name}")

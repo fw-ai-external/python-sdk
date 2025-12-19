@@ -1,0 +1,3 @@
+- we do not split train/validation/test sets. We use the entire dataset for training. You should probably handle this level of data splitting in your own code
+- we use direct route to minimize network latency and keepalive to save on job creation/teardonw time
+- use cleanup.py to delete oprhaned trainer jobs that train.py does not delete
