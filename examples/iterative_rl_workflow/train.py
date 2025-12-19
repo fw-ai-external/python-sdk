@@ -26,8 +26,8 @@ import argparse
 from typing import Any
 from collections import defaultdict
 
-import fsspec  # type: ignore[import-untyped]
-from dotenv import load_dotenv  # type: ignore[import-untyped]
+import fsspec  # type: ignore[import-untyped,import-not-found]
+from dotenv import load_dotenv  # type: ignore[import-untyped,import-not-found]
 
 import fireworks
 from fireworks import AsyncFireworks
@@ -400,7 +400,7 @@ async def create_or_get_deployment(
             direct_route_type="INTERNET",
             direct_route_api_keys=[api_key],
             # Direct route requires a specific region
-            placement={"region": region},  # type: ignore[dict-item]
+            placement={"region": region},  # type: ignore[dict-item,typeddict-item]
         )
         logger.info(f"Created deployment: {deployment.name}")
         return deployment
