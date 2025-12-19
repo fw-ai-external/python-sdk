@@ -50,6 +50,7 @@ from .rollup_settings import RollupSettings as RollupSettings
 from .type_date_param import TypeDateParam as TypeDateParam
 from .user_get_params import UserGetParams as UserGetParams
 from .completion_chunk import CompletionChunk as CompletionChunk
+from .deployment_shape import DeploymentShape as DeploymentShape
 from .evaluator_source import EvaluatorSource as EvaluatorSource
 from .lora_list_params import LoraListParams as LoraListParams
 from .lora_load_params import LoraLoadParams as LoraLoadParams
@@ -106,6 +107,7 @@ from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsP
 from .completion_create_params import CompletionCreateParams as CompletionCreateParams
 from .deployment_create_params import DeploymentCreateParams as DeploymentCreateParams
 from .deployment_delete_params import DeploymentDeleteParams as DeploymentDeleteParams
+from .deployment_shape_version import DeploymentShapeVersion as DeploymentShapeVersion
 from .deployment_update_params import DeploymentUpdateParams as DeploymentUpdateParams
 from .conversation_config_param import ConversationConfigParam as ConversationConfigParam
 from .evaluation_job_get_params import EvaluationJobGetParams as EvaluationJobGetParams
@@ -115,7 +117,9 @@ from .completion_create_response import CompletionCreateResponse as CompletionCr
 from .deployment_undelete_params import DeploymentUndeleteParams as DeploymentUndeleteParams
 from .evaluation_job_list_params import EvaluationJobListParams as EvaluationJobListParams
 from .supervised_fine_tuning_job import SupervisedFineTuningJob as SupervisedFineTuningJob
+from .deployment_shape_get_params import DeploymentShapeGetParams as DeploymentShapeGetParams
 from .evaluation_job_get_response import EvaluationJobGetResponse as EvaluationJobGetResponse
+from .deployment_shape_list_params import DeploymentShapeListParams as DeploymentShapeListParams
 from .evaluation_job_create_params import EvaluationJobCreateParams as EvaluationJobCreateParams
 from .evaluation_job_list_response import EvaluationJobListResponse as EvaluationJobListResponse
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
@@ -138,15 +142,9 @@ from .dataset_get_upload_endpoint_response import DatasetGetUploadEndpointRespon
 from .deployment_shape_version_list_params import DeploymentShapeVersionListParams as DeploymentShapeVersionListParams
 from .evaluator_get_upload_endpoint_params import EvaluatorGetUploadEndpointParams as EvaluatorGetUploadEndpointParams
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
-from .deployment_shape_version_get_response import (
-    DeploymentShapeVersionGetResponse as DeploymentShapeVersionGetResponse,
-)
 from .supervised_fine_tuning_job_get_params import SupervisedFineTuningJobGetParams as SupervisedFineTuningJobGetParams
 from .dataset_get_download_endpoint_response import (
     DatasetGetDownloadEndpointResponse as DatasetGetDownloadEndpointResponse,
-)
-from .deployment_shape_version_list_response import (
-    DeploymentShapeVersionListResponse as DeploymentShapeVersionListResponse,
 )
 from .evaluator_get_upload_endpoint_response import (
     EvaluatorGetUploadEndpointResponse as EvaluatorGetUploadEndpointResponse,

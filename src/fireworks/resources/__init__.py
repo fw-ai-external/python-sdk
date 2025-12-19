@@ -104,6 +104,14 @@ from .evaluation_jobs import (
     EvaluationJobsResourceWithStreamingResponse,
     AsyncEvaluationJobsResourceWithStreamingResponse,
 )
+from .deployment_shapes import (
+    DeploymentShapesResource,
+    AsyncDeploymentShapesResource,
+    DeploymentShapesResourceWithRawResponse,
+    AsyncDeploymentShapesResourceWithRawResponse,
+    DeploymentShapesResourceWithStreamingResponse,
+    AsyncDeploymentShapesResourceWithStreamingResponse,
+)
 from .batch_inference_jobs import (
     BatchInferenceJobsResource,
     AsyncBatchInferenceJobsResource,
@@ -182,6 +190,12 @@ __all__ = [
     "AsyncLoraResourceWithRawResponse",
     "LoraResourceWithStreamingResponse",
     "AsyncLoraResourceWithStreamingResponse",
+    "DeploymentShapesResource",
+    "AsyncDeploymentShapesResource",
+    "DeploymentShapesResourceWithRawResponse",
+    "AsyncDeploymentShapesResourceWithRawResponse",
+    "DeploymentShapesResourceWithStreamingResponse",
+    "AsyncDeploymentShapesResourceWithStreamingResponse",
     "DeploymentShapeVersionsResource",
     "AsyncDeploymentShapeVersionsResource",
     "DeploymentShapeVersionsResourceWithRawResponse",
