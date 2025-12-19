@@ -67,6 +67,7 @@ DEFAULT_DIRECT_ROUTE_REGION = "US_VIRGINIA_1"
 DEFAULT_LEARNING_RATE = 1e-5
 DEFAULT_LORA_RANK = 8
 DEFAULT_MAX_CONTEXT_LENGTH = 4096
+DEFAULT_MODEL_POLL_INTERVAL = 10
 DEFAULT_BATCH_SIZE = 32768
 
 ROLLOUTS_DIR = "rollouts"
@@ -211,6 +212,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_BATCH_SIZE,
         help="Batch size for training",
+    )
+    parser.add_argument(
+        "--model-poll-interval",
+        type=int,
+        default=DEFAULT_MODEL_POLL_INTERVAL,
+        help="Poll interval in seconds when waiting for model to be ready",
     )
     return parser.parse_args()
 
@@ -775,7 +782,7 @@ async def wait_for_model_ready_or_job_fail(
     model_id: str,
     job_id: str,
     timeout_seconds: int = DEFAULT_TRAINING_TIMEOUT,
-    poll_interval: int = 30,
+    poll_interval: int = DEFAULT_MODEL_POLL_INTERVAL,
 ) -> None:
     """Wait for model to be READY or job to FAIL."""
     logger.info(f"Waiting for model {model_id} to be ready (timeout: {timeout_seconds}s)...")
@@ -837,6 +844,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     lora_rank = args.lora_rank
     max_context_length = args.max_context_length
     batch_size = args.batch_size
+    model_poll_interval = args.model_poll_interval
 
     # Get account ID from environment (SDK will pick it up automatically)
     account_id = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
@@ -989,7 +997,11 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
                 # 4. Wait for Output Model
                 logger.info("Waiting for training to complete...")
                 await wait_for_model_ready_or_job_fail(
-                    client=client, model_id=output_model_id, job_id=trainer_job_id, timeout_seconds=training_timeout
+                    client=client,
+                    model_id=output_model_id,
+                    job_id=trainer_job_id,
+                    timeout_seconds=training_timeout,
+                    poll_interval=model_poll_interval,
                 )
 
                 # 5. Hot Reload
