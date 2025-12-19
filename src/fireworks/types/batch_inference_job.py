@@ -8,9 +8,33 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 from .shared.status import Status
-from .shared.inference_parameters import InferenceParameters
 
-__all__ = ["BatchInferenceJob", "JobProgress"]
+__all__ = ["BatchInferenceJob", "InferenceParameters", "JobProgress"]
+
+
+class InferenceParameters(BaseModel):
+    """Parameters controlling the inference process."""
+
+    extra_body: Optional[str] = FieldInfo(alias="extraBody", default=None)
+    """
+    Additional parameters for the inference request as a JSON string. For example:
+    "{\"stop\": [\"\\n\"]}".
+    """
+
+    max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
+    """Maximum number of tokens to generate per response."""
+
+    n: Optional[int] = None
+    """Number of response candidates to generate per input."""
+
+    temperature: Optional[float] = None
+    """Sampling temperature, typically between 0 and 2."""
+
+    top_k: Optional[int] = FieldInfo(alias="topK", default=None)
+    """Top-k sampling parameter, limits the token selection to the top k tokens."""
+
+    top_p: Optional[float] = FieldInfo(alias="topP", default=None)
+    """Top-p sampling parameter, typically between 0 and 1."""
 
 
 class JobProgress(BaseModel):

@@ -6,10 +6,10 @@ from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["ReinforcementFineTuningStepExecuteTrainStepParams"]
+__all__ = ["ReinforcementFineTuningStepExecuteParams"]
 
 
-class ReinforcementFineTuningStepExecuteTrainStepParams(TypedDict, total=False):
+class ReinforcementFineTuningStepExecuteParams(TypedDict, total=False):
     account_id: str
 
     dataset: Required[str]

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Required, Annotated, TypedDict
+from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
-from .shared_params.inference_parameters import InferenceParameters
+from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningJobCreateParams", "LossConfig"]
+__all__ = ["ReinforcementFineTuningJobCreateParams", "InferenceParameters"]
 
 
 class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
@@ -42,9 +42,9 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     """The name of a separate dataset to use for evaluation."""
 
     inference_parameters: Annotated[InferenceParameters, PropertyInfo(alias="inferenceParameters")]
-    """BIJ parameters."""
+    """RFT inference parameters."""
 
-    loss_config: Annotated[LossConfig, PropertyInfo(alias="lossConfig")]
+    loss_config: Annotated[ReinforcementLearningLossConfig, PropertyInfo(alias="lossConfig")]
     """
     Reinforcement learning loss method + hyperparameters for the underlying
     trainers.
@@ -65,15 +65,26 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     """The Weights & Biases team/user account for logging training progress."""
 
 
-class LossConfig(TypedDict, total=False):
+class InferenceParameters(TypedDict, total=False):
+    """RFT inference parameters."""
+
+    extra_body: Annotated[str, PropertyInfo(alias="extraBody")]
     """
-    Reinforcement learning loss method + hyperparameters for the underlying trainers.
+    Additional parameters for the inference request as a JSON string. For example:
+    "{\"stop\": [\"\\n\"]}".
     """
 
-    kl_beta: Annotated[float, PropertyInfo(alias="klBeta")]
-    """
-    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
-    default is used.
-    """
+    max_output_tokens: Annotated[int, PropertyInfo(alias="maxOutputTokens")]
+    """Maximum number of tokens to generate per response."""
 
-    method: Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]
+    response_candidates_count: Annotated[int, PropertyInfo(alias="responseCandidatesCount")]
+    """Number of response candidates to generate per input."""
+
+    temperature: float
+    """Sampling temperature, typically between 0 and 2."""
+
+    top_k: Annotated[int, PropertyInfo(alias="topK")]
+    """Top-k sampling parameter, limits the token selection to the top k tokens."""
+
+    top_p: Annotated[float, PropertyInfo(alias="topP")]
+    """Top-p sampling parameter, typically between 0 and 1."""

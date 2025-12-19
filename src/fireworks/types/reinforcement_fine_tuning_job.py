@@ -10,23 +10,34 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
-from .shared.inference_parameters import InferenceParameters
+from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningJob", "LossConfig"]
+__all__ = ["ReinforcementFineTuningJob", "InferenceParameters"]
 
 
-class LossConfig(BaseModel):
+class InferenceParameters(BaseModel):
+    """RFT inference parameters."""
+
+    extra_body: Optional[str] = FieldInfo(alias="extraBody", default=None)
     """
-    Reinforcement learning loss method + hyperparameters for the underlying trainers.
-    """
-
-    kl_beta: Optional[float] = FieldInfo(alias="klBeta", default=None)
-    """
-    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
-    default is used.
+    Additional parameters for the inference request as a JSON string. For example:
+    "{\"stop\": [\"\\n\"]}".
     """
 
-    method: Optional[Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]] = None
+    max_output_tokens: Optional[int] = FieldInfo(alias="maxOutputTokens", default=None)
+    """Maximum number of tokens to generate per response."""
+
+    response_candidates_count: Optional[int] = FieldInfo(alias="responseCandidatesCount", default=None)
+    """Number of response candidates to generate per input."""
+
+    temperature: Optional[float] = None
+    """Sampling temperature, typically between 0 and 2."""
+
+    top_k: Optional[int] = FieldInfo(alias="topK", default=None)
+    """Top-k sampling parameter, limits the token selection to the top k tokens."""
+
+    top_p: Optional[float] = FieldInfo(alias="topP", default=None)
+    """Top-p sampling parameter, typically between 0 and 1."""
 
 
 class ReinforcementFineTuningJob(BaseModel):
@@ -59,9 +70,9 @@ class ReinforcementFineTuningJob(BaseModel):
     """The name of a separate dataset to use for evaluation."""
 
     inference_parameters: Optional[InferenceParameters] = FieldInfo(alias="inferenceParameters", default=None)
-    """BIJ parameters."""
+    """RFT inference parameters."""
 
-    loss_config: Optional[LossConfig] = FieldInfo(alias="lossConfig", default=None)
+    loss_config: Optional[ReinforcementLearningLossConfig] = FieldInfo(alias="lossConfig", default=None)
     """
     Reinforcement learning loss method + hyperparameters for the underlying
     trainers.

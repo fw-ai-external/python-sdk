@@ -228,8 +228,8 @@ class TestReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_method_execute_train_step(self, client: Fireworks) -> None:
-        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.execute_train_step(
+    def test_method_execute(self, client: Fireworks) -> None:
+        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -239,8 +239,8 @@ class TestReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_raw_response_execute_train_step(self, client: Fireworks) -> None:
-        response = client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+    def test_raw_response_execute(self, client: Fireworks) -> None:
+        response = client.reinforcement_fine_tuning_steps.with_raw_response.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -254,8 +254,8 @@ class TestReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_streaming_response_execute_train_step(self, client: Fireworks) -> None:
-        with client.reinforcement_fine_tuning_steps.with_streaming_response.execute_train_step(
+    def test_streaming_response_execute(self, client: Fireworks) -> None:
+        with client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -271,9 +271,9 @@ class TestReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    def test_path_params_execute_train_step(self, client: Fireworks) -> None:
+    def test_path_params_execute(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            client.reinforcement_fine_tuning_steps.with_raw_response.execute(
                 rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
                 dataset="dataset",
@@ -281,7 +281,7 @@ class TestReinforcementFineTuningSteps:
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
-            client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            client.reinforcement_fine_tuning_steps.with_raw_response.execute(
                 rlor_trainer_job_id="",
                 account_id="account_id",
                 dataset="dataset",
@@ -621,8 +621,8 @@ class TestAsyncReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_method_execute_train_step(self, async_client: AsyncFireworks) -> None:
-        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.execute_train_step(
+    async def test_method_execute(self, async_client: AsyncFireworks) -> None:
+        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -632,8 +632,8 @@ class TestAsyncReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_raw_response_execute_train_step(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+    async def test_raw_response_execute(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -647,8 +647,8 @@ class TestAsyncReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_streaming_response_execute_train_step(self, async_client: AsyncFireworks) -> None:
-        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.execute_train_step(
+    async def test_streaming_response_execute(self, async_client: AsyncFireworks) -> None:
+        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
             rlor_trainer_job_id="rlor_trainer_job_id",
             account_id="account_id",
             dataset="dataset",
@@ -664,9 +664,9 @@ class TestAsyncReinforcementFineTuningSteps:
 
     @pytest.mark.skip(reason="Prism tests are disabled")
     @parametrize
-    async def test_path_params_execute_train_step(self, async_client: AsyncFireworks) -> None:
+    async def test_path_params_execute(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
                 rlor_trainer_job_id="rlor_trainer_job_id",
                 account_id="",
                 dataset="dataset",
@@ -674,7 +674,7 @@ class TestAsyncReinforcementFineTuningSteps:
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
-            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute_train_step(
+            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
                 rlor_trainer_job_id="",
                 account_id="account_id",
                 dataset="dataset",
