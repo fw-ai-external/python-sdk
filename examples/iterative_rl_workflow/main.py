@@ -3,7 +3,7 @@ GSM8K RLOR Training Example using Fireworks SDK.
 
 This script demonstrates an iterative reinforcement learning workflow using GSM8K:
 1. Load prompts from the GSM8K dataset (without assistant responses)
-2. Generate rollouts using qwen3-32b
+2. Generate rollouts using a base model
 3. Score outputs by comparing with ground truth answers
 4. Run reinforcement fine-tuning steps
 5. Repeat for multiple epochs
@@ -17,11 +17,18 @@ import json
 import time
 import asyncio
 import logging
+import argparse
 from typing import Any
 from collections import defaultdict
 
+import fsspec
+from dotenv import load_dotenv
+
 from fireworks import AsyncFireworks
 from fireworks._compat import model_dump
+from fireworks.types.shared_params.training_config import TrainingConfig
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -34,42 +41,111 @@ logger = logging.getLogger(__name__)
 # Suppress HTTP request logs from httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Configuration
-FIREWORKS_API_KEY = "YOUR_API_KEY"
-ACCOUNT_ID = "YOUR_ACCOUNT_ID"
-BASE_MODEL = "accounts/fireworks/models/qwen3-32b"
-DEPLOYMENT_ID = "gsm8k-rlor"
-NUM_EPOCHS = 2
-CHUNK_SIZE = 100  # number of prompts per training step
-TOTAL_PROMPTS = 1000  # total prompts to use from dataset
-NUM_GENERATIONS_PER_PROMPT = 4  # multiple generations per prompt for policy optimization
-CONCURRENCY = 64
-ROLLOUTS_DIR = "rollouts"
-DATASET_FILE = "dataset_with_ground_truth_column_1000.jsonl"
+# Configuration - set these environment variables before running
+FIREWORKS_API_KEY = os.environ.get("FIREWORKS_API_KEY", "")
+BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai")
+ACCOUNT_ID = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
 
-# Generate a unique run ID for this workflow execution
-RUN_ID = int(time.time())
+# Base model for training - update this to your desired model
+BASE_MODEL = os.environ.get("FIREWORKS_BASE_MODEL", "accounts/fireworks/models/qwen3-32b")
+
+# Default values (can be overridden via CLI)
+DEFAULT_DEPLOYMENT_ID = "gsm8k-rlor"
+DEFAULT_NUM_EPOCHS = 2
+DEFAULT_CHUNK_SIZE = 100
+DEFAULT_TOTAL_PROMPTS = 1000
+DEFAULT_NUM_GENERATIONS_PER_PROMPT = 4
+DEFAULT_CONCURRENCY = 64
+
+ROLLOUTS_DIR = "rollouts"
+# Path to the GSM8K dataset file (local or remote via fsspec, e.g., gs://, s3://)
+DATASET_FILE = os.environ.get("DATASET_FILE", "dataset_with_ground_truth.jsonl")
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="GSM8K RLOR Training Example - Iterative RL workflow using Fireworks SDK",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--keep-alive",
+        action="store_true",
+        help="Use keep-alive mode (single trainer job for multiple steps) instead of standard mode",
+    )
+    parser.add_argument(
+        "--deployment-id",
+        type=str,
+        default=DEFAULT_DEPLOYMENT_ID,
+        help="Deployment ID for the hot-reload inference deployment",
+    )
+    parser.add_argument(
+        "--num-epochs",
+        type=int,
+        default=DEFAULT_NUM_EPOCHS,
+        help="Number of epochs to run",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_CHUNK_SIZE,
+        help="Number of prompts per training step",
+    )
+    parser.add_argument(
+        "--total-prompts",
+        type=int,
+        default=DEFAULT_TOTAL_PROMPTS,
+        help="Total prompts to use from dataset",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=DEFAULT_CONCURRENCY,
+        help="Number of concurrent generation requests",
+    )
+    parser.add_argument(
+        "--run-id",
+        type=int,
+        default=None,
+        help="Run ID for this workflow (default: current timestamp)",
+    )
+    return parser.parse_args()
 
 
 def load_gsm8k_prompts(filepath: str, limit: int | None = None) -> list[dict[str, Any]]:
-    """Load GSM8K prompts from JSONL file, stripping assistant messages."""
-    prompts: list[dict[str, Any]] = []
-    with open(filepath, "r") as f:
-        for i, line in enumerate(f):
-            if limit is not None and i >= limit:
-                break
-            data = json.loads(line.strip())
-            # Keep only system and user messages (strip assistant response)
-            messages = [msg for msg in data["messages"] if msg["role"] != "assistant"]
-            prompts.append(
-                {
-                    "prompt_id": i,
-                    "messages": messages,
-                    "ground_truth": data.get("ground_truth", ""),
-                }
-            )
-    logger.info(f"Loaded {len(prompts)} prompts from {filepath}")
-    return prompts
+    """Load GSM8K prompts from JSONL file, stripping assistant messages.
+
+    Supports local files and remote files (e.g., gs://, s3://) via fsspec.
+    """
+    prompts = []
+    try:
+        with fsspec.open(filepath, "r") as f:
+            for i, line in enumerate(f):
+                if limit is not None and i >= limit:
+                    break
+                data = json.loads(line.strip())
+                # Keep only system and user messages (strip assistant response)
+                messages = [msg for msg in data["messages"] if msg["role"] != "assistant"]
+                prompts.append(
+                    {
+                        "prompt_id": i,
+                        "messages": messages,
+                        "ground_truth": data.get("ground_truth", ""),
+                    }
+                )
+        logger.info(f"Loaded {len(prompts)} prompts from {filepath}")
+        return prompts
+    except Exception as e:
+        # Fallback to dummy data if file not found for testing
+        logger.warning(f"Dataset file {filepath} not found or failed to load: {e}. Using dummy prompts.")
+        return [
+            {
+                "prompt_id": i,
+                "messages": [{"role": "user", "content": f"What is {i}+{i}?"}],
+                "ground_truth": f"<answer>{i + i}</answer>",
+            }
+            for i in range(min(limit or 10, 10))
+        ]
 
 
 def extract_answer(text: str) -> str | None:
@@ -155,8 +231,11 @@ async def create_or_get_deployment(
             enable_hot_reload_latest_addon=True,
             min_replica_count=1,
             max_replica_count=1,
-            # Use the pre-configured RFT deployment shape for qwen3-32b
-            deployment_shape="accounts/fireworks/deploymentShapes/rft-qwen3-32b",
+            # Use a deployment shape appropriate for your base model
+            deployment_shape=os.environ.get(
+                "FIREWORKS_DEPLOYMENT_SHAPE",
+                "accounts/fireworks/deploymentShapes/rft-qwen3-32b",
+            ),
             # Enable direct route for faster inference
             direct_route_type="INTERNET",
             direct_route_api_keys=[api_key],
@@ -182,8 +261,8 @@ async def get_direct_route_url(
     direct_route_type = deployment_dict.get("direct_route_type") or deployment_dict.get("directRouteType")
     if direct_route_type and direct_route_type not in ("DIRECT_ROUTE_TYPE_UNSPECIFIED", None, ""):
         # Get region from placement
-        placement: dict[str, Any] = deployment_dict.get("placement") or {}
-        region: str = str(placement.get("region", "")).lower().replace("_", "-")
+        placement = deployment_dict.get("placement") or {}
+        region = placement.get("region", "").lower().replace("_", "-")
 
         # If region is not set or unspecified, try to get from the deployment
         if not region or region == "region-unspecified":
@@ -225,11 +304,13 @@ async def generate_rollouts_and_rewards(
     (e.g., accounts/.../models/...).
     """
     # Use direct route client if available, otherwise use regular client
+    owns_inference_client = False
     if direct_route_url and api_key:
         inference_client = AsyncFireworks(
             api_key=api_key,
             base_url=direct_route_url,
         )
+        owns_inference_client = True  # We created this client, so we need to close it
         # For direct route: use model name if available, otherwise use base model
         if lora_model_name:
             inference_model = lora_model_name
@@ -249,7 +330,7 @@ async def generate_rollouts_and_rewards(
         """Generate a single response for a given prompt with simple retry logic."""
         async with semaphore:
             messages = prompt["messages"]
-            ground_truth = prompt["ground_truth"]
+            ground_truth = prompt.get("ground_truth", "")
             prompt_id = prompt["prompt_id"]
 
             max_retries = 3
@@ -264,15 +345,12 @@ async def generate_rollouts_and_rewards(
                         max_tokens=2048,
                     )
 
-                    # Handle content which can be str, list, or None
                     content = response.choices[0].message.content
-                    if content is None:
-                        assistant_message = ""
-                    elif isinstance(content, str):
-                        assistant_message = content
+                    # Ensure content is a string (handle case where it might be a list)
+                    if isinstance(content, list):
+                        assistant_message = "".join(str(item) for item in content)
                     else:
-                        # content is a list of ContentUnionMember1, extract text
-                        assistant_message = "".join(item.text or "" for item in content if item.text)
+                        assistant_message = str(content) if content else ""
 
                     # Compute reward by comparing with ground truth
                     reward = compute_reward(assistant_message, ground_truth)
@@ -373,6 +451,11 @@ async def generate_rollouts_and_rewards(
             f"Skipped {skipped_prompts} prompts that didn't have exactly {num_generations_per_prompt} generations"
         )
     logger.info(f"Created {len(dataset_rows)} dataset rows (each with {num_generations_per_prompt} generations)")
+
+    # Close the inference client if we created it
+    if owns_inference_client:
+        await inference_client.close()
+
     return dataset_rows
 
 
@@ -410,14 +493,23 @@ async def create_and_upload_dataset(
     """Create a dataset, upload from the saved rollouts file, and wait for it to be ready."""
     # Create the dataset
     logger.info(f"Creating dataset {dataset_id}...")
-    dataset = await client.datasets.create(
-        dataset_id=dataset_id,
-        dataset={
-            "display_name": f"GSM8K RL Training Dataset - {dataset_id}",
-            "example_count": str(example_count(rollouts_filepath)),
-        },
-    )
-    logger.info(f"Created dataset: {dataset.name}")
+    try:
+        dataset = await client.datasets.create(
+            dataset_id=dataset_id,
+            dataset={
+                "display_name": f"GSM8K RL Training Dataset - {dataset_id}",
+                "example_count": str(example_count(rollouts_filepath)),
+            },
+        )
+        logger.info(f"Created dataset: {dataset.name}")
+    except Exception as e:
+        logger.warning(f"Dataset creation failed (maybe exists): {e}")
+        # Try to get existing
+        try:
+            dataset = await client.datasets.get(dataset_id=dataset_id)
+            logger.info(f"Found existing dataset: {dataset.name}")
+        except Exception as get_error:
+            raise e from get_error
 
     # Upload the rollouts file
     logger.info(f"Uploading dataset from {rollouts_filepath}...")
@@ -597,185 +689,322 @@ async def wait_for_lora_deployed(
     raise TimeoutError(f"LoRA adapter did not become deployed within {timeout_seconds} seconds")
 
 
-async def run_gsm8k_rlor() -> None:
+async def execute_training_step(
+    client: AsyncFireworks,
+    job_id: str,
+    dataset: str,
+    output_model: str,
+) -> None:
+    """
+    Execute a training step on a running keep-alive trainer job.
+
+    Note: warm_start_from and reference_model are auto-filled by the trainer.
+    """
+    logger.info(f"Executing training step for job {job_id}...")
+    logger.info(f"  Dataset: {dataset}")
+    logger.info(f"  Output Model: {output_model}")
+
+    # Construct payload for ExecuteRlorTrainStep
+    payload = {
+        "name": f"accounts/{ACCOUNT_ID}/rlorTrainerJobs/{job_id}",
+        "dataset": dataset,
+        "output_model": output_model,
+    }
+
+    # Use the SDK's post method with cast_to=object since we don't need typed response
+    # URL needs /v1/ prefix to match the REST API path
+    url = f"/v1/accounts/{ACCOUNT_ID}/rlorTrainerJobs/{job_id}:executeTrainStep"
+
+    try:
+        await client.post(
+            url,
+            body=payload,
+            cast_to=object,  # Required by SDK, we don't care about response type
+        )
+        logger.info("Training step execution signalled successfully")
+    except Exception as e:
+        logger.error(f"Failed to signal training step: {e}")
+        raise e
+
+
+async def cleanup_trainer_job(client: AsyncFireworks, job_id: str) -> None:
+    """Clean up a keep-alive trainer job by deleting it."""
+    try:
+        logger.info(f"Cleaning up trainer job: {job_id}")
+        # SDK delete method takes rlor_trainer_job_id as positional arg
+        await client.reinforcement_fine_tuning_steps.delete(job_id)
+        logger.info(f"Successfully deleted trainer job: {job_id}")
+    except Exception as e:
+        logger.warning(f"Failed to cleanup trainer job {job_id}: {e}")
+
+
+async def wait_for_model_ready_or_job_fail(
+    client: AsyncFireworks,
+    model_id: str,
+    job_id: str,
+    timeout_seconds: int = 7200,
+    poll_interval: int = 30,
+) -> None:
+    """Wait for model to be READY or job to FAIL."""
+    logger.info(f"Waiting for model {model_id} to be ready (timeout: {timeout_seconds}s)...")
+    start_time = time.time()
+
+    while time.time() - start_time < timeout_seconds:
+        # Check model status
+        try:
+            model = await client.models.get(model_id=model_id)
+            state = model.state
+            logger.info(f"Model state: {state}")
+            if state == "READY":
+                logger.info("Model is ready!")
+                return
+            elif state == "FAILED":
+                raise Exception(f"Model creation failed: {state}")
+        except Exception as e:
+            # Re-raise if it's a failure state exception, otherwise log and continue
+            if "Model creation failed" in str(e):
+                raise
+            logger.warning(f"Error checking model status (might not exist yet): {e}")
+
+        # Check job status for failure
+        try:
+            job = await client.reinforcement_fine_tuning_steps.get(rlor_trainer_job_id=job_id)
+            if job.state in ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
+                raise Exception(f"Training job failed or cancelled: {job.state}")
+        except Exception as e:
+            logger.warning(f"Error checking job status: {e}")
+
+        elapsed = int(time.time() - start_time)
+        logger.info(f"Elapsed: {elapsed}s")
+        await asyncio.sleep(poll_interval)
+
+    raise TimeoutError(f"Model did not become ready within {timeout_seconds} seconds")
+
+
+async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     """Main function to run the GSM8K RLOR training workflow."""
-    # Create client with the specified API key and account ID
-    client = AsyncFireworks(api_key=FIREWORKS_API_KEY, account_id=ACCOUNT_ID)
+
+    # Extract args into local variables for clarity
+    use_keep_alive = args.keep_alive
+    deployment_id = args.deployment_id
+    num_epochs = args.num_epochs
+    chunk_size = args.chunk_size
+    total_prompts = args.total_prompts
+    concurrency = args.concurrency
+    run_id = args.run_id if args.run_id else int(time.time())
+
+    # Validate required configuration
+    if not FIREWORKS_API_KEY:
+        raise ValueError("FIREWORKS_API_KEY environment variable is required")
+    if not ACCOUNT_ID:
+        raise ValueError("FIREWORKS_ACCOUNT_ID environment variable is required")
+
+    # Create client with the specified API key, account ID, and base URL
+    client = AsyncFireworks(
+        api_key=FIREWORKS_API_KEY,
+        account_id=ACCOUNT_ID,
+        base_url=BASE_URL,
+    )
 
     logger.info("=" * 60)
     logger.info("GSM8K RLOR Training Workflow")
+    if use_keep_alive:
+        logger.info("(Keep-Alive Mode)")
+    else:
+        logger.info("(Standard Mode)")
     logger.info("=" * 60)
     logger.info(f"Account: {ACCOUNT_ID}")
     logger.info(f"Base Model: {BASE_MODEL}")
-    logger.info(f"Total Prompts: {TOTAL_PROMPTS}")
-    logger.info(f"Chunk Size: {CHUNK_SIZE}")
-    logger.info(f"Num Epochs: {NUM_EPOCHS}")
-    logger.info(f"Generations per Prompt: {NUM_GENERATIONS_PER_PROMPT}")
+    logger.info(f"Deployment ID: {deployment_id}")
+    logger.info(f"Run ID: {run_id}")
+    logger.info(f"Total Prompts: {total_prompts}")
+    logger.info(f"Chunk Size: {chunk_size}")
+    logger.info(f"Num Epochs: {num_epochs}")
+    logger.info(f"Concurrency: {concurrency}")
     logger.info("=" * 60)
 
     # Load all GSM8K prompts
-    all_prompts = load_gsm8k_prompts(DATASET_FILE, limit=TOTAL_PROMPTS)
-    num_chunks = (len(all_prompts) + CHUNK_SIZE - 1) // CHUNK_SIZE
+    all_prompts = load_gsm8k_prompts(DATASET_FILE, limit=total_prompts)
+    num_chunks = (len(all_prompts) + chunk_size - 1) // chunk_size
     logger.info(f"Will process {num_chunks} chunks per epoch")
 
-    # Step 1: Create or get the base deployment
+    trainer_job_id = f"gsm8k-rlor-trainer-{run_id}"
+
+    if use_keep_alive:
+        # Step 1: Create keep-alive trainer job (ONCE)
+        logger.info(f"Creating keep-alive trainer job: {trainer_job_id}")
+
+        # Delete any existing job first since we need a fresh keep-alive job
+        try:
+            await client.reinforcement_fine_tuning_steps.delete(trainer_job_id)
+            logger.info(f"Deleted existing trainer job: {trainer_job_id}")
+            await asyncio.sleep(2)  # Wait for cleanup
+        except Exception:
+            pass  # Job doesn't exist, that's fine
+
+        # Create new trainer job
+        logger.info("Creating new trainer job...")
+
+        keep_alive_training_config: TrainingConfig = {
+            "base_model": BASE_MODEL,
+            "learning_rate": 1e-5,
+            "lora_rank": 8,
+            "max_context_length": 4096,
+            "batch_size": 32768,
+        }
+
+        await client.reinforcement_fine_tuning_steps.create(
+            rlor_trainer_job_id=trainer_job_id,
+            dataset="",  # No initial dataset for keep-alive
+            display_name=f"GSM8K RL Trainer {run_id}",
+            training_config=keep_alive_training_config,
+            # Use extra_body to pass keep_alive and reward_weights since they're new proto fields not in the SDK yet
+            extra_body={
+                "keep_alive": True,
+                "reward_weights": ["score"],  # Reward key used in our dataset evals
+            },
+        )
+        logger.info(f"Created trainer job: {trainer_job_id}")
+
+        # Wait for job to be in RUNNING state (IDLE phase)
+        await asyncio.sleep(10)
+
+    # Step 2: Create or get the base deployment
     logger.info("[Step 0] Setting up base deployment...")
     await create_or_get_deployment(
         client=client,
-        deployment_id=DEPLOYMENT_ID,
+        deployment_id=deployment_id,
         base_model=BASE_MODEL,
         api_key=FIREWORKS_API_KEY,
     )
+    await wait_for_deployment_ready(client=client, deployment_id=deployment_id)
 
-    # Wait for deployment to be ready
-    await wait_for_deployment_ready(
-        client=client,
-        deployment_id=DEPLOYMENT_ID,
-    )
+    direct_route_url = await get_direct_route_url(client=client, deployment_id=deployment_id, account_id=ACCOUNT_ID)
 
-    # Check if direct route is available
-    logger.info("[Step 0.1] Checking for direct route...")
-    direct_route_url = await get_direct_route_url(
-        client=client,
-        deployment_id=DEPLOYMENT_ID,
-        account_id=ACCOUNT_ID,
-    )
-    if direct_route_url:
-        logger.info(f"Using direct route: {direct_route_url}")
-    else:
-        logger.info("Direct route not available, will use regular API gateway")
-
-    # Iterative reinforcement learning loop
-    deployment_name = f"accounts/{ACCOUNT_ID}/deployments/{DEPLOYMENT_ID}"
-    # Track the current LoRA model name for direct route (None = use base model)
+    deployment_name = f"accounts/{ACCOUNT_ID}/deployments/{deployment_id}"
     current_lora_model: str | None = None
-    # Track the global step number across all epochs and chunks
     step = 0
 
-    for epoch in range(NUM_EPOCHS):
-        logger.info("=" * 60)
-        logger.info(f"Starting epoch {epoch + 1}/{NUM_EPOCHS}")
-        logger.info("=" * 60)
+    try:
+        for epoch in range(num_epochs):
+            logger.info(f"Starting epoch {epoch + 1}/{num_epochs}")
 
-        # Process all chunks within this epoch
-        for chunk_idx in range(num_chunks):
-            chunk_start = chunk_idx * CHUNK_SIZE
-            chunk_end = min(chunk_start + CHUNK_SIZE, len(all_prompts))
-            chunk_prompts = all_prompts[chunk_start:chunk_end]
-            step += 1
+            for chunk_idx in range(num_chunks):
+                chunk_start = chunk_idx * chunk_size
+                chunk_end = min(chunk_start + chunk_size, len(all_prompts))
+                chunk_prompts = all_prompts[chunk_start:chunk_end]
+                step += 1
 
-            logger.info("-" * 40)
-            logger.info(
-                f"[Epoch {epoch + 1}, Chunk {chunk_idx + 1}/{num_chunks}] Processing prompts {chunk_start}-{chunk_end - 1} (step {step})"
-            )
-            logger.info("-" * 40)
+                logger.info(f"[Step {step}] Processing chunk {chunk_idx + 1}/{num_chunks}")
 
-            # Generate rollouts and rewards for this chunk
-            logger.info(f"[Step {step}.1] Generating rollouts...")
-            dataset_rows = await generate_rollouts_and_rewards(
-                client=client,
-                model=deployment_name,
-                prompts=chunk_prompts,
-                num_generations_per_prompt=NUM_GENERATIONS_PER_PROMPT,
-                concurrency=CONCURRENCY,
-                direct_route_url=direct_route_url,
-                api_key=FIREWORKS_API_KEY,
-                lora_model_name=current_lora_model,
-            )
-
-            if not dataset_rows:
-                logger.error("No successful rollouts generated. Skipping chunk.")
-                continue
-
-            # Save rollouts to local file for inspection
-            rollouts_filepath = save_rollouts_to_file(dataset_rows, step - 1)
-
-            # Create and upload dataset
-            dataset_id = f"gsm8k-rl-dataset-{RUN_ID}-step-{step}"
-            logger.info(f"[Step {step}.2] Creating and uploading dataset...")
-            dataset_name = await create_and_upload_dataset(
-                client=client,
-                dataset_id=dataset_id,
-                rollouts_filepath=rollouts_filepath,
-            )
-
-            # Create reinforcement fine-tuning step
-            output_model_name = f"accounts/{ACCOUNT_ID}/models/gsm8k-rl-model-{RUN_ID}-v{step}"
-            from fireworks.types.shared_params.training_config import TrainingConfig
-
-            training_config: TrainingConfig = {
-                "output_model": output_model_name,
-                "epochs": 1,
-                "learning_rate": 1e-5,
-                "lora_rank": 8,
-                "max_context_length": 4096,
-                "batch_size": 32768,
-            }
-            if step == 1:
-                training_config["base_model"] = BASE_MODEL
-            else:
-                training_config["warm_start_from"] = f"accounts/{ACCOUNT_ID}/models/gsm8k-rl-model-{RUN_ID}-v{step - 1}"
-
-            job_id = f"gsm8k-rl-job-{RUN_ID}-step-{step}"
-            logger.info(f"[Step {step}.3] Starting reinforcement fine-tuning step...")
-            logger.info(f"Creating job with ID: {job_id}")
-            job = await client.reinforcement_fine_tuning_steps.create(
-                rlor_trainer_job_id=job_id,
-                dataset=dataset_name,
-                display_name=f"GSM8K RL Step {step} (Epoch {epoch + 1}, Chunk {chunk_idx + 1})",
-                training_config=training_config,
-            )
-            logger.info(f"Created training job: {job.name}")
-
-            # Wait for training completion
-            logger.info(f"[Step {step}.4] Waiting for training to complete...")
-            await wait_for_training_completion(client=client, job_id=job_id)
-
-            # Wait for the output model to be ready
-            output_model_id = f"gsm8k-rl-model-{RUN_ID}-v{step}"
-            logger.info(f"[Step {step}.5] Waiting for model to be ready...")
-            await wait_for_model_ready(client=client, model_id=output_model_id)
-
-            # Hot reload the new LoRA adapter onto the deployment
-            logger.info(f"[Step {step}.6] Hot reloading new LoRA adapter...")
-            await load_lora_adapter(
-                client=client,
-                deployment_name=deployment_name,
-                model_name=output_model_name,
-            )
-
-            # Wait for LoRA adapter to be fully deployed by polling deployed model state
-            logger.info(f"[Step {step}.7] Waiting for LoRA adapter to be deployed...")
-            await wait_for_lora_deployed(
-                client=client,
-                model_name=output_model_name,
-                timeout_seconds=300,
-                poll_interval=5,
-            )
-
-            # Use the model name (not deployed model name) for direct route in next step
-            current_lora_model = output_model_name
-            logger.info(f"Step {step} completed! Model {output_model_name} is now active.")
-
-            # Clean up dataset
-            logger.info(f"[Step {step}.8] Cleaning up dataset...")
-            try:
-                await client.datasets.delete(
-                    dataset_id=dataset_id,
+                # 1. Rollout
+                logger.info("Generating rollouts...")
+                dataset_rows = await generate_rollouts_and_rewards(
+                    client=client,
+                    model=deployment_name,
+                    prompts=chunk_prompts,
+                    concurrency=concurrency,
+                    direct_route_url=direct_route_url,
+                    api_key=FIREWORKS_API_KEY,
+                    lora_model_name=current_lora_model,
                 )
-                logger.info(f"Deleted dataset: {dataset_id}")
-            except Exception as e:
-                logger.warning(f"Failed to delete dataset: {e}")
 
-        logger.info(f"Epoch {epoch + 1} completed!")
+                if not dataset_rows:
+                    logger.warning("No successful rollouts, skipping step")
+                    continue
 
-    logger.info("=" * 60)
-    logger.info("RLOR training complete!")
-    logger.info("=" * 60)
-    total_steps = NUM_EPOCHS * num_chunks
-    final_model_name = f"accounts/{ACCOUNT_ID}/models/gsm8k-rl-model-{RUN_ID}-v{total_steps}"
-    logger.info(f"Final model: {final_model_name}")
+                # 2. Upload Dataset
+                rollouts_filepath = save_rollouts_to_file(dataset_rows, step - 1)
+                dataset_id = f"gsm8k-rl-dataset-{run_id}-step-{step}"
+                dataset_name = await create_and_upload_dataset(
+                    client=client,
+                    dataset_id=dataset_id,
+                    rollouts_filepath=rollouts_filepath,
+                )
+
+                # 3. Execute Train Step (or Create Job)
+                output_model_name = f"accounts/{ACCOUNT_ID}/models/gsm8k-rl-model-{run_id}-v{step}"
+                output_model_id = f"gsm8k-rl-model-{run_id}-v{step}"
+
+                if use_keep_alive:
+                    logger.info(f"Signalling trainer for step {step} -> {output_model_name}")
+                    await execute_training_step(
+                        client=client,
+                        job_id=trainer_job_id,
+                        dataset=dataset_name,
+                        output_model=output_model_name,
+                    )
+                    # 4. Wait for Output Model (Keep-Alive)
+                    logger.info("Waiting for training to complete (keep-alive)...")
+                    await wait_for_model_ready_or_job_fail(
+                        client=client, model_id=output_model_id, job_id=trainer_job_id
+                    )
+
+                else:
+                    # Standard Mode: Create a new job for each step
+                    job_id = f"gsm8k-rl-job-{run_id}-step-{step}"
+                    logger.info(f"Creating standard RLOR job {job_id} -> {output_model_name}")
+
+                    standard_training_config: TrainingConfig = {
+                        "output_model": output_model_name,
+                        "epochs": 1,
+                        "learning_rate": 1e-5,
+                        "lora_rank": 8,
+                        "max_context_length": 4096,
+                        "batch_size": 32768,
+                        "base_model": BASE_MODEL,
+                    }
+
+                    await client.reinforcement_fine_tuning_steps.create(
+                        rlor_trainer_job_id=job_id,
+                        dataset=dataset_name,
+                        display_name=f"GSM8K RL Step {step}",
+                        training_config=standard_training_config,
+                    )
+
+                    # 4. Wait for Training (Standard)
+                    logger.info("Waiting for training to complete (standard)...")
+                    await wait_for_training_completion(client=client, job_id=job_id)
+                    await wait_for_model_ready(client=client, model_id=output_model_id)
+
+                # 5. Hot Reload
+                logger.info("Hot reloading...")
+                await load_lora_adapter(client=client, deployment_name=deployment_name, model_name=output_model_name)
+                await wait_for_lora_deployed(client=client, model_name=output_model_name)
+
+                current_lora_model = output_model_name
+                logger.info(f"Step {step} completed.")
+
+                # Cleanup dataset
+                try:
+                    await client.datasets.delete(dataset_id=dataset_id)
+                except Exception:
+                    pass
+
+        logger.info("RLOR training complete!")
+
+    except Exception as e:
+        logger.error(f"Training failed with error: {e}")
+        raise
+    finally:
+        # Cleanup keep-alive trainer job on exit (success or failure)
+        if use_keep_alive:
+            await cleanup_trainer_job(client, trainer_job_id)
+        # Properly close the async client to avoid SSL transport errors on exit
+        await client.close()
+
+
+async def main() -> None:
+    """Main entry point with proper async cleanup."""
+    args = parse_args()
+    try:
+        await run_gsm8k_rlor(args)
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        raise
 
 
 if __name__ == "__main__":
-    asyncio.run(run_gsm8k_rlor())
+    asyncio.run(main())

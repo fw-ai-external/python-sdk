@@ -1,0 +1,12 @@
+[project]
+name = "iterative-rl-workflow"
+version = "0.1.0"
+description = "Example of RFT on Fireworks in your own control loop"
+readme = "README.md"
+requires-python = ">=3.9.18"
+dependencies = [
+    "fireworks-ai",
+]
+
+[tool.uv.sources]
+fireworks-ai = { workspace = true }
