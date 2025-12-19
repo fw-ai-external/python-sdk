@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         completions,
         deployments,
         evaluation_jobs,
+        deployment_shapes,
         batch_inference_jobs,
         deployment_shape_versions,
         supervised_fine_tuning_jobs,
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
     from .resources.completions import CompletionsResource, AsyncCompletionsResource
     from .resources.deployments import DeploymentsResource, AsyncDeploymentsResource
     from .resources.evaluation_jobs import EvaluationJobsResource, AsyncEvaluationJobsResource
+    from .resources.deployment_shapes import DeploymentShapesResource, AsyncDeploymentShapesResource
     from .resources.batch_inference_jobs import BatchInferenceJobsResource, AsyncBatchInferenceJobsResource
     from .resources.deployment_shape_versions import (
         DeploymentShapeVersionsResource,
@@ -195,6 +197,12 @@ class Fireworks(SyncAPIClient):
         from .resources.lora import LoraResource
 
         return LoraResource(self)
+
+    @cached_property
+    def deployment_shapes(self) -> DeploymentShapesResource:
+        from .resources.deployment_shapes import DeploymentShapesResource
+
+        return DeploymentShapesResource(self)
 
     @cached_property
     def deployment_shape_versions(self) -> DeploymentShapeVersionsResource:
@@ -497,6 +505,12 @@ class AsyncFireworks(AsyncAPIClient):
         return AsyncLoraResource(self)
 
     @cached_property
+    def deployment_shapes(self) -> AsyncDeploymentShapesResource:
+        from .resources.deployment_shapes import AsyncDeploymentShapesResource
+
+        return AsyncDeploymentShapesResource(self)
+
+    @cached_property
     def deployment_shape_versions(self) -> AsyncDeploymentShapeVersionsResource:
         from .resources.deployment_shape_versions import AsyncDeploymentShapeVersionsResource
 
@@ -737,6 +751,12 @@ class FireworksWithRawResponse:
         return LoraResourceWithRawResponse(self._client.lora)
 
     @cached_property
+    def deployment_shapes(self) -> deployment_shapes.DeploymentShapesResourceWithRawResponse:
+        from .resources.deployment_shapes import DeploymentShapesResourceWithRawResponse
+
+        return DeploymentShapesResourceWithRawResponse(self._client.deployment_shapes)
+
+    @cached_property
     def deployment_shape_versions(self) -> deployment_shape_versions.DeploymentShapeVersionsResourceWithRawResponse:
         from .resources.deployment_shape_versions import DeploymentShapeVersionsResourceWithRawResponse
 
@@ -856,6 +876,12 @@ class AsyncFireworksWithRawResponse:
         from .resources.lora import AsyncLoraResourceWithRawResponse
 
         return AsyncLoraResourceWithRawResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shapes(self) -> deployment_shapes.AsyncDeploymentShapesResourceWithRawResponse:
+        from .resources.deployment_shapes import AsyncDeploymentShapesResourceWithRawResponse
+
+        return AsyncDeploymentShapesResourceWithRawResponse(self._client.deployment_shapes)
 
     @cached_property
     def deployment_shape_versions(
@@ -981,6 +1007,12 @@ class FireworksWithStreamedResponse:
         return LoraResourceWithStreamingResponse(self._client.lora)
 
     @cached_property
+    def deployment_shapes(self) -> deployment_shapes.DeploymentShapesResourceWithStreamingResponse:
+        from .resources.deployment_shapes import DeploymentShapesResourceWithStreamingResponse
+
+        return DeploymentShapesResourceWithStreamingResponse(self._client.deployment_shapes)
+
+    @cached_property
     def deployment_shape_versions(
         self,
     ) -> deployment_shape_versions.DeploymentShapeVersionsResourceWithStreamingResponse:
@@ -1102,6 +1134,12 @@ class AsyncFireworksWithStreamedResponse:
         from .resources.lora import AsyncLoraResourceWithStreamingResponse
 
         return AsyncLoraResourceWithStreamingResponse(self._client.lora)
+
+    @cached_property
+    def deployment_shapes(self) -> deployment_shapes.AsyncDeploymentShapesResourceWithStreamingResponse:
+        from .resources.deployment_shapes import AsyncDeploymentShapesResourceWithStreamingResponse
+
+        return AsyncDeploymentShapesResourceWithStreamingResponse(self._client.deployment_shapes)
 
     @cached_property
     def deployment_shape_versions(

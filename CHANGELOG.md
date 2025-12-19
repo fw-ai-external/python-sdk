@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.16 (2025-12-19)
+
+Full Changelog: [v1.0.0-alpha.15...v1.0.0-alpha.16](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.15...v1.0.0-alpha.16)
+
+### Features
+
+* Add deployment shapes to sdk ([5156da6](https://github.com/fw-ai-external/python-sdk/commit/5156da6ed9bfaf6e58d2275480f2dd7dd7aaa9ce))
+
 ## 1.0.0-alpha.15 (2025-12-19)
 
 Full Changelog: [v1.0.0-alpha.14...v1.0.0-alpha.15](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.14...v1.0.0-alpha.15)

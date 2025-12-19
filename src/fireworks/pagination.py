@@ -18,6 +18,8 @@ __all__ = [
     "AsyncCursorDatasets",
     "SyncCursorDeploymentShapeVersions",
     "AsyncCursorDeploymentShapeVersions",
+    "SyncCursorDeploymentShapes",
+    "AsyncCursorDeploymentShapes",
     "SyncCursorDeployments",
     "AsyncCursorDeployments",
     "SyncCursorDpoJobs",
@@ -235,6 +237,46 @@ class AsyncCursorDeploymentShapeVersions(BaseAsyncPage[_T], BasePage[_T], Generi
         if not deployment_shape_versions:
             return []
         return deployment_shape_versions
+
+    @override
+    def next_page_info(self) -> Optional[PageInfo]:
+        next_page_token = self.next_page_token
+        if not next_page_token:
+            return None
+
+        return PageInfo(params={"pageToken": next_page_token})
+
+
+class SyncCursorDeploymentShapes(BaseSyncPage[_T], BasePage[_T], Generic[_T]):
+    deployment_shapes: List[_T] = FieldInfo(alias="deploymentShapes")
+    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
+
+    @override
+    def _get_page_items(self) -> List[_T]:
+        deployment_shapes = self.deployment_shapes
+        if not deployment_shapes:
+            return []
+        return deployment_shapes
+
+    @override
+    def next_page_info(self) -> Optional[PageInfo]:
+        next_page_token = self.next_page_token
+        if not next_page_token:
+            return None
+
+        return PageInfo(params={"pageToken": next_page_token})
+
+
+class AsyncCursorDeploymentShapes(BaseAsyncPage[_T], BasePage[_T], Generic[_T]):
+    deployment_shapes: List[_T] = FieldInfo(alias="deploymentShapes")
+    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
+
+    @override
+    def _get_page_items(self) -> List[_T]:
+        deployment_shapes = self.deployment_shapes
+        if not deployment_shapes:
+            return []
+        return deployment_shapes
 
     @override
     def next_page_info(self) -> Optional[PageInfo]:
