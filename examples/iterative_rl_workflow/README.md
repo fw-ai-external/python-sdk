@@ -14,6 +14,12 @@ Activate the virtual environment:
 source .venv/bin/activate
 ```
 
+**Note**: This source code uses the local `fireworks-ai` package from the parent directory. If you copy this script elsewhere, you can install the latest version of `fireworks-ai` externally:
+
+```bash
+pip install fireworks-ai
+```
+
 ## Usage
 
 Run [`train.py`](./train.py) to start the iterative reinforcement learning workflow. Use `--help` to see all available flags and options:
