@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from fireworks import AsyncFireworks
 import fireworks
 
-from train import TRAINER_JOB_ID_PREFIX
+from train import DEFAULT_RUN_PREFIX
 
 load_dotenv()
 
@@ -49,8 +49,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prefix",
         type=str,
-        default=TRAINER_JOB_ID_PREFIX,
-        help="Trainer job ID prefix to match",
+        default=DEFAULT_RUN_PREFIX,
+        help="Run prefix to match trainer jobs (matches jobs starting with {prefix}-trainer)",
     )
     return parser.parse_args()
 
@@ -58,9 +58,10 @@ def parse_args() -> argparse.Namespace:
 async def cleanup_trainer_jobs(prefix: str, delete: bool) -> None:
     """Find and optionally delete trainer jobs matching the prefix."""
     client = AsyncFireworks()
+    trainer_prefix = f"{prefix}-trainer"
 
     try:
-        logger.info(f"Searching for trainer jobs with prefix: {prefix}")
+        logger.info(f"Searching for trainer jobs with prefix: {trainer_prefix}")
 
         # List all reinforcement fine-tuning jobs
         jobs_to_delete: list[str] = []
@@ -69,7 +70,7 @@ async def cleanup_trainer_jobs(prefix: str, delete: bool) -> None:
             # Extract job ID from the name (format: accounts/{account}/rlorTrainerJobs/{job_id})
             if job.name:
                 job_id = job.name.split("/")[-1]
-                if job_id.startswith(prefix):
+                if job_id.startswith(trainer_prefix):
                     jobs_to_delete.append(job_id)
                     logger.info(f"Found matching job: {job_id} (state: {job.state})")
 
