@@ -327,6 +327,46 @@ async def wait_for_deployment_ready(
     raise TimeoutError(f"Deployment did not become ready within {timeout_seconds} seconds")
 
 
+async def get_deployment_shape_for_model(
+    client: AsyncFireworks,
+    base_model: str,
+) -> str:
+    """Get a deployment shape compatible with the given base model.
+
+    Queries the deployment shapes API to find shapes that support the model,
+    preferring RFT shapes if available.
+    """
+    logger.info(f"Looking up deployment shapes for model: {base_model}")
+
+    # Query for shapes compatible with this model
+    shapes = await client.deployment_shape_versions.list(account_id="-", deployment_shape_id="-")
+    shape_list = [shape async for shape in shapes]
+
+    if not shape_list:
+        raise ValueError(f"No deployment shapes found for model: {base_model}")
+
+    # filter shapes that are not latest_validated=True
+    shape_list = [shape for shape in shape_list if shape.latest_validated]
+
+    model_id = base_model.split("/")[-1]
+    # filter shapes with model id in the name
+    shape_list = [shape for shape in shape_list if model_id in shape.name]
+
+    # Prefer RFT shapes (for reinforcement fine-tuning)
+    for shape in shape_list:
+        if shape.name and "rft" in shape.name.lower():
+            logger.info(f"Found RFT deployment shape: {shape.name}")
+            return shape.name
+
+    # Fall back to first available shape
+    first_shape = shape_list[0]
+    if first_shape.name:
+        logger.info(f"Using deployment shape: {first_shape.name}")
+        return first_shape.name
+
+    raise ValueError(f"No valid deployment shape found for model: {base_model}")
+
+
 async def create_or_get_deployment(
     client: AsyncFireworks,
     deployment_id: str,
@@ -344,17 +384,17 @@ async def create_or_get_deployment(
     except fireworks.NotFoundError:
         logger.info(f"Creating deployment {deployment_id} with hot reload and direct route enabled...")
         logger.info(f"  Base model: {base_model}")
+
+        # Get a deployment shape compatible with the model
+        deployment_shape = await get_deployment_shape_for_model(client, base_model)
+
         deployment = await client.deployments.create(
             base_model=base_model,
             deployment_id=deployment_id,
             enable_hot_reload_latest_addon=True,
             min_replica_count=replica_count,
             max_replica_count=replica_count,
-            # Use a deployment shape appropriate for your base model
-            deployment_shape=os.environ.get(
-                "FIREWORKS_DEPLOYMENT_SHAPE",
-                "accounts/fireworks/deploymentShapes/rft-qwen3-32b",
-            ),
+            deployment_shape=deployment_shape,
             # Enable direct route for faster inference
             direct_route_type="INTERNET",
             direct_route_api_keys=[api_key],
