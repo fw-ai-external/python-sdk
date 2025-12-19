@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.15 (2025-12-19)
+
+Full Changelog: [v1.0.0-alpha.14...v1.0.0-alpha.15](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.14...v1.0.0-alpha.15)
+
+### Features
+
+* run "make" + add SDK generation guide ([10b9806](https://github.com/fw-ai-external/python-sdk/commit/10b9806dfd4efa78416b3443bb75b83cfd58f3e9))
+
 ## 1.0.0-alpha.14 (2025-12-19)
 
 Full Changelog: [v1.0.0-alpha.13...v1.0.0-alpha.14](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.13...v1.0.0-alpha.14)
