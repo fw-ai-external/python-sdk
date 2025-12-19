@@ -29,8 +29,8 @@ from collections import defaultdict
 import fsspec
 from dotenv import load_dotenv
 
-from fireworks import AsyncFireworks
 import fireworks
+from fireworks import AsyncFireworks
 from fireworks.types import TrainingConfig
 from fireworks.types.deployment import Deployment
 from fireworks.types.shared.deployed_model import DeployedModel
@@ -407,8 +407,6 @@ async def create_or_get_deployment(
 
 async def get_direct_route_url(
     deployment: Deployment,
-    deployment_id: str,
-    account_id: str,
 ) -> str:
     """Get the direct route URL for a deployment, if available."""
     logger.info(f"Checking direct route URL for deployment {deployment.name}...")
@@ -985,7 +983,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{deployment_id}")
     await wait_for_deployment_ready(client=client, deployment_id=deployment_id, timeout_seconds=deployment_timeout)
 
-    direct_route_url = await get_direct_route_url(deployment=deployment, deployment_id=deployment_id, account_id=account_id)
+    direct_route_url = await get_direct_route_url(deployment=deployment)
 
     current_lora_model: str | None = None
     step = 0

@@ -12,14 +12,14 @@ Example usage:
 from __future__ import annotations
 
 import asyncio
-import argparse
 import logging
-
-from dotenv import load_dotenv
-from fireworks import AsyncFireworks
-import fireworks
+import argparse
 
 from train import DEFAULT_RUN_PREFIX
+from dotenv import load_dotenv
+
+import fireworks
+from fireworks import AsyncFireworks
 
 load_dotenv()
 
