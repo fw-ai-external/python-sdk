@@ -121,18 +121,31 @@ Methods:
 - <code title="post /v1/accounts/{account_id}/deployedModels">client.lora.<a href="./src/fireworks/resources/lora.py">load</a>(\*, account_id, \*\*<a href="src/fireworks/types/lora_load_params.py">params</a>) -> <a href="./src/fireworks/types/shared/deployed_model.py">DeployedModel</a></code>
 - <code title="delete /v1/accounts/{account_id}/deployedModels/{deployed_model_id}">client.lora.<a href="./src/fireworks/resources/lora.py">unload</a>(deployed_model_id, \*, account_id) -> object</code>
 
+# DeploymentShapes
+
+Types:
+
+```python
+from fireworks.types import DeploymentShape
+```
+
+Methods:
+
+- <code title="get /v1/accounts/{account_id}/deploymentShapes">client.deployment_shapes.<a href="./src/fireworks/resources/deployment_shapes.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape.py">SyncCursorDeploymentShapes[DeploymentShape]</a></code>
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}">client.deployment_shapes.<a href="./src/fireworks/resources/deployment_shapes.py">get</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape.py">DeploymentShape</a></code>
+
 # DeploymentShapeVersions
 
 Types:
 
 ```python
-from fireworks.types import DeploymentShapeVersionListResponse, DeploymentShapeVersionGetResponse
+from fireworks.types import DeploymentShapeVersion
 ```
 
 Methods:
 
-- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">list</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_list_response.py">SyncCursorDeploymentShapeVersions[DeploymentShapeVersionListResponse]</a></code>
-- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">get</a>(version_id, \*, account_id, deployment_shape_id, \*\*<a href="src/fireworks/types/deployment_shape_version_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version_get_response.py">DeploymentShapeVersionGetResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">list</a>(deployment_shape_id, \*, account_id, \*\*<a href="src/fireworks/types/deployment_shape_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version.py">SyncCursorDeploymentShapeVersions[DeploymentShapeVersion]</a></code>
+- <code title="get /v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}">client.deployment_shape_versions.<a href="./src/fireworks/resources/deployment_shape_versions.py">get</a>(version_id, \*, account_id, deployment_shape_id, \*\*<a href="src/fireworks/types/deployment_shape_version_get_params.py">params</a>) -> <a href="./src/fireworks/types/deployment_shape_version.py">DeploymentShapeVersion</a></code>
 
 # Datasets
 
