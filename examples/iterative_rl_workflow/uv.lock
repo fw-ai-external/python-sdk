@@ -2,12 +2,6 @@ version = 1
 revision = 2
 requires-python = ">=3.9.18"
 
-[manifest]
-members = [
-    "fireworks-ai",
-    "iterative-rl-workflow",
-]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
@@ -240,8 +234,8 @@ wheels = [
 
 [[package]]
 name = "fireworks-ai"
-version = "1.0.0a13"
-source = { editable = "." }
+version = "1.0.0a15"
+source = { directory = "../../" }
 dependencies = [
     { name = "aiohttp" },
     { name = "anyio" },
@@ -464,13 +458,13 @@ wheels = [
 [[package]]
 name = "iterative-rl-workflow"
 version = "0.1.0"
-source = { virtual = "examples/iterative_rl_workflow" }
+source = { virtual = "." }
 dependencies = [
     { name = "fireworks-ai" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fireworks-ai", editable = "." }]
+requires-dist = [{ name = "fireworks-ai", directory = "../../" }]
 
 [[package]]
 name = "multidict"

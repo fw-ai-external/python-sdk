@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-fireworks-ai = { workspace = true }
+fireworks-ai = { path = "../../" }
