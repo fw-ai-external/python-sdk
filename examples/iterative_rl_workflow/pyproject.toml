@@ -5,7 +5,9 @@ description = "Example of RFT on Fireworks in your own control loop"
 readme = "README.md"
 requires-python = ">=3.9.18"
 dependencies = [
+    "dotenv>=0.9.9",
     "fireworks-ai",
+    "fsspec>=2025.10.0",
 ]
 
 [tool.uv.sources]
