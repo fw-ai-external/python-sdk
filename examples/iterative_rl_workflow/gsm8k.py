@@ -71,7 +71,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--keep-alive",
         action="store_true",
-        help="Use keep-alive mode (single trainer job for multiple steps) instead of standard mode",
+        default=True,
+        help="Use keep-alive mode (single trainer job for multiple steps) instead of standard mode. "
+        "This is more performant as it avoids the overhead of creating a new trainer job for each step, "
+        "keeping the model warm in GPU memory between training iterations.",
     )
     parser.add_argument(
         "--deployment-id",
