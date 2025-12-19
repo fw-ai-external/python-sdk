@@ -44,8 +44,8 @@ class TestReinforcementFineTuningJobs:
             evaluation_dataset="evaluationDataset",
             inference_parameters={
                 "extra_body": "extraBody",
-                "max_tokens": 0,
-                "n": 0,
+                "max_output_tokens": 0,
+                "response_candidates_count": 0,
                 "temperature": 0,
                 "top_k": 0,
                 "top_p": 0,
@@ -457,8 +457,8 @@ class TestAsyncReinforcementFineTuningJobs:
             evaluation_dataset="evaluationDataset",
             inference_parameters={
                 "extra_body": "extraBody",
-                "max_tokens": 0,
-                "n": 0,
+                "max_output_tokens": 0,
+                "response_candidates_count": 0,
                 "temperature": 0,
                 "top_k": 0,
                 "top_p": 0,

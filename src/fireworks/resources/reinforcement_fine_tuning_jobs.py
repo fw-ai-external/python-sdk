@@ -26,7 +26,7 @@ from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.reinforcement_fine_tuning_job import ReinforcementFineTuningJob
 from ..types.shared_params.training_config import TrainingConfig
-from ..types.shared_params.inference_parameters import InferenceParameters
+from ..types.shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
 __all__ = ["ReinforcementFineTuningJobsResource", "AsyncReinforcementFineTuningJobsResource"]
 
@@ -62,8 +62,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
-        inference_parameters: InferenceParameters | Omit = omit,
-        loss_config: reinforcement_fine_tuning_job_create_params.LossConfig | Omit = omit,
+        inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -93,7 +93,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
-          inference_parameters: BIJ parameters.
+          inference_parameters: RFT inference parameters.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying
               trainers.
@@ -445,8 +445,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
-        inference_parameters: InferenceParameters | Omit = omit,
-        loss_config: reinforcement_fine_tuning_job_create_params.LossConfig | Omit = omit,
+        inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -476,7 +476,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
-          inference_parameters: BIJ parameters.
+          inference_parameters: RFT inference parameters.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying
               trainers.

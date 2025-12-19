@@ -9,7 +9,7 @@ from ..types import (
     reinforcement_fine_tuning_step_list_params,
     reinforcement_fine_tuning_step_create_params,
     reinforcement_fine_tuning_step_resume_params,
-    reinforcement_fine_tuning_step_execute_train_step_params,
+    reinforcement_fine_tuning_step_execute_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -26,6 +26,7 @@ from .._base_client import AsyncPaginator, make_request_options
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.reinforcement_fine_tuning_step import ReinforcementFineTuningStep
+from ..types.shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
 __all__ = ["ReinforcementFineTuningStepsResource", "AsyncReinforcementFineTuningStepsResource"]
 
@@ -60,7 +61,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
-        loss_config: reinforcement_fine_tuning_step_create_params.LossConfig | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -256,7 +257,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             cast_to=object,
         )
 
-    def execute_train_step(
+    def execute(
         self,
         rlor_trainer_job_id: str,
         *,
@@ -303,7 +304,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "dataset": dataset,
                     "output_model": output_model,
                 },
-                reinforcement_fine_tuning_step_execute_train_step_params.ReinforcementFineTuningStepExecuteTrainStepParams,
+                reinforcement_fine_tuning_step_execute_params.ReinforcementFineTuningStepExecuteParams,
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -441,7 +442,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
-        loss_config: reinforcement_fine_tuning_step_create_params.LossConfig | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -639,7 +640,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=object,
         )
 
-    async def execute_train_step(
+    async def execute(
         self,
         rlor_trainer_job_id: str,
         *,
@@ -686,7 +687,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "dataset": dataset,
                     "output_model": output_model,
                 },
-                reinforcement_fine_tuning_step_execute_train_step_params.ReinforcementFineTuningStepExecuteTrainStepParams,
+                reinforcement_fine_tuning_step_execute_params.ReinforcementFineTuningStepExecuteParams,
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -807,8 +808,8 @@ class ReinforcementFineTuningStepsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute_train_step = to_raw_response_wrapper(
-            reinforcement_fine_tuning_steps.execute_train_step,
+        self.execute = to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.execute,
         )
         self.get = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
@@ -831,8 +832,8 @@ class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         self.delete = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute_train_step = async_to_raw_response_wrapper(
-            reinforcement_fine_tuning_steps.execute_train_step,
+        self.execute = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.execute,
         )
         self.get = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
@@ -855,8 +856,8 @@ class ReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute_train_step = to_streamed_response_wrapper(
-            reinforcement_fine_tuning_steps.execute_train_step,
+        self.execute = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.execute,
         )
         self.get = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,
@@ -879,8 +880,8 @@ class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.delete = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute_train_step = async_to_streamed_response_wrapper(
-            reinforcement_fine_tuning_steps.execute_train_step,
+        self.execute = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.execute,
         )
         self.get = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,

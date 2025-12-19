@@ -20,6 +20,7 @@ from .._base_client import AsyncPaginator, make_request_options
 from ..types.evaluation_job_get_response import EvaluationJobGetResponse
 from ..types.evaluation_job_list_response import EvaluationJobListResponse
 from ..types.evaluation_job_create_response import EvaluationJobCreateResponse
+from ..types.evaluation_job_get_log_endpoint_response import EvaluationJobGetLogEndpointResponse
 
 __all__ = ["EvaluationJobsResource", "AsyncEvaluationJobsResource"]
 
@@ -240,6 +241,46 @@ class EvaluationJobsResource(SyncAPIResource):
                 query=maybe_transform({"read_mask": read_mask}, evaluation_job_get_params.EvaluationJobGetParams),
             ),
             cast_to=EvaluationJobGetResponse,
+        )
+
+    def get_log_endpoint(
+        self,
+        evaluation_job_id: str,
+        *,
+        account_id: str | None = None,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluationJobGetLogEndpointResponse:
+        """
+        Get Evaluation Job execution logs (stream log endpoint + tracing IDs).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluation_job_id:
+            raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
+        return self._get(
+            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=EvaluationJobGetLogEndpointResponse,
         )
 
 
@@ -463,6 +504,46 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
             cast_to=EvaluationJobGetResponse,
         )
 
+    async def get_log_endpoint(
+        self,
+        evaluation_job_id: str,
+        *,
+        account_id: str | None = None,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluationJobGetLogEndpointResponse:
+        """
+        Get Evaluation Job execution logs (stream log endpoint + tracing IDs).
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluation_job_id:
+            raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
+        return await self._get(
+            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=EvaluationJobGetLogEndpointResponse,
+        )
+
 
 class EvaluationJobsResourceWithRawResponse:
     def __init__(self, evaluation_jobs: EvaluationJobsResource) -> None:
@@ -479,6 +560,9 @@ class EvaluationJobsResourceWithRawResponse:
         )
         self.get = to_raw_response_wrapper(
             evaluation_jobs.get,
+        )
+        self.get_log_endpoint = to_raw_response_wrapper(
+            evaluation_jobs.get_log_endpoint,
         )
 
 
@@ -498,6 +582,9 @@ class AsyncEvaluationJobsResourceWithRawResponse:
         self.get = async_to_raw_response_wrapper(
             evaluation_jobs.get,
         )
+        self.get_log_endpoint = async_to_raw_response_wrapper(
+            evaluation_jobs.get_log_endpoint,
+        )
 
 
 class EvaluationJobsResourceWithStreamingResponse:
@@ -516,6 +603,9 @@ class EvaluationJobsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             evaluation_jobs.get,
         )
+        self.get_log_endpoint = to_streamed_response_wrapper(
+            evaluation_jobs.get_log_endpoint,
+        )
 
 
 class AsyncEvaluationJobsResourceWithStreamingResponse:
@@ -533,4 +623,7 @@ class AsyncEvaluationJobsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             evaluation_jobs.get,
+        )
+        self.get_log_endpoint = async_to_streamed_response_wrapper(
+            evaluation_jobs.get_log_endpoint,
         )

@@ -19,10 +19,10 @@ from .shared import (
     DeployedModelRef as DeployedModelRef,
     ChatCompletionTool as ChatCompletionTool,
     NewLogProbsContent as NewLogProbsContent,
-    InferenceParameters as InferenceParameters,
     PromptTokensDetails as PromptTokensDetails,
     ChatCompletionMessageToolCall as ChatCompletionMessageToolCall,
     NewLogProbsContentTopLogProbs as NewLogProbsContentTopLogProbs,
+    ReinforcementLearningLossConfig as ReinforcementLearningLossConfig,
     ChatCompletionMessageToolCallFunction as ChatCompletionMessageToolCallFunction,
 )
 from .account import Account as Account
@@ -157,6 +157,9 @@ from .supervised_fine_tuning_job_list_params import (
 from .evaluator_get_build_log_endpoint_params import (
     EvaluatorGetBuildLogEndpointParams as EvaluatorGetBuildLogEndpointParams,
 )
+from .evaluation_job_get_log_endpoint_response import (
+    EvaluationJobGetLogEndpointResponse as EvaluationJobGetLogEndpointResponse,
+)
 from .reinforcement_fine_tuning_job_get_params import (
     ReinforcementFineTuningJobGetParams as ReinforcementFineTuningJobGetParams,
 )
@@ -202,6 +205,6 @@ from .reinforcement_fine_tuning_step_create_params import (
 from .reinforcement_fine_tuning_step_resume_params import (
     ReinforcementFineTuningStepResumeParams as ReinforcementFineTuningStepResumeParams,
 )
-from .reinforcement_fine_tuning_step_execute_train_step_params import (
-    ReinforcementFineTuningStepExecuteTrainStepParams as ReinforcementFineTuningStepExecuteTrainStepParams,
+from .reinforcement_fine_tuning_step_execute_params import (
+    ReinforcementFineTuningStepExecuteParams as ReinforcementFineTuningStepExecuteParams,
 )

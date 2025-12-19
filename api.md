@@ -9,13 +9,13 @@ from fireworks.types import (
     Choice,
     DeployedModel,
     DeployedModelRef,
-    InferenceParameters,
     LogProbs,
     NewLogProbs,
     NewLogProbsContent,
     NewLogProbsContentTopLogProbs,
     PromptTokensDetails,
     RawOutput,
+    ReinforcementLearningLossConfig,
     Status,
     TrainingConfig,
     UsageInfo,
@@ -208,7 +208,7 @@ Methods:
 - <code title="post /v1/accounts/{account_id}/rlorTrainerJobs">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">create</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_create_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
 - <code title="get /v1/accounts/{account_id}/rlorTrainerJobs">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_list_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep]</a></code>
 - <code title="delete /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">delete</a>(rlor_trainer_job_id, \*, account_id) -> object</code>
-- <code title="post /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">execute_train_step</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_execute_train_step_params.py">params</a>) -> object</code>
+- <code title="post /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">execute</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_execute_params.py">params</a>) -> object</code>
 - <code title="get /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">get</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_get_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
 - <code title="post /v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume">client.reinforcement_fine_tuning_steps.<a href="./src/fireworks/resources/reinforcement_fine_tuning_steps.py">resume</a>(rlor_trainer_job_id, \*, account_id, \*\*<a href="src/fireworks/types/reinforcement_fine_tuning_step_resume_params.py">params</a>) -> <a href="./src/fireworks/types/reinforcement_fine_tuning_step.py">ReinforcementFineTuningStep</a></code>
 
@@ -238,6 +238,7 @@ from fireworks.types import (
     EvaluationJobCreateResponse,
     EvaluationJobListResponse,
     EvaluationJobGetResponse,
+    EvaluationJobGetLogEndpointResponse,
 )
 ```
 
@@ -247,6 +248,7 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/evaluationJobs">client.evaluation_jobs.<a href="./src/fireworks/resources/evaluation_jobs.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluation_job_list_params.py">params</a>) -> <a href="./src/fireworks/types/evaluation_job_list_response.py">SyncCursorEvaluationJobs[EvaluationJobListResponse]</a></code>
 - <code title="delete /v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}">client.evaluation_jobs.<a href="./src/fireworks/resources/evaluation_jobs.py">delete</a>(evaluation_job_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}">client.evaluation_jobs.<a href="./src/fireworks/resources/evaluation_jobs.py">get</a>(evaluation_job_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluation_job_get_params.py">params</a>) -> <a href="./src/fireworks/types/evaluation_job_get_response.py">EvaluationJobGetResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint">client.evaluation_jobs.<a href="./src/fireworks/resources/evaluation_jobs.py">get_log_endpoint</a>(evaluation_job_id, \*, account_id) -> <a href="./src/fireworks/types/evaluation_job_get_log_endpoint_response.py">EvaluationJobGetLogEndpointResponse</a></code>
 
 # Evaluators
 
