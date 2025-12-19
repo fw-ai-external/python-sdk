@@ -1,5 +1,19 @@
 # Iterative RL Workflow Example
 
+## Setup
+
+This example uses `uv` for dependency management. Install dependencies with:
+
+```bash
+uv sync
+```
+
+Activate the virtual environment:
+
+```bash
+source .venv/bin/activate
+```
+
 ## Usage
 
 Run [`train.py`](./train.py) to start the iterative reinforcement learning workflow. Use `--help` to see all available flags and options:
