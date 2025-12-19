@@ -8,12 +8,10 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["DeploymentShapeVersionListResponse", "Snapshot"]
+__all__ = ["DeploymentShape"]
 
 
-class Snapshot(BaseModel):
-    """Full snapshot of the Deployment Shape at this version."""
-
+class DeploymentShape(BaseModel):
     base_model: str = FieldInfo(alias="baseModel")
 
     accelerator_count: Optional[int] = FieldInfo(alias="acceleratorCount", default=None)
@@ -123,28 +121,3 @@ class Snapshot(BaseModel):
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the deployment shape."""
-
-
-class DeploymentShapeVersionListResponse(BaseModel):
-    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
-    """The creation time of the deployment shape version.
-
-    Lists will be ordered by this field.
-    """
-
-    latest_validated: Optional[bool] = FieldInfo(alias="latestValidated", default=None)
-    """
-    If true, this version is the latest validated version. Only one version of the
-    shape can be the latest validated version.
-    """
-
-    name: Optional[str] = None
-
-    public: Optional[bool] = None
-    """If true, this version will be publicly readable."""
-
-    snapshot: Optional[Snapshot] = None
-    """Full snapshot of the Deployment Shape at this version."""
-
-    validated: Optional[bool] = None
-    """If true, this version has been validated."""
