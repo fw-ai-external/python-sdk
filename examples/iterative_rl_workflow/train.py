@@ -69,6 +69,7 @@ DEFAULT_LORA_RANK = 8
 DEFAULT_MAX_CONTEXT_LENGTH = 4096
 DEFAULT_MODEL_POLL_INTERVAL = 10
 DEFAULT_BATCH_SIZE = 32768
+DEFAULT_REPLICA_COUNT = 1
 
 ROLLOUTS_DIR = "rollouts"
 # Path to the GSM8K dataset file (local or remote via fsspec, e.g., gs://, s3://)
@@ -219,6 +220,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MODEL_POLL_INTERVAL,
         help="Poll interval in seconds when waiting for model to be ready",
     )
+    parser.add_argument(
+        "--replica-count",
+        type=int,
+        default=DEFAULT_REPLICA_COUNT,
+        help="Number of replicas for creation of deployment (used for both min and max)",
+    )
     return parser.parse_args()
 
 
@@ -326,6 +333,7 @@ async def create_or_get_deployment(
     base_model: str,
     api_key: str,
     region: str = DEFAULT_DIRECT_ROUTE_REGION,
+    replica_count: int = DEFAULT_REPLICA_COUNT,
 ) -> Deployment:
     """Create a deployment with hot reload and direct route enabled, or get existing one."""
     logger.info(f"Checking for existing deployment: {deployment_id}")
@@ -340,8 +348,8 @@ async def create_or_get_deployment(
             base_model=base_model,
             deployment_id=deployment_id,
             enable_hot_reload_latest_addon=True,
-            min_replica_count=1,
-            max_replica_count=1,
+            min_replica_count=replica_count,
+            max_replica_count=replica_count,
             # Use a deployment shape appropriate for your base model
             deployment_shape=os.environ.get(
                 "FIREWORKS_DEPLOYMENT_SHAPE",
@@ -845,6 +853,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     max_context_length = args.max_context_length
     batch_size = args.batch_size
     model_poll_interval = args.model_poll_interval
+    replica_count = args.replica_count
 
     # Get account ID from environment (SDK will pick it up automatically)
     account_id = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
@@ -931,6 +940,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         base_model=base_model,
         api_key=direct_route_api_key,
         region=direct_route_region,
+        replica_count=replica_count,
     )
     logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{deployment_id}")
     await wait_for_deployment_ready(client=client, deployment_id=deployment_id, timeout_seconds=deployment_timeout)
