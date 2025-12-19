@@ -260,6 +260,77 @@ Nested request parameters are [TypedDicts](https://docs.python.org/3/library/typ
 
 Typed requests and responses provide autocomplete and documentation within your editor. If you would like to see type errors in VS Code to help catch bugs earlier, set `python.analysis.typeCheckingMode` to `basic`.
 
+## Pagination
+
+List methods in the Fireworks API are paginated.
+
+This library provides auto-paginating iterators with each list response, so you do not have to request successive pages manually:
+
+```python
+from fireworks import Fireworks
+
+client = Fireworks()
+
+all_batch_inference_jobs = []
+# Automatically fetches more pages as needed.
+for batch_inference_job in client.batch_inference_jobs.list(
+    account_id="account_id",
+):
+    # Do something with batch_inference_job here
+    all_batch_inference_jobs.append(batch_inference_job)
+print(all_batch_inference_jobs)
+```
+
+Or, asynchronously:
+
+```python
+import asyncio
+from fireworks import AsyncFireworks
+
+client = AsyncFireworks()
+
+
+async def main() -> None:
+    all_batch_inference_jobs = []
+    # Iterate through items across all pages, issuing requests as needed.
+    async for batch_inference_job in client.batch_inference_jobs.list(
+        account_id="account_id",
+    ):
+        all_batch_inference_jobs.append(batch_inference_job)
+    print(all_batch_inference_jobs)
+
+
+asyncio.run(main())
+```
+
+Alternatively, you can use the `.has_next_page()`, `.next_page_info()`, or `.get_next_page()` methods for more granular control working with pages:
+
+```python
+first_page = await client.batch_inference_jobs.list(
+    account_id="account_id",
+)
+if first_page.has_next_page():
+    print(f"will fetch next page using these details: {first_page.next_page_info()}")
+    next_page = await first_page.get_next_page()
+    print(f"number of items we just fetched: {len(next_page.batch_inference_jobs)}")
+
+# Remove `await` for non-async usage.
+```
+
+Or just work directly with the returned data:
+
+```python
+first_page = await client.batch_inference_jobs.list(
+    account_id="account_id",
+)
+
+print(f"next page cursor: {first_page.next_page_token}")  # => "next page cursor: ..."
+for batch_inference_job in first_page.batch_inference_jobs:
+    print(batch_inference_job.continued_from_job_name)
+
+# Remove `await` for non-async usage.
+```
+
 ## Nested params
 
 Nested parameters are dictionaries, typed using `TypedDict`, for example:
