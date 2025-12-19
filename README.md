@@ -191,62 +191,6 @@ async for chunk in stream:
         print(chunk.choices[0].delta.content, end="")
 ```
 
-## Pagination
-
-List methods in the Fireworks API are paginated.
-
-You can use the `for deployment in page.deployments` syntax to iterate through items on the first page, or you can use the auto-paging iterator which will automatically fetch more pages as needed.
-
-```python
-from fireworks import Fireworks
-
-client = Fireworks()
-
-# Iterate through items on a single page
-page = client.deployments.list()
-for deployment in page.deployments:
-    print(deployment.name)
-
-# Automatically paginate through all pages
-all_deployments = client.deployments.list()
-for deployment in all_deployments:
-    print(deployment.name)
-```
-
-The async client supports the same interface:
-
-```python
-import asyncio
-from fireworks import AsyncFireworks
-
-client = AsyncFireworks()
-
-
-async def main() -> None:
-    # Iterate through items on a single page
-    page = await client.deployments.list()
-    for deployment in page.deployments:
-        print(deployment.name)
-
-    # Automatically paginate through all pages
-    all_deployments = client.deployments.list()
-    async for deployment in all_deployments:
-        print(deployment.name)
-
-
-asyncio.run(main())
-```
-
-You can optionally provide `page_size` to control the number of items returned per page:
-
-```python
-all_deployments = client.deployments.list(page_size=10)
-for deployment in all_deployments:
-    print(deployment.name)
-```
-
-All list methods support pagination and follow the same pattern.
-
 ## Reasoning models
 
 For detailed information on how to use reasoning models with the Fireworks Python SDK, see the [guide on reasoning](https://docs.fireworks.ai/guides/reasoning).
