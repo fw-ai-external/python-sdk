@@ -237,11 +237,11 @@ def load_gsm8k_prompts(filepath: str, limit: int | None = None) -> list[dict[str
     prompts: list[dict[str, Any]] = []
     try:
         with fsspec.open(filepath, "r") as f:  # type: ignore[assignment]
-            for i, line in enumerate(f):
+            for i, line in enumerate(f):  # type: ignore[arg-type]
                 if limit is not None and i >= limit:
                     break
-                line_str = line.strip() if isinstance(line, str) else line.decode("utf-8").strip()
-                data = json.loads(line_str)
+                line_str: str = line.strip() if isinstance(line, str) else line.decode("utf-8").strip()  # type: ignore[union-attr, call-overload]
+                data = json.loads(line_str)  # type: ignore[arg-type]
                 # Keep only system and user messages (strip assistant response)
                 messages = [msg for msg in data["messages"] if msg["role"] != "assistant"]
                 prompts.append(
