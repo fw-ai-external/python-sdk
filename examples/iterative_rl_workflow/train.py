@@ -26,14 +26,14 @@ import argparse
 from typing import Any
 from collections import defaultdict
 
-import fsspec
-from dotenv import load_dotenv
+import fsspec  # type: ignore[import-untyped]
+from dotenv import load_dotenv  # type: ignore[import-untyped]
 
 import fireworks
 from fireworks import AsyncFireworks
-from fireworks.types import TrainingConfig
 from fireworks.types.deployment import Deployment
 from fireworks.types.shared.deployed_model import DeployedModel
+from fireworks.types.shared_params.training_config import TrainingConfig
 
 load_dotenv()
 
@@ -234,13 +234,14 @@ def load_gsm8k_prompts(filepath: str, limit: int | None = None) -> list[dict[str
 
     Supports local files and remote files (e.g., gs://, s3://) via fsspec.
     """
-    prompts = []
+    prompts: list[dict[str, Any]] = []
     try:
-        with fsspec.open(filepath, "r") as f:
+        with fsspec.open(filepath, "r") as f:  # type: ignore[assignment]
             for i, line in enumerate(f):
                 if limit is not None and i >= limit:
                     break
-                data = json.loads(line.strip())
+                line_str = line.strip() if isinstance(line, str) else line.decode("utf-8").strip()
+                data = json.loads(line_str)
                 # Keep only system and user messages (strip assistant response)
                 messages = [msg for msg in data["messages"] if msg["role"] != "assistant"]
                 prompts.append(
@@ -350,7 +351,7 @@ async def get_deployment_shape_for_model(
 
     model_id = base_model.split("/")[-1]
     # filter shapes with model id in the name
-    shape_list = [shape for shape in shape_list if model_id in shape.name]
+    shape_list = [shape for shape in shape_list if shape.name and model_id in shape.name]
 
     # Prefer RFT shapes (for reinforcement fine-tuning)
     for shape in shape_list:
@@ -399,7 +400,7 @@ async def create_or_get_deployment(
             direct_route_type="INTERNET",
             direct_route_api_keys=[api_key],
             # Direct route requires a specific region
-            placement={"region": region},
+            placement={"region": region},  # type: ignore[dict-item]
         )
         logger.info(f"Created deployment: {deployment.name}")
         return deployment
@@ -843,8 +844,10 @@ async def wait_for_model_ready_or_job_fail(
             if state == "READY":
                 logger.info("Model is ready!")
                 return
-            elif state == "FAILED":
-                raise Exception(f"Model creation failed: {state}")
+            elif state and state not in ("STATE_UNSPECIFIED", "UPLOADING"):
+                # Model state is not READY and not uploading, check status for errors
+                if model.status and model.status.message:
+                    raise Exception(f"Model creation failed: {state} - {model.status.message}")
         except fireworks.NotFoundError as e:
             logger.warning(f"Error checking model status (might not exist yet): {e}")
 
@@ -1054,6 +1057,8 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
 
                 # 5. Hot Reload
                 logger.info("Hot reloading...")
+                if deployment.name is None:
+                    raise ValueError("Deployment name is None")
                 await load_lora_adapter(client=client, deployment_name=deployment.name, model_name=output_model_name)
                 await wait_for_lora_deployed(client=client, model_name=output_model_name, timeout_seconds=lora_timeout)
 

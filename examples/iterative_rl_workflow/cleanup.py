@@ -16,7 +16,7 @@ import logging
 import argparse
 
 from train import DEFAULT_RUN_PREFIX
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore[import-untyped]
 
 import fireworks
 from fireworks import AsyncFireworks
