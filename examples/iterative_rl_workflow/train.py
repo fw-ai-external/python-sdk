@@ -71,7 +71,7 @@ DEFAULT_BATCH_SIZE = 32768
 
 ROLLOUTS_DIR = "rollouts"
 # Path to the GSM8K dataset file (local or remote via fsspec, e.g., gs://, s3://)
-DATASET_FILE = os.environ.get("DATASET_FILE", "dataset_with_ground_truth.jsonl")
+DATASET_FILE = os.environ.get("DATASET_FILE", "gsm8k_dataset.jsonl")
 
 
 def parse_args() -> argparse.Namespace:
@@ -579,7 +579,7 @@ async def create_and_upload_dataset(
         dataset = await client.datasets.create(
             dataset_id=dataset_id,
             dataset={
-                "display_name": f"GSM8K RL Training Dataset - {dataset_id}",
+                "display_name": dataset_id[:63],
                 "example_count": str(example_count(rollouts_filepath)),
             },
         )
@@ -792,10 +792,7 @@ async def wait_for_model_ready_or_job_fail(
                 return
             elif state == "FAILED":
                 raise Exception(f"Model creation failed: {state}")
-        except Exception as e:
-            # Re-raise if it's a failure state exception, otherwise log and continue
-            if "Model creation failed" in str(e):
-                raise
+        except fireworks.NotFoundError as e:
             logger.warning(f"Error checking model status (might not exist yet): {e}")
 
         # Check job status for failure
@@ -818,7 +815,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
 
     # Extract args into local variables for clarity
     run_prefix = args.run_prefix
-    deployment_id = f"{run_prefix}-deployment"
+    deployment_id = f"{run_prefix}"
     num_epochs = args.num_epochs
     chunk_size = args.chunk_size
     total_prompts = args.total_prompts
