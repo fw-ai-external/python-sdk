@@ -489,7 +489,7 @@ async def generate_rollouts_and_rewards(
             tasks.append(task)
 
     # Execute all generations concurrently
-    logger.info(f"Starting {len(tasks)} concurrent generations...")
+    logger.info(f"Starting {num_generations_per_prompt} x {len(prompts)} = {len(tasks)} concurrent generations...")
     start_time = time.time()
     num_completed = 0
     num_successful = 0
