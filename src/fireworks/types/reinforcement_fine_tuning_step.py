@@ -10,22 +10,9 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
+from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStep", "LossConfig"]
-
-
-class LossConfig(BaseModel):
-    """
-    Reinforcement learning loss method + hyperparameters for the underlying trainer.
-    """
-
-    kl_beta: Optional[float] = FieldInfo(alias="klBeta", default=None)
-    """
-    KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
-    default is used.
-    """
-
-    method: Optional[Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]] = None
+__all__ = ["ReinforcementFineTuningStep"]
 
 
 class ReinforcementFineTuningStep(BaseModel):
@@ -49,7 +36,7 @@ class ReinforcementFineTuningStep(BaseModel):
 
     keep_alive: Optional[bool] = FieldInfo(alias="keepAlive", default=None)
 
-    loss_config: Optional[LossConfig] = FieldInfo(alias="lossConfig", default=None)
+    loss_config: Optional[ReinforcementLearningLossConfig] = FieldInfo(alias="lossConfig", default=None)
     """
     Reinforcement learning loss method + hyperparameters for the underlying trainer.
     """

@@ -13,6 +13,7 @@ from fireworks.types import (
     EvaluationJobGetResponse,
     EvaluationJobListResponse,
     EvaluationJobCreateResponse,
+    EvaluationJobGetLogEndpointResponse,
 )
 from fireworks.pagination import SyncCursorEvaluationJobs, AsyncCursorEvaluationJobs
 
@@ -270,6 +271,58 @@ class TestEvaluationJobs:
                 account_id="account_id",
             )
 
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_method_get_log_endpoint(self, client: Fireworks) -> None:
+        evaluation_job = client.evaluation_jobs.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        )
+        assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_raw_response_get_log_endpoint(self, client: Fireworks) -> None:
+        response = client.evaluation_jobs.with_raw_response.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        evaluation_job = response.parse()
+        assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_streaming_response_get_log_endpoint(self, client: Fireworks) -> None:
+        with client.evaluation_jobs.with_streaming_response.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            evaluation_job = response.parse()
+            assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    def test_path_params_get_log_endpoint(self, client: Fireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            client.evaluation_jobs.with_raw_response.get_log_endpoint(
+                evaluation_job_id="evaluation_job_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `evaluation_job_id` but received ''"):
+            client.evaluation_jobs.with_raw_response.get_log_endpoint(
+                evaluation_job_id="",
+                account_id="account_id",
+            )
+
 
 class TestAsyncEvaluationJobs:
     parametrize = pytest.mark.parametrize(
@@ -520,6 +573,58 @@ class TestAsyncEvaluationJobs:
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `evaluation_job_id` but received ''"):
             await async_client.evaluation_jobs.with_raw_response.get(
+                evaluation_job_id="",
+                account_id="account_id",
+            )
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_method_get_log_endpoint(self, async_client: AsyncFireworks) -> None:
+        evaluation_job = await async_client.evaluation_jobs.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        )
+        assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_raw_response_get_log_endpoint(self, async_client: AsyncFireworks) -> None:
+        response = await async_client.evaluation_jobs.with_raw_response.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        )
+
+        assert response.is_closed is True
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        evaluation_job = await response.parse()
+        assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_streaming_response_get_log_endpoint(self, async_client: AsyncFireworks) -> None:
+        async with async_client.evaluation_jobs.with_streaming_response.get_log_endpoint(
+            evaluation_job_id="evaluation_job_id",
+            account_id="account_id",
+        ) as response:
+            assert not response.is_closed
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+
+            evaluation_job = await response.parse()
+            assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
+
+        assert cast(Any, response.is_closed) is True
+
+    @pytest.mark.skip(reason="Prism tests are disabled")
+    @parametrize
+    async def test_path_params_get_log_endpoint(self, async_client: AsyncFireworks) -> None:
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
+            await async_client.evaluation_jobs.with_raw_response.get_log_endpoint(
+                evaluation_job_id="evaluation_job_id",
+                account_id="",
+            )
+
+        with pytest.raises(ValueError, match=r"Expected a non-empty value for `evaluation_job_id` but received ''"):
+            await async_client.evaluation_jobs.with_raw_response.get_log_endpoint(
                 evaluation_job_id="",
                 account_id="account_id",
             )
