@@ -9,9 +9,14 @@ This script demonstrates an iterative reinforcement learning workflow using GSM8
 5. Repeat for multiple epochs
 
 Example usage:
-    python gsm8k.py \
+    python train.py \
+        --run-prefix gsm8k-rlor \
+        --deployment-id gsm8k-rlor \
         --base-model accounts/fireworks/models/qwen3-32b \
         --direct-route-api-key <your-direct-route-api-key>
+
+The script will use the provided --deployment-id to get an existing deployment
+or create a new one if it doesn't exist.
 """
 
 from __future__ import annotations
@@ -85,8 +90,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run-prefix",
         type=str,
-        default=DEFAULT_RUN_PREFIX,
-        help="Prefix for naming deployments, models, and datasets",
+        required=True,
+        help="Prefix for naming models and datasets. Required to ensure explicit naming.",
     )
     parser.add_argument(
         "--num-epochs",
@@ -225,6 +230,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_REPLICA_COUNT,
         help="Number of replicas for creation of deployment (used for both min and max)",
+    )
+    parser.add_argument(
+        "--deployment-id",
+        type=str,
+        required=True,
+        help="Explicit deployment ID to use. Must match an existing deployment or will be used as the ID for a new deployment.",
     )
     return parser.parse_args()
 
@@ -370,14 +381,17 @@ async def create_or_get_deployment(
     region: str = DEFAULT_DIRECT_ROUTE_REGION,
     replica_count: int = DEFAULT_REPLICA_COUNT,
 ) -> Deployment:
-    """Create a deployment with hot reload and direct route enabled, or get existing one."""
-    logger.info(f"Checking for existing deployment: {deployment_id}")
+    """Create a deployment with hot reload and direct route enabled, or get existing one.
+    
+    Uses the explicitly provided deployment_id to get an existing deployment or create a new one.
+    """
+    logger.info(f"Using deployment ID: {deployment_id}")
     try:
         deployment = await client.deployments.get(deployment_id=deployment_id)
         logger.info(f"Found existing deployment: {deployment.name}")
         return deployment
     except fireworks.NotFoundError:
-        logger.info(f"Creating deployment {deployment_id} with hot reload and direct route enabled...")
+        logger.info(f"Deployment {deployment_id} not found, creating new deployment...")
         logger.info(f"  Base model: {base_model}")
 
         # Get a deployment shape compatible with the model
@@ -865,7 +879,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
 
     # Extract args into local variables for clarity
     run_prefix = args.run_prefix
-    deployment_id = f"{run_prefix}"
+    deployment_id = args.deployment_id  # Can be None, will search by prefix if not provided
     num_epochs = args.num_epochs
     chunk_size = args.chunk_size
     total_prompts = args.total_prompts
@@ -902,7 +916,7 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     logger.info(f"Account: {account_id}")
     logger.info(f"Base Model: {base_model}")
     logger.info(f"Run Prefix: {run_prefix}")
-    logger.info(f"Deployment ID: {deployment_id}")
+    logger.info(f"Deployment ID: {deployment_id if deployment_id else f'(will search by prefix: {run_prefix})'}")
     logger.info(f"Run ID: {run_id}")
     logger.info(f"Total Prompts: {total_prompts}")
     logger.info(f"Chunk Size: {chunk_size}")
@@ -977,8 +991,13 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         region=direct_route_region,
         replica_count=replica_count,
     )
-    logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{deployment_id}")
-    await wait_for_deployment_ready(client=client, deployment_id=deployment_id, timeout_seconds=deployment_timeout)
+    # Extract deployment_id from deployment name for URL and wait
+    if deployment.name:
+        actual_deployment_id = deployment.name.split("/")[-1]
+        logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{actual_deployment_id}")
+        await wait_for_deployment_ready(client=client, deployment_id=actual_deployment_id, timeout_seconds=deployment_timeout)
+    else:
+        raise ValueError("Deployment name is None")
 
     direct_route_url = await get_direct_route_url(deployment=deployment)
 
