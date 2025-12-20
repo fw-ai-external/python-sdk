@@ -382,7 +382,7 @@ async def create_or_get_deployment(
     replica_count: int = DEFAULT_REPLICA_COUNT,
 ) -> Deployment:
     """Create a deployment with hot reload and direct route enabled, or get existing one.
-    
+
     Uses the explicitly provided deployment_id to get an existing deployment or create a new one.
     """
     logger.info(f"Using deployment ID: {deployment_id}")
@@ -994,8 +994,12 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
     # Extract deployment_id from deployment name for URL and wait
     if deployment.name:
         actual_deployment_id = deployment.name.split("/")[-1]
-        logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{actual_deployment_id}")
-        await wait_for_deployment_ready(client=client, deployment_id=actual_deployment_id, timeout_seconds=deployment_timeout)
+        logger.info(
+            f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{actual_deployment_id}"
+        )
+        await wait_for_deployment_ready(
+            client=client, deployment_id=actual_deployment_id, timeout_seconds=deployment_timeout
+        )
     else:
         raise ValueError("Deployment name is None")
 
