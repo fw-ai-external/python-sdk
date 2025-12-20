@@ -5,8 +5,8 @@ This script finds and deletes all reinforcement fine-tuning trainer jobs
 that match the trainer job ID prefix used by train.py.
 
 Example usage:
-    python cleanup.py           # Dry run - shows what would be deleted
-    python cleanup.py --delete  # Actually delete the jobs
+    python cleanup.py --run-prefix gsm8k-rlor           # Dry run - shows what would be deleted
+    python cleanup.py --run-prefix gsm8k-rlor --delete  # Actually delete the jobs
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import asyncio
 import logging
 import argparse
 
-from train import DEFAULT_RUN_PREFIX
 from dotenv import load_dotenv  # type: ignore[import-untyped,import-not-found]
 
 import fireworks
@@ -47,10 +46,10 @@ def parse_args() -> argparse.Namespace:
         help="Actually delete the jobs (default is dry run)",
     )
     parser.add_argument(
-        "--prefix",
+        "--run-prefix",
         type=str,
-        default=DEFAULT_RUN_PREFIX,
-        help="Run prefix to match trainer jobs (matches jobs starting with {prefix}-trainer)",
+        required=True,
+        help="Run prefix to match trainer jobs (matches jobs starting with {run_prefix}-trainer)",
     )
     return parser.parse_args()
 
@@ -103,7 +102,7 @@ async def cleanup_trainer_jobs(prefix: str, delete: bool) -> None:
 async def main() -> None:
     """Main entry point."""
     args = parse_args()
-    await cleanup_trainer_jobs(prefix=args.prefix, delete=args.delete)
+    await cleanup_trainer_jobs(prefix=args.run_prefix, delete=args.delete)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Default values (can be overridden via CLI)
-DEFAULT_RUN_PREFIX = "gsm8k-rlor"
 DEFAULT_NUM_EPOCHS = 2
 DEFAULT_CHUNK_SIZE = 100
 DEFAULT_TOTAL_PROMPTS = 1000
