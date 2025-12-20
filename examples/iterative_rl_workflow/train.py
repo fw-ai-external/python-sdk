@@ -992,16 +992,14 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         replica_count=replica_count,
     )
     # Extract deployment_id from deployment name for URL and wait
-    if deployment.name:
-        actual_deployment_id = deployment.name.split("/")[-1]
-        logger.info(
-            f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{actual_deployment_id}"
-        )
-        await wait_for_deployment_ready(
-            client=client, deployment_id=actual_deployment_id, timeout_seconds=deployment_timeout
-        )
-    else:
+    if not deployment.name:
         raise ValueError("Deployment name is None")
+    deployment_name: str = deployment.name  # Store as str for type checking
+    actual_deployment_id = deployment_name.split("/")[-1]
+    logger.info(f"You can view the deployment at https://app.fireworks.ai/dashboard/deployments/{actual_deployment_id}")
+    await wait_for_deployment_ready(
+        client=client, deployment_id=actual_deployment_id, timeout_seconds=deployment_timeout
+    )
 
     direct_route_url = await get_direct_route_url(deployment=deployment)
 
@@ -1074,9 +1072,8 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
 
                 # 5. Hot Reload
                 logger.info("Hot reloading...")
-                if deployment.name is None:
-                    raise ValueError("Deployment name is None")
-                await load_lora_adapter(client=client, deployment_name=deployment.name, model_name=output_model_name)
+                # deployment_name is already validated earlier and stored as str
+                await load_lora_adapter(client=client, deployment_name=deployment_name, model_name=output_model_name)
                 await wait_for_lora_deployed(client=client, model_name=output_model_name, timeout_seconds=lora_timeout)
 
                 current_lora_model = output_model_name
