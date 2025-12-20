@@ -359,12 +359,6 @@ async def get_deployment_shape_for_model(
             logger.info(f"Found RFT deployment shape: {shape.name}")
             return shape.name
 
-    # Fall back to first available shape
-    first_shape = shape_list[0]
-    if first_shape.name:
-        logger.info(f"Using deployment shape: {first_shape.name}")
-        return first_shape.name
-
     raise ValueError(f"No valid deployment shape found for model: {base_model}")
 
 
