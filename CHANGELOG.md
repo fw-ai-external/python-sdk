@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-alpha.17 (2025-12-20)
+
+Full Changelog: [v1.0.0-alpha.16...v1.0.0-alpha.17](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.16...v1.0.0-alpha.17)
+
 ## 1.0.0-alpha.16 (2025-12-19)
 
 Full Changelog: [v1.0.0-alpha.15...v1.0.0-alpha.16](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.15...v1.0.0-alpha.16)
