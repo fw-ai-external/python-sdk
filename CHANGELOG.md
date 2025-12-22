@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.19 (2025-12-22)
+
+Full Changelog: [v1.0.0-alpha.18...v1.0.0-alpha.19](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.18...v1.0.0-alpha.19)
+
+### Features
+
+* Document GLM 4.7 / reasoning_history ([a7e17a6](https://github.com/fw-ai-external/python-sdk/commit/a7e17a6cde8649814d3bcacedcc6e175d1671116))
+
 ## 1.0.0-alpha.18 (2025-12-20)
 
 Full Changelog: [v1.0.0-alpha.17...v1.0.0-alpha.18](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.17...v1.0.0-alpha.18)

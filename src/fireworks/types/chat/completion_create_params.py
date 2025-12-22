@@ -312,14 +312,41 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
       off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
       and integers have no additional effect.
-    - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-      on. Use `'none'` or `false` to disable; effort levels and integers have no
-      additional effect.
+    - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+      reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+      have no additional effect.
     - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
       `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
       values—using these will return an error (e.g., "Invalid reasoning effort:
       none"). When omitted, defaults to `'medium'`. Lower effort produces faster
       responses with shorter reasoning.
+    """
+
+    reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]]
+    """
+    Controls how historical assistant reasoning content is included in the prompt
+    for multi-turn conversations.
+
+    **Accepted values:**
+
+    - `null`: Use model/template default behavior
+    - `'disabled'`: Remove all historical reasoning content from the prompt
+    - `'interleaved'`: Keep only reasoning content after the last user message
+    - `'preserved'`: Retain all previous reasoning content across the conversation
+
+    **Model support:**
+
+    | Model            | Default         | Supported values                             |
+    | ---------------- | --------------- | -------------------------------------------- |
+    | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+    | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+    | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+    | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+    For other models, refer to the model provider's documentation.
+
+    **Note:** This parameter controls prompt formatting only. To disable reasoning
+    computation entirely, use `reasoning_effort='none'`.
     """
 
     repetition_penalty: Optional[float]
