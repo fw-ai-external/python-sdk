@@ -78,6 +78,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -325,14 +326,38 @@ class CompletionsResource(SyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -484,6 +509,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -736,14 +762,38 @@ class CompletionsResource(SyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -889,6 +939,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1141,14 +1192,38 @@ class CompletionsResource(SyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -1293,6 +1368,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1347,6 +1423,7 @@ class CompletionsResource(SyncAPIResource):
                     "prompt_truncate_len": prompt_truncate_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
+                    "reasoning_history": reasoning_history,
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
@@ -1426,6 +1503,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -1673,14 +1751,38 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -1832,6 +1934,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -2084,14 +2187,38 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -2237,6 +2364,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -2489,14 +2617,38 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
                 off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
                 and integers have no additional effect.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
+                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
+                have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
                 values—using these will return an error (e.g., "Invalid reasoning effort:
                 none"). When omitted, defaults to `'medium'`. Lower effort produces faster
                 responses with shorter reasoning.
+
+          reasoning_history: Controls how historical assistant reasoning content is included in the prompt
+              for multi-turn conversations.
+
+              **Accepted values:**
+
+              - `null`: Use model/template default behavior
+              - `'disabled'`: Remove all historical reasoning content from the prompt
+              - `'interleaved'`: Keep only reasoning content after the last user message
+              - `'preserved'`: Retain all previous reasoning content across the conversation
+
+              **Model support:**
+
+              | Model            | Default         | Supported values                             |
+              | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
+              | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+
+              For other models, refer to the model provider's documentation.
+
+              **Note:** This parameter controls prompt formatting only. To disable reasoning
+              computation entirely, use `reasoning_effort='none'`.
 
           repetition_penalty: Applies a penalty to repeated tokens to discourage or encourage repetition. A
               value of `1.0` means no penalty, allowing free repetition. Values above `1.0`
@@ -2641,6 +2793,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_truncate_len: Optional[int] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
@@ -2695,6 +2848,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "prompt_truncate_len": prompt_truncate_len,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
+                    "reasoning_history": reasoning_history,
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
