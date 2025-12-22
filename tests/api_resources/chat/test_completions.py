@@ -83,6 +83,7 @@ class TestCompletions:
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -212,6 +213,7 @@ class TestCompletions:
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -345,6 +347,7 @@ class TestAsyncCompletions:
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -474,6 +477,7 @@ class TestAsyncCompletions:
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",

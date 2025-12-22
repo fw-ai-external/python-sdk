@@ -56,6 +56,7 @@ class TestCompletions:
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -146,6 +147,7 @@ class TestCompletions:
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -240,6 +242,7 @@ class TestAsyncCompletions:
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
@@ -330,6 +333,7 @@ class TestAsyncCompletions:
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             raw_output=True,
             reasoning_effort="low",
+            reasoning_history="disabled",
             repetition_penalty=0,
             response_format={
                 "type": "json_object",
