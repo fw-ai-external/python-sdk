@@ -188,6 +188,13 @@ class Deployment(BaseModel):
     max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
     """
 
+    max_with_revocable_replica_count: Optional[int] = FieldInfo(alias="maxWithRevocableReplicaCount", default=None)
+    """
+    max_with_revocable_replica_count is max replica count including revocable
+    capacity. The max revocable capacity will be max_with_revocable_replica_count -
+    max_replica_count.
+    """
+
     min_replica_count: Optional[int] = FieldInfo(alias="minReplicaCount", default=None)
     """The minimum number of replicas. If not specified, the default is 0."""
 

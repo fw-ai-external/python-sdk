@@ -105,6 +105,7 @@ class DeploymentsResource(SyncAPIResource):
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
+        max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
@@ -210,6 +211,10 @@ class DeploymentsResource(SyncAPIResource):
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
+          max_with_revocable_replica_count: max_with_revocable_replica_count is max replica count including revocable
+              capacity. The max revocable capacity will be max_with_revocable_replica_count -
+              max_replica_count.
+
           min_replica_count: The minimum number of replicas. If not specified, the default is 0.
 
           ngram_speculation_length: The length of previous input sequence to be considered for N-gram speculation.
@@ -263,6 +268,7 @@ class DeploymentsResource(SyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
+                    "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
@@ -334,6 +340,7 @@ class DeploymentsResource(SyncAPIResource):
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
+        max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
@@ -424,6 +431,10 @@ class DeploymentsResource(SyncAPIResource):
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
+          max_with_revocable_replica_count: max_with_revocable_replica_count is max replica count including revocable
+              capacity. The max revocable capacity will be max_with_revocable_replica_count -
+              max_replica_count.
+
           min_replica_count: The minimum number of replicas. If not specified, the default is 0.
 
           ngram_speculation_length: The length of previous input sequence to be considered for N-gram speculation.
@@ -479,6 +490,7 @@ class DeploymentsResource(SyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
+                    "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
@@ -832,6 +844,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
+        max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
@@ -937,6 +950,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
+          max_with_revocable_replica_count: max_with_revocable_replica_count is max replica count including revocable
+              capacity. The max revocable capacity will be max_with_revocable_replica_count -
+              max_replica_count.
+
           min_replica_count: The minimum number of replicas. If not specified, the default is 0.
 
           ngram_speculation_length: The length of previous input sequence to be considered for N-gram speculation.
@@ -990,6 +1007,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
+                    "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
@@ -1061,6 +1079,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
         max_replica_count: int | Omit = omit,
+        max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
@@ -1151,6 +1170,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
+          max_with_revocable_replica_count: max_with_revocable_replica_count is max replica count including revocable
+              capacity. The max revocable capacity will be max_with_revocable_replica_count -
+              max_replica_count.
+
           min_replica_count: The minimum number of replicas. If not specified, the default is 0.
 
           ngram_speculation_length: The length of previous input sequence to be considered for N-gram speculation.
@@ -1206,6 +1229,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "max_replica_count": max_replica_count,
+                    "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,

@@ -31,7 +31,6 @@ from .dataset import Dataset as Dataset
 from .dpo_job import DpoJob as DpoJob
 from .splitted import Splitted as Splitted
 from .auto_tune import AutoTune as AutoTune
-from .criterion import Criterion as Criterion
 from .placement import Placement as Placement
 from .type_date import TypeDate as TypeDate
 from .deployment import Deployment as Deployment
@@ -39,14 +38,11 @@ from .model_param import ModelParam as ModelParam
 from .transformed import Transformed as Transformed
 from .peft_details import PeftDetails as PeftDetails
 from .api_key_param import APIKeyParam as APIKeyParam
-from .code_snippets import CodeSnippets as CodeSnippets
 from .dataset_param import DatasetParam as DatasetParam
 from .splitted_param import SplittedParam as SplittedParam
 from .auto_tune_param import AutoTuneParam as AutoTuneParam
-from .criterion_param import CriterionParam as CriterionParam
 from .lora_get_params import LoraGetParams as LoraGetParams
 from .placement_param import PlacementParam as PlacementParam
-from .rollup_settings import RollupSettings as RollupSettings
 from .type_date_param import TypeDateParam as TypeDateParam
 from .user_get_params import UserGetParams as UserGetParams
 from .completion_chunk import CompletionChunk as CompletionChunk
@@ -73,7 +69,6 @@ from .user_update_params import UserUpdateParams as UserUpdateParams
 from .account_list_params import AccountListParams as AccountListParams
 from .api_key_list_params import APIKeyListParams as APIKeyListParams
 from .batch_inference_job import BatchInferenceJob as BatchInferenceJob
-from .code_snippets_param import CodeSnippetsParam as CodeSnippetsParam
 from .conversation_config import ConversationConfig as ConversationConfig
 from .dataset_list_params import DatasetListParams as DatasetListParams
 from .dpo_job_list_params import DpoJobListParams as DpoJobListParams
@@ -92,7 +87,6 @@ from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
 from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
 from .dpo_job_resume_params import DpoJobResumeParams as DpoJobResumeParams
 from .evaluator_list_params import EvaluatorListParams as EvaluatorListParams
-from .rollup_settings_param import RollupSettingsParam as RollupSettingsParam
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .evaluator_get_response import EvaluatorGetResponse as EvaluatorGetResponse
 from .evaluator_source_param import EvaluatorSourceParam as EvaluatorSourceParam

@@ -42,31 +42,11 @@ class TestEvaluators:
             account_id="account_id",
             evaluator={
                 "commit_hash": "commitHash",
-                "criteria": [
-                    {
-                        "code_snippets": {
-                            "entry_file": "entryFile",
-                            "entry_func": "entryFunc",
-                            "file_contents": {"foo": "string"},
-                            "language": "language",
-                        },
-                        "description": "description",
-                        "name": "name",
-                        "type": "TYPE_UNSPECIFIED",
-                    }
-                ],
                 "default_dataset": "defaultDataset",
                 "description": "description",
                 "display_name": "displayName",
                 "entry_point": "entryPoint",
-                "multi_metrics": True,
                 "requirements": "requirements",
-                "rollup_settings": {
-                    "criteria_weights": {"foo": 0},
-                    "python_code": "pythonCode",
-                    "skip_rollup": True,
-                    "success_threshold": 0,
-                },
                 "source": {
                     "github_repository_name": "githubRepositoryName",
                     "type": "TYPE_UNSPECIFIED",
@@ -130,31 +110,11 @@ class TestEvaluators:
             account_id="account_id",
             prepare_code_upload=True,
             commit_hash="commitHash",
-            criteria=[
-                {
-                    "code_snippets": {
-                        "entry_file": "entryFile",
-                        "entry_func": "entryFunc",
-                        "file_contents": {"foo": "string"},
-                        "language": "language",
-                    },
-                    "description": "description",
-                    "name": "name",
-                    "type": "TYPE_UNSPECIFIED",
-                }
-            ],
             default_dataset="defaultDataset",
             description="description",
             display_name="displayName",
             entry_point="entryPoint",
-            multi_metrics=True,
             requirements="requirements",
-            rollup_settings={
-                "criteria_weights": {"foo": 0},
-                "python_code": "pythonCode",
-                "skip_rollup": True,
-                "success_threshold": 0,
-            },
             source={
                 "github_repository_name": "githubRepositoryName",
                 "type": "TYPE_UNSPECIFIED",
@@ -645,31 +605,11 @@ class TestAsyncEvaluators:
             account_id="account_id",
             evaluator={
                 "commit_hash": "commitHash",
-                "criteria": [
-                    {
-                        "code_snippets": {
-                            "entry_file": "entryFile",
-                            "entry_func": "entryFunc",
-                            "file_contents": {"foo": "string"},
-                            "language": "language",
-                        },
-                        "description": "description",
-                        "name": "name",
-                        "type": "TYPE_UNSPECIFIED",
-                    }
-                ],
                 "default_dataset": "defaultDataset",
                 "description": "description",
                 "display_name": "displayName",
                 "entry_point": "entryPoint",
-                "multi_metrics": True,
                 "requirements": "requirements",
-                "rollup_settings": {
-                    "criteria_weights": {"foo": 0},
-                    "python_code": "pythonCode",
-                    "skip_rollup": True,
-                    "success_threshold": 0,
-                },
                 "source": {
                     "github_repository_name": "githubRepositoryName",
                     "type": "TYPE_UNSPECIFIED",
@@ -733,31 +673,11 @@ class TestAsyncEvaluators:
             account_id="account_id",
             prepare_code_upload=True,
             commit_hash="commitHash",
-            criteria=[
-                {
-                    "code_snippets": {
-                        "entry_file": "entryFile",
-                        "entry_func": "entryFunc",
-                        "file_contents": {"foo": "string"},
-                        "language": "language",
-                    },
-                    "description": "description",
-                    "name": "name",
-                    "type": "TYPE_UNSPECIFIED",
-                }
-            ],
             default_dataset="defaultDataset",
             description="description",
             display_name="displayName",
             entry_point="entryPoint",
-            multi_metrics=True,
             requirements="requirements",
-            rollup_settings={
-                "criteria_weights": {"foo": 0},
-                "python_code": "pythonCode",
-                "skip_rollup": True,
-                "success_threshold": 0,
-            },
             source={
                 "github_repository_name": "githubRepositoryName",
                 "type": "TYPE_UNSPECIFIED",
