@@ -68,6 +68,7 @@ class TestDeployments:
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
             max_replica_count=0,
+            max_with_revocable_replica_count=0,
             min_replica_count=0,
             ngram_speculation_length=0,
             placement={
@@ -161,6 +162,7 @@ class TestDeployments:
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
             max_replica_count=0,
+            max_with_revocable_replica_count=0,
             min_replica_count=0,
             ngram_speculation_length=0,
             placement={
@@ -573,6 +575,7 @@ class TestAsyncDeployments:
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
             max_replica_count=0,
+            max_with_revocable_replica_count=0,
             min_replica_count=0,
             ngram_speculation_length=0,
             placement={
@@ -666,6 +669,7 @@ class TestAsyncDeployments:
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
             max_replica_count=0,
+            max_with_revocable_replica_count=0,
             min_replica_count=0,
             ngram_speculation_length=0,
             placement={

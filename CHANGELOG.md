@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.20 (2025-12-23)
+
+Full Changelog: [v1.0.0-alpha.19...v1.0.0-alpha.20](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.19...v1.0.0-alpha.20)
+
+### Features
+
+* Remove deprecated Evaluator fields ([be410eb](https://github.com/fw-ai-external/python-sdk/commit/be410ebe0b291ba2c726d0c716776d8d4da17f87))
+
 ## 1.0.0-alpha.19 (2025-12-22)
 
 Full Changelog: [v1.0.0-alpha.18...v1.0.0-alpha.19](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.18...v1.0.0-alpha.19)

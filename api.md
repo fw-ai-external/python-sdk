@@ -269,10 +269,7 @@ Types:
 
 ```python
 from fireworks.types import (
-    CodeSnippets,
-    Criterion,
     EvaluatorSource,
-    RollupSettings,
     EvaluatorCreateResponse,
     EvaluatorUpdateResponse,
     EvaluatorListResponse,

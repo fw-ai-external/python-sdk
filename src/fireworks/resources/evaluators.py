@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from typing import Dict
 
 import httpx
 
@@ -28,8 +28,6 @@ from .._response import (
 )
 from ..pagination import SyncCursorEvaluators, AsyncCursorEvaluators
 from .._base_client import AsyncPaginator, make_request_options
-from ..types.criterion_param import CriterionParam
-from ..types.rollup_settings_param import RollupSettingsParam
 from ..types.evaluator_get_response import EvaluatorGetResponse
 from ..types.evaluator_source_param import EvaluatorSourceParam
 from ..types.evaluator_list_response import EvaluatorListResponse
@@ -151,14 +149,11 @@ class EvaluatorsResource(SyncAPIResource):
         account_id: str | None = None,
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
-        criteria: Iterable[CriterionParam] | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
         entry_point: str | Omit = omit,
-        multi_metrics: bool | Omit = omit,
         requirements: str | Omit = omit,
-        rollup_settings: RollupSettingsParam | Omit = omit,
         source: EvaluatorSourceParam | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -175,15 +170,6 @@ class EvaluatorsResource(SyncAPIResource):
         Args:
           prepare_code_upload: If true, prepare a new code upload/build attempt by transitioning the evaluator
               to BUILDING state. Can be used without update_mask.
-
-          multi_metrics: If true, the criteria will report multiple metric-score pairs Otherwise, each
-              criteria will report the score assigned to the criteria name as metric.
-
-          rollup_settings: Strategy for metrics reports summary/rollup. e.g. {metric1: 1, metric2: 0.3},
-              rollup_settings could be criteria_weights: {metric1: 0.5, metric2: 0.5}, then
-              final score will be 0.5 _ 1 + 0.5 _ 0.3 = 0.65 If skip_rollup is true, the
-              rollup step will be skipped since the criteria will also report the rollup score
-              and metrics altogether.
 
           source: Source information for the evaluator codebase.
 
@@ -208,14 +194,11 @@ class EvaluatorsResource(SyncAPIResource):
             body=maybe_transform(
                 {
                     "commit_hash": commit_hash,
-                    "criteria": criteria,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,
                     "entry_point": entry_point,
-                    "multi_metrics": multi_metrics,
                     "requirements": requirements,
-                    "rollup_settings": rollup_settings,
                     "source": source,
                 },
                 evaluator_update_params.EvaluatorUpdateParams,
@@ -701,14 +684,11 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         account_id: str | None = None,
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
-        criteria: Iterable[CriterionParam] | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
         entry_point: str | Omit = omit,
-        multi_metrics: bool | Omit = omit,
         requirements: str | Omit = omit,
-        rollup_settings: RollupSettingsParam | Omit = omit,
         source: EvaluatorSourceParam | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -725,15 +705,6 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         Args:
           prepare_code_upload: If true, prepare a new code upload/build attempt by transitioning the evaluator
               to BUILDING state. Can be used without update_mask.
-
-          multi_metrics: If true, the criteria will report multiple metric-score pairs Otherwise, each
-              criteria will report the score assigned to the criteria name as metric.
-
-          rollup_settings: Strategy for metrics reports summary/rollup. e.g. {metric1: 1, metric2: 0.3},
-              rollup_settings could be criteria_weights: {metric1: 0.5, metric2: 0.5}, then
-              final score will be 0.5 _ 1 + 0.5 _ 0.3 = 0.65 If skip_rollup is true, the
-              rollup step will be skipped since the criteria will also report the rollup score
-              and metrics altogether.
 
           source: Source information for the evaluator codebase.
 
@@ -758,14 +729,11 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
             body=await async_maybe_transform(
                 {
                     "commit_hash": commit_hash,
-                    "criteria": criteria,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,
                     "entry_point": entry_point,
-                    "multi_metrics": multi_metrics,
                     "requirements": requirements,
-                    "rollup_settings": rollup_settings,
                     "source": source,
                 },
                 evaluator_update_params.EvaluatorUpdateParams,
