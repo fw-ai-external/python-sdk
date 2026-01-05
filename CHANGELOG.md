@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.21 (2026-01-05)
+
+Full Changelog: [v1.0.0-alpha.20...v1.0.0-alpha.21](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.20...v1.0.0-alpha.21)
+
+### Chores
+
+* **internal:** codegen related update ([5857d3e](https://github.com/fw-ai-external/python-sdk/commit/5857d3e64487426fc42c645e20099cdd83868b42))
+
 ## 1.0.0-alpha.20 (2025-12-23)
 
 Full Changelog: [v1.0.0-alpha.19...v1.0.0-alpha.20](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.19...v1.0.0-alpha.20)
