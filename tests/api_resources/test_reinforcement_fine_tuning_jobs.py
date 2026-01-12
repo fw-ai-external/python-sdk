@@ -59,6 +59,7 @@ class TestReinforcementFineTuningJobs:
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
+                "batch_size_samples": 0,
                 "epochs": 0,
                 "gradient_accumulation_steps": 0,
                 "jinja_template": "jinjaTemplate",
@@ -472,6 +473,7 @@ class TestAsyncReinforcementFineTuningJobs:
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
+                "batch_size_samples": 0,
                 "epochs": 0,
                 "gradient_accumulation_steps": 0,
                 "jinja_template": "jinjaTemplate",

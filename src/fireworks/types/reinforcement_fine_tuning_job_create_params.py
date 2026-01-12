@@ -78,7 +78,6 @@ class InferenceParameters(TypedDict, total=False):
     """Maximum number of tokens to generate per response."""
 
     response_candidates_count: Annotated[int, PropertyInfo(alias="responseCandidatesCount")]
-    """Number of response candidates to generate per input."""
 
     temperature: float
     """Sampling temperature, typically between 0 and 2."""

@@ -234,6 +234,7 @@ class CompletionsResource(SyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -250,7 +251,6 @@ class CompletionsResource(SyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -323,27 +323,34 @@ class CompletionsResource(SyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 
@@ -670,6 +677,7 @@ class CompletionsResource(SyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -686,7 +694,6 @@ class CompletionsResource(SyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -759,27 +766,34 @@ class CompletionsResource(SyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 
@@ -1100,6 +1114,7 @@ class CompletionsResource(SyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -1116,7 +1131,6 @@ class CompletionsResource(SyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -1189,27 +1203,34 @@ class CompletionsResource(SyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 
@@ -1659,6 +1680,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -1675,7 +1697,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -1748,27 +1769,34 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 
@@ -2095,6 +2123,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -2111,7 +2140,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -2184,27 +2212,34 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 
@@ -2525,6 +2560,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               **Basic Metrics (all deployments):**
 
               - `prompt-tokens`: Number of tokens in the prompt
+              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `server-time-to-first-token`: Time from request start to first token (in
                 seconds)
               - `server-processing-time`: Total processing time (in seconds, only for
@@ -2541,7 +2577,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `speculation-generated-tokens`: Number of speculative generated tokens (for
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
-              - `cached-prompt-tokens`: Number of cached prompt tokens
               - `backend-host`: Hostname of the backend server
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
@@ -2614,27 +2649,34 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
                 output. `'low'` maps to a default token limit (~3000 tokens).
+              - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
+                omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
+                `'high'`. `'none'` and boolean values are rejected.
               - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                off. Any value except `'none'`/`false`/`null` enables reasoning; effort levels
-                and integers have no additional effect.
+                on. Use `'none'` or `false` to disable; effort levels and integers have no
+                additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
-                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer
-                values—using these will return an error (e.g., "Invalid reasoning effort:
-                none"). When omitted, defaults to `'medium'`. Lower effort produces faster
-                responses with shorter reasoning.
+                `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
+                — using these will return an error (e.g., "Invalid reasoning effort: none").
+                When omitted, defaults to `'medium'`. Lower effort produces faster responses
+                with shorter reasoning.
 
           reasoning_history: Controls how historical assistant reasoning content is included in the prompt
               for multi-turn conversations.
 
               **Accepted values:**
 
-              - `null`: Use model/template default behavior
-              - `'disabled'`: Remove all historical reasoning content from the prompt
-              - `'interleaved'`: Keep only reasoning content after the last user message
-              - `'preserved'`: Retain all previous reasoning content across the conversation
+              - `null`: Use model/template default behavior (for **GLM-4.7**, the
+                model/template default is `'interleaved'`, i.e. historical reasoning is
+                cleared by default)
+              - `'disabled'`: Strip `reasoning_content` from all messages before prompt
+                construction
+              - `'interleaved'`: Strip `reasoning_content` from messages up to (and including)
+                the last user message
+              - `'preserved'`: Preserve historical `reasoning_content` across the conversation
 
               **Model support:**
 

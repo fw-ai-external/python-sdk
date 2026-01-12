@@ -17,7 +17,7 @@ class Placement(BaseModel):
     specified.
     """
 
-    multi_region: Optional[Literal["MULTI_REGION_UNSPECIFIED", "GLOBAL", "US"]] = FieldInfo(
+    multi_region: Optional[Literal["MULTI_REGION_UNSPECIFIED", "GLOBAL", "US", "EUROPE", "APAC"]] = FieldInfo(
         alias="multiRegion", default=None
     )
     """The multi-region where the deployment must be placed."""
@@ -58,6 +58,7 @@ class Placement(BaseModel):
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
+            "EU_ICELAND_3",
         ]
     ] = None
     """The region where the deployment must be placed."""
@@ -99,6 +100,7 @@ class Placement(BaseModel):
                 "US_GEORGIA_3",
                 "NA_BRITISHCOLUMBIA_1",
                 "US_GEORGIA_4",
+                "EU_ICELAND_3",
             ]
         ]
     ] = None

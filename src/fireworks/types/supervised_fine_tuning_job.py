@@ -67,6 +67,9 @@ class SupervisedFineTuningJob(BaseModel):
 
     batch_size: Optional[int] = FieldInfo(alias="batchSize", default=None)
 
+    batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
+    """The number of samples per gradient batch."""
+
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
@@ -167,6 +170,7 @@ class SupervisedFineTuningJob(BaseModel):
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
+            "EU_ICELAND_3",
         ]
     ] = None
     """The region where the fine-tuning job is located."""
@@ -200,6 +204,12 @@ class SupervisedFineTuningJob(BaseModel):
     """
 
     status: Optional[Status] = None
+
+    trainer_logs_signed_url: Optional[str] = FieldInfo(alias="trainerLogsSignedUrl", default=None)
+    """
+    The signed URL for the trainer logs file (stdout/stderr). Only populated if the
+    account has trainer log reading enabled.
+    """
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the supervised fine-tuning job."""

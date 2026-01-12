@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
+from typing import Dict, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -28,7 +28,6 @@ class InferenceParameters(BaseModel):
     """Maximum number of tokens to generate per response."""
 
     response_candidates_count: Optional[int] = FieldInfo(alias="responseCandidatesCount", default=None)
-    """Number of response candidates to generate per input."""
 
     temperature: Optional[float] = None
     """Sampling temperature, typically between 0 and 2."""
@@ -46,6 +45,12 @@ class ReinforcementFineTuningJob(BaseModel):
 
     evaluator: str
     """The evaluator resource name to use for RLOR fine-tuning job."""
+
+    accelerator_seconds: Optional[Dict[str, str]] = FieldInfo(alias="acceleratorSeconds", default=None)
+    """
+    Accelerator seconds used by the job, keyed by accelerator type (e.g.,
+    "NVIDIA_H100_80GB"). Updated when job completes or is cancelled.
+    """
 
     chunk_size: Optional[int] = FieldInfo(alias="chunkSize", default=None)
     """Data chunking for rollout, default size 200, enabled when dataset > 300.
@@ -122,6 +127,12 @@ class ReinforcementFineTuningJob(BaseModel):
     """
 
     status: Optional[Status] = None
+
+    trainer_logs_signed_url: Optional[str] = FieldInfo(alias="trainerLogsSignedUrl", default=None)
+    """
+    The signed URL for the trainer logs file (stdout/stderr). Only populated if the
+    account has trainer log reading enabled.
+    """
 
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
