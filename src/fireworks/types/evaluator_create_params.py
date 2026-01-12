@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing_extensions import Required, Annotated, TypedDict
+from typing import Dict, Iterable
+from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .evaluator_source_param import EvaluatorSourceParam
 
-__all__ = ["EvaluatorCreateParams", "Evaluator"]
+__all__ = ["EvaluatorCreateParams", "Evaluator", "EvaluatorCriterion", "EvaluatorCriterionCodeSnippets"]
 
 
 class EvaluatorCreateParams(TypedDict, total=False):
@@ -18,8 +19,30 @@ class EvaluatorCreateParams(TypedDict, total=False):
     evaluator_id: Annotated[str, PropertyInfo(alias="evaluatorId")]
 
 
+class EvaluatorCriterionCodeSnippets(TypedDict, total=False):
+    entry_file: Annotated[str, PropertyInfo(alias="entryFile")]
+
+    entry_func: Annotated[str, PropertyInfo(alias="entryFunc")]
+
+    file_contents: Annotated[Dict[str, str], PropertyInfo(alias="fileContents")]
+
+    language: str
+
+
+class EvaluatorCriterion(TypedDict, total=False):
+    code_snippets: Annotated[EvaluatorCriterionCodeSnippets, PropertyInfo(alias="codeSnippets")]
+
+    description: str
+
+    name: str
+
+    type: Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]
+
+
 class Evaluator(TypedDict, total=False):
     commit_hash: Annotated[str, PropertyInfo(alias="commitHash")]
+
+    criteria: Iterable[EvaluatorCriterion]
 
     default_dataset: Annotated[str, PropertyInfo(alias="defaultDataset")]
 

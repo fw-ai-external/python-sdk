@@ -42,6 +42,19 @@ class TestEvaluators:
             account_id="account_id",
             evaluator={
                 "commit_hash": "commitHash",
+                "criteria": [
+                    {
+                        "code_snippets": {
+                            "entry_file": "entryFile",
+                            "entry_func": "entryFunc",
+                            "file_contents": {"foo": "string"},
+                            "language": "language",
+                        },
+                        "description": "description",
+                        "name": "name",
+                        "type": "TYPE_UNSPECIFIED",
+                    }
+                ],
                 "default_dataset": "defaultDataset",
                 "description": "description",
                 "display_name": "displayName",
@@ -110,6 +123,19 @@ class TestEvaluators:
             account_id="account_id",
             prepare_code_upload=True,
             commit_hash="commitHash",
+            criteria=[
+                {
+                    "code_snippets": {
+                        "entry_file": "entryFile",
+                        "entry_func": "entryFunc",
+                        "file_contents": {"foo": "string"},
+                        "language": "language",
+                    },
+                    "description": "description",
+                    "name": "name",
+                    "type": "TYPE_UNSPECIFIED",
+                }
+            ],
             default_dataset="defaultDataset",
             description="description",
             display_name="displayName",
@@ -605,6 +631,19 @@ class TestAsyncEvaluators:
             account_id="account_id",
             evaluator={
                 "commit_hash": "commitHash",
+                "criteria": [
+                    {
+                        "code_snippets": {
+                            "entry_file": "entryFile",
+                            "entry_func": "entryFunc",
+                            "file_contents": {"foo": "string"},
+                            "language": "language",
+                        },
+                        "description": "description",
+                        "name": "name",
+                        "type": "TYPE_UNSPECIFIED",
+                    }
+                ],
                 "default_dataset": "defaultDataset",
                 "description": "description",
                 "display_name": "displayName",
@@ -673,6 +712,19 @@ class TestAsyncEvaluators:
             account_id="account_id",
             prepare_code_upload=True,
             commit_hash="commitHash",
+            criteria=[
+                {
+                    "code_snippets": {
+                        "entry_file": "entryFile",
+                        "entry_func": "entryFunc",
+                        "file_contents": {"foo": "string"},
+                        "language": "language",
+                    },
+                    "description": "description",
+                    "name": "name",
+                    "type": "TYPE_UNSPECIFIED",
+                }
+            ],
             default_dataset="defaultDataset",
             description="description",
             display_name="displayName",

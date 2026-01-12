@@ -11,7 +11,8 @@ __all__ = ["BaseModelDetailsParam"]
 
 class BaseModelDetailsParam(TypedDict, total=False):
     checkpoint_format: Annotated[
-        Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE"], PropertyInfo(alias="checkpointFormat")
+        Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE", "UNINITIALIZED"],
+        PropertyInfo(alias="checkpointFormat"),
     ]
 
     model_type: Annotated[str, PropertyInfo(alias="modelType")]

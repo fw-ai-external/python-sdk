@@ -62,6 +62,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        node_count: int | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -86,6 +87,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -121,6 +125,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
+                    "node_count": node_count,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,
@@ -443,6 +448,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         evaluation_dataset: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        node_count: int | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -467,6 +473,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
+
+          node_count: The number of nodes to use for the fine-tuning job. If not specified, the
+              default is 1.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -502,6 +511,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "evaluation_dataset": evaluation_dataset,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
+                    "node_count": node_count,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "training_config": training_config,

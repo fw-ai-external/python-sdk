@@ -41,6 +41,7 @@ class TestDpoJobs:
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
+                "batch_size_samples": 0,
                 "epochs": 0,
                 "gradient_accumulation_steps": 0,
                 "jinja_template": "jinjaTemplate",
@@ -403,6 +404,7 @@ class TestAsyncDpoJobs:
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
+                "batch_size_samples": 0,
                 "epochs": 0,
                 "gradient_accumulation_steps": 0,
                 "jinja_template": "jinjaTemplate",

@@ -59,6 +59,12 @@ class DpoJob(BaseModel):
 
     status: Optional[Status] = None
 
+    trainer_logs_signed_url: Optional[str] = FieldInfo(alias="trainerLogsSignedUrl", default=None)
+    """
+    The signed URL for the trainer logs file (stdout/stderr). Only populated if the
+    account has trainer log reading enabled.
+    """
+
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
 

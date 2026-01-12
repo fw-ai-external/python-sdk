@@ -271,6 +271,7 @@ class Deployment(BaseModel):
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
+            "EU_ICELAND_3",
         ]
     ] = None
     """The geographic region where the deployment is presently located.

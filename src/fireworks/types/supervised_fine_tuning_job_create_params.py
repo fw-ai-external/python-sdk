@@ -30,6 +30,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
 
     batch_size: Annotated[int, PropertyInfo(alias="batchSize")]
 
+    batch_size_samples: Annotated[int, PropertyInfo(alias="batchSizeSamples")]
+    """The number of samples per gradient batch."""
+
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
     early_stop: Annotated[bool, PropertyInfo(alias="earlyStop")]
@@ -117,6 +120,7 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
         "US_GEORGIA_3",
         "NA_BRITISHCOLUMBIA_1",
         "US_GEORGIA_4",
+        "EU_ICELAND_3",
     ]
     """The region where the fine-tuning job is located."""
 

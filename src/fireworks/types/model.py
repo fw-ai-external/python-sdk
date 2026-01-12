@@ -183,6 +183,9 @@ class Model(BaseModel):
     supports_lora: Optional[bool] = FieldInfo(alias="supportsLora", default=None)
     """Whether this model supports LoRA."""
 
+    supports_serverless: Optional[bool] = FieldInfo(alias="supportsServerless", default=None)
+    """If true, the model has a serverless deployment."""
+
     supports_tools: Optional[bool] = FieldInfo(alias="supportsTools", default=None)
     """If set, tools (i.e.
 

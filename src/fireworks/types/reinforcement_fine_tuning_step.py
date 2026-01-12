@@ -43,6 +43,12 @@ class ReinforcementFineTuningStep(BaseModel):
 
     name: Optional[str] = None
 
+    node_count: Optional[int] = FieldInfo(alias="nodeCount", default=None)
+    """
+    The number of nodes to use for the fine-tuning job. If not specified, the
+    default is 1.
+    """
+
     reward_weights: Optional[List[str]] = FieldInfo(alias="rewardWeights", default=None)
     """
     A list of reward metrics to use for training in format of
