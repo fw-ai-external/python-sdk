@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Iterable
 
 import httpx
 
@@ -149,6 +149,7 @@ class EvaluatorsResource(SyncAPIResource):
         account_id: str | None = None,
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
+        criteria: Iterable[evaluator_update_params.Criterion] | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -194,6 +195,7 @@ class EvaluatorsResource(SyncAPIResource):
             body=maybe_transform(
                 {
                     "commit_hash": commit_hash,
+                    "criteria": criteria,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,
@@ -684,6 +686,7 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         account_id: str | None = None,
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
+        criteria: Iterable[evaluator_update_params.Criterion] | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -729,6 +732,7 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
             body=await async_maybe_transform(
                 {
                     "commit_hash": commit_hash,
+                    "criteria": criteria,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,

@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -10,7 +10,27 @@ from .._models import BaseModel
 from .shared.status import Status
 from .evaluator_source import EvaluatorSource
 
-__all__ = ["EvaluatorGetResponse"]
+__all__ = ["EvaluatorGetResponse", "Criterion", "CriterionCodeSnippets"]
+
+
+class CriterionCodeSnippets(BaseModel):
+    entry_file: Optional[str] = FieldInfo(alias="entryFile", default=None)
+
+    entry_func: Optional[str] = FieldInfo(alias="entryFunc", default=None)
+
+    file_contents: Optional[Dict[str, str]] = FieldInfo(alias="fileContents", default=None)
+
+    language: Optional[str] = None
+
+
+class Criterion(BaseModel):
+    code_snippets: Optional[CriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
+
+    description: Optional[str] = None
+
+    name: Optional[str] = None
+
+    type: Optional[Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]] = None
 
 
 class EvaluatorGetResponse(BaseModel):
@@ -19,6 +39,8 @@ class EvaluatorGetResponse(BaseModel):
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
+
+    criteria: Optional[List[Criterion]] = None
 
     default_dataset: Optional[str] = FieldInfo(alias="defaultDataset", default=None)
 

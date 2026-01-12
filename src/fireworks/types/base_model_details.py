@@ -11,8 +11,8 @@ __all__ = ["BaseModelDetails"]
 
 
 class BaseModelDetails(BaseModel):
-    checkpoint_format: Optional[Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE"]] = FieldInfo(
-        alias="checkpointFormat", default=None
+    checkpoint_format: Optional[Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE", "UNINITIALIZED"]] = (
+        FieldInfo(alias="checkpointFormat", default=None)
     )
 
     default_precision: Optional[

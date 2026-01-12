@@ -37,6 +37,12 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     Reinforcement learning loss method + hyperparameters for the underlying trainer.
     """
 
+    node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
+    """
+    The number of nodes to use for the fine-tuning job. If not specified, the
+    default is 1.
+    """
+
     reward_weights: Annotated[SequenceNotStr[str], PropertyInfo(alias="rewardWeights")]
     """
     A list of reward metrics to use for training in format of

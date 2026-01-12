@@ -58,6 +58,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         supervised_fine_tuning_job_id: str | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
+        batch_size_samples: int | Omit = omit,
         display_name: str | Omit = omit,
         early_stop: bool | Omit = omit,
         epochs: int | Omit = omit,
@@ -112,6 +113,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
+            "EU_ICELAND_3",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -134,6 +136,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
+
+          batch_size_samples: The number of samples per gradient batch.
 
           early_stop: Whether to stop training early if the validation loss does not improve.
 
@@ -186,6 +190,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "dataset": dataset,
                     "base_model": base_model,
                     "batch_size": batch_size,
+                    "batch_size_samples": batch_size_samples,
                     "display_name": display_name,
                     "early_stop": early_stop,
                     "epochs": epochs,
@@ -466,6 +471,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         supervised_fine_tuning_job_id: str | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
+        batch_size_samples: int | Omit = omit,
         display_name: str | Omit = omit,
         early_stop: bool | Omit = omit,
         epochs: int | Omit = omit,
@@ -520,6 +526,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
+            "EU_ICELAND_3",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -542,6 +549,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
+
+          batch_size_samples: The number of samples per gradient batch.
 
           early_stop: Whether to stop training early if the validation loss does not improve.
 
@@ -594,6 +603,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "dataset": dataset,
                     "base_model": base_model,
                     "batch_size": batch_size,
+                    "batch_size_samples": batch_size_samples,
                     "display_name": display_name,
                     "early_stop": early_stop,
                     "epochs": epochs,
