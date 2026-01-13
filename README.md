@@ -16,7 +16,7 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 
 ```sh
 # install from PyPI
-pip install --pre fireworks-ai
+pip install '--pre fireworks-ai'
 ```
 
 ## Usage
