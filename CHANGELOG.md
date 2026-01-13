@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-alpha.22 (2026-01-13)
+
+Full Changelog: [v1.0.0-alpha.21...v1.0.0-alpha.22](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.21...v1.0.0-alpha.22)
+
+### Features
+
+* Add model_kind and model_state schemas to stainless.yml ([67e6a8b](https://github.com/fw-ai-external/python-sdk/commit/67e6a8b67942c7be36a78a9308b725b137083c94))
+* **client:** add support for binary request streaming ([d9e22fd](https://github.com/fw-ai-external/python-sdk/commit/d9e22fd467aeabe9fb6243353d74a5de5a5e33ad))
+
+
+### Chores
+
+* **internal:** codegen related update ([7fbd701](https://github.com/fw-ai-external/python-sdk/commit/7fbd701b46f7bc446bd295da4628e415e5f2e19c))
+
 ## 1.0.0-alpha.21 (2026-01-12)
 
 Full Changelog: [v1.0.0-alpha.20...v1.0.0-alpha.21](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.20...v1.0.0-alpha.21)
