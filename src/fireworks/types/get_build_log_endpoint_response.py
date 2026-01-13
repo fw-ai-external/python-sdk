@@ -6,8 +6,8 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["EvaluatorGetBuildLogEndpointResponse"]
+__all__ = ["GetBuildLogEndpointResponse"]
 
 
-class EvaluatorGetBuildLogEndpointResponse(BaseModel):
+class GetBuildLogEndpointResponse(BaseModel):
     build_log_signed_uri: Optional[str] = FieldInfo(alias="buildLogSignedUri", default=None)

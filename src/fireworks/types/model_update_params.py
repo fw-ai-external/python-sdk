@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
+from .model_kind import ModelKind
 from .type_date_param import TypeDateParam
 from .peft_details_param import PeftDetailsParam
 from .base_model_details_param import BaseModelDetailsParam
@@ -61,20 +62,7 @@ class ModelUpdateParams(TypedDict, total=False):
     hugging_face_url: Annotated[str, PropertyInfo(alias="huggingFaceUrl")]
     """The URL to the Hugging Face model."""
 
-    kind: Literal[
-        "KIND_UNSPECIFIED",
-        "HF_BASE_MODEL",
-        "HF_PEFT_ADDON",
-        "HF_TEFT_ADDON",
-        "FLUMINA_BASE_MODEL",
-        "FLUMINA_ADDON",
-        "DRAFT_ADDON",
-        "FIRE_AGENT",
-        "LIVE_MERGE",
-        "CUSTOM_MODEL",
-        "EMBEDDING_MODEL",
-        "SNAPSHOT_MODEL",
-    ]
+    kind: ModelKind
     """The kind of model. If not specified, the default is HF_PEFT_ADDON."""
 
     peft_details: Annotated[PeftDetailsParam, PropertyInfo(alias="peftDetails")]
