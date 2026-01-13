@@ -9,6 +9,7 @@ import httpx
 
 from ..types import (
     Model,
+    ModelKind,
     model_get_params,
     model_list_params,
     model_create_params,
@@ -31,6 +32,7 @@ from .._response import (
 from ..pagination import SyncCursorModels, AsyncCursorModels
 from ..types.model import Model
 from .._base_client import AsyncPaginator, make_request_options
+from ..types.model_kind import ModelKind
 from ..types.model_param import ModelParam
 from ..types.type_date_param import TypeDateParam
 from ..types.peft_details_param import PeftDetailsParam
@@ -134,21 +136,7 @@ class ModelsResource(SyncAPIResource):
         display_name: str | Omit = omit,
         github_url: str | Omit = omit,
         hugging_face_url: str | Omit = omit,
-        kind: Literal[
-            "KIND_UNSPECIFIED",
-            "HF_BASE_MODEL",
-            "HF_PEFT_ADDON",
-            "HF_TEFT_ADDON",
-            "FLUMINA_BASE_MODEL",
-            "FLUMINA_ADDON",
-            "DRAFT_ADDON",
-            "FIRE_AGENT",
-            "LIVE_MERGE",
-            "CUSTOM_MODEL",
-            "EMBEDDING_MODEL",
-            "SNAPSHOT_MODEL",
-        ]
-        | Omit = omit,
+        kind: ModelKind | Omit = omit,
         peft_details: PeftDetailsParam | Omit = omit,
         public: bool | Omit = omit,
         snapshot_type: Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"] | Omit = omit,
@@ -754,21 +742,7 @@ class AsyncModelsResource(AsyncAPIResource):
         display_name: str | Omit = omit,
         github_url: str | Omit = omit,
         hugging_face_url: str | Omit = omit,
-        kind: Literal[
-            "KIND_UNSPECIFIED",
-            "HF_BASE_MODEL",
-            "HF_PEFT_ADDON",
-            "HF_TEFT_ADDON",
-            "FLUMINA_BASE_MODEL",
-            "FLUMINA_ADDON",
-            "DRAFT_ADDON",
-            "FIRE_AGENT",
-            "LIVE_MERGE",
-            "CUSTOM_MODEL",
-            "EMBEDDING_MODEL",
-            "SNAPSHOT_MODEL",
-        ]
-        | Omit = omit,
+        kind: ModelKind | Omit = omit,
         peft_details: PeftDetailsParam | Omit = omit,
         public: bool | Omit = omit,
         snapshot_type: Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"] | Omit = omit,

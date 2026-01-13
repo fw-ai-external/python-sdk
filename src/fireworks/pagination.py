@@ -26,6 +26,8 @@ __all__ = [
     "AsyncCursorDpoJobs",
     "SyncCursorEvaluationJobs",
     "AsyncCursorEvaluationJobs",
+    "SyncCursorEvaluatorVersions",
+    "AsyncCursorEvaluatorVersions",
     "SyncCursorEvaluators",
     "AsyncCursorEvaluators",
     "SyncCursorLora",
@@ -397,6 +399,46 @@ class AsyncCursorEvaluationJobs(BaseAsyncPage[_T], BasePage[_T], Generic[_T]):
         if not evaluation_jobs:
             return []
         return evaluation_jobs
+
+    @override
+    def next_page_info(self) -> Optional[PageInfo]:
+        next_page_token = self.next_page_token
+        if not next_page_token:
+            return None
+
+        return PageInfo(params={"pageToken": next_page_token})
+
+
+class SyncCursorEvaluatorVersions(BaseSyncPage[_T], BasePage[_T], Generic[_T]):
+    evaluator_versions: List[_T] = FieldInfo(alias="evaluatorVersions")
+    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
+
+    @override
+    def _get_page_items(self) -> List[_T]:
+        evaluator_versions = self.evaluator_versions
+        if not evaluator_versions:
+            return []
+        return evaluator_versions
+
+    @override
+    def next_page_info(self) -> Optional[PageInfo]:
+        next_page_token = self.next_page_token
+        if not next_page_token:
+            return None
+
+        return PageInfo(params={"pageToken": next_page_token})
+
+
+class AsyncCursorEvaluatorVersions(BaseAsyncPage[_T], BasePage[_T], Generic[_T]):
+    evaluator_versions: List[_T] = FieldInfo(alias="evaluatorVersions")
+    next_page_token: Optional[str] = FieldInfo(alias="nextPageToken", default=None)
+
+    @override
+    def _get_page_items(self) -> List[_T]:
+        evaluator_versions = self.evaluator_versions
+        if not evaluator_versions:
+            return []
+        return evaluator_versions
 
     @override
     def next_page_info(self) -> Optional[PageInfo]:

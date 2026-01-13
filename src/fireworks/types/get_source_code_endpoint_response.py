@@ -6,8 +6,8 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 
-__all__ = ["EvaluatorGetUploadEndpointResponse"]
+__all__ = ["GetSourceCodeEndpointResponse"]
 
 
-class EvaluatorGetUploadEndpointResponse(BaseModel):
+class GetSourceCodeEndpointResponse(BaseModel):
     filename_to_signed_urls: Optional[Dict[str, str]] = FieldInfo(alias="filenameToSignedUrls", default=None)

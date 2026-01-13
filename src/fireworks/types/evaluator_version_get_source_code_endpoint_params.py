@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["EvaluatorGetBuildLogEndpointParams"]
+__all__ = ["EvaluatorVersionGetSourceCodeEndpointParams"]
 
 
-class EvaluatorGetBuildLogEndpointParams(TypedDict, total=False):
+class EvaluatorVersionGetSourceCodeEndpointParams(TypedDict, total=False):
     account_id: str
+
+    evaluator_id: Required[str]
 
     read_mask: Annotated[str, PropertyInfo(alias="readMask")]
     """The fields to be returned in the response.

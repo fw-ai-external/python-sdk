@@ -10,10 +10,10 @@ from .._models import BaseModel
 from .shared.status import Status
 from .evaluator_source import EvaluatorSource
 
-__all__ = ["EvaluatorUpdateResponse", "Criterion", "CriterionCodeSnippets"]
+__all__ = ["EvaluatorVersion", "Snapshot", "SnapshotCriterion", "SnapshotCriterionCodeSnippets"]
 
 
-class CriterionCodeSnippets(BaseModel):
+class SnapshotCriterionCodeSnippets(BaseModel):
     entry_file: Optional[str] = FieldInfo(alias="entryFile", default=None)
 
     entry_func: Optional[str] = FieldInfo(alias="entryFunc", default=None)
@@ -23,8 +23,8 @@ class CriterionCodeSnippets(BaseModel):
     language: Optional[str] = None
 
 
-class Criterion(BaseModel):
-    code_snippets: Optional[CriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
+class SnapshotCriterion(BaseModel):
+    code_snippets: Optional[SnapshotCriterionCodeSnippets] = FieldInfo(alias="codeSnippets", default=None)
 
     description: Optional[str] = None
 
@@ -33,14 +33,19 @@ class Criterion(BaseModel):
     type: Optional[Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]] = None
 
 
-class EvaluatorUpdateResponse(BaseModel):
+class Snapshot(BaseModel):
+    """
+    The snapshot of the evaluator at the time the revision was created.
+    Kept for backwards compatibility with existing versions.
+    """
+
     commit_hash: Optional[str] = FieldInfo(alias="commitHash", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
 
-    criteria: Optional[List[Criterion]] = None
+    criteria: Optional[List[SnapshotCriterion]] = None
 
     current_version_id: Optional[str] = FieldInfo(alias="currentVersionId", default=None)
     """
@@ -70,3 +75,35 @@ class EvaluatorUpdateResponse(BaseModel):
     status: Optional[Status] = None
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
+
+
+class EvaluatorVersion(BaseModel):
+    alternate_ids: Optional[List[str]] = FieldInfo(alias="alternateIds", default=None)
+    """Other revision IDs that share the same snapshot (e.g. aliases like "latest")."""
+
+    commit_hash: Optional[str] = FieldInfo(alias="commitHash", default=None)
+    """Commit hash of this version from the user's original codebase."""
+
+    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
+    """The timestamp that the revision was created."""
+
+    entry_point: Optional[str] = FieldInfo(alias="entryPoint", default=None)
+    """Entry point of the evaluator inside the codebase."""
+
+    name: Optional[str] = None
+    """The name of the evaluator revision."""
+
+    requirements: Optional[str] = None
+    """Content for the requirements.txt for package installation."""
+
+    snapshot: Optional[Snapshot] = None
+    """
+    The snapshot of the evaluator at the time the revision was created. Kept for
+    backwards compatibility with existing versions.
+    """
+
+    state: Optional[Literal["STATE_UNSPECIFIED", "ACTIVE", "BUILDING", "BUILD_FAILED"]] = None
+    """Version-specific build state."""
+
+    status: Optional[Status] = None
+    """Version-specific build status with details."""
