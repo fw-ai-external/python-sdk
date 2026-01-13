@@ -34,7 +34,9 @@ from .auto_tune import AutoTune as AutoTune
 from .placement import Placement as Placement
 from .type_date import TypeDate as TypeDate
 from .deployment import Deployment as Deployment
+from .model_kind import ModelKind as ModelKind
 from .model_param import ModelParam as ModelParam
+from .model_state import ModelState as ModelState
 from .transformed import Transformed as Transformed
 from .peft_details import PeftDetails as PeftDetails
 from .api_key_param import APIKeyParam as APIKeyParam
@@ -53,6 +55,7 @@ from .lora_load_params import LoraLoadParams as LoraLoadParams
 from .model_get_params import ModelGetParams as ModelGetParams
 from .user_list_params import UserListParams as UserListParams
 from .evaluation_result import EvaluationResult as EvaluationResult
+from .evaluator_version import EvaluatorVersion as EvaluatorVersion
 from .model_list_params import ModelListParams as ModelListParams
 from .secret_get_params import SecretGetParams as SecretGetParams
 from .transformed_param import TransformedParam as TransformedParam
@@ -96,6 +99,7 @@ from .evaluation_result_param import EvaluationResultParam as EvaluationResultPa
 from .evaluator_create_params import EvaluatorCreateParams as EvaluatorCreateParams
 from .evaluator_list_response import EvaluatorListResponse as EvaluatorListResponse
 from .evaluator_update_params import EvaluatorUpdateParams as EvaluatorUpdateParams
+from .evaluator_version_param import EvaluatorVersionParam as EvaluatorVersionParam
 from .autoscaling_policy_param import AutoscalingPolicyParam as AutoscalingPolicyParam
 from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsParam
 from .completion_create_params import CompletionCreateParams as CompletionCreateParams
@@ -116,7 +120,9 @@ from .evaluation_job_get_response import EvaluationJobGetResponse as EvaluationJ
 from .deployment_shape_list_params import DeploymentShapeListParams as DeploymentShapeListParams
 from .evaluation_job_create_params import EvaluationJobCreateParams as EvaluationJobCreateParams
 from .evaluation_job_list_response import EvaluationJobListResponse as EvaluationJobListResponse
+from .evaluator_version_get_params import EvaluatorVersionGetParams as EvaluatorVersionGetParams
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
+from .evaluator_version_list_params import EvaluatorVersionListParams as EvaluatorVersionListParams
 from .reinforcement_fine_tuning_job import ReinforcementFineTuningJob as ReinforcementFineTuningJob
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
 from .dataset_validate_upload_params import DatasetValidateUploadParams as DatasetValidateUploadParams
@@ -124,9 +130,11 @@ from .evaluation_job_create_response import EvaluationJobCreateResponse as Evalu
 from .model_validate_upload_response import ModelValidateUploadResponse as ModelValidateUploadResponse
 from .reinforcement_fine_tuning_step import ReinforcementFineTuningStep as ReinforcementFineTuningStep
 from .batch_inference_job_list_params import BatchInferenceJobListParams as BatchInferenceJobListParams
-from .evaluator_validate_upload_params import EvaluatorValidateUploadParams as EvaluatorValidateUploadParams
+from .evaluator_version_create_params import EvaluatorVersionCreateParams as EvaluatorVersionCreateParams
+from .get_build_log_endpoint_response import GetBuildLogEndpointResponse as GetBuildLogEndpointResponse
 from .model_get_upload_endpoint_params import ModelGetUploadEndpointParams as ModelGetUploadEndpointParams
 from .batch_inference_job_create_params import BatchInferenceJobCreateParams as BatchInferenceJobCreateParams
+from .get_source_code_endpoint_response import GetSourceCodeEndpointResponse as GetSourceCodeEndpointResponse
 from .dataset_get_upload_endpoint_params import DatasetGetUploadEndpointParams as DatasetGetUploadEndpointParams
 from .model_get_download_endpoint_params import ModelGetDownloadEndpointParams as ModelGetDownloadEndpointParams
 from .model_get_upload_endpoint_response import ModelGetUploadEndpointResponse as ModelGetUploadEndpointResponse
@@ -134,23 +142,19 @@ from .deployment_shape_version_get_params import DeploymentShapeVersionGetParams
 from .dataset_get_download_endpoint_params import DatasetGetDownloadEndpointParams as DatasetGetDownloadEndpointParams
 from .dataset_get_upload_endpoint_response import DatasetGetUploadEndpointResponse as DatasetGetUploadEndpointResponse
 from .deployment_shape_version_list_params import DeploymentShapeVersionListParams as DeploymentShapeVersionListParams
-from .evaluator_get_upload_endpoint_params import EvaluatorGetUploadEndpointParams as EvaluatorGetUploadEndpointParams
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
 from .supervised_fine_tuning_job_get_params import SupervisedFineTuningJobGetParams as SupervisedFineTuningJobGetParams
 from .dataset_get_download_endpoint_response import (
     DatasetGetDownloadEndpointResponse as DatasetGetDownloadEndpointResponse,
 )
-from .evaluator_get_upload_endpoint_response import (
-    EvaluatorGetUploadEndpointResponse as EvaluatorGetUploadEndpointResponse,
-)
 from .supervised_fine_tuning_job_list_params import (
     SupervisedFineTuningJobListParams as SupervisedFineTuningJobListParams,
 )
-from .evaluator_get_build_log_endpoint_params import (
-    EvaluatorGetBuildLogEndpointParams as EvaluatorGetBuildLogEndpointParams,
-)
 from .evaluation_job_get_log_endpoint_response import (
     EvaluationJobGetLogEndpointResponse as EvaluationJobGetLogEndpointResponse,
+)
+from .evaluator_version_validate_upload_params import (
+    EvaluatorVersionValidateUploadParams as EvaluatorVersionValidateUploadParams,
 )
 from .reinforcement_fine_tuning_job_get_params import (
     ReinforcementFineTuningJobGetParams as ReinforcementFineTuningJobGetParams,
@@ -160,12 +164,6 @@ from .supervised_fine_tuning_job_create_params import (
 )
 from .supervised_fine_tuning_job_resume_params import (
     SupervisedFineTuningJobResumeParams as SupervisedFineTuningJobResumeParams,
-)
-from .evaluator_get_build_log_endpoint_response import (
-    EvaluatorGetBuildLogEndpointResponse as EvaluatorGetBuildLogEndpointResponse,
-)
-from .evaluator_get_source_code_endpoint_params import (
-    EvaluatorGetSourceCodeEndpointParams as EvaluatorGetSourceCodeEndpointParams,
 )
 from .reinforcement_fine_tuning_job_list_params import (
     ReinforcementFineTuningJobListParams as ReinforcementFineTuningJobListParams,
@@ -179,9 +177,6 @@ from .dpo_job_get_metrics_file_endpoint_response import (
 from .reinforcement_fine_tuning_step_list_params import (
     ReinforcementFineTuningStepListParams as ReinforcementFineTuningStepListParams,
 )
-from .evaluator_get_source_code_endpoint_response import (
-    EvaluatorGetSourceCodeEndpointResponse as EvaluatorGetSourceCodeEndpointResponse,
-)
 from .reinforcement_fine_tuning_job_cancel_params import (
     ReinforcementFineTuningJobCancelParams as ReinforcementFineTuningJobCancelParams,
 )
@@ -191,6 +186,9 @@ from .reinforcement_fine_tuning_job_create_params import (
 from .reinforcement_fine_tuning_job_resume_params import (
     ReinforcementFineTuningJobResumeParams as ReinforcementFineTuningJobResumeParams,
 )
+from .evaluator_version_get_upload_endpoint_params import (
+    EvaluatorVersionGetUploadEndpointParams as EvaluatorVersionGetUploadEndpointParams,
+)
 from .reinforcement_fine_tuning_step_create_params import (
     ReinforcementFineTuningStepCreateParams as ReinforcementFineTuningStepCreateParams,
 )
@@ -199,4 +197,13 @@ from .reinforcement_fine_tuning_step_resume_params import (
 )
 from .reinforcement_fine_tuning_step_execute_params import (
     ReinforcementFineTuningStepExecuteParams as ReinforcementFineTuningStepExecuteParams,
+)
+from .evaluator_version_get_upload_endpoint_response import (
+    EvaluatorVersionGetUploadEndpointResponse as EvaluatorVersionGetUploadEndpointResponse,
+)
+from .evaluator_version_get_build_log_endpoint_params import (
+    EvaluatorVersionGetBuildLogEndpointParams as EvaluatorVersionGetBuildLogEndpointParams,
+)
+from .evaluator_version_get_source_code_endpoint_params import (
+    EvaluatorVersionGetSourceCodeEndpointParams as EvaluatorVersionGetSourceCodeEndpointParams,
 )

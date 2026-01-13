@@ -44,6 +44,14 @@ class Evaluator(TypedDict, total=False):
 
     criteria: Iterable[EvaluatorCriterion]
 
+    current_version_id: Annotated[str, PropertyInfo(alias="currentVersionId")]
+    """
+    The version ID of the currently active version of this evaluator. This
+    references EvaluatorVersion.VersionId for this evaluator. When set, GetEvaluator
+    merges version-specific data (state, requirements, etc.) into the response.
+    Empty for legacy evaluators that don't use versioning.
+    """
+
     default_dataset: Annotated[str, PropertyInfo(alias="defaultDataset")]
 
     description: str
