@@ -249,7 +249,7 @@ wheels = [
 
 [[package]]
 name = "fireworks-ai"
-version = "1.0.0a15"
+version = "1.0.0a22"
 source = { directory = "../../" }
 dependencies = [
     { name = "aiohttp" },
