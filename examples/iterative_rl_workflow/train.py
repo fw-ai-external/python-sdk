@@ -33,6 +33,7 @@ from collections import defaultdict
 
 import fsspec  # type: ignore[import-untyped,import-not-found]
 from dotenv import load_dotenv  # type: ignore[import-untyped,import-not-found]
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 import fireworks
 from fireworks import AsyncFireworks
@@ -308,6 +309,34 @@ def compute_reward(generated_answer: str, ground_truth: str) -> float:
         pass
 
     return 1.0 if gen_ans == gt_ans else 0.0
+
+
+class RlorEvals(BaseModel):
+    score: float
+
+    @field_validator("score", mode="before")
+    def score_must_be_number(cls, value: Any) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError("evals.score must be a number")
+        return float(value)
+
+
+class RlorSample(BaseModel):
+    evals: RlorEvals
+    model_config = ConfigDict(extra="allow")
+
+
+class RlorDatasetRow(BaseModel):
+    samples: list[RlorSample]
+
+
+def validate_dataset_rows(dataset_rows: list[dict[str, Any]]) -> None:
+    """Validate dataset rows before upload."""
+    for index, row in enumerate(dataset_rows):
+        try:
+            RlorDatasetRow.model_validate(row)
+        except ValidationError as exc:
+            raise ValueError(f"Invalid dataset row at index {index}: {exc}") from exc
 
 
 async def wait_for_deployment_ready(
@@ -597,6 +626,7 @@ async def generate_rollouts_and_rewards(
         )
     logger.info(f"Created {len(dataset_rows)} dataset rows (each with {num_generations_per_prompt} generations)")
 
+    validate_dataset_rows(dataset_rows)
     await inference_client.close()
 
     return dataset_rows
@@ -859,12 +889,11 @@ async def wait_for_model_ready_or_job_fail(
             logger.warning(f"Error checking model status (might not exist yet): {e}")
 
         # Check job status for failure
-        try:
-            job = await client.reinforcement_fine_tuning_steps.get(rlor_trainer_job_id=job_id)
-            if job.state in ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
-                raise Exception(f"Training job failed or cancelled: {job.state}")
-        except Exception as e:
-            logger.warning(f"Error checking job status: {e}")
+        job = await client.reinforcement_fine_tuning_steps.get(rlor_trainer_job_id=job_id)
+        logger.info(f"Job state: {job.state}")
+        if job.state in ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
+            error_msg = f"Training job failed or cancelled: state={job.state}, status={job.status!r}"
+            raise Exception(error_msg)
 
         elapsed = int(time.time() - start_time)
         logger.info(f"Elapsed: {elapsed}s")
@@ -971,9 +1000,6 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
         display_name=f"{run_prefix} Trainer {run_id}",
         training_config=keep_alive_training_config,
         keep_alive=True,
-        # The documenation for `reward_weights` is poorly documented, it is
-        # actually used to assign a field for the reward
-        reward_weights=["score"],
     )
     logger.info(f"Created trainer job: {trainer_job_id}")
 
