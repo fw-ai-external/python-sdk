@@ -1095,10 +1095,6 @@ async def run_gsm8k_rlor(args: argparse.Namespace) -> None:
                     poll_interval=model_poll_interval,
                 )
 
-                import pdb
-
-                pdb.set_trace()
-
                 # 5. Hot Reload
                 logger.info("Hot reloading...")
                 # deployment_name is already validated earlier and stored as str
