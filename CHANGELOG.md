@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.23 (2026-01-16)
+
+Full Changelog: [v1.0.0-alpha.22...v1.0.0-alpha.23](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.22...v1.0.0-alpha.23)
+
+### Features
+
+* **validation:** add Pydantic models and validation for dataset rows in training workflow ([a4cbe9b](https://github.com/fw-ai-external/python-sdk/commit/a4cbe9b7d1eec031116d9960b21385071f5a6093))
+
+
+### Chores
+
+* **internal:** update `actions/checkout` version ([14881d2](https://github.com/fw-ai-external/python-sdk/commit/14881d22e04ec739d2ee20a9757dbeb9d1d84079))
+
 ## 1.0.0-alpha.22 (2026-01-13)
 
 Full Changelog: [v1.0.0-alpha.21...v1.0.0-alpha.22](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.21...v1.0.0-alpha.22)
