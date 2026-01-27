@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.24 (2026-01-23)
+
+Full Changelog: [v1.0.0-alpha.23...v1.0.0-alpha.24](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.23...v1.0.0-alpha.24)
+
+### Chores
+
+* **ci:** upgrade `actions/github-script` ([7869665](https://github.com/fw-ai-external/python-sdk/commit/7869665ddc977126a2bd375a046538b9b6cb66b5))
+
 ## 1.0.0-alpha.23 (2026-01-16)
 
 Full Changelog: [v1.0.0-alpha.22...v1.0.0-alpha.23](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.22...v1.0.0-alpha.23)
