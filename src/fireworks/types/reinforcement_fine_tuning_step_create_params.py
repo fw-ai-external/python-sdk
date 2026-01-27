@@ -10,7 +10,7 @@ from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStepCreateParams"]
+__all__ = ["ReinforcementFineTuningStepCreateParams", "AwsS3Config"]
 
 
 class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
@@ -18,6 +18,9 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     rlor_trainer_job_id: Annotated[str, PropertyInfo(alias="rlorTrainerJobId")]
     """ID of the RLOR trainer job, a random UUID will be generated if not specified."""
+
+    aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
+    """The AWS configuration for S3 dataset access."""
 
     dataset: str
     """The name of the dataset used for training."""
@@ -29,6 +32,13 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     evaluation_dataset: Annotated[str, PropertyInfo(alias="evaluationDataset")]
     """The name of a separate dataset to use for evaluation."""
+
+    hot_load_deployment_id: Annotated[str, PropertyInfo(alias="hotLoadDeploymentId")]
+    """The deployment ID used for hot loading.
+
+    When set, checkpoints are saved to this deployment's hot load bucket, enabling
+    weight swaps on inference. Only valid for service-mode or keep-alive jobs.
+    """
 
     keep_alive: Annotated[bool, PropertyInfo(alias="keepAlive")]
 
@@ -55,8 +65,18 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     If not set, trainer will not trigger weight sync to rollout engine.
     """
 
+    service_mode: Annotated[bool, PropertyInfo(alias="serviceMode")]
+
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
+
+
+class AwsS3Config(TypedDict, total=False):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+
+    iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]

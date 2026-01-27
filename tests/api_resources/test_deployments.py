@@ -67,6 +67,7 @@ class TestDeployments:
             enable_session_affinity=True,
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
+            hot_load_bucket_url="hotLoadBucketUrl",
             max_replica_count=0,
             max_with_revocable_replica_count=0,
             min_replica_count=0,
@@ -77,6 +78,7 @@ class TestDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            pricing_plan_id="pricingPlanId",
             target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
@@ -135,6 +137,7 @@ class TestDeployments:
             deployment_id="deployment_id",
             account_id="account_id",
             base_model="baseModel",
+            skip_shape_validation=True,
             accelerator_count=0,
             accelerator_type="ACCELERATOR_TYPE_UNSPECIFIED",
             active_model_version="activeModelVersion",
@@ -161,6 +164,7 @@ class TestDeployments:
             enable_session_affinity=True,
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
+            hot_load_bucket_url="hotLoadBucketUrl",
             max_replica_count=0,
             max_with_revocable_replica_count=0,
             min_replica_count=0,
@@ -171,6 +175,7 @@ class TestDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            pricing_plan_id="pricingPlanId",
             target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
@@ -574,6 +579,7 @@ class TestAsyncDeployments:
             enable_session_affinity=True,
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
+            hot_load_bucket_url="hotLoadBucketUrl",
             max_replica_count=0,
             max_with_revocable_replica_count=0,
             min_replica_count=0,
@@ -584,6 +590,7 @@ class TestAsyncDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            pricing_plan_id="pricingPlanId",
             target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])
@@ -642,6 +649,7 @@ class TestAsyncDeployments:
             deployment_id="deployment_id",
             account_id="account_id",
             base_model="baseModel",
+            skip_shape_validation=True,
             accelerator_count=0,
             accelerator_type="ACCELERATOR_TYPE_UNSPECIFIED",
             active_model_version="activeModelVersion",
@@ -668,6 +676,7 @@ class TestAsyncDeployments:
             enable_session_affinity=True,
             expire_time=parse_datetime("2019-12-27T18:11:19.117Z"),
             hot_load_bucket_type="BUCKET_TYPE_UNSPECIFIED",
+            hot_load_bucket_url="hotLoadBucketUrl",
             max_replica_count=0,
             max_with_revocable_replica_count=0,
             min_replica_count=0,
@@ -678,6 +687,7 @@ class TestAsyncDeployments:
                 "regions": ["REGION_UNSPECIFIED"],
             },
             precision="PRECISION_UNSPECIFIED",
+            pricing_plan_id="pricingPlanId",
             target_model_version="targetModelVersion",
         )
         assert_matches_type(Deployment, deployment, path=["response"])

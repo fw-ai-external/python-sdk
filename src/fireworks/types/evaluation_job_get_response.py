@@ -9,7 +9,15 @@ from pydantic import Field as FieldInfo
 from .._models import BaseModel
 from .shared.status import Status
 
-__all__ = ["EvaluationJobGetResponse"]
+__all__ = ["EvaluationJobGetResponse", "AwsS3Config"]
+
+
+class AwsS3Config(BaseModel):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+
+    iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
 
 
 class EvaluationJobGetResponse(BaseModel):
@@ -30,6 +38,9 @@ class EvaluationJobGetResponse(BaseModel):
 
     Format: accounts/{account_id}/datasets/{output_dataset_id}
     """
+
+    aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
+    """The AWS configuration for S3 dataset access."""
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
 

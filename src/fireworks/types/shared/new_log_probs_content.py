@@ -21,10 +21,6 @@ class NewLogProbsContent(BaseModel):
 
     token_id: int
 
-    extra_logprobs: Optional[List[float]] = None
-
-    extra_tokens: Optional[List[int]] = None
-
     last_activation: Optional[str] = None
 
     routing_matrix: Optional[str] = None

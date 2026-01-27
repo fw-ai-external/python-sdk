@@ -7,7 +7,7 @@ from typing_extensions import Literal, Required, Annotated, TypedDict
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJobCreateParams", "HiddenStatesGenConfig"]
+__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config", "HiddenStatesGenConfig"]
 
 
 class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
@@ -21,6 +21,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     ID of the supervised fine-tuning job, a random UUID will be generated if not
     specified.
     """
+
+    aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
+    """The AWS configuration for S3 dataset access."""
 
     base_model: Annotated[str, PropertyInfo(alias="baseModel")]
     """
@@ -79,6 +82,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     nodes: int
     """The number of nodes to use for the fine-tuning job."""
 
+    optimizer_weight_decay: Annotated[float, PropertyInfo(alias="optimizerWeightDecay")]
+    """Weight decay (L2 regularization) for optimizer."""
+
     output_model: Annotated[str, PropertyInfo(alias="outputModel")]
     """The model ID to be assigned to the resulting fine-tuned model.
 
@@ -121,6 +127,7 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
         "NA_BRITISHCOLUMBIA_1",
         "US_GEORGIA_4",
         "EU_ICELAND_3",
+        "US_OHIO_1",
     ]
     """The region where the fine-tuning job is located."""
 
@@ -132,6 +139,14 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     The PEFT addon model in Fireworks format to be fine-tuned from Only one of
     'base_model' or 'warm_start_from' should be specified.
     """
+
+
+class AwsS3Config(TypedDict, total=False):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+
+    iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]
 
 
 class HiddenStatesGenConfig(TypedDict, total=False):

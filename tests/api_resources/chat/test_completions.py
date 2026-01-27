@@ -97,6 +97,10 @@ class TestCompletions:
             stop="string",
             stream=False,
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             tool_choice="auto",
             tools=[
                 {
@@ -226,6 +230,10 @@ class TestCompletions:
             speculation="string",
             stop="string",
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             tool_choice="auto",
             tools=[
                 {
@@ -361,6 +369,10 @@ class TestAsyncCompletions:
             stop="string",
             stream=False,
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             tool_choice="auto",
             tools=[
                 {
@@ -490,6 +502,10 @@ class TestAsyncCompletions:
             speculation="string",
             stop="string",
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             tool_choice="auto",
             tools=[
                 {

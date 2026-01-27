@@ -13,7 +13,7 @@ class UserCreateParams(TypedDict, total=False):
     account_id: str
 
     role: Required[str]
-    """The user's role, e.g. admin or user."""
+    """The user's role: admin, user, contributor, or inference-user."""
 
     user_id: Annotated[str, PropertyInfo(alias="userId")]
     """The user ID to use in the user name.

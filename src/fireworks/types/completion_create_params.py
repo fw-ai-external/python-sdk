@@ -14,6 +14,9 @@ __all__ = [
     "PredictionPredictedOutputContentUnionMember1",
     "PredictionPredictedOutputContentUnionMember1ImageURL",
     "ResponseFormat",
+    "Thinking",
+    "ThinkingThinkingConfigEnabled",
+    "ThinkingThinkingConfigDisabled",
     "CompletionCreateParamsNonStreaming",
     "CompletionCreateParamsStreaming",
 ]
@@ -395,6 +398,24 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     Example: `1`
     """
 
+    thinking: Optional[Thinking]
+    """Configuration for enabling extended thinking (Anthropic-compatible format).
+
+    This is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+    **Format:**
+
+    - `{"type": "enabled"}` - Enable thinking (equivalent to
+      `reasoning_effort: true`)
+    - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+      budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+    - `{"type": "disabled"}` - Disable thinking (equivalent to
+      `reasoning_effort: "none"`)
+
+    **Note:** Cannot be specified together with `reasoning_effort`. If both are
+    provided, a validation error will be raised.
+    """
+
     top_k: Optional[int]
     """
     Top-k sampling is another sampling method where the k most probable next tokens
@@ -493,6 +514,28 @@ class ResponseFormat(TypedDict, total=False):
     json_schema: Union[str, Dict[str, object], None]
 
     schema: Union[str, Dict[str, object], None]
+
+
+class ThinkingThinkingConfigEnabled(TypedDict, total=False):
+    """Configuration for enabling extended thinking (Anthropic-compatible format)."""
+
+    type: Required[Literal["enabled"]]
+
+    budget_tokens: Optional[int]
+    """Determines how many tokens the model can use for its internal reasoning process.
+
+    Larger budgets can enable more thorough analysis for complex problems, improving
+    response quality. Must be >= 1024 if specified.
+    """
+
+
+class ThinkingThinkingConfigDisabled(TypedDict, total=False):
+    """Configuration for disabling extended thinking (Anthropic-compatible format)."""
+
+    type: Required[Literal["disabled"]]
+
+
+Thinking: TypeAlias = Union[ThinkingThinkingConfigEnabled, ThinkingThinkingConfigDisabled]
 
 
 class CompletionCreateParamsNonStreaming(CompletionCreateParamsBase, total=False):

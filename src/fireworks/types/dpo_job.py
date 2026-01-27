@@ -10,6 +10,7 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
+from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
 __all__ = ["DpoJob"]
 
@@ -26,6 +27,12 @@ class DpoJob(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
+
+    loss_config: Optional[ReinforcementLearningLossConfig] = FieldInfo(alias="lossConfig", default=None)
+    """
+    Loss configuration for the training job. If not specified, defaults to DPO loss.
+    Set method to ORPO for ORPO training.
+    """
 
     name: Optional[str] = None
 

@@ -41,6 +41,9 @@ class TrainingConfig(BaseModel):
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """The maximum context length to use with the model."""
 
+    optimizer_weight_decay: Optional[float] = FieldInfo(alias="optimizerWeightDecay", default=None)
+    """Weight decay (L2 regularization) for optimizer."""
+
     output_model: Optional[str] = FieldInfo(alias="outputModel", default=None)
     """The model ID to be assigned to the resulting fine-tuned model.
 
@@ -84,6 +87,7 @@ class TrainingConfig(BaseModel):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
     ] = None
     """The region where the fine-tuning job is located."""

@@ -14,7 +14,7 @@ __all__ = ["User"]
 
 class User(BaseModel):
     role: str
-    """The user's role, e.g. admin or user."""
+    """The user's role: admin, user, contributor, or inference-user."""
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the user."""

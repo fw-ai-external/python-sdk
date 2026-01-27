@@ -10,7 +10,15 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "EstimatedCost", "HiddenStatesGenConfig"]
+__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost", "HiddenStatesGenConfig"]
+
+
+class AwsS3Config(BaseModel):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+
+    iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
 
 
 class EstimatedCost(BaseModel):
@@ -58,6 +66,9 @@ class HiddenStatesGenConfig(BaseModel):
 class SupervisedFineTuningJob(BaseModel):
     dataset: str
     """The name of the dataset used for training."""
+
+    aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
+    """The AWS configuration for S3 dataset access."""
 
     base_model: Optional[str] = FieldInfo(alias="baseModel", default=None)
     """
@@ -128,6 +139,9 @@ class SupervisedFineTuningJob(BaseModel):
     nodes: Optional[int] = None
     """The number of nodes to use for the fine-tuning job."""
 
+    optimizer_weight_decay: Optional[float] = FieldInfo(alias="optimizerWeightDecay", default=None)
+    """Weight decay (L2 regularization) for optimizer."""
+
     output_model: Optional[str] = FieldInfo(alias="outputModel", default=None)
     """The model ID to be assigned to the resulting fine-tuned model.
 
@@ -171,6 +185,7 @@ class SupervisedFineTuningJob(BaseModel):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
     ] = None
     """The region where the fine-tuning job is located."""

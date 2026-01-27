@@ -56,6 +56,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         account_id: str | None = None,
         dataset: str,
         supervised_fine_tuning_job_id: str | Omit = omit,
+        aws_s3_config: supervised_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
@@ -77,6 +78,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         mtp_freeze_base_model: bool | Omit = omit,
         mtp_num_draft_tokens: int | Omit = omit,
         nodes: int | Omit = omit,
+        optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
@@ -114,6 +116,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -133,6 +136,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           supervised_fine_tuning_job_id: ID of the supervised fine-tuning job, a random UUID will be generated if not
               specified.
+
+          aws_s3_config: The AWS configuration for S3 dataset access.
 
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
@@ -158,6 +163,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           max_context_length: The maximum context length to use with the model.
 
           nodes: The number of nodes to use for the fine-tuning job.
+
+          optimizer_weight_decay: Weight decay (L2 regularization) for optimizer.
 
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
@@ -188,6 +195,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             body=maybe_transform(
                 {
                     "dataset": dataset,
+                    "aws_s3_config": aws_s3_config,
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,
@@ -209,6 +217,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "mtp_freeze_base_model": mtp_freeze_base_model,
                     "mtp_num_draft_tokens": mtp_num_draft_tokens,
                     "nodes": nodes,
+                    "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
                     "region": region,
                     "wandb_config": wandb_config,
@@ -469,6 +478,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         account_id: str | None = None,
         dataset: str,
         supervised_fine_tuning_job_id: str | Omit = omit,
+        aws_s3_config: supervised_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
@@ -490,6 +500,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         mtp_freeze_base_model: bool | Omit = omit,
         mtp_num_draft_tokens: int | Omit = omit,
         nodes: int | Omit = omit,
+        optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
@@ -527,6 +538,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -546,6 +558,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           supervised_fine_tuning_job_id: ID of the supervised fine-tuning job, a random UUID will be generated if not
               specified.
+
+          aws_s3_config: The AWS configuration for S3 dataset access.
 
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
@@ -571,6 +585,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           max_context_length: The maximum context length to use with the model.
 
           nodes: The number of nodes to use for the fine-tuning job.
+
+          optimizer_weight_decay: Weight decay (L2 regularization) for optimizer.
 
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
@@ -601,6 +617,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
+                    "aws_s3_config": aws_s3_config,
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,
@@ -622,6 +639,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "mtp_freeze_base_model": mtp_freeze_base_model,
                     "mtp_num_draft_tokens": mtp_num_draft_tokens,
                     "nodes": nodes,
+                    "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
                     "region": region,
                     "wandb_config": wandb_config,
