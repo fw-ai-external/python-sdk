@@ -58,12 +58,11 @@ class UsersResource(SyncAPIResource):
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> User:
-        """Create User
+        """
+        Create User
 
         Args:
-          role: The user's role, e.g.
-
-        admin or user.
+          role: The user's role: admin, user, contributor, or inference-user.
 
           user_id: The user ID to use in the user name. e.g. my-user If not specified, a default ID
               is generated from user.email.
@@ -124,12 +123,11 @@ class UsersResource(SyncAPIResource):
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> User:
-        """Update User
+        """
+        Update User
 
         Args:
-          role: The user's role, e.g.
-
-        admin or user.
+          role: The user's role: admin, user, contributor, or inference-user.
 
           display_name: Human-readable display name of the user. e.g. "Alice" Must be fewer than 64
               characters long.
@@ -329,12 +327,11 @@ class AsyncUsersResource(AsyncAPIResource):
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> User:
-        """Create User
+        """
+        Create User
 
         Args:
-          role: The user's role, e.g.
-
-        admin or user.
+          role: The user's role: admin, user, contributor, or inference-user.
 
           user_id: The user ID to use in the user name. e.g. my-user If not specified, a default ID
               is generated from user.email.
@@ -395,12 +392,11 @@ class AsyncUsersResource(AsyncAPIResource):
         extra_body: Body | None = None,
         timeout: float | httpx.Timeout | None | NotGiven = not_given,
     ) -> User:
-        """Update User
+        """
+        Update User
 
         Args:
-          role: The user's role, e.g.
-
-        admin or user.
+          role: The user's role: admin, user, contributor, or inference-user.
 
           display_name: Human-readable display name of the user. e.g. "Alice" Must be fewer than 64
               characters long.

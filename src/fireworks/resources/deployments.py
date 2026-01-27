@@ -104,6 +104,7 @@ class DeploymentsResource(SyncAPIResource):
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_url: str | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -127,6 +128,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -208,6 +210,10 @@ class DeploymentsResource(SyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
+          hot_load_bucket_url:
+              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+              gs://mybucket/..
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -223,6 +229,10 @@ class DeploymentsResource(SyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
+              deployment will use the pricing plan's billing rules instead of default billing
+              behavior.
 
           target_model_version: The target model version that is being rolled out to the deployment. In a ready
               steady state, the target model version is the same as the active model version.
@@ -267,12 +277,14 @@ class DeploymentsResource(SyncAPIResource):
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
+                    "hot_load_bucket_url": hot_load_bucket_url,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
                 deployment_create_params.DeploymentCreateParams,
@@ -302,6 +314,7 @@ class DeploymentsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         base_model: str,
+        skip_shape_validation: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
         accelerator_type: Literal[
             "ACCELERATOR_TYPE_UNSPECIFIED",
@@ -339,6 +352,7 @@ class DeploymentsResource(SyncAPIResource):
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_url: str | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -362,6 +376,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -374,6 +389,10 @@ class DeploymentsResource(SyncAPIResource):
         Update Deployment
 
         Args:
+          skip_shape_validation: By default, updating a deployment shape will ensure the new deployment shape
+              provided is validated. If true, we will not require the deployment shape to be
+              validated.
+
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
@@ -428,6 +447,10 @@ class DeploymentsResource(SyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
+          hot_load_bucket_url:
+              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+              gs://mybucket/..
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -443,6 +466,10 @@ class DeploymentsResource(SyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
+              deployment will use the pricing plan's billing rules instead of default billing
+              behavior.
 
           target_model_version: The target model version that is being rolled out to the deployment. In a ready
               steady state, the target model version is the same as the active model version.
@@ -489,18 +516,26 @@ class DeploymentsResource(SyncAPIResource):
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
+                    "hot_load_bucket_url": hot_load_bucket_url,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
                 deployment_update_params.DeploymentUpdateParams,
             ),
             options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {"skip_shape_validation": skip_shape_validation}, deployment_update_params.DeploymentUpdateParams
+                ),
             ),
             cast_to=Deployment,
         )
@@ -843,6 +878,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_url: str | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -866,6 +902,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -947,6 +984,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
+          hot_load_bucket_url:
+              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+              gs://mybucket/..
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -962,6 +1003,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
+              deployment will use the pricing plan's billing rules instead of default billing
+              behavior.
 
           target_model_version: The target model version that is being rolled out to the deployment. In a ready
               steady state, the target model version is the same as the active model version.
@@ -1006,12 +1051,14 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
+                    "hot_load_bucket_url": hot_load_bucket_url,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
                 deployment_create_params.DeploymentCreateParams,
@@ -1041,6 +1088,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         base_model: str,
+        skip_shape_validation: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
         accelerator_type: Literal[
             "ACCELERATOR_TYPE_UNSPECIFIED",
@@ -1078,6 +1126,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_url: str | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -1101,6 +1150,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -1113,6 +1163,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         Update Deployment
 
         Args:
+          skip_shape_validation: By default, updating a deployment shape will ensure the new deployment shape
+              provided is validated. If true, we will not require the deployment shape to be
+              validated.
+
           accelerator_count: The number of accelerators used per replica. If not specified, the default is
               the estimated minimum required by the base model.
 
@@ -1167,6 +1221,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
+          hot_load_bucket_url:
+              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+              gs://mybucket/..
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -1182,6 +1240,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
+              deployment will use the pricing plan's billing rules instead of default billing
+              behavior.
 
           target_model_version: The target model version that is being rolled out to the deployment. In a ready
               steady state, the target model version is the same as the active model version.
@@ -1228,18 +1290,26 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
+                    "hot_load_bucket_url": hot_load_bucket_url,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
                     "placement": placement,
                     "precision": precision,
+                    "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
                 deployment_update_params.DeploymentUpdateParams,
             ),
             options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {"skip_shape_validation": skip_shape_validation}, deployment_update_params.DeploymentUpdateParams
+                ),
             ),
             cast_to=Deployment,
         )

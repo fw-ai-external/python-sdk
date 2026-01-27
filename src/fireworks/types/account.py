@@ -14,12 +14,15 @@ __all__ = ["Account"]
 
 class Account(BaseModel):
     email: str
-    """For developer accounts, this is the email of the developer user and is
-    immutable.
+    """The primary email for the account.
 
-    For ENTERPRISE and BUSINESS accounts, this is mutable and it is the email that
-    will recieve the invoice for the account if automated billing is used.
+    This is used for billing invoices and account notifications.
     """
+
+    account_type: Optional[Literal["ACCOUNT_TYPE_UNSPECIFIED", "ENTERPRISE"]] = FieldInfo(
+        alias="accountType", default=None
+    )
+    """The type of the account."""
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the account."""

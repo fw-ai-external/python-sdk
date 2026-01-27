@@ -12,7 +12,15 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningJob", "InferenceParameters"]
+__all__ = ["ReinforcementFineTuningJob", "AwsS3Config", "InferenceParameters"]
+
+
+class AwsS3Config(BaseModel):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+
+    iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
 
 
 class InferenceParameters(BaseModel):
@@ -52,6 +60,9 @@ class ReinforcementFineTuningJob(BaseModel):
     "NVIDIA_H100_80GB"). Updated when job completes or is cancelled.
     """
 
+    aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
+    """The AWS configuration for S3 dataset access."""
+
     chunk_size: Optional[int] = FieldInfo(alias="chunkSize", default=None)
     """Data chunking for rollout, default size 200, enabled when dataset > 300.
 
@@ -82,6 +93,12 @@ class ReinforcementFineTuningJob(BaseModel):
     Reinforcement learning loss method + hyperparameters for the underlying
     trainers.
     """
+
+    max_concurrent_evaluations: Optional[int] = FieldInfo(alias="maxConcurrentEvaluations", default=None)
+    """Maximum number of concurrent evaluations during the RFT job."""
+
+    max_concurrent_rollouts: Optional[int] = FieldInfo(alias="maxConcurrentRollouts", default=None)
+    """Maximum number of concurrent rollouts during the RFT job."""
 
     mcp_server: Optional[str] = FieldInfo(alias="mcpServer", default=None)
 

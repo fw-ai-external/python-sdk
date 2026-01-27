@@ -38,6 +38,10 @@ class TestDpoJobs:
             dataset="dataset",
             dpo_job_id="dpoJobId",
             display_name="displayName",
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
+            },
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -49,6 +53,7 @@ class TestDpoJobs:
                 "learning_rate_warmup_steps": 0,
                 "lora_rank": 0,
                 "max_context_length": 0,
+                "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",
@@ -401,6 +406,10 @@ class TestAsyncDpoJobs:
             dataset="dataset",
             dpo_job_id="dpoJobId",
             display_name="displayName",
+            loss_config={
+                "kl_beta": 0,
+                "method": "METHOD_UNSPECIFIED",
+            },
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -412,6 +421,7 @@ class TestAsyncDpoJobs:
                 "learning_rate_warmup_steps": 0,
                 "lora_rank": 0,
                 "max_context_length": 0,
+                "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",

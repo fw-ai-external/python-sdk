@@ -36,6 +36,10 @@ class TestSupervisedFineTuningJobs:
             account_id="account_id",
             dataset="dataset",
             supervised_fine_tuning_job_id="supervisedFineTuningJobId",
+            aws_s3_config={
+                "credentials_secret": "credentialsSecret",
+                "iam_role_arn": "iamRoleArn",
+            },
             base_model="baseModel",
             batch_size=0,
             batch_size_samples=0,
@@ -66,6 +70,7 @@ class TestSupervisedFineTuningJobs:
             mtp_freeze_base_model=True,
             mtp_num_draft_tokens=0,
             nodes=0,
+            optimizer_weight_decay=0,
             output_model="outputModel",
             region="REGION_UNSPECIFIED",
             wandb_config={
@@ -380,6 +385,10 @@ class TestAsyncSupervisedFineTuningJobs:
             account_id="account_id",
             dataset="dataset",
             supervised_fine_tuning_job_id="supervisedFineTuningJobId",
+            aws_s3_config={
+                "credentials_secret": "credentialsSecret",
+                "iam_role_arn": "iamRoleArn",
+            },
             base_model="baseModel",
             batch_size=0,
             batch_size_samples=0,
@@ -410,6 +419,7 @@ class TestAsyncSupervisedFineTuningJobs:
             mtp_freeze_base_model=True,
             mtp_num_draft_tokens=0,
             nodes=0,
+            optimizer_weight_decay=0,
             output_model="outputModel",
             region="REGION_UNSPECIFIED",
             wandb_config={

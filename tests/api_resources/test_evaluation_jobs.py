@@ -45,6 +45,10 @@ class TestEvaluationJobs:
                 "evaluator": "evaluator",
                 "input_dataset": "inputDataset",
                 "output_dataset": "outputDataset",
+                "aws_s3_config": {
+                    "credentials_secret": "credentialsSecret",
+                    "iam_role_arn": "iamRoleArn",
+                },
                 "display_name": "displayName",
                 "evaluator_version": "evaluatorVersion",
                 "output_stats": "outputStats",
@@ -352,6 +356,10 @@ class TestAsyncEvaluationJobs:
                 "evaluator": "evaluator",
                 "input_dataset": "inputDataset",
                 "output_dataset": "outputDataset",
+                "aws_s3_config": {
+                    "credentials_secret": "credentialsSecret",
+                    "iam_role_arn": "iamRoleArn",
+                },
                 "display_name": "displayName",
                 "evaluator_version": "evaluatorVersion",
                 "output_stats": "outputStats",

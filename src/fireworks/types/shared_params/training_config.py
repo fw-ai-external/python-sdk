@@ -40,6 +40,9 @@ class TrainingConfig(TypedDict, total=False):
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """The maximum context length to use with the model."""
 
+    optimizer_weight_decay: Annotated[float, PropertyInfo(alias="optimizerWeightDecay")]
+    """Weight decay (L2 regularization) for optimizer."""
+
     output_model: Annotated[str, PropertyInfo(alias="outputModel")]
     """The model ID to be assigned to the resulting fine-tuned model.
 
@@ -82,6 +85,7 @@ class TrainingConfig(TypedDict, total=False):
         "NA_BRITISHCOLUMBIA_1",
         "US_GEORGIA_4",
         "EU_ICELAND_3",
+        "US_OHIO_1",
     ]
     """The region where the fine-tuning job is located."""
 

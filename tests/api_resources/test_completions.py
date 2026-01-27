@@ -70,6 +70,10 @@ class TestCompletions:
             stop="string",
             stream=False,
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             top_k=0,
             top_logprobs=0,
             top_p=0,
@@ -160,6 +164,10 @@ class TestCompletions:
             speculation="string",
             stop="string",
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             top_k=0,
             top_logprobs=0,
             top_p=0,
@@ -256,6 +264,10 @@ class TestAsyncCompletions:
             stop="string",
             stream=False,
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             top_k=0,
             top_logprobs=0,
             top_p=0,
@@ -346,6 +358,10 @@ class TestAsyncCompletions:
             speculation="string",
             stop="string",
             temperature=0,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 0,
+            },
             top_k=0,
             top_logprobs=0,
             top_p=0,

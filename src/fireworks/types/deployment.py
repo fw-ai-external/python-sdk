@@ -182,6 +182,12 @@ class Deployment(BaseModel):
         alias="hotLoadBucketType", default=None
     )
 
+    hot_load_bucket_url: Optional[str] = FieldInfo(alias="hotLoadBucketUrl", default=None)
+    """
+    For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+    gs://mybucket/..
+    """
+
     max_replica_count: Optional[int] = FieldInfo(alias="maxReplicaCount", default=None)
     """
     The maximum number of replicas. If not specified, the default is
@@ -232,6 +238,13 @@ class Deployment(BaseModel):
     ] = None
     """The precision with which the model should be served."""
 
+    pricing_plan_id: Optional[str] = FieldInfo(alias="pricingPlanId", default=None)
+    """
+    Optional pricing plan ID for custom billing configuration. If set, this
+    deployment will use the pricing plan's billing rules instead of default billing
+    behavior.
+    """
+
     purge_time: Optional[datetime] = FieldInfo(alias="purgeTime", default=None)
     """The time at which the resource will be hard deleted."""
 
@@ -272,6 +285,7 @@ class Deployment(BaseModel):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
     ] = None
     """The geographic region where the deployment is presently located.

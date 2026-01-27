@@ -59,6 +59,7 @@ class Placement(BaseModel):
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
             "EU_ICELAND_3",
+            "US_OHIO_1",
         ]
     ] = None
     """The region where the deployment must be placed."""
@@ -101,6 +102,7 @@ class Placement(BaseModel):
                 "NA_BRITISHCOLUMBIA_1",
                 "US_GEORGIA_4",
                 "EU_ICELAND_3",
+                "US_OHIO_1",
             ]
         ]
     ] = None

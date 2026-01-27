@@ -34,10 +34,15 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
             rlor_trainer_job_id="rlorTrainerJobId",
+            aws_s3_config={
+                "credentials_secret": "credentialsSecret",
+                "iam_role_arn": "iamRoleArn",
+            },
             dataset="dataset",
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            hot_load_deployment_id="hotLoadDeploymentId",
             keep_alive=True,
             loss_config={
                 "kl_beta": 0,
@@ -46,6 +51,7 @@ class TestReinforcementFineTuningSteps:
             node_count=0,
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
+            service_mode=True,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -57,6 +63,7 @@ class TestReinforcementFineTuningSteps:
                 "learning_rate_warmup_steps": 0,
                 "lora_rank": 0,
                 "max_context_length": 0,
+                "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",
@@ -429,10 +436,15 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.create(
             account_id="account_id",
             rlor_trainer_job_id="rlorTrainerJobId",
+            aws_s3_config={
+                "credentials_secret": "credentialsSecret",
+                "iam_role_arn": "iamRoleArn",
+            },
             dataset="dataset",
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            hot_load_deployment_id="hotLoadDeploymentId",
             keep_alive=True,
             loss_config={
                 "kl_beta": 0,
@@ -441,6 +453,7 @@ class TestAsyncReinforcementFineTuningSteps:
             node_count=0,
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
+            service_mode=True,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -452,6 +465,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 "learning_rate_warmup_steps": 0,
                 "lora_rank": 0,
                 "max_context_length": 0,
+                "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",

@@ -9,7 +9,7 @@ from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningJobCreateParams", "InferenceParameters"]
+__all__ = ["ReinforcementFineTuningJobCreateParams", "AwsS3Config", "InferenceParameters"]
 
 
 class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
@@ -26,6 +26,9 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     ID of the reinforcement fine-tuning job, a random UUID will be generated if not
     specified.
     """
+
+    aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
+    """The AWS configuration for S3 dataset access."""
 
     chunk_size: Annotated[int, PropertyInfo(alias="chunkSize")]
     """Data chunking for rollout, default size 200, enabled when dataset > 300.
@@ -50,6 +53,12 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     trainers.
     """
 
+    max_concurrent_evaluations: Annotated[int, PropertyInfo(alias="maxConcurrentEvaluations")]
+    """Maximum number of concurrent evaluations during the RFT job."""
+
+    max_concurrent_rollouts: Annotated[int, PropertyInfo(alias="maxConcurrentRollouts")]
+    """Maximum number of concurrent rollouts during the RFT job."""
+
     mcp_server: Annotated[str, PropertyInfo(alias="mcpServer")]
 
     node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
@@ -63,6 +72,14 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
+
+
+class AwsS3Config(TypedDict, total=False):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+
+    iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]
 
 
 class InferenceParameters(TypedDict, total=False):
