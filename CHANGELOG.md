@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.25 (2026-01-27)
+
+Full Changelog: [v1.0.0-alpha.24...v1.0.0-alpha.25](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.24...v1.0.0-alpha.25)
+
+### Features
+
+* update API reference ([9f7626c](https://github.com/fw-ai-external/python-sdk/commit/9f7626cb71374ec9c44d3f1de7ee44c22dd91126))
+
 ## 1.0.0-alpha.24 (2026-01-23)
 
 Full Changelog: [v1.0.0-alpha.23...v1.0.0-alpha.24](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.23...v1.0.0-alpha.24)

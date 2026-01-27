@@ -20,6 +20,13 @@ class DeploymentUpdateParams(TypedDict, total=False):
 
     base_model: Required[Annotated[str, PropertyInfo(alias="baseModel")]]
 
+    skip_shape_validation: Annotated[bool, PropertyInfo(alias="skipShapeValidation")]
+    """
+    By default, updating a deployment shape will ensure the new deployment shape
+    provided is validated. If true, we will not require the deployment shape to be
+    validated.
+    """
+
     accelerator_count: Annotated[int, PropertyInfo(alias="acceleratorCount")]
     """
     The number of accelerators used per replica. If not specified, the default is
@@ -139,6 +146,12 @@ class DeploymentUpdateParams(TypedDict, total=False):
         Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"], PropertyInfo(alias="hotLoadBucketType")
     ]
 
+    hot_load_bucket_url: Annotated[str, PropertyInfo(alias="hotLoadBucketUrl")]
+    """
+    For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
+    gs://mybucket/..
+    """
+
     max_replica_count: Annotated[int, PropertyInfo(alias="maxReplicaCount")]
     """
     The maximum number of replicas. If not specified, the default is
@@ -182,6 +195,13 @@ class DeploymentUpdateParams(TypedDict, total=False):
         "FP4_MX_MOE",
     ]
     """The precision with which the model should be served."""
+
+    pricing_plan_id: Annotated[str, PropertyInfo(alias="pricingPlanId")]
+    """
+    Optional pricing plan ID for custom billing configuration. If set, this
+    deployment will use the pricing plan's billing rules instead of default billing
+    behavior.
+    """
 
     target_model_version: Annotated[str, PropertyInfo(alias="targetModelVersion")]
     """

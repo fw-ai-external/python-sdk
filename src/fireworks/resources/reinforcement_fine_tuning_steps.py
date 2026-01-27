@@ -56,15 +56,18 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
+        aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         dataset: str | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         node_count: int | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
+        service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -80,11 +83,17 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         Args:
           rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
 
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
           dataset: The name of the dataset used for training.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
+              deployment's hot load bucket, enabling weight swaps on inference. Only valid for
+              service-mode or keep-alive jobs.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
@@ -119,15 +128,18 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             body=maybe_transform(
                 {
+                    "aws_s3_config": aws_s3_config,
                     "dataset": dataset,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
                     "node_count": node_count,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
+                    "service_mode": service_mode,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -442,15 +454,18 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
+        aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         dataset: str | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         node_count: int | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
+        service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -466,11 +481,17 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         Args:
           rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
 
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
           dataset: The name of the dataset used for training.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
+              deployment's hot load bucket, enabling weight swaps on inference. Only valid for
+              service-mode or keep-alive jobs.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
@@ -505,15 +526,18 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
             body=await async_maybe_transform(
                 {
+                    "aws_s3_config": aws_s3_config,
                     "dataset": dataset,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
                     "node_count": node_count,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
+                    "service_mode": service_mode,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

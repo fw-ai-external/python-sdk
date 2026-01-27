@@ -13,6 +13,7 @@ class ReinforcementLearningLossConfig(TypedDict, total=False):
     """Loss method + hyperparameters for reinforcement-learning-style fine-tuning (e.g.
 
     RFT / RL trainers).
+    For preference jobs (DPO API), the default loss method is GRPO when METHOD_UNSPECIFIED.
     """
 
     kl_beta: Annotated[float, PropertyInfo(alias="klBeta")]
@@ -21,4 +22,4 @@ class ReinforcementLearningLossConfig(TypedDict, total=False):
     default is used.
     """
 
-    method: Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO"]
+    method: Literal["METHOD_UNSPECIFIED", "GRPO", "DAPO", "DPO", "ORPO", "GSPO_TOKEN"]

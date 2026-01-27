@@ -21,6 +21,7 @@ from ..types.dpo_job import DpoJob
 from ..types.shared_params.wandb_config import WandbConfig
 from ..types.shared_params.training_config import TrainingConfig
 from ..types.dpo_job_get_metrics_file_endpoint_response import DpoJobGetMetricsFileEndpointResponse
+from ..types.shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
 __all__ = ["DpoJobsResource", "AsyncDpoJobsResource"]
 
@@ -52,6 +53,7 @@ class DpoJobsResource(SyncAPIResource):
         dataset: str,
         dpo_job_id: str | Omit = omit,
         display_name: str | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -66,6 +68,9 @@ class DpoJobsResource(SyncAPIResource):
           dataset: The name of the dataset used for training.
 
           dpo_job_id: ID of the DPO job, a random ID will be generated if not specified.
+
+          loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
+              Set method to ORPO for ORPO training.
 
           training_config: Common training configurations.
 
@@ -91,6 +96,7 @@ class DpoJobsResource(SyncAPIResource):
                 {
                     "dataset": dataset,
                     "display_name": display_name,
+                    "loss_config": loss_config,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -372,6 +378,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         dataset: str,
         dpo_job_id: str | Omit = omit,
         display_name: str | Omit = omit,
+        loss_config: ReinforcementLearningLossConfig | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -386,6 +393,9 @@ class AsyncDpoJobsResource(AsyncAPIResource):
           dataset: The name of the dataset used for training.
 
           dpo_job_id: ID of the DPO job, a random ID will be generated if not specified.
+
+          loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
+              Set method to ORPO for ORPO training.
 
           training_config: Common training configurations.
 
@@ -411,6 +421,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                 {
                     "dataset": dataset,
                     "display_name": display_name,
+                    "loss_config": loss_config,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

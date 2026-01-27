@@ -87,6 +87,7 @@ class CompletionsResource(SyncAPIResource):
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -418,6 +419,21 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -524,6 +540,7 @@ class CompletionsResource(SyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -855,6 +872,21 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -961,6 +993,7 @@ class CompletionsResource(SyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1292,6 +1325,21 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -1398,6 +1446,7 @@ class CompletionsResource(SyncAPIResource):
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1453,6 +1502,7 @@ class CompletionsResource(SyncAPIResource):
                     "stop": stop,
                     "stream": stream,
                     "temperature": temperature,
+                    "thinking": thinking,
                     "tool_choice": tool_choice,
                     "tools": tools,
                     "top_k": top_k,
@@ -1533,6 +1583,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1864,6 +1915,21 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -1970,6 +2036,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -2301,6 +2368,21 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -2407,6 +2489,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -2738,6 +2821,21 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `1`
 
+          thinking: Configuration for enabling extended thinking (Anthropic-compatible format). This
+              is an alternative to `reasoning_effort` for controlling reasoning behavior.
+
+              **Format:**
+
+              - `{"type": "enabled"}` - Enable thinking (equivalent to
+                `reasoning_effort: true`)
+              - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
+                budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "disabled"}` - Disable thinking (equivalent to
+                `reasoning_effort: "none"`)
+
+              **Note:** Cannot be specified together with `reasoning_effort`. If both are
+              provided, a validation error will be raised.
+
           tool_choice: Controls which (if any) tool is called by the model.
 
               - `none`: the model will not call any tool and instead generates a message.
@@ -2844,6 +2942,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
+        thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         tool_choice: completion_create_params.ToolChoice | Omit = omit,
         tools: Iterable[ChatCompletionTool] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -2899,6 +2998,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "stop": stop,
                     "stream": stream,
                     "temperature": temperature,
+                    "thinking": thinking,
                     "tool_choice": tool_choice,
                     "tools": tools,
                     "top_k": top_k,

@@ -7,6 +7,7 @@ from typing_extensions import Required, Annotated, TypedDict
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
+from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
 __all__ = ["DpoJobCreateParams"]
 
@@ -21,6 +22,12 @@ class DpoJobCreateParams(TypedDict, total=False):
     """ID of the DPO job, a random ID will be generated if not specified."""
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
+
+    loss_config: Annotated[ReinforcementLearningLossConfig, PropertyInfo(alias="lossConfig")]
+    """
+    Loss configuration for the training job. If not specified, defaults to DPO loss.
+    Set method to ORPO for ORPO training.
+    """
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""

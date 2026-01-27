@@ -13,7 +13,7 @@ class UserUpdateParams(TypedDict, total=False):
     account_id: str
 
     role: Required[str]
-    """The user's role, e.g. admin or user."""
+    """The user's role: admin, user, contributor, or inference-user."""
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
     """Human-readable display name of the user.

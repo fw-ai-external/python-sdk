@@ -58,12 +58,15 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         dataset: str,
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
+        aws_s3_config: reinforcement_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
         chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        max_concurrent_evaluations: int | Omit = omit,
+        max_concurrent_rollouts: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -86,6 +89,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           reinforcement_fine_tuning_job_id: ID of the reinforcement fine-tuning job, a random UUID will be generated if not
               specified.
 
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
           chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
               range is 1-10,000.
 
@@ -97,6 +102,10 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying
               trainers.
+
+          max_concurrent_evaluations: Maximum number of concurrent evaluations during the RFT job.
+
+          max_concurrent_rollouts: Maximum number of concurrent rollouts during the RFT job.
 
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
@@ -125,12 +134,15 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 {
                     "dataset": dataset,
                     "evaluator": evaluator,
+                    "aws_s3_config": aws_s3_config,
                     "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "loss_config": loss_config,
+                    "max_concurrent_evaluations": max_concurrent_evaluations,
+                    "max_concurrent_rollouts": max_concurrent_rollouts,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,
@@ -441,12 +453,15 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         dataset: str,
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
+        aws_s3_config: reinforcement_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
         chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         inference_parameters: reinforcement_fine_tuning_job_create_params.InferenceParameters | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        max_concurrent_evaluations: int | Omit = omit,
+        max_concurrent_rollouts: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -469,6 +484,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           reinforcement_fine_tuning_job_id: ID of the reinforcement fine-tuning job, a random UUID will be generated if not
               specified.
 
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
           chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
               range is 1-10,000.
 
@@ -480,6 +497,10 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying
               trainers.
+
+          max_concurrent_evaluations: Maximum number of concurrent evaluations during the RFT job.
+
+          max_concurrent_rollouts: Maximum number of concurrent rollouts during the RFT job.
 
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
@@ -508,12 +529,15 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 {
                     "dataset": dataset,
                     "evaluator": evaluator,
+                    "aws_s3_config": aws_s3_config,
                     "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "inference_parameters": inference_parameters,
                     "loss_config": loss_config,
+                    "max_concurrent_evaluations": max_concurrent_evaluations,
+                    "max_concurrent_rollouts": max_concurrent_rollouts,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,

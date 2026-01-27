@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -12,10 +12,27 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStep"]
+__all__ = ["ReinforcementFineTuningStep", "AwsS3Config"]
+
+
+class AwsS3Config(BaseModel):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+
+    iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
 
 
 class ReinforcementFineTuningStep(BaseModel):
+    accelerator_seconds: Optional[Dict[str, str]] = FieldInfo(alias="acceleratorSeconds", default=None)
+    """
+    Accelerator seconds used by the job, keyed by accelerator type (e.g.,
+    "NVIDIA_H100_80GB"). Updated periodically.
+    """
+
+    aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
+    """The AWS configuration for S3 dataset access."""
+
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
@@ -26,6 +43,8 @@ class ReinforcementFineTuningStep(BaseModel):
     dataset: Optional[str] = None
     """The name of the dataset used for training."""
 
+    direct_route_handle: Optional[str] = FieldInfo(alias="directRouteHandle", default=None)
+
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
     eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
@@ -33,6 +52,13 @@ class ReinforcementFineTuningStep(BaseModel):
 
     evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
     """The name of a separate dataset to use for evaluation."""
+
+    hot_load_deployment_id: Optional[str] = FieldInfo(alias="hotLoadDeploymentId", default=None)
+    """The deployment ID used for hot loading.
+
+    When set, checkpoints are saved to this deployment's hot load bucket, enabling
+    weight swaps on inference. Only valid for service-mode or keep-alive jobs.
+    """
 
     keep_alive: Optional[bool] = FieldInfo(alias="keepAlive", default=None)
 
@@ -60,6 +86,8 @@ class ReinforcementFineTuningStep(BaseModel):
 
     If not set, trainer will not trigger weight sync to rollout engine.
     """
+
+    service_mode: Optional[bool] = FieldInfo(alias="serviceMode", default=None)
 
     state: Optional[
         Literal[
