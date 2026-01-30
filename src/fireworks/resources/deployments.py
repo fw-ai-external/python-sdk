@@ -65,6 +65,7 @@ class DeploymentsResource(SyncAPIResource):
         deployment_id: str | Omit = omit,
         disable_auto_deploy: bool | Omit = omit,
         disable_speculative_decoding: bool | Omit = omit,
+        skip_image_tag_validation: bool | Omit = omit,
         skip_shape_validation: bool | Omit = omit,
         validate_only: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
@@ -103,8 +104,9 @@ class DeploymentsResource(SyncAPIResource):
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
-        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -149,6 +151,10 @@ class DeploymentsResource(SyncAPIResource):
 
           disable_speculative_decoding: By default, a deployment will use the speculative decoding settings from the
               base model. If true, this will disable speculative decoding.
+
+          skip_image_tag_validation: If true, skip the image tag policy validation that blocks certain image tags.
+              This allows creating deployments with image tags that would otherwise be
+              blocked.
 
           skip_shape_validation: By default, a deployment will ensure the deployment shape provided is validated.
               If true, we will not require the deployment shape to be validated.
@@ -214,6 +220,9 @@ class DeploymentsResource(SyncAPIResource):
               For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
               gs://mybucket/..
 
+          max_context_length: The maximum context length supported by the model (context window). If set to 0
+              or not specified, the model's default maximum context length will be used.
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -278,6 +287,7 @@ class DeploymentsResource(SyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
@@ -299,6 +309,7 @@ class DeploymentsResource(SyncAPIResource):
                         "deployment_id": deployment_id,
                         "disable_auto_deploy": disable_auto_deploy,
                         "disable_speculative_decoding": disable_speculative_decoding,
+                        "skip_image_tag_validation": skip_image_tag_validation,
                         "skip_shape_validation": skip_shape_validation,
                         "validate_only": validate_only,
                     },
@@ -351,8 +362,9 @@ class DeploymentsResource(SyncAPIResource):
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
-        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -451,6 +463,9 @@ class DeploymentsResource(SyncAPIResource):
               For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
               gs://mybucket/..
 
+          max_context_length: The maximum context length supported by the model (context window). If set to 0
+              or not specified, the model's default maximum context length will be used.
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -517,6 +532,7 @@ class DeploymentsResource(SyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
@@ -839,6 +855,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         deployment_id: str | Omit = omit,
         disable_auto_deploy: bool | Omit = omit,
         disable_speculative_decoding: bool | Omit = omit,
+        skip_image_tag_validation: bool | Omit = omit,
         skip_shape_validation: bool | Omit = omit,
         validate_only: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
@@ -877,8 +894,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
-        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -923,6 +941,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           disable_speculative_decoding: By default, a deployment will use the speculative decoding settings from the
               base model. If true, this will disable speculative decoding.
+
+          skip_image_tag_validation: If true, skip the image tag policy validation that blocks certain image tags.
+              This allows creating deployments with image tags that would otherwise be
+              blocked.
 
           skip_shape_validation: By default, a deployment will ensure the deployment shape provided is validated.
               If true, we will not require the deployment shape to be validated.
@@ -988,6 +1010,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
               gs://mybucket/..
 
+          max_context_length: The maximum context length supported by the model (context window). If set to 0
+              or not specified, the model's default maximum context length will be used.
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -1052,6 +1077,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
@@ -1073,6 +1099,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                         "deployment_id": deployment_id,
                         "disable_auto_deploy": disable_auto_deploy,
                         "disable_speculative_decoding": disable_speculative_decoding,
+                        "skip_image_tag_validation": skip_image_tag_validation,
                         "skip_shape_validation": skip_shape_validation,
                         "validate_only": validate_only,
                     },
@@ -1125,8 +1152,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
-        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"] | Omit = omit,
+        hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
@@ -1225,6 +1253,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
               gs://mybucket/..
 
+          max_context_length: The maximum context length supported by the model (context window). If set to 0
+              or not specified, the model's default maximum context length will be used.
+
           max_replica_count: The maximum number of replicas. If not specified, the default is
               max(min_replica_count, 1). May be set to 0 to downscale the deployment to 0.
 
@@ -1291,6 +1322,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,

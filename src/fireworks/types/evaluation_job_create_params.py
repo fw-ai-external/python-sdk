@@ -53,16 +53,5 @@ class EvaluationJob(TypedDict, total=False):
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
-    evaluator_version: Annotated[str, PropertyInfo(alias="evaluatorVersion")]
-    """The evaluator version ID used for this job.
-
-    If specified in the request, this version is used instead of the evaluator's
-    current version. If not specified, the evaluator's current_version_id is used
-    and stored here for auditing purposes.
-
-    Format: The version ID only (not the full resource name), e.g. "v1.0.0" or
-    "abc123"
-    """
-
     output_stats: Annotated[str, PropertyInfo(alias="outputStats")]
     """The output dataset's aggregated stats for the evaluation job."""

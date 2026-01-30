@@ -10,7 +10,7 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost", "HiddenStatesGenConfig"]
+__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost"]
 
 
 class AwsS3Config(BaseModel):
@@ -41,26 +41,6 @@ class EstimatedCost(BaseModel):
     The whole units of the amount. For example if `currencyCode` is `"USD"`, then 1
     unit is one US dollar.
     """
-
-
-class HiddenStatesGenConfig(BaseModel):
-    """Config for generating dataset with hidden states for training."""
-
-    api_key: Optional[str] = FieldInfo(alias="apiKey", default=None)
-
-    deployed_model: Optional[str] = FieldInfo(alias="deployedModel", default=None)
-
-    input_limit: Optional[int] = FieldInfo(alias="inputLimit", default=None)
-
-    input_offset: Optional[int] = FieldInfo(alias="inputOffset", default=None)
-
-    max_tokens: Optional[int] = FieldInfo(alias="maxTokens", default=None)
-
-    max_workers: Optional[int] = FieldInfo(alias="maxWorkers", default=None)
-
-    output_activations: Optional[bool] = FieldInfo(alias="outputActivations", default=None)
-
-    regenerate_assistant: Optional[bool] = FieldInfo(alias="regenerateAssistant", default=None)
 
 
 class SupervisedFineTuningJob(BaseModel):
@@ -106,9 +86,6 @@ class SupervisedFineTuningJob(BaseModel):
     """The name of a separate dataset to use for evaluation."""
 
     gradient_accumulation_steps: Optional[int] = FieldInfo(alias="gradientAccumulationSteps", default=None)
-
-    hidden_states_gen_config: Optional[HiddenStatesGenConfig] = FieldInfo(alias="hiddenStatesGenConfig", default=None)
-    """Config for generating dataset with hidden states for training."""
 
     is_turbo: Optional[bool] = FieldInfo(alias="isTurbo", default=None)
     """Whether to run the fine-tuning job in turbo mode."""

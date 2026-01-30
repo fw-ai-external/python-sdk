@@ -178,14 +178,20 @@ class Deployment(BaseModel):
     expire_time: Optional[datetime] = FieldInfo(alias="expireTime", default=None)
     """The time at which this deployment will automatically be deleted."""
 
-    hot_load_bucket_type: Optional[Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"]] = FieldInfo(
-        alias="hotLoadBucketType", default=None
+    hot_load_bucket_type: Optional[Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"]] = (
+        FieldInfo(alias="hotLoadBucketType", default=None)
     )
 
     hot_load_bucket_url: Optional[str] = FieldInfo(alias="hotLoadBucketUrl", default=None)
     """
     For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
     gs://mybucket/..
+    """
+
+    max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
+    """
+    The maximum context length supported by the model (context window). If set to 0
+    or not specified, the model's default maximum context length will be used.
     """
 
     max_replica_count: Optional[int] = FieldInfo(alias="maxReplicaCount", default=None)

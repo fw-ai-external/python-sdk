@@ -66,7 +66,6 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         gradient_accumulation_steps: int | Omit = omit,
-        hidden_states_gen_config: supervised_fine_tuning_job_create_params.HiddenStatesGenConfig | Omit = omit,
         is_turbo: bool | Omit = omit,
         jinja_template: str | Omit = omit,
         learning_rate: float | Omit = omit,
@@ -152,8 +151,6 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
-          hidden_states_gen_config: Config for generating dataset with hidden states for training.
-
           is_turbo: Whether to run the fine-tuning job in turbo mode.
 
           learning_rate: The learning rate used for training.
@@ -205,7 +202,6 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "gradient_accumulation_steps": gradient_accumulation_steps,
-                    "hidden_states_gen_config": hidden_states_gen_config,
                     "is_turbo": is_turbo,
                     "jinja_template": jinja_template,
                     "learning_rate": learning_rate,
@@ -488,7 +484,6 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         gradient_accumulation_steps: int | Omit = omit,
-        hidden_states_gen_config: supervised_fine_tuning_job_create_params.HiddenStatesGenConfig | Omit = omit,
         is_turbo: bool | Omit = omit,
         jinja_template: str | Omit = omit,
         learning_rate: float | Omit = omit,
@@ -574,8 +569,6 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
-          hidden_states_gen_config: Config for generating dataset with hidden states for training.
-
           is_turbo: Whether to run the fine-tuning job in turbo mode.
 
           learning_rate: The learning rate used for training.
@@ -627,7 +620,6 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "gradient_accumulation_steps": gradient_accumulation_steps,
-                    "hidden_states_gen_config": hidden_states_gen_config,
                     "is_turbo": is_turbo,
                     "jinja_template": jinja_template,
                     "learning_rate": learning_rate,

@@ -7,16 +7,12 @@ from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["EvaluatorVersionGetUploadEndpointParams"]
+__all__ = ["EvaluatorGetUploadEndpointParams"]
 
 
-class EvaluatorVersionGetUploadEndpointParams(TypedDict, total=False):
+class EvaluatorGetUploadEndpointParams(TypedDict, total=False):
     account_id: str
 
-    evaluator_id: Required[str]
-
     filename_to_size: Required[Annotated[Dict[str, str], PropertyInfo(alias="filenameToSize")]]
-    """
-    Map of filename to file size for generating upload signed URLs. Typically
-    contains a single entry like {"evaluator.tar.gz": 12345}.
-    """
+
+    read_mask: Annotated[str, PropertyInfo(alias="readMask")]

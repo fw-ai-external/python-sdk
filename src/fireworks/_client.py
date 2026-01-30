@@ -46,7 +46,6 @@ if TYPE_CHECKING:
         deployments,
         evaluation_jobs,
         deployment_shapes,
-        evaluator_versions,
         batch_inference_jobs,
         deployment_shape_versions,
         supervised_fine_tuning_jobs,
@@ -67,7 +66,6 @@ if TYPE_CHECKING:
     from .resources.deployments import DeploymentsResource, AsyncDeploymentsResource
     from .resources.evaluation_jobs import EvaluationJobsResource, AsyncEvaluationJobsResource
     from .resources.deployment_shapes import DeploymentShapesResource, AsyncDeploymentShapesResource
-    from .resources.evaluator_versions import EvaluatorVersionsResource, AsyncEvaluatorVersionsResource
     from .resources.batch_inference_jobs import BatchInferenceJobsResource, AsyncBatchInferenceJobsResource
     from .resources.deployment_shape_versions import (
         DeploymentShapeVersionsResource,
@@ -253,12 +251,6 @@ class Fireworks(SyncAPIClient):
         from .resources.evaluators import EvaluatorsResource
 
         return EvaluatorsResource(self)
-
-    @cached_property
-    def evaluator_versions(self) -> EvaluatorVersionsResource:
-        from .resources.evaluator_versions import EvaluatorVersionsResource
-
-        return EvaluatorVersionsResource(self)
 
     @cached_property
     def accounts(self) -> AccountsResource:
@@ -567,12 +559,6 @@ class AsyncFireworks(AsyncAPIClient):
         return AsyncEvaluatorsResource(self)
 
     @cached_property
-    def evaluator_versions(self) -> AsyncEvaluatorVersionsResource:
-        from .resources.evaluator_versions import AsyncEvaluatorVersionsResource
-
-        return AsyncEvaluatorVersionsResource(self)
-
-    @cached_property
     def accounts(self) -> AsyncAccountsResource:
         from .resources.accounts import AsyncAccountsResource
 
@@ -825,12 +811,6 @@ class FireworksWithRawResponse:
         return EvaluatorsResourceWithRawResponse(self._client.evaluators)
 
     @cached_property
-    def evaluator_versions(self) -> evaluator_versions.EvaluatorVersionsResourceWithRawResponse:
-        from .resources.evaluator_versions import EvaluatorVersionsResourceWithRawResponse
-
-        return EvaluatorVersionsResourceWithRawResponse(self._client.evaluator_versions)
-
-    @cached_property
     def accounts(self) -> accounts.AccountsResourceWithRawResponse:
         from .resources.accounts import AccountsResourceWithRawResponse
 
@@ -960,12 +940,6 @@ class AsyncFireworksWithRawResponse:
         return AsyncEvaluatorsResourceWithRawResponse(self._client.evaluators)
 
     @cached_property
-    def evaluator_versions(self) -> evaluator_versions.AsyncEvaluatorVersionsResourceWithRawResponse:
-        from .resources.evaluator_versions import AsyncEvaluatorVersionsResourceWithRawResponse
-
-        return AsyncEvaluatorVersionsResourceWithRawResponse(self._client.evaluator_versions)
-
-    @cached_property
     def accounts(self) -> accounts.AsyncAccountsResourceWithRawResponse:
         from .resources.accounts import AsyncAccountsResourceWithRawResponse
 
@@ -1093,12 +1067,6 @@ class FireworksWithStreamedResponse:
         from .resources.evaluators import EvaluatorsResourceWithStreamingResponse
 
         return EvaluatorsResourceWithStreamingResponse(self._client.evaluators)
-
-    @cached_property
-    def evaluator_versions(self) -> evaluator_versions.EvaluatorVersionsResourceWithStreamingResponse:
-        from .resources.evaluator_versions import EvaluatorVersionsResourceWithStreamingResponse
-
-        return EvaluatorVersionsResourceWithStreamingResponse(self._client.evaluator_versions)
 
     @cached_property
     def accounts(self) -> accounts.AccountsResourceWithStreamingResponse:
@@ -1236,12 +1204,6 @@ class AsyncFireworksWithStreamedResponse:
         from .resources.evaluators import AsyncEvaluatorsResourceWithStreamingResponse
 
         return AsyncEvaluatorsResourceWithStreamingResponse(self._client.evaluators)
-
-    @cached_property
-    def evaluator_versions(self) -> evaluator_versions.AsyncEvaluatorVersionsResourceWithStreamingResponse:
-        from .resources.evaluator_versions import AsyncEvaluatorVersionsResourceWithStreamingResponse
-
-        return AsyncEvaluatorVersionsResourceWithStreamingResponse(self._client.evaluator_versions)
 
     @cached_property
     def accounts(self) -> accounts.AsyncAccountsResourceWithStreamingResponse:
