@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-alpha.26 (2026-01-30)
+
+Full Changelog: [v1.0.0-alpha.25...v1.0.0-alpha.26](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.25...v1.0.0-alpha.26)
+
+### Features
+
+* **client:** add custom JSON encoder for extended type support ([38fabde](https://github.com/fw-ai-external/python-sdk/commit/38fabde3f36a5d7eb776eadea985db488cff586a))
+* update API reference / SDK ([127a473](https://github.com/fw-ai-external/python-sdk/commit/127a4730a682feffa241cf8a63bbce6e436c6e21))
+
 ## 1.0.0-alpha.25 (2026-01-27)
 
 Full Changelog: [v1.0.0-alpha.24...v1.0.0-alpha.25](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.24...v1.0.0-alpha.25)
