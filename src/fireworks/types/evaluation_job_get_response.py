@@ -48,17 +48,6 @@ class EvaluationJobGetResponse(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
-    evaluator_version: Optional[str] = FieldInfo(alias="evaluatorVersion", default=None)
-    """The evaluator version ID used for this job.
-
-    If specified in the request, this version is used instead of the evaluator's
-    current version. If not specified, the evaluator's current_version_id is used
-    and stored here for auditing purposes.
-
-    Format: The version ID only (not the full resource name), e.g. "v1.0.0" or
-    "abc123"
-    """
-
     metrics: Optional[Dict[str, float]] = None
 
     name: Optional[str] = None

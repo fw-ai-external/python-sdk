@@ -7,7 +7,7 @@ from typing_extensions import Literal, Required, Annotated, TypedDict
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config", "HiddenStatesGenConfig"]
+__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config"]
 
 
 class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
@@ -51,9 +51,6 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     """The name of a separate dataset to use for evaluation."""
 
     gradient_accumulation_steps: Annotated[int, PropertyInfo(alias="gradientAccumulationSteps")]
-
-    hidden_states_gen_config: Annotated[HiddenStatesGenConfig, PropertyInfo(alias="hiddenStatesGenConfig")]
-    """Config for generating dataset with hidden states for training."""
 
     is_turbo: Annotated[bool, PropertyInfo(alias="isTurbo")]
     """Whether to run the fine-tuning job in turbo mode."""
@@ -147,23 +144,3 @@ class AwsS3Config(TypedDict, total=False):
     credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
 
     iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]
-
-
-class HiddenStatesGenConfig(TypedDict, total=False):
-    """Config for generating dataset with hidden states for training."""
-
-    api_key: Annotated[str, PropertyInfo(alias="apiKey")]
-
-    deployed_model: Annotated[str, PropertyInfo(alias="deployedModel")]
-
-    input_limit: Annotated[int, PropertyInfo(alias="inputLimit")]
-
-    input_offset: Annotated[int, PropertyInfo(alias="inputOffset")]
-
-    max_tokens: Annotated[int, PropertyInfo(alias="maxTokens")]
-
-    max_workers: Annotated[int, PropertyInfo(alias="maxWorkers")]
-
-    output_activations: Annotated[bool, PropertyInfo(alias="outputActivations")]
-
-    regenerate_assistant: Annotated[bool, PropertyInfo(alias="regenerateAssistant")]

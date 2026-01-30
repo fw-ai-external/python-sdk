@@ -80,6 +80,12 @@ class DeploymentShape(BaseModel):
     enable_session_affinity: Optional[bool] = FieldInfo(alias="enableSessionAffinity", default=None)
     """Whether to apply sticky routing based on `user` field."""
 
+    max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
+    """
+    The maximum context length supported by the model (context window). If set to 0
+    or not specified, the model's default maximum context length will be used.
+    """
+
     api_model_type: Optional[str] = FieldInfo(alias="modelType", default=None)
     """The model type of the base model."""
 

@@ -91,8 +91,6 @@ from fireworks.types import (
     BaseModelDetails,
     ConversationConfig,
     Model,
-    ModelKind,
-    ModelState,
     PeftDetails,
     TypeDate,
     ModelGetDownloadEndpointResponse,
@@ -276,6 +274,9 @@ from fireworks.types import (
     EvaluatorUpdateResponse,
     EvaluatorListResponse,
     EvaluatorGetResponse,
+    EvaluatorGetBuildLogEndpointResponse,
+    EvaluatorGetSourceCodeEndpointResponse,
+    EvaluatorGetUploadEndpointResponse,
 )
 ```
 
@@ -286,30 +287,10 @@ Methods:
 - <code title="get /v1/accounts/{account_id}/evaluators">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">list</a>(\*, account_id, \*\*<a href="src/fireworks/types/evaluator_list_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_list_response.py">SyncCursorEvaluators[EvaluatorListResponse]</a></code>
 - <code title="delete /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">delete</a>(evaluator_id, \*, account_id) -> object</code>
 - <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_response.py">EvaluatorGetResponse</a></code>
-
-# EvaluatorVersions
-
-Types:
-
-```python
-from fireworks.types import (
-    EvaluatorVersion,
-    GetBuildLogEndpointResponse,
-    GetSourceCodeEndpointResponse,
-    EvaluatorVersionGetUploadEndpointResponse,
-)
-```
-
-Methods:
-
-- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">create</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_version_create_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_version.py">EvaluatorVersion</a></code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">list</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_version_list_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_version.py">SyncCursorEvaluatorVersions[EvaluatorVersion]</a></code>
-- <code title="delete /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">delete</a>(version_id, \*, account_id, evaluator_id) -> object</code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">get</a>(version_id, \*, account_id, evaluator_id, \*\*<a href="src/fireworks/types/evaluator_version_get_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_version.py">EvaluatorVersion</a></code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:getBuildLogSignedUrl">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">get_build_log_endpoint</a>(version_id, \*, account_id, evaluator_id, \*\*<a href="src/fireworks/types/evaluator_version_get_build_log_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/get_build_log_endpoint_response.py">GetBuildLogEndpointResponse</a></code>
-- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:getSourceCodeSignedUrl">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">get_source_code_endpoint</a>(version_id, \*, account_id, evaluator_id, \*\*<a href="src/fireworks/types/evaluator_version_get_source_code_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/get_source_code_endpoint_response.py">GetSourceCodeEndpointResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:getUploadEndpoint">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">get_upload_endpoint</a>(version_id, \*, account_id, evaluator_id, \*\*<a href="src/fireworks/types/evaluator_version_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_version_get_upload_endpoint_response.py">EvaluatorVersionGetUploadEndpointResponse</a></code>
-- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}/versions/{version_id}:validateUpload">client.evaluator_versions.<a href="./src/fireworks/resources/evaluator_versions.py">validate_upload</a>(version_id, \*, account_id, evaluator_id, \*\*<a href="src/fireworks/types/evaluator_version_validate_upload_params.py">params</a>) -> object</code>
+- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_build_log_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_build_log_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_build_log_endpoint_response.py">EvaluatorGetBuildLogEndpointResponse</a></code>
+- <code title="get /v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_source_code_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_source_code_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_source_code_endpoint_response.py">EvaluatorGetSourceCodeEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">get_upload_endpoint</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_get_upload_endpoint_params.py">params</a>) -> <a href="./src/fireworks/types/evaluator_get_upload_endpoint_response.py">EvaluatorGetUploadEndpointResponse</a></code>
+- <code title="post /v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload">client.evaluators.<a href="./src/fireworks/resources/evaluators.py">validate_upload</a>(evaluator_id, \*, account_id, \*\*<a href="src/fireworks/types/evaluator_validate_upload_params.py">params</a>) -> object</code>
 
 # Accounts
 
