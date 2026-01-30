@@ -35,6 +35,13 @@ class DeploymentCreateParams(TypedDict, total=False):
     base model. If true, this will disable speculative decoding.
     """
 
+    skip_image_tag_validation: Annotated[bool, PropertyInfo(alias="skipImageTagValidation")]
+    """
+    If true, skip the image tag policy validation that blocks certain image tags.
+    This allows creating deployments with image tags that would otherwise be
+    blocked.
+    """
+
     skip_shape_validation: Annotated[bool, PropertyInfo(alias="skipShapeValidation")]
     """
     By default, a deployment will ensure the deployment shape provided is validated.
@@ -163,13 +170,20 @@ class DeploymentCreateParams(TypedDict, total=False):
     """The time at which this deployment will automatically be deleted."""
 
     hot_load_bucket_type: Annotated[
-        Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS"], PropertyInfo(alias="hotLoadBucketType")
+        Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"],
+        PropertyInfo(alias="hotLoadBucketType"),
     ]
 
     hot_load_bucket_url: Annotated[str, PropertyInfo(alias="hotLoadBucketUrl")]
     """
     For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
     gs://mybucket/..
+    """
+
+    max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
+    """
+    The maximum context length supported by the model (context window). If set to 0
+    or not specified, the model's default maximum context length will be used.
     """
 
     max_replica_count: Annotated[int, PropertyInfo(alias="maxReplicaCount")]

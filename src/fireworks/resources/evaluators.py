@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Dict, Iterable
 
 import httpx
 
@@ -11,6 +11,10 @@ from ..types import (
     evaluator_list_params,
     evaluator_create_params,
     evaluator_update_params,
+    evaluator_validate_upload_params,
+    evaluator_get_upload_endpoint_params,
+    evaluator_get_build_log_endpoint_params,
+    evaluator_get_source_code_endpoint_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import maybe_transform, async_maybe_transform
@@ -29,6 +33,9 @@ from ..types.evaluator_source_param import EvaluatorSourceParam
 from ..types.evaluator_list_response import EvaluatorListResponse
 from ..types.evaluator_create_response import EvaluatorCreateResponse
 from ..types.evaluator_update_response import EvaluatorUpdateResponse
+from ..types.evaluator_get_upload_endpoint_response import EvaluatorGetUploadEndpointResponse
+from ..types.evaluator_get_build_log_endpoint_response import EvaluatorGetBuildLogEndpointResponse
+from ..types.evaluator_get_source_code_endpoint_response import EvaluatorGetSourceCodeEndpointResponse
 
 __all__ = ["EvaluatorsResource", "AsyncEvaluatorsResource"]
 
@@ -92,21 +99,14 @@ class EvaluatorsResource(SyncAPIResource):
         If using the API directly:
 
         1. Call this endpoint to create the evaluator resource
-        2. Call [Create Evaluator Version](/api-reference/create-evaluator-version) to
-           create a version
+        2. Package your source directory as a `.tar.gz` (respecting `.gitignore`)
         3. Call
-           [Get Evaluator Version Upload Endpoint](/api-reference/get-evaluator-version-upload-endpoint)
-           to get signed URLs
-        4. Package your source directory as a `.tar.gz` and `PUT` to the signed URL
-        5. Call
-           [Validate Evaluator Version Upload](/api-reference/validate-evaluator-version-upload)
-           to trigger the build
-        6. Poll [Get Evaluator Version](/api-reference/get-evaluator-version) until
-           state is ACTIVE
-
-        Versions allow you to update evaluator code and switch between versions when
-        running evaluation jobs. Use [Update Evaluator](/api-reference/update-evaluator)
-        with `current_version_id` to change which version is used.
+           [Get Evaluator Upload Endpoint](/api-reference/get-evaluator-upload-endpoint)
+           to get a signed upload URL
+        4. `PUT` the tar.gz file to the signed URL
+        5. Call [Validate Evaluator Upload](/api-reference/validate-evaluator-upload) to
+           trigger server-side validation
+        6. Poll [Get Evaluator](/api-reference/get-evaluator) until ready
 
         Once active, reference the evaluator in
         [Create Evaluation Job](/api-reference/create-evaluation-job) or
@@ -150,7 +150,6 @@ class EvaluatorsResource(SyncAPIResource):
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
         criteria: Iterable[evaluator_update_params.Criterion] | Omit = omit,
-        current_version_id: str | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -172,11 +171,6 @@ class EvaluatorsResource(SyncAPIResource):
         Args:
           prepare_code_upload: If true, prepare a new code upload/build attempt by transitioning the evaluator
               to BUILDING state. Can be used without update_mask.
-
-          current_version_id: The version ID of the currently active version of this evaluator. This
-              references EvaluatorVersion.VersionId for this evaluator. When set, GetEvaluator
-              merges version-specific data (state, requirements, etc.) into the response.
-              Empty for legacy evaluators that don't use versioning.
 
           source: Source information for the evaluator codebase.
 
@@ -202,7 +196,6 @@ class EvaluatorsResource(SyncAPIResource):
                 {
                     "commit_hash": commit_hash,
                     "criteria": criteria,
-                    "current_version_id": current_version_id,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,
@@ -381,6 +374,208 @@ class EvaluatorsResource(SyncAPIResource):
             cast_to=EvaluatorGetResponse,
         )
 
+    def get_build_log_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetBuildLogEndpointResponse:
+        """Returns a signed URL to download the evaluator's build logs.
+
+        Useful for
+        debugging `BUILD_FAILED` state.
+
+        Args:
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return self._get(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {"read_mask": read_mask}, evaluator_get_build_log_endpoint_params.EvaluatorGetBuildLogEndpointParams
+                ),
+            ),
+            cast_to=EvaluatorGetBuildLogEndpointResponse,
+        )
+
+    def get_source_code_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetSourceCodeEndpointResponse:
+        """Returns a signed URL to download the evaluator's source code archive.
+
+        Useful for
+        debugging or reviewing the uploaded code.
+
+        Args:
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return self._get(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=maybe_transform(
+                    {"read_mask": read_mask},
+                    evaluator_get_source_code_endpoint_params.EvaluatorGetSourceCodeEndpointParams,
+                ),
+            ),
+            cast_to=EvaluatorGetSourceCodeEndpointResponse,
+        )
+
+    def get_upload_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        filename_to_size: Dict[str, str],
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetUploadEndpointResponse:
+        """
+        Returns signed URLs for uploading evaluator source code (**step 3** in the
+        [Create Evaluator](/api-reference/create-evaluator) workflow). After receiving
+        the signed URL, upload your `.tar.gz` archive using HTTP `PUT` with
+        `Content-Type: application/octet-stream` header.
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return self._post(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+            body=maybe_transform(
+                {
+                    "filename_to_size": filename_to_size,
+                    "read_mask": read_mask,
+                },
+                evaluator_get_upload_endpoint_params.EvaluatorGetUploadEndpointParams,
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=EvaluatorGetUploadEndpointResponse,
+        )
+
+    def validate_upload(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Triggers server-side validation of the uploaded source code (**step 5** in the
+        [Create Evaluator](/api-reference/create-evaluator) workflow). The server
+        extracts and processes the archive, then builds the evaluator environment. Poll
+        [Get Evaluator](/api-reference/get-evaluator) to monitor progress.
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return self._post(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+            body=maybe_transform(body, evaluator_validate_upload_params.EvaluatorValidateUploadParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
 
 class AsyncEvaluatorsResource(AsyncAPIResource):
     @cached_property
@@ -441,21 +636,14 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         If using the API directly:
 
         1. Call this endpoint to create the evaluator resource
-        2. Call [Create Evaluator Version](/api-reference/create-evaluator-version) to
-           create a version
+        2. Package your source directory as a `.tar.gz` (respecting `.gitignore`)
         3. Call
-           [Get Evaluator Version Upload Endpoint](/api-reference/get-evaluator-version-upload-endpoint)
-           to get signed URLs
-        4. Package your source directory as a `.tar.gz` and `PUT` to the signed URL
-        5. Call
-           [Validate Evaluator Version Upload](/api-reference/validate-evaluator-version-upload)
-           to trigger the build
-        6. Poll [Get Evaluator Version](/api-reference/get-evaluator-version) until
-           state is ACTIVE
-
-        Versions allow you to update evaluator code and switch between versions when
-        running evaluation jobs. Use [Update Evaluator](/api-reference/update-evaluator)
-        with `current_version_id` to change which version is used.
+           [Get Evaluator Upload Endpoint](/api-reference/get-evaluator-upload-endpoint)
+           to get a signed upload URL
+        4. `PUT` the tar.gz file to the signed URL
+        5. Call [Validate Evaluator Upload](/api-reference/validate-evaluator-upload) to
+           trigger server-side validation
+        6. Poll [Get Evaluator](/api-reference/get-evaluator) until ready
 
         Once active, reference the evaluator in
         [Create Evaluation Job](/api-reference/create-evaluation-job) or
@@ -499,7 +687,6 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         prepare_code_upload: bool | Omit = omit,
         commit_hash: str | Omit = omit,
         criteria: Iterable[evaluator_update_params.Criterion] | Omit = omit,
-        current_version_id: str | Omit = omit,
         default_dataset: str | Omit = omit,
         description: str | Omit = omit,
         display_name: str | Omit = omit,
@@ -521,11 +708,6 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         Args:
           prepare_code_upload: If true, prepare a new code upload/build attempt by transitioning the evaluator
               to BUILDING state. Can be used without update_mask.
-
-          current_version_id: The version ID of the currently active version of this evaluator. This
-              references EvaluatorVersion.VersionId for this evaluator. When set, GetEvaluator
-              merges version-specific data (state, requirements, etc.) into the response.
-              Empty for legacy evaluators that don't use versioning.
 
           source: Source information for the evaluator codebase.
 
@@ -551,7 +733,6 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
                 {
                     "commit_hash": commit_hash,
                     "criteria": criteria,
-                    "current_version_id": current_version_id,
                     "default_dataset": default_dataset,
                     "description": description,
                     "display_name": display_name,
@@ -730,6 +911,208 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
             cast_to=EvaluatorGetResponse,
         )
 
+    async def get_build_log_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetBuildLogEndpointResponse:
+        """Returns a signed URL to download the evaluator's build logs.
+
+        Useful for
+        debugging `BUILD_FAILED` state.
+
+        Args:
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return await self._get(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {"read_mask": read_mask}, evaluator_get_build_log_endpoint_params.EvaluatorGetBuildLogEndpointParams
+                ),
+            ),
+            cast_to=EvaluatorGetBuildLogEndpointResponse,
+        )
+
+    async def get_source_code_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetSourceCodeEndpointResponse:
+        """Returns a signed URL to download the evaluator's source code archive.
+
+        Useful for
+        debugging or reviewing the uploaded code.
+
+        Args:
+          read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
+              returned.
+
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return await self._get(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+            options=make_request_options(
+                extra_headers=extra_headers,
+                extra_query=extra_query,
+                extra_body=extra_body,
+                timeout=timeout,
+                query=await async_maybe_transform(
+                    {"read_mask": read_mask},
+                    evaluator_get_source_code_endpoint_params.EvaluatorGetSourceCodeEndpointParams,
+                ),
+            ),
+            cast_to=EvaluatorGetSourceCodeEndpointResponse,
+        )
+
+    async def get_upload_endpoint(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        filename_to_size: Dict[str, str],
+        read_mask: str | Omit = omit,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> EvaluatorGetUploadEndpointResponse:
+        """
+        Returns signed URLs for uploading evaluator source code (**step 3** in the
+        [Create Evaluator](/api-reference/create-evaluator) workflow). After receiving
+        the signed URL, upload your `.tar.gz` archive using HTTP `PUT` with
+        `Content-Type: application/octet-stream` header.
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return await self._post(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+            body=await async_maybe_transform(
+                {
+                    "filename_to_size": filename_to_size,
+                    "read_mask": read_mask,
+                },
+                evaluator_get_upload_endpoint_params.EvaluatorGetUploadEndpointParams,
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=EvaluatorGetUploadEndpointResponse,
+        )
+
+    async def validate_upload(
+        self,
+        evaluator_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Triggers server-side validation of the uploaded source code (**step 5** in the
+        [Create Evaluator](/api-reference/create-evaluator) workflow). The server
+        extracts and processes the archive, then builds the evaluator environment. Poll
+        [Get Evaluator](/api-reference/get-evaluator) to monitor progress.
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not evaluator_id:
+            raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
+        return await self._post(
+            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload"
+            if self._client._base_url_overridden
+            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+            body=await async_maybe_transform(body, evaluator_validate_upload_params.EvaluatorValidateUploadParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
 
 class EvaluatorsResourceWithRawResponse:
     def __init__(self, evaluators: EvaluatorsResource) -> None:
@@ -749,6 +1132,18 @@ class EvaluatorsResourceWithRawResponse:
         )
         self.get = to_raw_response_wrapper(
             evaluators.get,
+        )
+        self.get_build_log_endpoint = to_raw_response_wrapper(
+            evaluators.get_build_log_endpoint,
+        )
+        self.get_source_code_endpoint = to_raw_response_wrapper(
+            evaluators.get_source_code_endpoint,
+        )
+        self.get_upload_endpoint = to_raw_response_wrapper(
+            evaluators.get_upload_endpoint,
+        )
+        self.validate_upload = to_raw_response_wrapper(
+            evaluators.validate_upload,
         )
 
 
@@ -771,6 +1166,18 @@ class AsyncEvaluatorsResourceWithRawResponse:
         self.get = async_to_raw_response_wrapper(
             evaluators.get,
         )
+        self.get_build_log_endpoint = async_to_raw_response_wrapper(
+            evaluators.get_build_log_endpoint,
+        )
+        self.get_source_code_endpoint = async_to_raw_response_wrapper(
+            evaluators.get_source_code_endpoint,
+        )
+        self.get_upload_endpoint = async_to_raw_response_wrapper(
+            evaluators.get_upload_endpoint,
+        )
+        self.validate_upload = async_to_raw_response_wrapper(
+            evaluators.validate_upload,
+        )
 
 
 class EvaluatorsResourceWithStreamingResponse:
@@ -792,6 +1199,18 @@ class EvaluatorsResourceWithStreamingResponse:
         self.get = to_streamed_response_wrapper(
             evaluators.get,
         )
+        self.get_build_log_endpoint = to_streamed_response_wrapper(
+            evaluators.get_build_log_endpoint,
+        )
+        self.get_source_code_endpoint = to_streamed_response_wrapper(
+            evaluators.get_source_code_endpoint,
+        )
+        self.get_upload_endpoint = to_streamed_response_wrapper(
+            evaluators.get_upload_endpoint,
+        )
+        self.validate_upload = to_streamed_response_wrapper(
+            evaluators.validate_upload,
+        )
 
 
 class AsyncEvaluatorsResourceWithStreamingResponse:
@@ -812,4 +1231,16 @@ class AsyncEvaluatorsResourceWithStreamingResponse:
         )
         self.get = async_to_streamed_response_wrapper(
             evaluators.get,
+        )
+        self.get_build_log_endpoint = async_to_streamed_response_wrapper(
+            evaluators.get_build_log_endpoint,
+        )
+        self.get_source_code_endpoint = async_to_streamed_response_wrapper(
+            evaluators.get_source_code_endpoint,
+        )
+        self.get_upload_endpoint = async_to_streamed_response_wrapper(
+            evaluators.get_upload_endpoint,
+        )
+        self.validate_upload = async_to_streamed_response_wrapper(
+            evaluators.validate_upload,
         )

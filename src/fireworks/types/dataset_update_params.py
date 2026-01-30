@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Annotated, TypedDict
+from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .splitted_param import SplittedParam
@@ -15,13 +15,13 @@ __all__ = ["DatasetUpdateParams"]
 class DatasetUpdateParams(TypedDict, total=False):
     account_id: str
 
+    example_count: Required[Annotated[str, PropertyInfo(alias="exampleCount")]]
+
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
     eval_protocol: Annotated[object, PropertyInfo(alias="evalProtocol")]
 
     evaluation_result: Annotated[EvaluationResultParam, PropertyInfo(alias="evaluationResult")]
-
-    example_count: Annotated[str, PropertyInfo(alias="exampleCount")]
 
     external_url: Annotated[str, PropertyInfo(alias="externalUrl")]
 

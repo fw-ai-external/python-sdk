@@ -112,14 +112,6 @@ from .deployment_shapes import (
     DeploymentShapesResourceWithStreamingResponse,
     AsyncDeploymentShapesResourceWithStreamingResponse,
 )
-from .evaluator_versions import (
-    EvaluatorVersionsResource,
-    AsyncEvaluatorVersionsResource,
-    EvaluatorVersionsResourceWithRawResponse,
-    AsyncEvaluatorVersionsResourceWithRawResponse,
-    EvaluatorVersionsResourceWithStreamingResponse,
-    AsyncEvaluatorVersionsResourceWithStreamingResponse,
-)
 from .batch_inference_jobs import (
     BatchInferenceJobsResource,
     AsyncBatchInferenceJobsResource,
@@ -252,12 +244,6 @@ __all__ = [
     "AsyncEvaluatorsResourceWithRawResponse",
     "EvaluatorsResourceWithStreamingResponse",
     "AsyncEvaluatorsResourceWithStreamingResponse",
-    "EvaluatorVersionsResource",
-    "AsyncEvaluatorVersionsResource",
-    "EvaluatorVersionsResourceWithRawResponse",
-    "AsyncEvaluatorVersionsResourceWithRawResponse",
-    "EvaluatorVersionsResourceWithStreamingResponse",
-    "AsyncEvaluatorVersionsResourceWithStreamingResponse",
     "AccountsResource",
     "AsyncAccountsResource",
     "AccountsResourceWithRawResponse",

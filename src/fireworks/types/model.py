@@ -8,8 +8,6 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 from .type_date import TypeDate
-from .model_kind import ModelKind
-from .model_state import ModelState
 from .peft_details import PeftDetails
 from .shared.status import Status
 from .base_model_details import BaseModelDetails
@@ -96,7 +94,22 @@ class Model(BaseModel):
     This field is empty if the model was not imported.
     """
 
-    kind: Optional[ModelKind] = None
+    kind: Optional[
+        Literal[
+            "KIND_UNSPECIFIED",
+            "HF_BASE_MODEL",
+            "HF_PEFT_ADDON",
+            "HF_TEFT_ADDON",
+            "FLUMINA_BASE_MODEL",
+            "FLUMINA_ADDON",
+            "DRAFT_ADDON",
+            "FIRE_AGENT",
+            "LIVE_MERGE",
+            "CUSTOM_MODEL",
+            "EMBEDDING_MODEL",
+            "SNAPSHOT_MODEL",
+        ]
+    ] = None
     """The kind of model. If not specified, the default is HF_PEFT_ADDON."""
 
     name: Optional[str] = None
@@ -114,7 +127,7 @@ class Model(BaseModel):
         alias="snapshotType", default=None
     )
 
-    state: Optional[ModelState] = None
+    state: Optional[Literal["STATE_UNSPECIFIED", "UPLOADING", "READY"]] = None
     """The state of the model."""
 
     status: Optional[Status] = None
