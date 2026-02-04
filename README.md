@@ -19,6 +19,12 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 pip install '--pre fireworks-ai'
 ```
 
+For RL training helpers and examples (GRPO/DPO), install the optional extras:
+
+```sh
+pip install '--pre fireworks-ai[rl]'
+```
+
 ## Usage
 
 The full API of this library can be found in [api.md](api.md).
