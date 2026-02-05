@@ -613,6 +613,10 @@ def main():
             if not input_messages:
                 continue
 
+            # Progress logging
+            user_msg = input_messages[0].get("content", "")[:60]
+            log(f"  Prompt {prompt_idx}/{len(dataset)}: {user_msg}...")
+
             # =========================================================================
             # On-Policy: Hotload BEFORE sampling
             #
@@ -720,9 +724,16 @@ def main():
                 score, _ = evaluate_gsm8k_response(s.text, ground_truth)
                 rewards.append(score)
 
+            # Log sampling + reward results
+            response_lens = [len(s.full_tokens) - s.prompt_len for s in sampled]
+            correct_count = sum(1 for r in rewards if r > 0.5)
+            log(f"    Sampled {len(sampled)} completions ({min(response_lens)}-{max(response_lens)} tokens), {correct_count}/{len(rewards)} correct")
+
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
                 skipped += 1
+                uniform_type = "all correct" if rewards[0] == 1.0 else "all wrong"
+                log(f"    SKIPPED ({uniform_type}) | skipped: {skipped}, valid: {accum_count}, steps: {global_step}")
                 continue
 
             # =========================================================================

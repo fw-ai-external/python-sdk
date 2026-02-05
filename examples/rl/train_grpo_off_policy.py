@@ -714,11 +714,9 @@ def main():
             if not input_messages:
                 continue
 
-            # Debug: show which sample is being processed
-            if args.debug:
-                user_msg = input_messages[0].get("content", "")[:80]
-                log(f"\n[DEBUG] Epoch {epoch}, Prompt {prompt_idx}: {user_msg}...")
-                log(f"[DEBUG] Ground truth: {ground_truth}")
+            # Progress logging (always shown — important for long runs)
+            user_msg = input_messages[0].get("content", "")[:60]
+            log(f"  Prompt {prompt_idx}/{len(dataset)}: {user_msg}...")
 
             # =========================================================================
             # Off-Policy: Hotload at intervals (not every step)
@@ -814,6 +812,10 @@ def main():
                 warn(f"Got {len(sampled)} completions, expected {args.group_size}")
                 continue
 
+            # Log sampling results: token counts and response lengths
+            response_lens = [len(s.full_tokens) - s.prompt_len for s in sampled]
+            log(f"    Sampled {len(sampled)} completions, response lengths: {min(response_lens)}-{max(response_lens)} tokens")
+
             # =========================================================================
             # Compute rewards
             # =========================================================================
@@ -824,29 +826,24 @@ def main():
                 rewards.append(score)
                 eval_details.append(detail)
 
-            # Debug: show prompt, ground truth, and rewards
+            correct_count = sum(1 for r in rewards if r > 0.5)
+            log(f"    Rewards: {correct_count}/{len(rewards)} correct ({rewards})")
+
+            # Show extracted answers for debugging
             if args.debug:
-                user_msg = input_messages[0].get("content", "")[:100]
-                log(f"\n[DEBUG DATA] === Prompt {prompt_idx} ===")
-                log(f"[DEBUG DATA] Question: {user_msg}...")
-                log(f"[DEBUG DATA] Ground truth: {ground_truth}")
-                log(f"[DEBUG DATA] Rewards: {rewards}")
-                log(f"[DEBUG DATA] Correct: {sum(rewards)}/{len(rewards)} ({100*sum(rewards)/len(rewards):.0f}%)")
                 for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
                     if i < 2 or r == 1.0:
-                        response_preview = s.text[:80].replace('\n', ' ')
-                        log(f"[DEBUG DATA]   [{i}] reward={r:.0f} | {d} | {response_preview}...")
+                        response_preview = s.text[-80:].replace('\n', ' ')
+                        log(f"      [{i}] {d} | ...{response_preview}")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
                 skipped += 1
-                if args.debug:
-                    uniform_type = "all correct" if rewards[0] == 1.0 else "all wrong"
-                    log(f"[DEBUG DATA] SKIPPED: {uniform_type} - no learning signal")
+                uniform_type = "all correct" if rewards[0] == 1.0 else "all wrong"
+                log(f"    SKIPPED ({uniform_type}) | total skipped: {skipped}, valid: {accum_count}, steps: {global_step}")
                 continue
             
-            if args.debug:
-                log(f"[DEBUG DATA] TRAINING on this prompt (has reward variance)")
+            log(f"    TRAINING on this prompt (accum {accum_count+1}/{args.grad_accum})")
 
             # =========================================================================
             # Build datums with weights and get reference + behavior logprobs
