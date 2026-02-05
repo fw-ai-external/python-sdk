@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
 """
-GRPO (Group Relative Policy Optimization) Training via Tinker SDK
+GRPO (Group Relative Policy Optimization) Training via Tinker SDK - OFF-POLICY
 
-This script runs GRPO training using the Tinker SDK and control plane with
-two RLOR trainer jobs: policy (trainable) and reference (frozen, logprobs only).
-Sampling uses the deployment's chat completions API.
+This script runs OFF-POLICY GRPO training using the Tinker SDK and control plane.
+Unlike the on-policy version, this hotloads at intervals (not every step) and uses
+importance sampling to correct for the mismatch between sampling and training policies.
 
 Architecture:
     - Policy RLOR job: forward_backward + optim_step (trainable)
     - Reference RLOR job: forward only (frozen, for KL)
-    - Deployment: sampling (chat completions) and hotload
+    - Deployment: sampling (chat completions) and hotload at intervals
 
-GRPO Algorithm (On-Policy when using hotload):
+GRPO Algorithm (Off-Policy with Importance Sampling):
     advantage = (r - mean_r) / (std_r + eps)
-    loss = -advantage * sum(response_logprobs) + kl_beta * KL(policy || reference)
+    rho = exp(log_pi_current - log_pi_behavior)  # importance ratio
+    loss = rho * (-advantage * sum(response_logprobs) + kl_beta * KL(policy || reference))
     
-    On-policy: hotload at every step so sampling policy = current policy.
-    No importance sampling needed (rho = 1).
+    Off-policy: hotload at intervals (e.g., every 10 steps).
+    Uses importance sampling to correct for stale samples.
 
 Usage:
-    python examples/rl/train_grpo.py \\
+    python examples/rl/train_grpo_off_policy.py \\
         --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/gsm8k.jsonl \\
         --create-deployment --hotload-deployment-id "grpo-test" \\
+        --hotload-interval 10 \\
         --save-sampler --hotload --skip-validations
 
 Copyright (c) Fireworks AI, Inc. and affiliates.
@@ -83,32 +85,34 @@ except ImportError:
 
 
 # =============================================================================
-# GRPO Loss Function for forward_backward_custom
+# GRPO Loss Function for forward_backward_custom (Off-Policy with Importance Sampling)
 # =============================================================================
 
 
 def make_grpo_loss_fn(
     rewards: List[float],
     ref_logprobs_list: List[List[float]],
+    behavior_logprobs_list: List[List[float]],
     kl_beta: float = 0.001,
+    clip_rho: float = 10.0,
     eps: float = 1e-8,
     debug: bool = False,
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
-    """Create a GRPO loss function for forward_backward_custom.
+    """Create an OFF-POLICY GRPO loss function with importance sampling.
 
     Uses the tinker-cookbook pattern: weights from datum.loss_fn_inputs["weights"]
     and torch.dot() to compute weighted logprob sums over response tokens only.
 
-    GRPO (Group Relative Policy Optimization) uses reward centering within a group:
-        advantage = (reward - mean_reward) / (std_reward + eps)
-
-    On-policy loss (no importance sampling since we hotload before sampling):
-        loss = -advantage * dot(logprobs, weights) + kl_beta * dot(pi - ref, weights)
+    Off-policy loss with importance sampling correction:
+        rho = exp(dot(log_pi_current - log_pi_behavior, weights) / n_response)
+        loss = rho * (-advantage * dot(logprobs, weights) + kl_beta * dot(pi - ref, weights))
 
     Args:
         rewards: List of K rewards, one per completion in the group
         ref_logprobs_list: Reference model logprobs for each completion (frozen, for KL)
+        behavior_logprobs_list: Behavior policy logprobs (from deployment at time of sampling)
         kl_beta: KL regularization coefficient
+        clip_rho: Clip importance ratio for stability
         eps: Epsilon for numerical stability in advantage normalization
         debug: Enable pdb breakpoints inside loss function
 
@@ -128,23 +132,24 @@ def make_grpo_loss_fn(
     advantages = ((rewards_tensor - mean_r) / (std_r + eps)).tolist()
 
     if debug:
-        print(f"\n[DEBUG GRPO] === Advantage Computation ===")
+        print(f"\n[DEBUG GRPO OFF-POLICY] === Advantage Computation ===")
         print(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
         print(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
         print(f"[DEBUG GRPO] advantages: {advantages}")
 
-    # Convert reference logprobs to tensors (no grad needed - frozen)
+    # Convert reference and behavior logprobs to tensors (no grad needed - frozen)
     ref_tensors = [torch.tensor(ref_lp, dtype=torch.float32) for ref_lp in ref_logprobs_list]
+    behavior_tensors = [torch.tensor(b_lp, dtype=torch.float32) for b_lp in behavior_logprobs_list]
 
     def loss_fn(
         data: List[tinker.Datum],
         logprobs_list: List[torch.Tensor],
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        """GRPO loss function using weights + dot product (tinker-cookbook pattern).
+        """Off-policy GRPO loss using weights + dot product (tinker-cookbook pattern).
 
         Args:
             data: List of K Datum objects with loss_fn_inputs["weights"]
-            logprobs_list: List of K logprob tensors from policy model (requires_grad=True)
+            logprobs_list: List of K logprob tensors from CURRENT policy (requires_grad=True)
 
         Returns:
             (loss, metrics) tuple
@@ -155,43 +160,57 @@ def make_grpo_loss_fn(
         total_kl = 0.0
         total_policy_lp = 0.0
         total_ref_lp = 0.0
+        total_behavior_lp = 0.0
+        total_rho = 0.0
         num_response_tokens = 0
 
         for i in range(K):
             adv = advantages[i]
-            pi_lp = logprobs_list[i]  # Policy logprobs (requires_grad=True)
+            pi_lp = logprobs_list[i]  # Current policy logprobs (requires_grad=True)
             ref_lp = ref_tensors[i]  # Reference logprobs (frozen)
+            behavior_lp = behavior_tensors[i]  # Behavior policy logprobs (frozen)
 
             # Get weights from datum (0 for prompt, 1 for response tokens)
-            # datum_from_model_input_weights already shifted these to align with logprobs
             weights = torch.tensor(data[i].loss_fn_inputs["weights"].data, dtype=torch.float32)
 
-            # Truncate to min length (handles mismatched lengths)
-            min_len = min(len(pi_lp), len(ref_lp), len(weights))
+            # Truncate to min length
+            min_len = min(len(pi_lp), len(ref_lp), len(behavior_lp), len(weights))
             if min_len == 0:
                 continue
             pi_lp_t = pi_lp[:min_len]
             ref_lp_t = ref_lp[:min_len]
+            behavior_lp_t = behavior_lp[:min_len]
             weights_t = weights[:min_len]
 
-            # Weighted logprob sums using dot product (response tokens only)
+            n_response = int(weights_t.sum().item())
+            if n_response == 0:
+                continue
+
+            # Weighted logprob sums using dot product
             pi_sum = torch.dot(pi_lp_t.float(), weights_t)
             ref_sum = torch.dot(ref_lp_t.float(), weights_t)
+            behavior_sum = torch.dot(behavior_lp_t.float(), weights_t)
 
-            # Policy gradient loss: -advantage * weighted_logprob_sum
-            pg_loss = -adv * pi_sum
+            # Importance ratio: rho = exp(mean per-token log ratio over response)
+            log_rho = torch.dot((pi_lp_t - behavior_lp_t).float(), weights_t)
+            rho = torch.clamp(torch.exp(log_rho / n_response), max=clip_rho)
 
-            # KL penalty: beta * dot(pi - ref, weights)
+            # Policy gradient loss with importance sampling
+            pg_loss = rho * (-adv * pi_sum)
+
+            # KL penalty
             kl_term = torch.dot((pi_lp_t - ref_lp_t).float(), weights_t)
 
-            total_loss = total_loss + pg_loss + kl_beta * kl_term
+            total_loss = total_loss + pg_loss + rho * kl_beta * kl_term
 
             # Metrics (detached)
             with torch.no_grad():
                 total_kl += kl_term.item()
                 total_policy_lp += pi_sum.item()
                 total_ref_lp += ref_sum.item()
-                num_response_tokens += int(weights_t.sum().item())
+                total_behavior_lp += behavior_sum.item()
+                total_rho += rho.item()
+                num_response_tokens += n_response
 
         # Average loss over group
         loss = total_loss / K
@@ -204,6 +223,8 @@ def make_grpo_loss_fn(
             "mean_kl": total_kl / K if K > 0 else 0.0,
             "mean_policy_lp": total_policy_lp / num_response_tokens if num_response_tokens > 0 else 0.0,
             "mean_ref_lp": total_ref_lp / num_response_tokens if num_response_tokens > 0 else 0.0,
+            "mean_behavior_lp": total_behavior_lp / num_response_tokens if num_response_tokens > 0 else 0.0,
+            "mean_importance_ratio": total_rho / K if K > 0 else 1.0,
             "num_response_tokens": num_response_tokens,
         }
 
@@ -287,6 +308,88 @@ def sample_completions_from_deployment(
     return completions
 
 
+def get_prefill_logprobs_from_deployment(
+    inference_url: str,
+    api_key: str,
+    model: str,
+    tokens: List[int],
+    timeout: int = 120,
+) -> List[float]:
+    """Get logprobs for a token sequence by running prefill on the deployment.
+
+    This is used for OFF-POLICY training to get the "behavior policy" logprobs
+    (the logprobs at the time of sampling, before subsequent training updates).
+
+    Uses /v1/completions with echo=True to get logprobs for the input tokens.
+
+    IMPORTANT: Alignment with Tinker API (trainer's /forward):
+    - Trainer returns: logprobs[i] = P(tokens[i+1] | tokens[0:i+1])  (N-1 values for N tokens)
+    - Inference returns: logprobs[i] = P(tokens[i] | tokens[0:i])    (N values, first=None)
+    - To align: use inference[1:] which matches trainer[0:]
+
+    Args:
+        inference_url: Base URL of the inference server/deployment
+        api_key: Fireworks API key
+        model: Model name (e.g., accounts/{account}/deployments/{deployment_id})
+        tokens: Full token sequence (prompt + completion)
+        timeout: Request timeout in seconds
+
+    Returns:
+        List of per-token logprobs aligned with trainer convention (N-1 values for N tokens).
+    """
+    if not tokens or len(tokens) < 2:
+        return [0.0] * (len(tokens) - 1) if tokens else []
+
+    base = inference_url.rstrip("/")
+    # Fireworks API gateway URL handling
+    if "api.fireworks" in base:
+        completions_url = f"{base}/inference/v1/completions"
+    else:
+        completions_url = f"{base}/v1/completions"
+
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": model,
+        "prompt": tokens,  # Pass token IDs directly
+        "max_tokens": 1,  # Minimal generation, we only want prefill logprobs
+        "echo": True,  # Include input in output to get logprobs for input tokens
+        "logprobs": 1,  # Request logprobs
+        "prompt_cache_max_len": 0,  # Disable prompt caching for accurate logprobs
+    }
+
+    resp = httpx.post(completions_url, headers=headers, json=payload, timeout=timeout)
+    resp.raise_for_status()
+
+    result = resp.json()
+    choices = result.get("choices", [])
+
+    if not choices:
+        return [0.0] * (len(tokens) - 1)
+
+    logprobs_data = choices[0].get("logprobs", {})
+    token_logprobs = logprobs_data.get("token_logprobs", [])
+
+    # Inference returns: logprobs[i] = P(tokens[i] | tokens[0:i])
+    # - logprobs[0] = None (first token has no context)
+    # - logprobs[1] = P(tokens[1] | tokens[0])
+    # - logprobs[2] = P(tokens[2] | tokens[0:2])
+    #
+    # Trainer returns: logprobs[i] = P(tokens[i+1] | tokens[0:i+1])
+    # - logprobs[0] = P(tokens[1] | tokens[0])
+    # - logprobs[1] = P(tokens[2] | tokens[0:2])
+    #
+    # So inference[1:] aligns with trainer[0:]
+    aligned_logprobs = token_logprobs[1 : len(tokens)]  # Skip first (None), take up to len(tokens)-1
+
+    # Replace None with 0.0 and pad if needed
+    logprobs = [lp if lp is not None else 0.0 for lp in aligned_logprobs]
+    expected_len = len(tokens) - 1  # Trainer returns N-1 logprobs for N tokens
+    while len(logprobs) < expected_len:
+        logprobs.append(0.0)
+
+    return logprobs
+
+
 # =============================================================================
 # CLI and main
 # =============================================================================
@@ -294,7 +397,7 @@ def sample_completions_from_deployment(
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="GRPO Training via Tinker SDK (two RLOR jobs: policy + reference)",
+        description="OFF-POLICY GRPO Training via Tinker SDK with Importance Sampling",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -354,7 +457,19 @@ def parse_args():
     ckpt_group = parser.add_argument_group("Checkpointing")
     ckpt_group.add_argument("--save-sampler", action="store_true", help="Save final checkpoint for sampler")
     ckpt_group.add_argument("--sampler-name", type=str, default=None, help="Name for saved sampler checkpoint")
-    ckpt_group.add_argument("--hotload", action="store_true", help="Enable on-policy hotloading (save + hotload after each optimizer step)")
+    ckpt_group.add_argument("--hotload", action="store_true", help="Enable hotloading at intervals")
+    ckpt_group.add_argument(
+        "--hotload-interval",
+        type=int,
+        default=10,
+        help="Hotload every N optimizer steps. Uses importance sampling between hotloads.",
+    )
+    ckpt_group.add_argument(
+        "--clip-rho",
+        type=float,
+        default=10.0,
+        help="Clip importance ratio for stability",
+    )
     ckpt_group.add_argument("--hotload-api-url", type=str, default="https://api.fireworks.ai", help="API URL for hotload requests")
     ckpt_group.add_argument("--hotload-timeout", type=int, default=120, help="Timeout for hotload to complete (seconds)")
 
@@ -370,21 +485,17 @@ def parse_args():
 
 
 def main():
-    """GRPO on-policy training loop.
+    """GRPO off-policy training loop with importance sampling.
 
-    Overall flow:
-    1. Create a deployment (inference endpoint for sampling completions)
-    2. Create two RLOR trainer jobs:
-       - Policy trainer: trainable, does forward_backward + optim_step
-       - Reference trainer: frozen, provides KL reference logprobs
-    3. For each prompt in the dataset:
-       a. Hotload latest weights onto deployment (on-policy: every step)
-       b. Sample K completions from deployment
-       c. Score completions with reward function (GSM8K accuracy)
-       d. Get reference logprobs from frozen trainer
-       e. Compute GRPO loss with forward_backward_custom
-       f. Accumulate gradients, then optim_step
-    4. Save final checkpoint and hotload to deployment
+    Same architecture as on-policy, but hotloads at intervals (not every step).
+    Between hotloads, uses importance sampling to correct for the mismatch
+    between the deployment's weights (behavior policy) and the trainer's
+    current weights (target policy).
+
+    Key difference from on-policy:
+    - Hotload every N steps instead of every step (--hotload-interval)
+    - Computes behavior policy logprobs via deployment prefill
+    - Loss includes importance ratio: rho = exp(pi_current - pi_behavior)
     """
     args = parse_args()
     log(f"Starting GRPO training: two RLOR jobs (policy + reference)")
@@ -497,9 +608,7 @@ def main():
     # Register cleanup to run on exit (handles exceptions, Ctrl+C, etc.)
     atexit.register(cleanup_resources)
 
-    # Create two RLOR trainer jobs:
-    # - Policy: trainable model, linked to deployment for checkpoint uploads
-    # - Reference: frozen copy of the initial model, used for KL regularization
+    # Create policy RLOR job (with hotload)
     log("\n[2/5] Creating policy RLOR trainer job...")
     policy_endpoint = create_rlor_service_job_and_wait(
         api_key=fw_api_key,
@@ -545,9 +654,7 @@ def main():
     )
     log(f"  Reference trainer ready: {reference_endpoint.job_id}")
 
-    # Create Tinker SDK clients — these are the Python interfaces for
-    # calling forward(), forward_backward_custom(), optim_step(), etc.
-    # on the remote GPU trainers.
+    # Create Tinker SDK clients for policy and reference trainers
     policy_service = tinker.ServiceClient(base_url=policy_endpoint.base_url, api_key=args.api_key)
     policy_client = policy_service.create_lora_training_client(
         base_model=args.base_model,
@@ -583,21 +690,15 @@ def main():
     log("\n[5/5] GRPO training loop...")
     global_step = 0
     accum_count = 0
-    epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "num_prompts": 0}
+    epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "importance_ratio": 0.0, "num_prompts": 0}
     skipped = 0
 
     # Checkpoint tracking for delta hotloads:
-    #
-    # Why base vs delta? The first checkpoint must be a "base" (full model weights)
-    # because the deployment needs a complete model to start from. After that,
-    # subsequent checkpoints can be "delta" — only storing what changed since the
-    # base. Deltas are much smaller (~10x) and faster to upload/download, making
-    # per-step hotloading practical.
-    #
-    # The deployment applies deltas on top of the base: loaded_weights = base XOR delta
+    # First save is "base" (full weights). Subsequent saves are "delta" (diff only,
+    # ~10x smaller). See on-policy script for detailed explanation.
     base_checkpoint_saved = False
-    base_checkpoint_identity: str | None = None  # Which base checkpoint deltas reference
-    last_hotloaded_step = -1  # Avoid hotloading multiple times per optimizer step
+    base_checkpoint_identity: str | None = None
+    last_hotloaded_step = -1
 
     # Print initial (step 0) metrics for e2e test
     print(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
@@ -613,22 +714,24 @@ def main():
             if not input_messages:
                 continue
 
+            # Debug: show which sample is being processed
+            if args.debug:
+                user_msg = input_messages[0].get("content", "")[:80]
+                print(f"\n[DEBUG] Epoch {epoch}, Prompt {prompt_idx}: {user_msg}...")
+                print(f"[DEBUG] Ground truth: {ground_truth}")
+
             # =========================================================================
-            # On-Policy: Hotload BEFORE sampling
-            #
-            # Why hotload before sampling? The deployment is still serving the OLD
-            # model weights. After optim_step updates the trainer's weights, the
-            # deployment doesn't know about those changes. We need to:
-            #   1. Save the trainer's current weights to GCS
-            #   2. Tell the deployment to load them (hotload)
-            #   3. THEN sample — so completions come from the updated policy
-            #
-            # This makes it "on-policy": the model that generates samples is the
-            # same model being trained. No importance sampling correction needed.
-            #
-            # Only hotload once per optimizer step (not per prompt within grad_accum).
+            # Off-Policy: Hotload at intervals (not every step)
+            # Between hotloads, use importance sampling to correct for stale samples
             # =========================================================================
-            if global_step > 0 and hotload_deployment_id and last_hotloaded_step < global_step:
+            should_hotload = (
+                args.hotload
+                and hotload_deployment_id
+                and global_step > 0
+                and last_hotloaded_step < global_step
+                and (global_step % args.hotload_interval == 0)
+            )
+            if should_hotload:
                 try:
                     sampler_name = f"online-step-{global_step}"
                     ckpt_type = "delta" if base_checkpoint_saved else "base"
@@ -678,8 +781,7 @@ def main():
                     )
 
                     if hotload_success:
-                        # Track as the deployment's current snapshot. Next delta's
-                        # previous_snapshot_identity must match what the deployment has.
+                        # Update base identity for next delta
                         base_checkpoint_identity = sampler_name
                         last_hotloaded_step = global_step  # Mark this step as hotloaded
                     else:
@@ -716,22 +818,45 @@ def main():
             # Compute rewards
             # =========================================================================
             rewards = []
+            eval_details = []
             for s in sampled:
-                score, _ = evaluate_gsm8k_response(s.text, ground_truth)
+                score, detail = evaluate_gsm8k_response(s.text, ground_truth)
                 rewards.append(score)
+                eval_details.append(detail)
+
+            # Debug: show prompt, ground truth, and rewards
+            if args.debug:
+                user_msg = input_messages[0].get("content", "")[:100]
+                print(f"\n[DEBUG DATA] === Prompt {prompt_idx} ===")
+                print(f"[DEBUG DATA] Question: {user_msg}...")
+                print(f"[DEBUG DATA] Ground truth: {ground_truth}")
+                print(f"[DEBUG DATA] Rewards: {rewards}")
+                print(f"[DEBUG DATA] Correct: {sum(rewards)}/{len(rewards)} ({100*sum(rewards)/len(rewards):.0f}%)")
+                # Show first correct and first incorrect response
+                for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
+                    if i < 2 or r == 1.0:  # Show first 2 and any correct ones
+                        response_preview = s.text[:80].replace('\n', ' ')
+                        print(f"[DEBUG DATA]   [{i}] reward={r:.0f} | {d} | {response_preview}...")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
                 skipped += 1
+                if args.debug:
+                    uniform_type = "all correct" if rewards[0] == 1.0 else "all wrong"
+                    print(f"[DEBUG DATA] SKIPPED: {uniform_type} - no learning signal")
                 continue
+            
+            if args.debug:
+                print(f"[DEBUG DATA] TRAINING on this prompt (has reward variance)")
 
             # =========================================================================
-            # Build datums with weights and get reference logprobs
+            # Build datums with weights and get reference + behavior logprobs
             # Uses datum_from_model_input_weights (tinker-cookbook pattern):
             #   - Handles token shifting internally (no manual [:-1] / [1:])
             #   - weights[i]=0 for prompt, weights[i]=1 for response
             # =========================================================================
             ref_logprobs_list: List[List[float]] = []
+            behavior_logprobs_list: List[List[float]] = []
             datums: List[tinker.Datum] = []
 
             for s in sampled:
@@ -756,17 +881,31 @@ def main():
                 ref_lp = list(ref_fwd.loss_fn_outputs[0]["logprobs"].data)
                 ref_logprobs_list.append(ref_lp)
 
+                # Get behavior policy logprobs via deployment prefill.
+                # These are the logprobs from the model that GENERATED the samples
+                # (may be stale if we haven't hotloaded recently). Used for
+                # importance sampling correction: rho = pi_current / pi_behavior
+                behavior_lp = get_prefill_logprobs_from_deployment(
+                    inference_url=inference_url,
+                    api_key=fw_api_key,
+                    model=inference_model,
+                    tokens=full_tokens,
+                )
+                behavior_logprobs_list.append(behavior_lp)
+
             if not datums:
                 continue
 
             # =========================================================================
-            # Create GRPO loss function and run forward_backward_custom
+            # Create off-policy GRPO loss function and run forward_backward_custom
             # Loss fn uses torch.dot(logprobs, weights) for weighted response-only sums
             # =========================================================================
             grpo_loss_fn = make_grpo_loss_fn(
                 rewards=rewards,
                 ref_logprobs_list=ref_logprobs_list,
+                behavior_logprobs_list=behavior_logprobs_list,
                 kl_beta=args.kl_beta,
+                clip_rho=args.clip_rho,
                 debug=args.debug,
             )
 
@@ -786,6 +925,7 @@ def main():
             epoch_metrics["accuracy"] += sum(1 for r in rewards if r > 0.5) / len(rewards)
             epoch_metrics["kl"] += metrics.get("mean_kl", 0.0)
             epoch_metrics["grpo_loss"] += metrics.get("grpo_loss", 0.0)
+            epoch_metrics["importance_ratio"] += metrics.get("mean_importance_ratio", 1.0)
             epoch_metrics["num_prompts"] += 1
             accum_count += 1
 
@@ -806,9 +946,10 @@ def main():
                 avg_acc = epoch_metrics["accuracy"] / n if n > 0 else 0
                 avg_kl = epoch_metrics["kl"] / n if n > 0 else 0
                 avg_loss = epoch_metrics["grpo_loss"] / n if n > 0 else 0
+                avg_rho = epoch_metrics["importance_ratio"] / n if n > 0 else 1.0
 
                 log(
-                    f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | LR: {args.lr:.2e}"
+                    f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | ρ: {avg_rho:.3f} | LR: {args.lr:.2e}"
                 )
                 print(
                     json.dumps(
@@ -835,7 +976,7 @@ def main():
                         step=global_step,
                     )
 
-                epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "num_prompts": 0}
+                epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "importance_ratio": 0.0, "num_prompts": 0}
                 accum_count = 0
 
         if accum_count > 0:
@@ -856,9 +997,10 @@ def main():
             avg_acc = epoch_metrics["accuracy"] / n if n > 0 else 0
             avg_kl = epoch_metrics["kl"] / n if n > 0 else 0
             avg_loss = epoch_metrics["grpo_loss"] / n if n > 0 else 0
+            avg_rho = epoch_metrics["importance_ratio"] / n if n > 0 else 1.0
 
             log(
-                f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | LR: {args.lr:.2e}"
+                f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | ρ: {avg_rho:.3f} | LR: {args.lr:.2e}"
             )
             print(
                 json.dumps(
@@ -885,7 +1027,7 @@ def main():
                     step=global_step,
                 )
 
-            epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "num_prompts": 0}
+            epoch_metrics = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "grpo_loss": 0.0, "importance_ratio": 0.0, "num_prompts": 0}
             accum_count = 0
 
     log(f"\nTraining complete: {global_step} optimizer steps (skipped {skipped} prompts with uniform rewards)")
@@ -893,7 +1035,6 @@ def main():
     # Save and hotload
     if args.save_sampler:
         sampler_name = args.sampler_name or f"grpo_sampler_step_{global_step}"
-        # First save uses --first-checkpoint-type, subsequent are always delta
         # First save is always base, subsequent are delta
         final_ckpt_type = "delta" if base_checkpoint_saved else "base"
         log(f"\nSaving final weights: {sampler_name} (type={final_ckpt_type})")
