@@ -128,10 +128,10 @@ def make_grpo_loss_fn(
     advantages = ((rewards_tensor - mean_r) / (std_r + eps)).tolist()
 
     if debug:
-        print(f"\n[DEBUG GRPO] === Advantage Computation ===")
-        print(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
-        print(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
-        print(f"[DEBUG GRPO] advantages: {advantages}")
+        log(f"\n[DEBUG GRPO] === Advantage Computation ===")
+        log(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
+        log(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
+        log(f"[DEBUG GRPO] advantages: {advantages}")
 
     # Convert reference logprobs to tensors (no grad needed - frozen)
     ref_tensors = [torch.tensor(ref_lp, dtype=torch.float32) for ref_lp in ref_logprobs_list]
@@ -600,7 +600,7 @@ def main():
     last_hotloaded_step = -1  # Avoid hotloading multiple times per optimizer step
 
     # Print initial (step 0) metrics for e2e test
-    print(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
+    log(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
 
     for epoch in range(args.epochs):
         for prompt_idx, row in enumerate(dataset):
@@ -810,18 +810,7 @@ def main():
                 log(
                     f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | LR: {args.lr:.2e}"
                 )
-                print(
-                    json.dumps(
-                        {
-                            "type": "metrics",
-                            "step": global_step,
-                            "grpo_loss": avg_loss,
-                            "reward": avg_reward,
-                            "accuracy": avg_acc,
-                            "kl": avg_kl,
-                        }
-                    )
-                )
+                log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
                 if use_wandb:
                     wandb.log(
@@ -850,7 +839,6 @@ def main():
             ).result()
             global_step += 1
 
-            # Log end-of-epoch step (same as main loop)
             n = epoch_metrics["num_prompts"]
             avg_reward = epoch_metrics["reward"] / n if n > 0 else 0
             avg_acc = epoch_metrics["accuracy"] / n if n > 0 else 0
@@ -860,18 +848,7 @@ def main():
             log(
                 f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | LR: {args.lr:.2e}"
             )
-            print(
-                json.dumps(
-                    {
-                        "type": "metrics",
-                        "step": global_step,
-                        "grpo_loss": avg_loss,
-                        "reward": avg_reward,
-                        "accuracy": avg_acc,
-                        "kl": avg_kl,
-                    }
-                )
-            )
+            log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
             if use_wandb:
                 wandb.log(

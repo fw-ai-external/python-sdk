@@ -132,10 +132,10 @@ def make_grpo_loss_fn(
     advantages = ((rewards_tensor - mean_r) / (std_r + eps)).tolist()
 
     if debug:
-        print(f"\n[DEBUG GRPO OFF-POLICY] === Advantage Computation ===")
-        print(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
-        print(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
-        print(f"[DEBUG GRPO] advantages: {advantages}")
+        log(f"\n[DEBUG GRPO OFF-POLICY] === Advantage Computation ===")
+        log(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
+        log(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
+        log(f"[DEBUG GRPO] advantages: {advantages}")
 
     # Convert reference and behavior logprobs to tensors (no grad needed - frozen)
     ref_tensors = [torch.tensor(ref_lp, dtype=torch.float32) for ref_lp in ref_logprobs_list]
@@ -701,7 +701,7 @@ def main():
     last_hotloaded_step = -1
 
     # Print initial (step 0) metrics for e2e test
-    print(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
+    log(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
 
     for epoch in range(args.epochs):
         for prompt_idx, row in enumerate(dataset):
@@ -717,8 +717,8 @@ def main():
             # Debug: show which sample is being processed
             if args.debug:
                 user_msg = input_messages[0].get("content", "")[:80]
-                print(f"\n[DEBUG] Epoch {epoch}, Prompt {prompt_idx}: {user_msg}...")
-                print(f"[DEBUG] Ground truth: {ground_truth}")
+                log(f"\n[DEBUG] Epoch {epoch}, Prompt {prompt_idx}: {user_msg}...")
+                log(f"[DEBUG] Ground truth: {ground_truth}")
 
             # =========================================================================
             # Off-Policy: Hotload at intervals (not every step)
@@ -827,27 +827,26 @@ def main():
             # Debug: show prompt, ground truth, and rewards
             if args.debug:
                 user_msg = input_messages[0].get("content", "")[:100]
-                print(f"\n[DEBUG DATA] === Prompt {prompt_idx} ===")
-                print(f"[DEBUG DATA] Question: {user_msg}...")
-                print(f"[DEBUG DATA] Ground truth: {ground_truth}")
-                print(f"[DEBUG DATA] Rewards: {rewards}")
-                print(f"[DEBUG DATA] Correct: {sum(rewards)}/{len(rewards)} ({100*sum(rewards)/len(rewards):.0f}%)")
-                # Show first correct and first incorrect response
+                log(f"\n[DEBUG DATA] === Prompt {prompt_idx} ===")
+                log(f"[DEBUG DATA] Question: {user_msg}...")
+                log(f"[DEBUG DATA] Ground truth: {ground_truth}")
+                log(f"[DEBUG DATA] Rewards: {rewards}")
+                log(f"[DEBUG DATA] Correct: {sum(rewards)}/{len(rewards)} ({100*sum(rewards)/len(rewards):.0f}%)")
                 for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
-                    if i < 2 or r == 1.0:  # Show first 2 and any correct ones
+                    if i < 2 or r == 1.0:
                         response_preview = s.text[:80].replace('\n', ' ')
-                        print(f"[DEBUG DATA]   [{i}] reward={r:.0f} | {d} | {response_preview}...")
+                        log(f"[DEBUG DATA]   [{i}] reward={r:.0f} | {d} | {response_preview}...")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
                 skipped += 1
                 if args.debug:
                     uniform_type = "all correct" if rewards[0] == 1.0 else "all wrong"
-                    print(f"[DEBUG DATA] SKIPPED: {uniform_type} - no learning signal")
+                    log(f"[DEBUG DATA] SKIPPED: {uniform_type} - no learning signal")
                 continue
             
             if args.debug:
-                print(f"[DEBUG DATA] TRAINING on this prompt (has reward variance)")
+                log(f"[DEBUG DATA] TRAINING on this prompt (has reward variance)")
 
             # =========================================================================
             # Build datums with weights and get reference + behavior logprobs
@@ -951,18 +950,7 @@ def main():
                 log(
                     f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | ρ: {avg_rho:.3f} | LR: {args.lr:.2e}"
                 )
-                print(
-                    json.dumps(
-                        {
-                            "type": "metrics",
-                            "step": global_step,
-                            "grpo_loss": avg_loss,
-                            "reward": avg_reward,
-                            "accuracy": avg_acc,
-                            "kl": avg_kl,
-                        }
-                    )
-                )
+                log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
                 if use_wandb:
                     wandb.log(
@@ -1002,18 +990,7 @@ def main():
             log(
                 f"Step {global_step} | Loss: {avg_loss:.4f} | Reward: {avg_reward:.3f} | Acc: {avg_acc:.2%} | KL: {avg_kl:.4f} | ρ: {avg_rho:.3f} | LR: {args.lr:.2e}"
             )
-            print(
-                json.dumps(
-                    {
-                        "type": "metrics",
-                        "step": global_step,
-                        "grpo_loss": avg_loss,
-                        "reward": avg_reward,
-                        "accuracy": avg_acc,
-                        "kl": avg_kl,
-                    }
-                )
-            )
+            log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
             if use_wandb:
                 wandb.log(

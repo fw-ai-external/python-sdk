@@ -2,219 +2,222 @@
 
 RL training scripts using the Tinker SDK with Fireworks infrastructure.
 
-## What We Use vs. Don't Use from Tinker
+## Scripts
 
-These scripts use a subset of the Tinker SDK and replace other parts with Fireworks-specific APIs.
+| Script | Algorithm | Hotload Frequency | Importance Sampling |
+|--------|-----------|-------------------|---------------------|
+| `train_grpo.py` | GRPO (on-policy) | Every optimizer step | No (ρ=1) |
+| `train_grpo_off_policy.py` | GRPO (off-policy) | Every N steps | Yes (ρ = π_current / π_behavior) |
+| `train_dpo.py` | DPO | End of training only | No |
 
-### What We Use from Tinker
+Shared infrastructure code lives in `shared/`:
 
-| Component | Usage |
-|-----------|-------|
-| `ServiceClient` | Connect to RLOR trainer endpoints |
-| `TrainingClient` | `forward_backward_custom()`, `optim_step()` |
-| `save_weights_for_sampler()` | Save checkpoints (with patched `checkpoint_type`) |
-| `Datum`, `ModelInput`, `TensorData` | Data structures for training |
+```
+shared/
+├── rlor.py         # Create, poll, delete RLOR trainer jobs
+├── deployment.py   # Create, poll, delete hotload-enabled deployments
+├── hotload.py      # Trigger hotload + wait for completion
+├── dataset.py      # Load GSM8K dataset + evaluate responses
+└── tokenizer.py    # Encode text via trainer's tokenizer endpoint
+```
 
-### What We Don't Use from Tinker
+## How It Works (Step by Step)
 
-| Component | What We Use Instead |
-|-----------|---------------------|
-| `SamplingClient` | Fireworks Chat Completions API with `raw_output=True` |
-| Built-in loss functions (`importance_sampling`, `ppo`) | `forward_backward_custom()` with custom loss |
-| Tinker's checkpoint management | Fireworks hotload API |
+### Step 1: Create a Deployment
 
-## Fireworks-Specific Components
+A deployment is an inference endpoint that serves your model for sampling completions.
+With hotload enabled, you can update its weights during training without restarting.
 
-### 1. Deployment Management
+```
+--create-deployment --hotload-deployment-id "my-run"
+--deployment-shape "accounts/{account}/deploymentShapes/{shape}"
+--deployment-region "US_VIRGINIA_1"
+```
 
-We create and manage hotload-enabled deployments via the Fireworks SDK:
+→ See `shared/deployment.py`: `create_or_get_deployment()`, `wait_for_deployment_ready()`
+
+### Step 2: Create RLOR Trainer Jobs
+
+RLOR jobs are GPU-backed training servers managed by Fireworks. Each job loads the model
+onto dedicated hardware and exposes a Tinker API for forward/backward/optim_step calls.
+
+- **Policy trainer**: Trainable. Linked to the deployment so it can upload checkpoints for hotloading.
+- **Reference trainer** (GRPO only): Frozen copy of the initial model. Used for KL regularization.
+  DPO doesn't need this — it caches reference logprobs at initialization.
+
+→ See `shared/rlor.py`: `create_rlor_service_job_and_wait()`
+
+### Step 3: Connect Tinker SDK Clients
+
+After RLOR jobs are running, create Tinker SDK clients to talk to them:
 
 ```python
-from fireworks import Fireworks
-
-client = Fireworks(api_key=api_key, base_url="https://api.fireworks.ai")
-
-# Create deployment
-client.deployments.create(
-    account_id=account_id,
-    deployment_id="my-deployment",
-    base_model="accounts/fireworks/models/qwen3-8b",
-    enable_hot_load=True,
-    hot_load_bucket_type="FW_HOSTED",
-    deployment_shape="accounts/{account}/deploymentShapes/{shape}",
-    placement={"region": "US_VIRGINIA_1"},
-)
+service = tinker.ServiceClient(base_url=trainer_endpoint.base_url)
+training_client = service.create_lora_training_client(base_model=model, rank=lora_rank)
 ```
 
-### 2. RLOR Trainer Job Creation
+These clients provide `forward()`, `forward_backward_custom()`, `optim_step()`, and
+`save_weights_for_sampler()`.
 
-RLOR (Reinforcement Learning Optimization Runtime) trainer jobs are created via the Fireworks SDK:
+### Step 4: Training Loop
 
-```python
-# Create trainer job linked to deployment for hotloading
-client.reinforcement_fine_tuning_steps.create(
-    account_id=account_id,
-    extra_body={
-        "serviceMode": True,
-        "keepAlive": False,
-        "hotLoadDeploymentId": deployment_id,  # Links trainer to deployment
-        "trainingConfig": {
-            "baseModel": base_model,
-            "loraRank": 0,
-            "maxContextLength": 4096,
-            "learningRate": 1e-5,
-        },
-    },
-    extra_query={"deploymentId": deployment_id},
-)
-```
+For each prompt in the dataset:
 
-The `hotLoadDeploymentId` and `deploymentId` query param link the trainer to the deployment, allowing `save_weights_for_sampler()` to write checkpoints that the deployment can load.
+1. **Hotload** (on-policy: every step; off-policy: every N steps)
+   - Save current trainer weights to GCS: `save_weights_for_sampler(name, checkpoint_type="delta")`
+   - Tell deployment to load them: `hotload_load_model(snapshot_identity=name)`
+   - Wait for completion: `wait_for_hotload_ready(expected_identity=name)`
 
-### 3. Sampling via Chat Completions API
+2. **Sample** K completions from the deployment via the Fireworks Chat Completions API
+   with `raw_output=True` to get token IDs back.
 
-Instead of Tinker's `SamplingClient`, we sample from the deployed model:
+3. **Score** each completion with a reward function (e.g., GSM8K accuracy check).
+   Skip prompts where all completions have the same reward (no learning signal).
 
-```python
-import httpx
+4. **Build datums** using `datum_from_tokens_weights()` from tinker-cookbook. This handles
+   token shifting internally. Weights mark which tokens to train on (0=prompt, 1=response).
 
-response = httpx.post(
-    f"{api_url}/inference/v1/chat/completions",
-    headers={"Authorization": f"Bearer {api_key}"},
-    json={
-        "model": f"accounts/{account_id}/deployments/{deployment_id}",
-        "messages": messages,
-        "n": 8,  # Group size
-        "max_tokens": 512,
-        "temperature": 1.0,
-        "raw_output": True,  # Get token IDs
-    },
-)
+5. **Get reference logprobs** via `forward()` on the frozen reference trainer.
 
-for choice in response.json()["choices"]:
-    prompt_tokens = choice["raw_output"]["prompt_token_ids"]
-    completion_tokens = choice["raw_output"]["completion_token_ids"]
-```
+6. **Compute loss** via `forward_backward_custom()`. The custom loss function uses
+   `torch.dot(logprobs, weights)` for response-only computation:
+   - GRPO: `-advantage * dot(logprobs, weights) + kl_beta * dot(pi - ref, weights)`
+   - Off-policy adds importance ratio: `rho * loss` where `rho = exp(pi_current - pi_behavior)`
+   - DPO: `-log(sigmoid(beta * (margin_chosen - margin_rejected)))`
 
-The `raw_output=True` flag returns token IDs needed to construct `Datum` objects for training.
+7. **Accumulate gradients** over `grad_accum` prompts, then call `optim_step()`.
 
-### 4. Hotload API
+→ See `shared/hotload.py`: `hotload_load_model()`, `wait_for_hotload_ready()`
 
-To load trained weights onto the deployment:
+### Step 5: Save Final Checkpoint + Hotload
 
-```python
-# Trigger hotload
-httpx.post(
-    f"{api_url}/hot_load/v1/models/hot_load",
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "fireworks-model": base_model,
-        "fireworks-deployment": f"accounts/{account_id}/deployments/{deployment_id}",
-    },
-    json={
-        "identity": snapshot_name,
-        # For delta checkpoints only:
-        "incremental_snapshot_metadata": {
-            "previous_snapshot_identity": base_snapshot_name,
-            "compression_format": "xor_one_to_one_zstd",
-            "checksum_format": "alder32",
-        },
-    },
-)
+After training completes, save the final weights and hotload them so the deployment
+serves the trained model.
 
-# Check status
-status = httpx.get(
-    f"{api_url}/hot_load/v1/models/hot_load",
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "fireworks-model": base_model,
-        "fireworks-deployment": f"accounts/{account_id}/deployments/{deployment_id}",
-    },
-)
-# status.json()["replicas"][0]["current_snapshot_identity"]
-# status.json()["replicas"][0]["readiness"]
-```
+### Step 6: Cleanup
 
-### 5. `checkpoint_type` Parameter
+Delete RLOR jobs and deployment to release GPU resources.
 
-The Tinker SDK's `save_weights_for_sampler()` doesn't natively support `checkpoint_type`. We patch it:
+→ See `shared/rlor.py`: `delete_rlor_job()`, `shared/deployment.py`: `delete_deployment()`
 
-```python
-import fireworks.rl  # Auto-patches Tinker on import
+## Checkpoint Types
 
-# Now checkpoint_type is available
-policy_client.save_weights_for_sampler(
-    "step-10",
-    checkpoint_type="base",  # Full checkpoint
-).result()
-
-policy_client.save_weights_for_sampler(
-    "step-20",
-    checkpoint_type="delta",  # Incremental checkpoint (~10x smaller)
-).result()
-```
-
-The patch adds `checkpoint_type` to `extra_body` in the API request.
-
-## Checkpoint Types and Hotloading
-
-### Base Checkpoint
-
-Full model weights. Load without metadata:
-
-```python
-hotload_load_model(snapshot_identity="step-10")
-```
-
-### Delta Checkpoint
-
-XOR-compressed difference from previous checkpoint. Requires metadata:
-
-```python
-hotload_load_model(
-    snapshot_identity="step-20",
-    incremental_snapshot_metadata={
-        "previous_snapshot_identity": "step-10",
-        "compression_format": "xor_one_to_one_zstd",
-        "checksum_format": "alder32",
-    },
-)
-```
-
-### Chained Deltas
-
-Each delta references the immediately previous checkpoint:
+- **Base**: Full model weights. The first checkpoint must be base.
+- **Delta**: XOR diff from the previous checkpoint (~10x smaller, ~5x faster).
+  Each delta references the previous save (chained, not all relative to the original base).
 
 ```
-step-10 (base) → step-20 (delta, refs step-10) → step-30 (delta, refs step-20)
+step-1 (base) → step-2 (delta vs step-1) → step-3 (delta vs step-2)
 ```
 
-To load step-30, you must first have step-20 loaded (which requires step-10).
+The deployment validates that `previous_snapshot_identity` matches its currently loaded
+snapshot before applying a delta.
 
-## Usage
+## Install & Run
 
 ```bash
-# Install
 pip install fireworks-ai[rl]
 
-# Set credentials
 export FIREWORKS_API_KEY="..."
 export FIREWORKS_ACCOUNT_ID="..."
+```
 
-# Run training (on-policy: saves + hotloads after each optimizer step)
+### GRPO On-Policy
+
+```bash
 python examples/rl/train_grpo.py \
     --base-model "accounts/fireworks/models/qwen3-8b" \
-    --dataset /path/to/dataset.jsonl \
+    --dataset /path/to/gsm8k.jsonl \
+    --lora-rank 0 \
+    --max-seq-len 4096 \
+    --max-new-tokens 1024 \
+    --epochs 1 \
+    --max-rows 200 \
+    --group-size 8 \
+    --temperature 1.0 \
+    --kl-beta 0.001 \
+    --lr 1e-5 \
+    --grad-accum 4 \
+    --region "US_VIRGINIA_1" \
     --create-deployment \
-    --hotload-deployment-id "my-training-run" \
+    --hotload-deployment-id "grpo-run" \
     --deployment-shape "accounts/{account}/deploymentShapes/{shape}" \
+    --deployment-region "US_VIRGINIA_1" \
+    --skip-validations \
+    --save-sampler \
     --hotload \
     --cleanup-rlor-job \
     --cleanup-deployment
 ```
 
-## Files
+### GRPO Off-Policy
 
-- `train_grpo.py` - On-policy GRPO training (hotload every step, no importance sampling)
-- `train_grpo_off_policy.py` - Off-policy GRPO training (hotload at intervals, with importance sampling)
-- `train_dpo.py` - DPO training
+```bash
+python examples/rl/train_grpo_off_policy.py \
+    --base-model "accounts/fireworks/models/qwen3-8b" \
+    --dataset /path/to/gsm8k.jsonl \
+    --lora-rank 0 \
+    --max-seq-len 4096 \
+    --max-new-tokens 1024 \
+    --epochs 1 \
+    --max-rows 200 \
+    --group-size 8 \
+    --temperature 1.0 \
+    --kl-beta 0.001 \
+    --lr 1e-5 \
+    --grad-accum 4 \
+    --hotload-interval 5 \
+    --region "US_VIRGINIA_1" \
+    --create-deployment \
+    --hotload-deployment-id "grpo-offpolicy-run" \
+    --deployment-shape "accounts/{account}/deploymentShapes/{shape}" \
+    --deployment-region "US_VIRGINIA_1" \
+    --skip-validations \
+    --save-sampler \
+    --hotload \
+    --cleanup-rlor-job \
+    --cleanup-deployment
+```
+
+### DPO
+
+```bash
+python examples/rl/train_dpo.py \
+    --base-model "accounts/fireworks/models/qwen3-8b" \
+    --dataset /path/to/preference_data.jsonl \
+    --lora-rank 0 \
+    --max-seq-len 4096 \
+    --epochs 1 \
+    --max-pairs 200 \
+    --beta 0.1 \
+    --lr 1e-5 \
+    --grad-accum 4 \
+    --region "US_VIRGINIA_1" \
+    --create-deployment \
+    --hotload-deployment-id "dpo-run" \
+    --deployment-shape "accounts/{account}/deploymentShapes/{shape}" \
+    --deployment-region "US_VIRGINIA_1" \
+    --skip-validations \
+    --save-sampler \
+    --hotload \
+    --cleanup-rlor-job \
+    --cleanup-deployment
+```
+
+## What We Use from Tinker SDK
+
+| Component | Usage |
+|-----------|-------|
+| `ServiceClient` | Connect to RLOR trainer endpoints |
+| `TrainingClient` | `forward_backward_custom()`, `optim_step()`, `forward()` |
+| `save_weights_for_sampler()` | Save checkpoints (with `checkpoint_type` via `import fireworks.rl`) |
+| `Datum`, `ModelInput`, `TensorData` | Data structures for training |
+| `datum_from_tokens_weights()` | Datum construction with weights (from `tinker-cookbook`) |
+
+### What We Replace
+
+| Tinker Component | Our Replacement |
+|------------------|-----------------|
+| `SamplingClient` | Fireworks Chat Completions API with `raw_output=True` |
+| Built-in loss functions | `forward_backward_custom()` with custom GRPO/DPO loss |
+| Checkpoint management | Fireworks hotload API for live weight swapping |
