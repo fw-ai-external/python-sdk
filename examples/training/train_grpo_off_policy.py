@@ -241,6 +241,7 @@ class SampledCompletion:
     text: str
     full_tokens: List[int]
     prompt_len: int
+    finish_reason: str = "unknown"
 
 
 def sample_completions_from_deployment(
@@ -270,6 +271,7 @@ def sample_completions_from_deployment(
 
     for choice in result.get("choices", []):
         text = choice.get("message", {}).get("content", "")
+        finish_reason = choice.get("finish_reason", "unknown") or "unknown"
         raw_output = choice.get("raw_output", {})
         prompt_token_ids = raw_output.get("prompt_token_ids", [])
         completion_token_ids = raw_output.get("completion_token_ids", [])
@@ -292,7 +294,7 @@ def sample_completions_from_deployment(
         else:
             continue
 
-        completions.append(SampledCompletion(text=text, full_tokens=full_tokens, prompt_len=prompt_len))
+        completions.append(SampledCompletion(text=text, full_tokens=full_tokens, prompt_len=prompt_len, finish_reason=finish_reason))
 
     return completions
 
@@ -802,9 +804,11 @@ def main():
                 warn(f"Got {len(sampled)} completions, expected {args.group_size}")
                 continue
 
-            # Log sampling results: token counts and response lengths
+            # Log sampling results: token counts, response lengths, finish reasons
             response_lens = [len(s.full_tokens) - s.prompt_len for s in sampled]
+            finish_reasons = [s.finish_reason for s in sampled]
             log(f"    Sampled {len(sampled)} completions, response lengths: {min(response_lens)}-{max(response_lens)} tokens")
+            log(f"    Finish reasons: {finish_reasons}")
 
             # =========================================================================
             # Compute rewards
@@ -818,15 +822,14 @@ def main():
 
             correct_count = sum(1 for r in rewards if r > 0.5)
             log(f"    Rewards: {correct_count}/{len(rewards)} correct ({rewards})")
+            log(f"    Ground truth: {ground_truth}")
 
-            # Show extracted answers for debugging (only at DEBUG log level)
-            if args.debug:
-                import logging as _logging
-                _dbg = _logging.getLogger(__name__)
-                for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
-                    if i < 2 or r == 1.0:
-                        response_preview = s.text[-80:].replace('\n', ' ')
-                        _dbg.debug(f"  [{i}] {d} | ...{response_preview}")
+            # Always show extracted answers and response tails for first 2 completions
+            for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
+                if i < 2 or r == 1.0:
+                    # Show last 200 chars of response (where the answer usually is)
+                    response_tail = s.text[-200:].replace('\n', ' ')
+                    log(f"    [{i}] {d} | finish={s.finish_reason} | ...{response_tail}")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:

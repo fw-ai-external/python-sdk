@@ -142,10 +142,39 @@ CPU machine while the heavy GPU work happens on the Fireworks trainer:
 2. Trainer runs forward pass on GPU → computes per-token logprobs
 3. Logprobs are sent back to your script as PyTorch tensors (requires_grad=True)
 4. Your script computes the custom loss (e.g., GRPO advantage-weighted policy gradient)
-5. Your script calls loss.backward() → PyTorch autograd computes per-token gradients
-6. Gradients are sent back to the trainer
-7. Trainer runs backward pass on GPU using your gradients (via surrogate loss trick)
+5. Your script calls loss.backward() → PyTorch autograd computes ∂L/∂logprobs
+6. These per-token gradients (∂L/∂logprobs) are sent back to the trainer
+7. Trainer constructs a surrogate loss and runs backward on GPU to get ∂L/∂θ
 ```
+
+**Why this is mathematically correct (the surrogate loss trick):**
+
+The real loss `L` depends on model parameters `θ` only through the logprobs:
+
+```
+θ  →  logprobs  →  L(logprobs, rewards, ref_logprobs, ...)
+```
+
+By the chain rule: `∂L/∂θ = (∂L/∂logprobs) · (∂logprobs/∂θ)`
+
+Your script computes `∂L/∂logprobs` (step 5) — this is just scalar math on CPU, no model
+weights needed. The trainer needs to compute `∂logprobs/∂θ` — this requires the full model
+on GPU. To combine them, the trainer constructs a **surrogate loss**:
+
+```
+surrogate_loss = dot(logprobs, ∂L/∂logprobs.detach())
+```
+
+When the trainer calls `surrogate_loss.backward()`, PyTorch autograd computes:
+
+```
+∂(surrogate_loss)/∂θ = (∂L/∂logprobs) · (∂logprobs/∂θ) = ∂L/∂θ  ✓
+```
+
+This gives exactly the correct gradient `∂L/∂θ`, because `∂L/∂logprobs` is treated as a
+constant (detached) and `logprobs` carries the computation graph back to `θ`. The result is
+identical to computing `L` directly on GPU and calling `L.backward()` — but the loss function
+itself runs entirely on your CPU.
 
 This split lets you write arbitrary loss functions in Python without needing GPU access.
 The trainer handles all the distributed GPU work (FSDP, PP, EP) transparently.

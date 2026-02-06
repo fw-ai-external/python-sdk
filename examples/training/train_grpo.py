@@ -219,6 +219,7 @@ class SampledCompletion:
     text: str
     full_tokens: List[int]
     prompt_len: int
+    finish_reason: str = "unknown"
 
 
 def sample_completions_from_deployment(
@@ -251,6 +252,7 @@ def sample_completions_from_deployment(
 
     for choice in result.get("choices", []):
         text = choice.get("message", {}).get("content", "")
+        finish_reason = choice.get("finish_reason", "unknown") or "unknown"
         raw_output = choice.get("raw_output", {})
         prompt_token_ids = raw_output.get("prompt_token_ids", [])
         completion_token_ids = raw_output.get("completion_token_ids", [])
@@ -274,7 +276,7 @@ def sample_completions_from_deployment(
         else:
             continue
 
-        completions.append(SampledCompletion(text=text, full_tokens=full_tokens, prompt_len=prompt_len))
+        completions.append(SampledCompletion(text=text, full_tokens=full_tokens, prompt_len=prompt_len, finish_reason=finish_reason))
 
     return completions
 
@@ -715,14 +717,25 @@ def main():
             # Compute rewards
             # =========================================================================
             rewards = []
+            eval_details = []
             for s in sampled:
-                score, _ = evaluate_gsm8k_response(s.text, ground_truth)
+                score, detail = evaluate_gsm8k_response(s.text, ground_truth)
                 rewards.append(score)
+                eval_details.append(detail)
 
             # Log sampling + reward results
             response_lens = [len(s.full_tokens) - s.prompt_len for s in sampled]
+            finish_reasons = [s.finish_reason for s in sampled]
             correct_count = sum(1 for r in rewards if r > 0.5)
             log(f"    Sampled {len(sampled)} completions ({min(response_lens)}-{max(response_lens)} tokens), {correct_count}/{len(rewards)} correct")
+            log(f"    Finish reasons: {finish_reasons}")
+            log(f"    Ground truth: {ground_truth}")
+
+            # Show extracted answers and response tails for first 2 completions
+            for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
+                if i < 2 or r == 1.0:
+                    response_tail = s.text[-200:].replace('\n', ' ')
+                    log(f"    [{i}] {d} | finish={s.finish_reason} | ...{response_tail}")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
