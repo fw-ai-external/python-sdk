@@ -43,7 +43,7 @@ Homepage = "https://github.com/fw-ai-external/python-sdk"
 Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
-rl = [
+training = [
   "tinker",
   "tinker-cookbook",
 ]

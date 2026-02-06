@@ -1,6 +1,6 @@
-# Fireworks RL Training Examples
+# Fireworks Training Examples
 
-RL training scripts using the Tinker SDK with Fireworks infrastructure.
+Training scripts (GRPO, DPO) using the Tinker SDK with Fireworks infrastructure.
 
 ## Scripts
 
@@ -63,23 +63,21 @@ sequenceDiagram
     participant Policy as Policy Trainer (GPU)
     participant Ref as Reference Trainer (GPU)
     participant Deploy as Deployment (GPU)
-    participant GCS as GCS Bucket
 
     Note over Script: For each prompt in dataset...
 
     rect rgb(240, 248, 255)
-    Note over Script,GCS: 1. Hotload (on-policy: every step, off-policy: every N steps)
+    Note over Script,Deploy: 1. Hotload (on-policy: every step, off-policy: every N steps)
     Script->>Policy: save_weights_for_sampler()
-    Policy->>GCS: Upload checkpoint (base or delta)
-    Script->>Deploy: POST /hot_load/v1/models/hot_load
-    Deploy->>GCS: Download checkpoint
-    Deploy->>Deploy: Swap weights in-place
+    Policy->>Policy: Upload checkpoint to Fireworks
+    Script->>Deploy: Trigger hotload via Fireworks API
+    Deploy->>Deploy: Download checkpoint + swap weights
     end
 
     rect rgb(255, 248, 240)
     Note over Script,Deploy: 2. Sample K completions
-    Script->>Deploy: POST /inference/v1/chat/completions (n=K)
-    Deploy-->>Script: K completions + token IDs (raw_output)
+    Script->>Deploy: Fireworks chat completions API (n=K, raw_output=True)
+    Deploy-->>Script: K completions + token IDs
     end
 
     rect rgb(240, 255, 240)
@@ -91,11 +89,12 @@ sequenceDiagram
     end
 
     rect rgb(255, 240, 255)
-    Note over Script,Policy: 4. Compute loss + Update weights
+    Note over Script,Policy: 4. Compute loss + Update weights (forward_backward_custom)
     Script->>Policy: forward_backward_custom(datums, loss_fn)
-    Policy-->>Script: Logprobs (requires_grad=True)
-    Script->>Script: Compute GRPO/DPO loss, call backward()
-    Script->>Policy: Send gradients
+    Policy-->>Script: Per-token logprobs (requires_grad=True)
+    Script->>Script: Compute GRPO/DPO loss + backward() → per-token gradients
+    Script->>Policy: Send gradients back to server
+    Policy->>Policy: Server backward pass using gradients
     Script->>Policy: optim_step() (after grad_accum prompts)
     end
 ```
@@ -117,10 +116,44 @@ Use `--cleanup-rlor-job --cleanup-deployment` to enable automatic cleanup.
 
 → See `shared/rlor.py`: `delete_rlor_job()`, `shared/deployment.py`: `delete_deployment()`
 
+## Client vs Server: What Runs Where
+
+Understanding what runs on your machine vs on Fireworks GPUs:
+
+| What | Where | How |
+|------|-------|-----|
+| Training loop orchestration | **Your machine** (CPU) | Python script |
+| Sampling completions | **Fireworks Deployment** (GPU) | Fireworks chat completions API |
+| Forward pass (logprobs) | **Fireworks Trainer** (GPU) | `training_client.forward()` via Tinker SDK |
+| Backward pass (gradients) | **Fireworks Trainer** (GPU) | `forward_backward_custom()` via Tinker SDK |
+| Loss computation | **Your machine** (CPU) | Custom PyTorch loss function |
+| Optimizer step | **Fireworks Trainer** (GPU) | `training_client.optim_step()` via Tinker SDK |
+| Checkpoint save | **Fireworks Trainer** (GPU) | `save_weights_for_sampler()` via Tinker SDK |
+| Hotload trigger | **Your machine** → **Deployment** | Fireworks hotload REST API |
+| Reward evaluation | **Your machine** (CPU) | Custom reward function (e.g., GSM8K accuracy) |
+
+### How `forward_backward_custom` Works
+
+This is the key mechanism that lets you define custom loss functions (GRPO, DPO) on your
+CPU machine while the heavy GPU work happens on the Fireworks trainer:
+
+```
+1. Your script sends datums (token sequences) to the trainer
+2. Trainer runs forward pass on GPU → computes per-token logprobs
+3. Logprobs are sent back to your script as PyTorch tensors (requires_grad=True)
+4. Your script computes the custom loss (e.g., GRPO advantage-weighted policy gradient)
+5. Your script calls loss.backward() → PyTorch autograd computes per-token gradients
+6. Gradients are sent back to the trainer
+7. Trainer runs backward pass on GPU using your gradients (via surrogate loss trick)
+```
+
+This split lets you write arbitrary loss functions in Python without needing GPU access.
+The trainer handles all the distributed GPU work (FSDP, PP, EP) transparently.
+
 ## Install & Run
 
 ```bash
-pip install fireworks-ai[rl]
+pip install fireworks-ai[training]
 
 export FIREWORKS_API_KEY="..."
 export FIREWORKS_ACCOUNT_ID="..."
@@ -133,8 +166,8 @@ python examples/training/train_grpo.py \
     --base-model "accounts/fireworks/models/qwen3-8b" \
     --dataset /path/to/gsm8k.jsonl \
     --lora-rank 0 \
-    --max-seq-len 4096 \
-    --max-new-tokens 1024 \
+    --max-seq-len 8192 \
+    --max-new-tokens 8192 \
     --epochs 1 \
     --max-rows 200 \
     --group-size 8 \
@@ -190,33 +223,23 @@ python examples/training/train_dpo.py \
     --cleanup-deployment
 ```
 
-### Warm Starting from a Checkpoint
-
-To resume training from a previously saved checkpoint, use the Tinker SDK's
-`load_state` method after creating the training client:
-
-```python
-# Load weights from a previous checkpoint (fresh optimizer state)
-training_client.load_state("/path/to/checkpoint").result()
-
-# Or load with optimizer state for exact resume:
-training_client.load_state_with_optimizer("/path/to/checkpoint").result()
-```
-
 ## What We Use from Tinker SDK
 
 | Component | Usage |
 |-----------|-------|
 | `ServiceClient` | Connect to RLOR trainer endpoints |
 | `TrainingClient` | `forward_backward_custom()`, `optim_step()`, `forward()` |
-| `save_weights_for_sampler()` | Save checkpoints (with `checkpoint_type` via `import fireworks.rl`) |
+| `save_weights_for_sampler()` | Save checkpoints (with `checkpoint_type` via `import fireworks.training`) |
 | `Datum`, `ModelInput`, `TensorData` | Data structures for training |
 | `datum_from_tokens_weights()` | Datum construction with weights (from `tinker-cookbook`) |
 
-### What We Extend
+### What We Extend / Replace
 
-| Tinker Component | What We Add |
-|------------------|-------------|
-| `SamplingClient` | We use the Fireworks Chat Completions API with `raw_output=True` instead, for sampling from the deployment |
-| Built-in loss functions | We use `forward_backward_custom()` with custom GRPO/DPO loss functions |
-| `save_weights_for_sampler()` | We patch it (`import fireworks.rl`) to add `checkpoint_type` support for base/delta saves |
+| Tinker Component | What We Do Differently | Why |
+|------------------|----------------------|-----|
+| `SamplingClient` | Use Fireworks Chat Completions API (`raw_output=True`) | Sample from a hotload-enabled deployment, not the trainer |
+| Built-in loss functions (`importance_sampling`, `ppo`) | Use `forward_backward_custom()` with custom loss | Full control over GRPO/DPO loss computation on client side |
+| `save_weights_for_sampler()` | Patch via `import fireworks.training` to add `checkpoint_type` | Enables base/delta checkpoint saves for efficient hotloading |
+| Checkpoint loading onto deployment | Use Fireworks hotload REST API | Push trained weights to a live inference deployment |
+| Deployment management | Use Fireworks SDK (`client.deployments.create()`) | Create/manage hotload-enabled inference endpoints |
+| Trainer job management | Use Fireworks SDK (`client.reinforcement_fine_tuning_steps.create()`) | Create/manage GPU trainer instances |

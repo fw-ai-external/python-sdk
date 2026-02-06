@@ -1,5 +1,5 @@
 """
-Fireworks RL Training - GRPO/DPO with Tinker SDK
+Fireworks Training - GRPO/DPO/SFT with Tinker SDK
 
 This module patches the Tinker SDK to add Fireworks-specific features like
 checkpoint_type support for base/delta checkpoints.
@@ -7,7 +7,7 @@ checkpoint_type support for base/delta checkpoints.
 After importing this module, the Tinker SDK is patched transparently:
 
     import tinker
-    import fireworks.rl  # Patches tinker automatically
+    import fireworks.training  # Patches tinker automatically
 
     service = tinker.ServiceClient(base_url=trainer_url)
     client = service.create_lora_training_client(base_model=model, rank=32)

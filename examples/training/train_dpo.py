@@ -62,10 +62,10 @@ import tinker
 import torch
 import torch.nn.functional as F
 
-# Importing fireworks.rl applies the Fireworks compatibility patches to Tinker
+# Importing fireworks.training applies the Fireworks compatibility patches to Tinker
 # automatically (if Tinker is installed). This adds checkpoint_type support to
 # save_weights_for_sampler.
-import fireworks.rl  # noqa: F401
+import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
 
 # Tinker cookbook helper for datum construction (handles token shifting internally)
 from tinker_cookbook.supervised.common import datum_from_tokens_weights
