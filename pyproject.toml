@@ -46,7 +46,6 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 rl = [
   "tinker",
   "tinker-cookbook",
-  "torch",
 ]
 
 [tool.rye]

@@ -132,10 +132,8 @@ def make_grpo_loss_fn(
     advantages = ((rewards_tensor - mean_r) / (std_r + eps)).tolist()
 
     if debug:
-        log(f"\n[DEBUG GRPO OFF-POLICY] === Advantage Computation ===")
-        log(f"[DEBUG GRPO] rewards_tensor: {rewards_tensor}")
-        log(f"[DEBUG GRPO] mean_r: {mean_r.item():.4f}, std_r: {std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}")
-        log(f"[DEBUG GRPO] advantages: {advantages}")
+        import logging as _logging
+        _logging.getLogger(__name__).debug(f"Advantage: rewards={rewards_tensor}, mean_r={mean_r.item():.4f}, std_r={std_r.item() if isinstance(std_r, torch.Tensor) else std_r:.4f}, advantages={advantages}")
 
     # Convert reference and behavior logprobs to tensors (no grad needed - frozen)
     ref_tensors = [torch.tensor(ref_lp, dtype=torch.float32) for ref_lp in ref_logprobs_list]
@@ -246,37 +244,29 @@ class SampledCompletion:
 
 
 def sample_completions_from_deployment(
-    inference_url: str,
+    fw_client: "Fireworks",
     model: str,
-    api_key: str,
     messages: List[Dict[str, str]],
     n: int,
     max_tokens: int = 1024,
     temperature: float = 0.7,
     policy_encode_url: str | None = None,
 ) -> List[SampledCompletion]:
-    """Sample n completions from deployment. If raw_output not available, encode via policy tokenizer."""
-    base = inference_url.rstrip("/")
-    # Fireworks API gateway: .../inference/v1/chat/completions
-    if "api.fireworks" in base:
-        chat_url = f"{base}/inference/v1/chat/completions"
-    else:
-        chat_url = f"{base}/v1/chat/completions"
+    """Sample n completions from deployment using the Fireworks SDK."""
+    from fireworks import Fireworks
 
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-    payload: Dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "n": n,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-    }
-    payload["raw_output"] = True
+    response = fw_client.chat.completions.create(
+        model=model,
+        messages=messages,
+        n=n,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        extra_body={"raw_output": True},
+        timeout=180,
+    )
 
-    resp = httpx.post(chat_url, headers=headers, json=payload, timeout=180)
-    resp.raise_for_status()
-    result = resp.json()
     completions = []
+    result = response.model_dump() if hasattr(response, "model_dump") else dict(response)
 
     for choice in result.get("choices", []):
         text = choice.get("message", {}).get("content", "")
@@ -288,7 +278,6 @@ def sample_completions_from_deployment(
             full_tokens = prompt_token_ids + completion_token_ids
             prompt_len = len(prompt_token_ids)
         elif policy_encode_url:
-            # Fallback: build prompt text and encode with policy tokenizer
             parts = []
             for m in messages:
                 role = m.get("role", "user")
@@ -433,7 +422,7 @@ def parse_args():
     data_group = parser.add_argument_group("Dataset")
     data_group.add_argument("--dataset", required=True, help="Path or URL to GSM8K-style JSONL dataset")
     data_group.add_argument("--max-rows", type=int, default=100, help="Maximum number of dataset rows to use")
-    data_group.add_argument("--max-seq-len", type=int, default=4096, help="Maximum sequence length for training")
+    data_group.add_argument("--max-seq-len", type=int, default=8192, help="Maximum sequence length for training")
 
     # Training hyperparameters
     train_group = parser.add_argument_group("Training")
@@ -443,7 +432,7 @@ def parse_args():
     train_group.add_argument("--epochs", type=int, default=1, help="Number of training epochs")
     train_group.add_argument("--grad-accum", type=int, default=4, help="Gradient accumulation steps (prompts per optimizer step)")
     train_group.add_argument("--lora-rank", type=int, default=0, help="LoRA rank (0 = full fine-tuning)")
-    train_group.add_argument("--max-new-tokens", type=int, default=512, help="Maximum new tokens for sampling")
+    train_group.add_argument("--max-new-tokens", type=int, default=8192, help="Maximum new tokens for sampling")
     train_group.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
 
     # Logging and monitoring
@@ -672,8 +661,10 @@ def main():
     # Keep URLs for tokenizer endpoint
     policy_url = policy_endpoint.base_url
 
-    # Inference URL and model for sampling via Fireworks API gateway
-    inference_url = fw_base_url
+    # Fireworks SDK client for sampling via chat completions API
+    from fireworks import Fireworks
+    fw_client = Fireworks(api_key=fw_api_key, base_url=fw_base_url)
+    inference_url = fw_base_url  # Still needed for behavior logprobs (prefill endpoint)
     if hotload_deployment_id:
         inference_model = f"accounts/{fw_account_id}/deployments/{hotload_deployment_id}"
         log(f"  Sampling via deployment: {inference_model}")
@@ -795,9 +786,8 @@ def main():
             # =========================================================================
             try:
                 sampled = sample_completions_from_deployment(
-                    inference_url=inference_url,
+                    fw_client=fw_client,
                     model=inference_model,
-                    api_key=fw_api_key,
                     messages=input_messages,
                     n=args.group_size,
                     max_tokens=args.max_new_tokens,
@@ -829,12 +819,14 @@ def main():
             correct_count = sum(1 for r in rewards if r > 0.5)
             log(f"    Rewards: {correct_count}/{len(rewards)} correct ({rewards})")
 
-            # Show extracted answers for debugging
+            # Show extracted answers for debugging (only at DEBUG log level)
             if args.debug:
+                import logging as _logging
+                _dbg = _logging.getLogger(__name__)
                 for i, (r, d, s) in enumerate(zip(rewards, eval_details, sampled)):
                     if i < 2 or r == 1.0:
                         response_preview = s.text[-80:].replace('\n', ' ')
-                        log(f"      [{i}] {d} | ...{response_preview}")
+                        _dbg.debug(f"  [{i}] {d} | ...{response_preview}")
 
             # Skip if all rewards are the same (no learning signal)
             if len(set(rewards)) == 1:
@@ -851,9 +843,8 @@ def main():
             #   - Handles token shifting internally (no manual [:-1] / [1:])
             #   - weights[i]=0 for prompt, weights[i]=1 for response
             # =========================================================================
-            ref_logprobs_list: List[List[float]] = []
-            behavior_logprobs_list: List[List[float]] = []
             datums: List[tinker.Datum] = []
+            sampled_tokens: List[List[int]] = []  # Track full tokens for behavior logprobs
 
             for s in sampled:
                 full_tokens = s.full_tokens
@@ -871,16 +862,24 @@ def main():
                     max_length=args.max_seq_len,
                 )
                 datums.append(datum)
+                sampled_tokens.append(full_tokens)
 
-                # Get reference logprobs via forward on frozen reference trainer
-                ref_fwd = reference_client.forward([datum], "cross_entropy").result()
-                ref_lp = list(ref_fwd.loss_fn_outputs[0]["logprobs"].data)
-                ref_logprobs_list.append(ref_lp)
+            if not datums:
+                continue
 
-                # Get behavior policy logprobs via deployment prefill.
-                # These are the logprobs from the model that GENERATED the samples
-                # (may be stale if we haven't hotloaded recently). Used for
-                # importance sampling correction: rho = pi_current / pi_behavior
+            # Get reference logprobs in ONE batched call (not one-by-one)
+            ref_fwd = reference_client.forward(datums, "cross_entropy").result()
+            ref_logprobs_list: List[List[float]] = [
+                list(ref_fwd.loss_fn_outputs[i]["logprobs"].data)
+                for i in range(len(datums))
+            ]
+
+            # Get behavior policy logprobs via deployment prefill.
+            # These are the logprobs from the model that GENERATED the samples
+            # (may be stale if we haven't hotloaded recently). Used for
+            # importance sampling correction: rho = pi_current / pi_behavior
+            behavior_logprobs_list: List[List[float]] = []
+            for full_tokens in sampled_tokens:
                 behavior_lp = get_prefill_logprobs_from_deployment(
                     inference_url=inference_url,
                     api_key=fw_api_key,
@@ -889,8 +888,14 @@ def main():
                 )
                 behavior_logprobs_list.append(behavior_lp)
 
-            if not datums:
-                continue
+            # Verify batched forward results
+            log(f"    Datums: {len(datums)}, ref_logprobs: {len(ref_logprobs_list)}, behavior_logprobs: {len(behavior_logprobs_list)}")
+            log(f"    Ref logprob lengths: {[len(lp) for lp in ref_logprobs_list]}")
+            log(f"    Behavior logprob lengths: {[len(lp) for lp in behavior_logprobs_list]}")
+            for i, d in enumerate(datums):
+                w = d.loss_fn_inputs["weights"].data
+                n_response = sum(1 for x in w if x > 0)
+                log(f"    Datum[{i}]: input_len={d.model_input.length}, weights_len={len(w)}, response_tokens={n_response}")
 
             # =========================================================================
             # Create off-policy GRPO loss function and run forward_backward_custom

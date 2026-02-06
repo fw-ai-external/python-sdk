@@ -466,7 +466,7 @@ def parse_args():
         type=str,
         default="FW_HOSTED",
         choices=["MINIO", "S3", "NEBIUS", "FW_HOSTED"],
-        help="Hotload bucket type. FW_HOSTED (default) aligns with Alluxio mounts for GCS buckets.",
+        help="Hotload bucket type (default: FW_HOSTED).",
     )
 
     # Dataset

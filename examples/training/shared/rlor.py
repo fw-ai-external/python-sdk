@@ -104,7 +104,7 @@ def _create_rlor_job(
     fixed training job to completion.
 
     If hot_load_deployment_id is provided, the trainer is linked to that
-    deployment. This tells the trainer where to upload checkpoints (GCS bucket)
+    deployment. This tells the trainer where to upload checkpoints
     so the deployment can hotload them.
     """
     client = _get_fireworks_client(api_key, base_url)
@@ -129,19 +129,22 @@ def _create_rlor_job(
         # Links trainer to deployment for checkpoint upload path resolution
         extra_body["hotLoadDeploymentId"] = hot_load_deployment_id
 
-    # Training configuration (model, hyperparameters, region)
-    training_config_body: dict[str, Any] = {
-        "baseModel": base_model,
-        "loraRank": lora_rank,
-        "maxContextLength": max_context_length,
-        "learningRate": learning_rate,
-        "gradientAccumulationSteps": gradient_accumulation_steps,
+    # Training config: use the SDK's typed parameter for fields it supports
+    # (this ensures proper proto enum serialization, e.g. region)
+    typed_training_config: dict[str, Any] = {
+        "base_model": base_model,
+        "lora_rank": lora_rank,
+        "max_context_length": max_context_length,
+        "learning_rate": learning_rate,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
     }
     if region:
-        training_config_body["region"] = region
+        typed_training_config["region"] = region
     if custom_image_tag:
-        training_config_body["customImageTag"] = custom_image_tag
+        typed_training_config["custom_image_tag"] = custom_image_tag
         log(f"  customImageTag={custom_image_tag}")
+
+    # Fields not in the SDK's typed TrainingConfig go via extra_body
     if extra_args:
         flat_extra_args = []
         for arg in extra_args:
@@ -149,12 +152,12 @@ def _create_rlor_job(
                 flat_extra_args.extend(arg.split())
             else:
                 flat_extra_args.append(arg)
-        training_config_body["extraArgs"] = flat_extra_args
+        # extraArgs is not in the SDK's typed params, so pass via extra_body
+        extra_body["trainingConfig"] = {"extraArgs": flat_extra_args}
         log(f"  extraArgs={flat_extra_args}")
-    extra_body["trainingConfig"] = training_config_body
 
     # skipValidations: bypasses control plane checks and auto-constructs the
-    # GCS bucket URL for checkpoint uploads. Required for FW_HOSTED bucket type.
+    # Required for FW_HOSTED bucket type.
     extra_query: dict[str, str] = {}
     if skip_validations:
         extra_query["skipValidations"] = "true"
@@ -165,6 +168,7 @@ def _create_rlor_job(
     try:
         job = client.reinforcement_fine_tuning_steps.create(
             account_id=account_id,
+            training_config=typed_training_config,
             extra_body=extra_body,
             extra_query=extra_query if extra_query else None,
         )

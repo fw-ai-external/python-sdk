@@ -6,7 +6,7 @@ deployment. This is essential for RL training where the sampling policy needs
 to stay in sync with the training policy.
 
 How it works:
-1. Trainer saves a checkpoint to GCS (via save_weights_for_sampler)
+1. Trainer saves a checkpoint (via save_weights_for_sampler)
 2. You call hotload_load_model to tell the deployment to load that checkpoint
 3. The deployment downloads the checkpoint and swaps the weights in-place
 4. wait_for_hotload_ready polls until the swap is complete
@@ -49,7 +49,7 @@ def hotload_load_model(
     """Tell a deployment to load a new model snapshot (checkpoint).
 
     This triggers the deployment to download and load the specified checkpoint.
-    The checkpoint must already be uploaded to GCS (done by save_weights_for_sampler).
+    The checkpoint must already be saved (done by save_weights_for_sampler).
 
     For base (full) checkpoints: just pass the snapshot_identity.
     For delta (incremental) checkpoints: also pass incremental_snapshot_metadata

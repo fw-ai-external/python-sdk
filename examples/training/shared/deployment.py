@@ -49,7 +49,7 @@ class DeploymentInfo:
         deployment_id: Short deployment ID
         name: Full resource name
         state: Current state (e.g., "READY", "CREATING")
-        hot_load_bucket_url: GCS path where the trainer uploads checkpoints
+        hot_load_bucket_url: Path where the trainer uploads checkpoints
             for this deployment to hotload from
     """
 
@@ -118,7 +118,7 @@ def _create_deployment(
     update the model's weights during training. The deployment will:
     - Serve chat completions at: POST /inference/v1/chat/completions
     - Accept hotload requests to swap in new weights
-    - Watch a GCS bucket for new checkpoint files
+    - Watch for new checkpoint files
 
     The deployment_shape determines the GPU configuration. Common shapes:
     - accounts/{account}/deploymentShapes/hotload-qwen3-1p7b-bf16 (1x H200)
