@@ -37,10 +37,6 @@ class TestDpoJobs:
             account_id="account_id",
             dataset="dataset",
             dpo_job_id="dpoJobId",
-            aws_s3_config={
-                "credentials_secret": "credentialsSecret",
-                "iam_role_arn": "iamRoleArn",
-            },
             display_name="displayName",
             loss_config={
                 "kl_beta": 0,
@@ -409,10 +405,6 @@ class TestAsyncDpoJobs:
             account_id="account_id",
             dataset="dataset",
             dpo_job_id="dpoJobId",
-            aws_s3_config={
-                "credentials_secret": "credentialsSecret",
-                "iam_role_arn": "iamRoleArn",
-            },
             display_name="displayName",
             loss_config={
                 "kl_beta": 0,

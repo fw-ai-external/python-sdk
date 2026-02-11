@@ -119,6 +119,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "US_NEWYORK_1",
         ]
         | Omit = omit,
+        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -169,6 +170,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           region: The region where the fine-tuning job is located.
 
+          use_purpose: Use dedicated resources for the job. The only supported value currently is
+              "pilot". Defaults to empty.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           warm_start_from: The PEFT addon model in Fireworks format to be fine-tuned from Only one of
@@ -217,6 +221,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
                     "region": region,
+                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },
@@ -538,6 +543,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "US_NEWYORK_1",
         ]
         | Omit = omit,
+        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -588,6 +594,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           region: The region where the fine-tuning job is located.
 
+          use_purpose: Use dedicated resources for the job. The only supported value currently is
+              "pilot". Defaults to empty.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           warm_start_from: The PEFT addon model in Fireworks format to be fine-tuned from Only one of
@@ -636,6 +645,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
                     "region": region,
+                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },

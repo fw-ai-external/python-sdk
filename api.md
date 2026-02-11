@@ -49,6 +49,39 @@ Methods:
 
 - <code title="post /v1/completions">client.completions.<a href="./src/fireworks/resources/completions.py">create</a>(\*\*<a href="src/fireworks/types/completion_create_params.py">params</a>) -> <a href="./src/fireworks/types/completion_create_response.py">CompletionCreateResponse</a></code>
 
+# Messages
+
+Types:
+
+```python
+from fireworks.types import (
+    CacheControlEphemeral,
+    ContentBlock,
+    MessageStreamEvent,
+    RequestCharLocationCitation,
+    RequestContentBlockLocationCitation,
+    RequestImageBlock,
+    RequestPageLocationCitation,
+    RequestSearchResultLocationCitation,
+    RequestTextBlock,
+    RequestWebSearchResultLocationCitation,
+    ResponseCharLocationCitation,
+    ResponseContentBlockLocationCitation,
+    ResponsePageLocationCitation,
+    ResponseRedactedThinkingBlock,
+    ResponseSearchResultLocationCitation,
+    ResponseTextBlock,
+    ResponseThinkingBlock,
+    ResponseToolUseBlock,
+    ResponseWebSearchResultLocationCitation,
+    MessageCreateResponse,
+)
+```
+
+Methods:
+
+- <code title="post /v1/messages">client.messages.<a href="./src/fireworks/resources/messages.py">create</a>(\*\*<a href="src/fireworks/types/message_create_params.py">params</a>) -> <a href="./src/fireworks/types/message_create_response.py">MessageCreateResponse</a></code>
+
 # BatchInferenceJobs
 
 Types:

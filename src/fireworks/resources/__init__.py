@@ -72,6 +72,14 @@ from .dpo_jobs import (
     DpoJobsResourceWithStreamingResponse,
     AsyncDpoJobsResourceWithStreamingResponse,
 )
+from .messages import (
+    MessagesResource,
+    AsyncMessagesResource,
+    MessagesResourceWithRawResponse,
+    AsyncMessagesResourceWithRawResponse,
+    MessagesResourceWithStreamingResponse,
+    AsyncMessagesResourceWithStreamingResponse,
+)
 from .evaluators import (
     EvaluatorsResource,
     AsyncEvaluatorsResource,
@@ -166,6 +174,12 @@ __all__ = [
     "AsyncCompletionsResourceWithRawResponse",
     "CompletionsResourceWithStreamingResponse",
     "AsyncCompletionsResourceWithStreamingResponse",
+    "MessagesResource",
+    "AsyncMessagesResource",
+    "MessagesResourceWithRawResponse",
+    "AsyncMessagesResourceWithRawResponse",
+    "MessagesResourceWithStreamingResponse",
+    "AsyncMessagesResourceWithStreamingResponse",
     "BatchInferenceJobsResource",
     "AsyncBatchInferenceJobsResource",
     "BatchInferenceJobsResourceWithRawResponse",
