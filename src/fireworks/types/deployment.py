@@ -183,10 +183,6 @@ class Deployment(BaseModel):
     )
 
     hot_load_bucket_url: Optional[str] = FieldInfo(alias="hotLoadBucketUrl", default=None)
-    """
-    For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-    gs://mybucket/..
-    """
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """
@@ -292,6 +288,7 @@ class Deployment(BaseModel):
             "US_GEORGIA_4",
             "EU_ICELAND_3",
             "US_OHIO_1",
+            "US_NEWYORK_1",
         ]
     ] = None
     """The geographic region where the deployment is presently located.

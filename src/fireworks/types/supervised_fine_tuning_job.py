@@ -163,6 +163,7 @@ class SupervisedFineTuningJob(BaseModel):
             "US_GEORGIA_4",
             "EU_ICELAND_3",
             "US_OHIO_1",
+            "US_NEWYORK_1",
         ]
     ] = None
     """The region where the fine-tuning job is located."""
