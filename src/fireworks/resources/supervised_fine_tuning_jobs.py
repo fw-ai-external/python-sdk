@@ -116,6 +116,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
             "US_GEORGIA_4",
             "EU_ICELAND_3",
             "US_OHIO_1",
+            "US_NEWYORK_1",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -534,6 +535,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             "US_GEORGIA_4",
             "EU_ICELAND_3",
             "US_OHIO_1",
+            "US_NEWYORK_1",
         ]
         | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,

@@ -216,10 +216,6 @@ class DeploymentsResource(SyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
-          hot_load_bucket_url:
-              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-              gs://mybucket/..
-
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -458,10 +454,6 @@ class DeploymentsResource(SyncAPIResource):
               true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
-
-          hot_load_bucket_url:
-              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-              gs://mybucket/..
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
@@ -1006,10 +998,6 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           expire_time: The time at which this deployment will automatically be deleted.
 
-          hot_load_bucket_url:
-              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-              gs://mybucket/..
-
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -1248,10 +1236,6 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               true when creating deployment.
 
           expire_time: The time at which this deployment will automatically be deleted.
-
-          hot_load_bucket_url:
-              For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-              gs://mybucket/..
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.

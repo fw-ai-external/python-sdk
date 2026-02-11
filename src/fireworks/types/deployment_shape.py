@@ -120,9 +120,18 @@ class DeploymentShape(BaseModel):
     ] = None
     """The precision with which the model should be served."""
 
-    preset_type: Optional[Literal["PRESET_TYPE_UNSPECIFIED", "MINIMAL", "FAST", "THROUGHPUT", "FULL_PRECISION"]] = (
-        FieldInfo(alias="presetType", default=None)
-    )
+    preset_type: Optional[
+        Literal[
+            "PRESET_TYPE_UNSPECIFIED",
+            "MINIMAL",
+            "FAST",
+            "THROUGHPUT",
+            "FULL_PRECISION",
+            "AGENTIC_CODING",
+            "CHAT",
+            "SUMMARIZATION",
+        ]
+    ] = FieldInfo(alias="presetType", default=None)
     """Type of deployment shape for different deployment configurations."""
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
