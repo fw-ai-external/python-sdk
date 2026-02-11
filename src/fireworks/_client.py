@@ -41,6 +41,7 @@ if TYPE_CHECKING:
         api_keys,
         datasets,
         dpo_jobs,
+        messages,
         evaluators,
         completions,
         deployments,
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
     from .resources.api_keys import APIKeysResource, AsyncAPIKeysResource
     from .resources.datasets import DatasetsResource, AsyncDatasetsResource
     from .resources.dpo_jobs import DpoJobsResource, AsyncDpoJobsResource
+    from .resources.messages import MessagesResource, AsyncMessagesResource
     from .resources.chat.chat import ChatResource, AsyncChatResource
     from .resources.evaluators import EvaluatorsResource, AsyncEvaluatorsResource
     from .resources.completions import CompletionsResource, AsyncCompletionsResource
@@ -173,6 +175,12 @@ class Fireworks(SyncAPIClient):
         from .resources.completions import CompletionsResource
 
         return CompletionsResource(self)
+
+    @cached_property
+    def messages(self) -> MessagesResource:
+        from .resources.messages import MessagesResource
+
+        return MessagesResource(self)
 
     @cached_property
     def batch_inference_jobs(self) -> BatchInferenceJobsResource:
@@ -481,6 +489,12 @@ class AsyncFireworks(AsyncAPIClient):
         return AsyncCompletionsResource(self)
 
     @cached_property
+    def messages(self) -> AsyncMessagesResource:
+        from .resources.messages import AsyncMessagesResource
+
+        return AsyncMessagesResource(self)
+
+    @cached_property
     def batch_inference_jobs(self) -> AsyncBatchInferenceJobsResource:
         from .resources.batch_inference_jobs import AsyncBatchInferenceJobsResource
 
@@ -727,6 +741,12 @@ class FireworksWithRawResponse:
         return CompletionsResourceWithRawResponse(self._client.completions)
 
     @cached_property
+    def messages(self) -> messages.MessagesResourceWithRawResponse:
+        from .resources.messages import MessagesResourceWithRawResponse
+
+        return MessagesResourceWithRawResponse(self._client.messages)
+
+    @cached_property
     def batch_inference_jobs(self) -> batch_inference_jobs.BatchInferenceJobsResourceWithRawResponse:
         from .resources.batch_inference_jobs import BatchInferenceJobsResourceWithRawResponse
 
@@ -852,6 +872,12 @@ class AsyncFireworksWithRawResponse:
         from .resources.completions import AsyncCompletionsResourceWithRawResponse
 
         return AsyncCompletionsResourceWithRawResponse(self._client.completions)
+
+    @cached_property
+    def messages(self) -> messages.AsyncMessagesResourceWithRawResponse:
+        from .resources.messages import AsyncMessagesResourceWithRawResponse
+
+        return AsyncMessagesResourceWithRawResponse(self._client.messages)
 
     @cached_property
     def batch_inference_jobs(self) -> batch_inference_jobs.AsyncBatchInferenceJobsResourceWithRawResponse:
@@ -983,6 +1009,12 @@ class FireworksWithStreamedResponse:
         return CompletionsResourceWithStreamingResponse(self._client.completions)
 
     @cached_property
+    def messages(self) -> messages.MessagesResourceWithStreamingResponse:
+        from .resources.messages import MessagesResourceWithStreamingResponse
+
+        return MessagesResourceWithStreamingResponse(self._client.messages)
+
+    @cached_property
     def batch_inference_jobs(self) -> batch_inference_jobs.BatchInferenceJobsResourceWithStreamingResponse:
         from .resources.batch_inference_jobs import BatchInferenceJobsResourceWithStreamingResponse
 
@@ -1110,6 +1142,12 @@ class AsyncFireworksWithStreamedResponse:
         from .resources.completions import AsyncCompletionsResourceWithStreamingResponse
 
         return AsyncCompletionsResourceWithStreamingResponse(self._client.completions)
+
+    @cached_property
+    def messages(self) -> messages.AsyncMessagesResourceWithStreamingResponse:
+        from .resources.messages import AsyncMessagesResourceWithStreamingResponse
+
+        return AsyncMessagesResourceWithStreamingResponse(self._client.messages)
 
     @cached_property
     def batch_inference_jobs(self) -> batch_inference_jobs.AsyncBatchInferenceJobsResourceWithStreamingResponse:

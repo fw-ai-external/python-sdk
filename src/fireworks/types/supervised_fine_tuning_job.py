@@ -207,6 +207,12 @@ class SupervisedFineTuningJob(BaseModel):
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the supervised fine-tuning job."""
 
+    use_purpose: Optional[str] = FieldInfo(alias="usePurpose", default=None)
+    """Use dedicated resources for the job.
+
+    The only supported value currently is "pilot". Defaults to empty.
+    """
+
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
     """The Weights & Biases team/user account for logging training progress."""
 

@@ -38,6 +38,7 @@ from .model_param import ModelParam as ModelParam
 from .transformed import Transformed as Transformed
 from .peft_details import PeftDetails as PeftDetails
 from .api_key_param import APIKeyParam as APIKeyParam
+from .content_block import ContentBlock as ContentBlock
 from .dataset_param import DatasetParam as DatasetParam
 from .splitted_param import SplittedParam as SplittedParam
 from .auto_tune_param import AutoTuneParam as AutoTuneParam
@@ -74,6 +75,7 @@ from .dataset_list_params import DatasetListParams as DatasetListParams
 from .dpo_job_list_params import DpoJobListParams as DpoJobListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
+from .response_text_block import ResponseTextBlock as ResponseTextBlock
 from .evaluator_get_params import EvaluatorGetParams as EvaluatorGetParams
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
 from .secret_create_params import SecretCreateParams as SecretCreateParams
@@ -87,6 +89,7 @@ from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
 from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
 from .dpo_job_resume_params import DpoJobResumeParams as DpoJobResumeParams
 from .evaluator_list_params import EvaluatorListParams as EvaluatorListParams
+from .message_create_params import MessageCreateParams as MessageCreateParams
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .evaluator_get_response import EvaluatorGetResponse as EvaluatorGetResponse
 from .evaluator_source_param import EvaluatorSourceParam as EvaluatorSourceParam
@@ -96,6 +99,9 @@ from .evaluation_result_param import EvaluationResultParam as EvaluationResultPa
 from .evaluator_create_params import EvaluatorCreateParams as EvaluatorCreateParams
 from .evaluator_list_response import EvaluatorListResponse as EvaluatorListResponse
 from .evaluator_update_params import EvaluatorUpdateParams as EvaluatorUpdateParams
+from .message_create_response import MessageCreateResponse as MessageCreateResponse
+from .response_thinking_block import ResponseThinkingBlock as ResponseThinkingBlock
+from .response_tool_use_block import ResponseToolUseBlock as ResponseToolUseBlock
 from .autoscaling_policy_param import AutoscalingPolicyParam as AutoscalingPolicyParam
 from .base_model_details_param import BaseModelDetailsParam as BaseModelDetailsParam
 from .completion_create_params import CompletionCreateParams as CompletionCreateParams
@@ -103,10 +109,12 @@ from .deployment_create_params import DeploymentCreateParams as DeploymentCreate
 from .deployment_delete_params import DeploymentDeleteParams as DeploymentDeleteParams
 from .deployment_shape_version import DeploymentShapeVersion as DeploymentShapeVersion
 from .deployment_update_params import DeploymentUpdateParams as DeploymentUpdateParams
+from .request_text_block_param import RequestTextBlockParam as RequestTextBlockParam
 from .conversation_config_param import ConversationConfigParam as ConversationConfigParam
 from .evaluation_job_get_params import EvaluationJobGetParams as EvaluationJobGetParams
 from .evaluator_create_response import EvaluatorCreateResponse as EvaluatorCreateResponse
 from .evaluator_update_response import EvaluatorUpdateResponse as EvaluatorUpdateResponse
+from .request_image_block_param import RequestImageBlockParam as RequestImageBlockParam
 from .completion_create_response import CompletionCreateResponse as CompletionCreateResponse
 from .deployment_undelete_params import DeploymentUndeleteParams as DeploymentUndeleteParams
 from .evaluation_job_list_params import EvaluationJobListParams as EvaluationJobListParams
@@ -117,6 +125,7 @@ from .deployment_shape_list_params import DeploymentShapeListParams as Deploymen
 from .evaluation_job_create_params import EvaluationJobCreateParams as EvaluationJobCreateParams
 from .evaluation_job_list_response import EvaluationJobListResponse as EvaluationJobListResponse
 from .model_validate_upload_params import ModelValidateUploadParams as ModelValidateUploadParams
+from .cache_control_ephemeral_param import CacheControlEphemeralParam as CacheControlEphemeralParam
 from .reinforcement_fine_tuning_job import ReinforcementFineTuningJob as ReinforcementFineTuningJob
 from .batch_inference_job_get_params import BatchInferenceJobGetParams as BatchInferenceJobGetParams
 from .dataset_validate_upload_params import DatasetValidateUploadParams as DatasetValidateUploadParams
@@ -124,8 +133,11 @@ from .evaluation_job_create_response import EvaluationJobCreateResponse as Evalu
 from .model_validate_upload_response import ModelValidateUploadResponse as ModelValidateUploadResponse
 from .reinforcement_fine_tuning_step import ReinforcementFineTuningStep as ReinforcementFineTuningStep
 from .batch_inference_job_list_params import BatchInferenceJobListParams as BatchInferenceJobListParams
+from .response_char_location_citation import ResponseCharLocationCitation as ResponseCharLocationCitation
+from .response_page_location_citation import ResponsePageLocationCitation as ResponsePageLocationCitation
 from .evaluator_validate_upload_params import EvaluatorValidateUploadParams as EvaluatorValidateUploadParams
 from .model_get_upload_endpoint_params import ModelGetUploadEndpointParams as ModelGetUploadEndpointParams
+from .response_redacted_thinking_block import ResponseRedactedThinkingBlock as ResponseRedactedThinkingBlock
 from .batch_inference_job_create_params import BatchInferenceJobCreateParams as BatchInferenceJobCreateParams
 from .dataset_get_upload_endpoint_params import DatasetGetUploadEndpointParams as DatasetGetUploadEndpointParams
 from .model_get_download_endpoint_params import ModelGetDownloadEndpointParams as ModelGetDownloadEndpointParams
@@ -136,6 +148,8 @@ from .dataset_get_upload_endpoint_response import DatasetGetUploadEndpointRespon
 from .deployment_shape_version_list_params import DeploymentShapeVersionListParams as DeploymentShapeVersionListParams
 from .evaluator_get_upload_endpoint_params import EvaluatorGetUploadEndpointParams as EvaluatorGetUploadEndpointParams
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
+from .request_char_location_citation_param import RequestCharLocationCitationParam as RequestCharLocationCitationParam
+from .request_page_location_citation_param import RequestPageLocationCitationParam as RequestPageLocationCitationParam
 from .supervised_fine_tuning_job_get_params import SupervisedFineTuningJobGetParams as SupervisedFineTuningJobGetParams
 from .dataset_get_download_endpoint_response import (
     DatasetGetDownloadEndpointResponse as DatasetGetDownloadEndpointResponse,
@@ -154,6 +168,12 @@ from .evaluation_job_get_log_endpoint_response import (
 )
 from .reinforcement_fine_tuning_job_get_params import (
     ReinforcementFineTuningJobGetParams as ReinforcementFineTuningJobGetParams,
+)
+from .response_content_block_location_citation import (
+    ResponseContentBlockLocationCitation as ResponseContentBlockLocationCitation,
+)
+from .response_search_result_location_citation import (
+    ResponseSearchResultLocationCitation as ResponseSearchResultLocationCitation,
 )
 from .supervised_fine_tuning_job_create_params import (
     SupervisedFineTuningJobCreateParams as SupervisedFineTuningJobCreateParams,
@@ -197,6 +217,18 @@ from .reinforcement_fine_tuning_step_create_params import (
 from .reinforcement_fine_tuning_step_resume_params import (
     ReinforcementFineTuningStepResumeParams as ReinforcementFineTuningStepResumeParams,
 )
+from .response_web_search_result_location_citation import (
+    ResponseWebSearchResultLocationCitation as ResponseWebSearchResultLocationCitation,
+)
 from .reinforcement_fine_tuning_step_execute_params import (
     ReinforcementFineTuningStepExecuteParams as ReinforcementFineTuningStepExecuteParams,
+)
+from .request_content_block_location_citation_param import (
+    RequestContentBlockLocationCitationParam as RequestContentBlockLocationCitationParam,
+)
+from .request_search_result_location_citation_param import (
+    RequestSearchResultLocationCitationParam as RequestSearchResultLocationCitationParam,
+)
+from .request_web_search_result_location_citation_param import (
+    RequestWebSearchResultLocationCitationParam as RequestWebSearchResultLocationCitationParam,
 )

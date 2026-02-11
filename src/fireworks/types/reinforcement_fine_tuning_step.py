@@ -122,5 +122,11 @@ class ReinforcementFineTuningStep(BaseModel):
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
 
+    use_purpose: Optional[str] = FieldInfo(alias="usePurpose", default=None)
+    """Use dedicated resources for the job.
+
+    The only supported value currently is "pilot". Defaults to empty.
+    """
+
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
     """The Weights & Biases team/user account for logging training progress."""

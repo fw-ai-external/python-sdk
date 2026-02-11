@@ -59,8 +59,13 @@ class Stream(Generic[_T]):
                 if sse.data.startswith("[DONE]"):
                     break
 
-                if sse.event is None:
-                    yield process_data(data=sse.json(), cast_to=cast_to, response=response)
+                if sse.event == "message_stop":
+                    break
+
+                if sse.event == "ping":
+                    continue
+
+                yield process_data(data=sse.json(), cast_to=cast_to, response=response)
         finally:
             # Ensure the response is closed even if the consumer doesn't read all data
             response.close()
@@ -127,8 +132,13 @@ class AsyncStream(Generic[_T]):
                 if sse.data.startswith("[DONE]"):
                     break
 
-                if sse.event is None:
-                    yield process_data(data=sse.json(), cast_to=cast_to, response=response)
+                if sse.event == "message_stop":
+                    break
+
+                if sse.event == "ping":
+                    continue
+
+                yield process_data(data=sse.json(), cast_to=cast_to, response=response)
         finally:
             # Ensure the response is closed even if the consumer doesn't read all data
             await response.aclose()
