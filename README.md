@@ -22,7 +22,7 @@ pip install '--pre fireworks-ai'
 For RL training helpers and examples (GRPO/DPO), install the optional extras:
 
 ```sh
-pip install '--pre fireworks-ai[rl]'
+pip install '--pre fireworks-ai[training]'
 ```
 
 ## Usage

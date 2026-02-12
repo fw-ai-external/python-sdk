@@ -26,19 +26,19 @@ Checkpointing & Hotload:
 
 Usage:
     # Basic training:
-    python train_dpo.py \\
+    python examples/training/train_dpo.py \\
         --base-model "Qwen/Qwen3-8B" \\
         --dataset /path/to/preference_data.jsonl
 
     # With hotload (saves trained weights to inference deployment):
-    python train_dpo.py \\
+    python examples/training/train_dpo.py \\
         --base-model "Qwen/Qwen3-8B" \\
         --dataset /path/to/data.jsonl \\
         --create-deployment --hotload-deployment-id "my-dpo-deployment" \\
         --save-sampler --hotload
 
     # Periodic saves with delta hotloading:
-    python train_dpo.py \\
+    python examples/training/train_dpo.py \\
         --base-model "Qwen/Qwen3-8B" \\
         --dataset /path/to/data.jsonl \\
         --hotload-deployment-id "my-deployment" \\

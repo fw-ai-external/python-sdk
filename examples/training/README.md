@@ -1,6 +1,7 @@
 # Fireworks Training Examples
 
 Training scripts (GRPO, DPO) using the Tinker SDK with Fireworks infrastructure.
+For GRPO, we use both a trainable policy client and a frozen reference client for KL regularization.
 
 ## Scripts
 
@@ -9,6 +10,7 @@ Training scripts (GRPO, DPO) using the Tinker SDK with Fireworks infrastructure.
 | `train_grpo.py` | GRPO (on-policy) | Every optimizer step | No (ρ=1) |
 | `train_grpo_off_policy.py` | GRPO (off-policy) | Every N steps | Yes (ρ = π_current / π_behavior) |
 | `train_dpo.py` | DPO | End of training only | No |
+| `cleanup.py` | Utility | N/A | N/A |
 
 Shared infrastructure code lives in `shared/`:
 
@@ -20,6 +22,16 @@ shared/
 ├── dataset.py      # Load GSM8K dataset + evaluate responses
 └── tokenizer.py    # Encode text via trainer's tokenizer endpoint
 ```
+
+## On-policy vs Off-policy (quick scan)
+
+| Dimension | On-policy (`train_grpo.py`) | Off-policy (`train_grpo_off_policy.py`) |
+|-----------|------------------------------|------------------------------------------|
+| Sampling policy freshness | Always current | Potentially stale between hotloads |
+| Hotload cadence | Every optimizer step | Every `--hotload-interval` steps |
+| Correction term | None (`ρ=1`) | Importance sampling ratio `ρ = π_current / π_behavior` |
+| Key extra flags | None | `--hotload-interval`, `--clip-rho` |
+| Compute overhead | Lower | Higher (prefill logprobs + ratio correction) |
 
 ## How It Works
 
@@ -115,6 +127,28 @@ are released even if the script is interrupted.
 Use `--cleanup-rlor-job --cleanup-deployment` to enable automatic cleanup.
 
 → See `shared/rlor.py`: `delete_rlor_job()`, `shared/deployment.py`: `delete_deployment()`
+
+If your process is terminated without running `atexit` (for example: `kill -9`, host restart,
+remote shell disconnect before Python handles shutdown), use `cleanup.py` for manual cleanup.
+
+Dry-run:
+
+```bash
+python examples/training/cleanup.py \
+    --rlor-job-id "<policy_job_id>" \
+    --rlor-job-id "<reference_job_id>" \
+    --deployment-id "<deployment_id>"
+```
+
+Delete:
+
+```bash
+python examples/training/cleanup.py \
+    --rlor-job-id "<policy_job_id>" \
+    --rlor-job-id "<reference_job_id>" \
+    --deployment-id "<deployment_id>" \
+    --delete
+```
 
 ## Client vs Server: What Runs Where
 

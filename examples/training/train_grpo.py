@@ -19,7 +19,7 @@ GRPO Algorithm (On-Policy when using hotload):
     No importance sampling needed (rho = 1).
 
 Usage:
-    python examples/rl/train_grpo.py \\
+    python examples/training/train_grpo.py \\
         --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/gsm8k.jsonl \\
         --create-deployment --hotload-deployment-id "grpo-test" \\
@@ -34,7 +34,6 @@ import argparse
 import atexit
 import json
 import os
-import pdb
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
@@ -109,7 +108,7 @@ def make_grpo_loss_fn(
         ref_logprobs_list: Reference model logprobs for each completion (frozen, for KL)
         kl_beta: KL regularization coefficient
         eps: Epsilon for numerical stability in advantage normalization
-        debug: Enable pdb breakpoints inside loss function
+        debug: Enable detailed debug logging inside loss function
 
     Returns:
         Loss function compatible with training_client.forward_backward_custom()
@@ -358,7 +357,7 @@ def parse_args():
     cleanup_group.add_argument("--cleanup-deployment", action="store_true", help="Delete deployment after training (only if --create-deployment)")
 
     # Debug
-    parser.add_argument("--debug", action="store_true", help="Enable pdb breakpoints at key training steps")
+    parser.add_argument("--debug", action="store_true", help="Enable detailed debug logging at key training steps")
 
     return parser.parse_args()
 

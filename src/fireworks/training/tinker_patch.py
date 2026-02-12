@@ -5,10 +5,10 @@ This module patches the Tinker SDK to add `checkpoint_type` support to
 `save_weights_for_sampler`, enabling base/delta checkpoint saves for
 efficient hotloading.
 
-After importing `fireworks.rl`, users can use the normal Tinker API:
+After importing `fireworks.training`, users can use the normal Tinker API:
 
     import tinker
-    import fireworks.rl  # Patches tinker automatically
+    import fireworks.training  # Patches tinker automatically
 
     client = service.create_lora_training_client(...)
     client.save_weights_for_sampler("step-1", checkpoint_type="base")
@@ -31,7 +31,7 @@ def patch_tinker() -> None:
     After patching, users can call:
         client.save_weights_for_sampler("name", checkpoint_type="base")
 
-    This is called automatically when importing `fireworks.rl`.
+    This is called automatically when importing `fireworks.training`.
     """
     global _patched
     if _patched:
@@ -48,11 +48,11 @@ def patch_tinker() -> None:
 def _patch_training_client() -> None:
     """Patch TrainingClient to support checkpoint_type in save_weights_for_sampler."""
     from tinker import types
-    from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
-    from tinker.lib.public_interfaces.training_client import TrainingClient
 
     # Import internal types needed for the implementation
     from tinker.lib.api_future_impl import _APIFuture
+    from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
+    from tinker.lib.public_interfaces.training_client import TrainingClient
 
     # Only patch once
     if hasattr(TrainingClient, "_fw_patched"):
@@ -69,8 +69,8 @@ def _patch_training_client() -> None:
         checkpoint_type: str | None = None,
     ) -> types.SaveWeightsForSamplerResponseInternal:
         """Internal implementation that passes checkpoint_type via extra_body."""
-        import asyncio
         import time
+        import asyncio
 
         assert asyncio.get_event_loop() == self.holder.get_loop()
         start_time = time.time()
@@ -127,9 +127,7 @@ def _patch_training_client() -> None:
         request_id = self._get_request_id()
 
         async def _save_async():
-            result = await _save_weights_for_sampler_impl_with_checkpoint_type(
-                self, request_id, name, checkpoint_type
-            )
+            result = await _save_weights_for_sampler_impl_with_checkpoint_type(self, request_id, name, checkpoint_type)
             assert result.path is not None
             return types.SaveWeightsForSamplerResponse(path=result.path)
 
@@ -143,5 +141,3 @@ def _patch_training_client() -> None:
     TrainingClient.save_weights_for_sampler = patched_save_weights_for_sampler
     TrainingClient.save_weights_for_sampler_async = patched_save_weights_for_sampler_async
     TrainingClient._fw_patched = True
-
-
