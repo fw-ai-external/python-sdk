@@ -31,8 +31,8 @@ Copyright (c) Fireworks AI, Inc. and affiliates.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import Any
+from dataclasses import dataclass
 
 import httpx
 
@@ -166,12 +166,15 @@ def _create_rlor_job(
         extra_query["deploymentId"] = hot_load_deployment_id
 
     try:
-        job = client.reinforcement_fine_tuning_steps.create(
-            account_id=account_id,
-            training_config=typed_training_config,
-            extra_body=extra_body,
-            extra_query=extra_query if extra_query else None,
-        )
+        kwargs: dict[str, Any] = {
+            "account_id": account_id,
+            "training_config": typed_training_config,
+            "extra_body": extra_body,
+            "extra_query": extra_query if extra_query else None,
+        }
+        if additional_headers:
+            kwargs["extra_headers"] = additional_headers
+        job = client.reinforcement_fine_tuning_steps.create(**kwargs)
         return job.model_dump() if hasattr(job, "model_dump") else dict(job)
     except Exception as e:
         warn(f"RLOR job creation failed: {e}")
@@ -187,10 +190,13 @@ def _get_rlor_job(
 ) -> dict:
     """Get RLOR trainer job status."""
     client = _get_fireworks_client(api_key, base_url)
-    job = client.reinforcement_fine_tuning_steps.get(
-        account_id=account_id,
-        rlor_trainer_job_id=job_id,
-    )
+    kwargs: dict[str, Any] = {
+        "account_id": account_id,
+        "rlor_trainer_job_id": job_id,
+    }
+    if additional_headers:
+        kwargs["extra_headers"] = additional_headers
+    job = client.reinforcement_fine_tuning_steps.get(**kwargs)
     return job.model_dump() if hasattr(job, "model_dump") else dict(job)
 
 
@@ -203,10 +209,13 @@ def delete_rlor_job(
 ) -> None:
     """Delete an RLOR trainer job, releasing its GPU resources."""
     client = _get_fireworks_client(api_key, base_url)
-    client.reinforcement_fine_tuning_steps.delete(
-        account_id=account_id,
-        rlor_trainer_job_id=job_id,
-    )
+    kwargs: dict[str, Any] = {
+        "account_id": account_id,
+        "rlor_trainer_job_id": job_id,
+    }
+    if additional_headers:
+        kwargs["extra_headers"] = additional_headers
+    client.reinforcement_fine_tuning_steps.delete(**kwargs)
 
 
 def create_rlor_service_job_and_wait(

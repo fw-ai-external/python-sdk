@@ -50,45 +50,41 @@ Copyright (c) Fireworks AI, Inc. and affiliates.
 
 from __future__ import annotations
 
-import argparse
-import json
 import os
 import re
-import time
-from typing import Any, Callable, List
+import json
+import argparse
+from typing import Any, List, Callable
 
 import httpx
-import tinker
 import torch
+import tinker
 import torch.nn.functional as F
-
-# Importing fireworks.training applies the Fireworks compatibility patches to Tinker
-# automatically (if Tinker is installed). This adds checkpoint_type support to
-# save_weights_for_sampler.
-import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
-
-# Tinker cookbook helper for datum construction (handles token shifting internally)
-from tinker_cookbook.supervised.common import datum_from_tokens_weights
 
 # Import shared utilities
 from shared import (
+    # Deployment
     log,
     warn,
-    parse_additional_headers,
-    # RLOR
-    RlorServiceEndpoint,
-    create_rlor_service_job_and_wait,
     delete_rlor_job,
-    # Deployment
-    DeploymentInfo,
-    create_or_get_deployment,
-    wait_for_deployment_ready,
     delete_deployment,
     # Hotload
     hotload_load_model,
     hotload_check_status,
     wait_for_hotload_ready,
+    create_or_get_deployment,
+    parse_additional_headers,
+    wait_for_deployment_ready,
+    create_rlor_service_job_and_wait,
 )
+
+# Tinker cookbook helper for datum construction (handles token shifting internally)
+from tinker_cookbook.supervised.common import datum_from_tokens_weights
+
+# Importing fireworks.training applies the Fireworks compatibility patches to Tinker
+# automatically (if Tinker is installed). This adds checkpoint_type support to
+# save_weights_for_sampler.
+import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
 
 try:
     import wandb
@@ -961,7 +957,7 @@ def main():
         if use_wandb:
             wandb.log({"train/dpo_loss": init_loss, "train/margin": init_margin, "train/accuracy": init_acc, "train/step": 0}, step=0)
 
-        for epoch in range(args.epochs):
+        for _epoch in range(args.epochs):
             epoch_metrics = {"dpo_loss": 0.0, "margin": 0.0, "accuracy": 0.0}
             accum_count = 0
 

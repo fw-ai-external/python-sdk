@@ -32,48 +32,46 @@ Copyright (c) Fireworks AI, Inc. and affiliates.
 
 from __future__ import annotations
 
-import argparse
-import atexit
-import json
 import os
+import json
+import atexit
+import argparse
+from typing import Any, Dict, List, Tuple, Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Tuple
 
 import httpx
-import tinker
 import torch
+import tinker
+
+# Import shared utilities
+from shared import (
+    # Deployment
+    RlorServiceEndpoint,
+    log,
+    warn,
+    # Tokenizer
+    encode_text,
+    delete_rlor_job,
+    delete_deployment,
+    # Hotload
+    hotload_load_model,
+    load_gsm8k_dataset,
+    wait_for_hotload_ready,
+    # Dataset
+    evaluate_gsm8k_response,
+    create_or_get_deployment,
+    parse_additional_headers,
+    wait_for_deployment_ready,
+    create_rlor_service_job_and_wait,
+)
+
+# Tinker cookbook helper for datum construction (handles token shifting internally)
+from tinker_cookbook.supervised.common import datum_from_tokens_weights
 
 # Importing fireworks.training applies the Fireworks compatibility patches to Tinker
 # automatically (if Tinker is installed). This adds checkpoint_type support to
 # save_weights_for_sampler.
 import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
-
-# Tinker cookbook helper for datum construction (handles token shifting internally)
-from tinker_cookbook.supervised.common import datum_from_tokens_weights
-
-# Import shared utilities
-from shared import (
-    log,
-    warn,
-    parse_additional_headers,
-    # RLOR
-    RlorServiceEndpoint,
-    create_rlor_service_job_and_wait,
-    delete_rlor_job,
-    # Deployment
-    DeploymentInfo,
-    create_or_get_deployment,
-    wait_for_deployment_ready,
-    delete_deployment,
-    # Hotload
-    hotload_load_model,
-    wait_for_hotload_ready,
-    # Dataset
-    evaluate_gsm8k_response,
-    load_gsm8k_dataset,
-    # Tokenizer
-    encode_text,
-)
 
 try:
     import wandb
@@ -253,7 +251,6 @@ def sample_completions_from_deployment(
     policy_encode_url: str | None = None,
 ) -> List[SampledCompletion]:
     """Sample n completions from deployment using the Fireworks SDK."""
-    from fireworks import Fireworks
 
     response = fw_client.chat.completions.create(
         model=model,
@@ -695,7 +692,7 @@ def main():
     # Print initial (step 0) metrics for e2e test
     log(json.dumps({"type": "metrics", "step": 0, "reward": 0.0, "accuracy": 0.0, "kl": 0.0}))
 
-    for epoch in range(args.epochs):
+    for _epoch in range(args.epochs):
         for prompt_idx, row in enumerate(dataset):
             messages = row.get("messages", [])
             ground_truth = row.get("ground_truth", "")

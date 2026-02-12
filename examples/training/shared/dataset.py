@@ -18,9 +18,9 @@ Copyright (c) Fireworks AI, Inc. and affiliates.
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+import json
+from typing import Any, Dict, List, Tuple, Optional
 
 import httpx
 

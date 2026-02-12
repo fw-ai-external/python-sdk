@@ -21,8 +21,8 @@ Copyright (c) Fireworks AI, Inc. and affiliates.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import Any
+from dataclasses import dataclass
 
 try:
     from fireworks import Fireworks
@@ -69,10 +69,13 @@ def _get_deployment(
     """Get deployment status. Returns None if not found."""
     try:
         client = _get_fireworks_client(api_key, base_url)
-        deployment = client.deployments.get(
-            account_id=account_id,
-            deployment_id=deployment_id,
-        )
+        kwargs: dict[str, Any] = {
+            "account_id": account_id,
+            "deployment_id": deployment_id,
+        }
+        if additional_headers:
+            kwargs["extra_headers"] = additional_headers
+        deployment = client.deployments.get(**kwargs)
         return deployment.model_dump() if hasattr(deployment, "model_dump") else dict(deployment)
     except Exception as e:
         if "not found" in str(e).lower() or "404" in str(e):
@@ -90,12 +93,14 @@ def delete_deployment(
 ) -> None:
     """Delete a deployment, releasing its resources."""
     client = _get_fireworks_client(api_key, base_url)
-    extra_query = {"ignoreChecks": "true"} if ignore_checks else None
-    client.deployments.delete(
-        account_id=account_id,
-        deployment_id=deployment_id,
-        extra_query=extra_query,
-    )
+    kwargs: dict[str, Any] = {
+        "account_id": account_id,
+        "deployment_id": deployment_id,
+        "extra_query": {"ignoreChecks": "true"} if ignore_checks else None,
+    }
+    if additional_headers:
+        kwargs["extra_headers"] = additional_headers
+    client.deployments.delete(**kwargs)
 
 
 def _create_deployment(
@@ -154,6 +159,8 @@ def _create_deployment(
         kwargs["deployment_shape"] = deployment_shape
     if accelerator_type:
         kwargs["accelerator_type"] = accelerator_type
+    if additional_headers:
+        kwargs["extra_headers"] = additional_headers
 
     try:
         deployment = client.deployments.create(**kwargs)
