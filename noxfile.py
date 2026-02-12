@@ -9,9 +9,10 @@ _TRAINING_ONLY_PACKAGES = ("tinker==", "tinker-cookbook==")
 def _install_dev_deps_without_training_extras(session: nox.Session) -> None:
     """Install lockfile deps while skipping training-only extras.
 
-    `test-pydantic-v1` validates base SDK compatibility and does not require
-    training extras. Filtering these packages keeps Python 3.9 test sessions
-    working when lockfiles are generated with all optional features.
+    `test-pydantic-v1` runs on Python 3.9 to validate base SDK compatibility.
+    Training extras (`tinker`, `tinker-cookbook`) currently require newer
+    Python versions, so we exclude only those packages from the shared dev
+    lockfile for this session.
     """
     lockfile_lines = Path("requirements-dev.lock").read_text(encoding="utf-8").splitlines()
     filtered_lines = [
