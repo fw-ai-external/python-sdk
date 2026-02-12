@@ -19,6 +19,12 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 pip install '--pre fireworks-ai'
 ```
 
+For using our Tinker-compatible API for training (GRPO/DPO), install the optional extras:
+
+```sh
+pip install '--pre fireworks-ai[training]'
+```
+
 ## Usage
 
 The full API of this library can be found in [api.md](api.md).
