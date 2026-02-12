@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0-alpha.27 (2026-02-12)
+
+Full Changelog: [v1.0.0-alpha.26...v1.0.0-alpha.27](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.26...v1.0.0-alpha.27)
+
+### Features
+
+* Add Anthropic-compatible Messages API documentation ([f696fa5](https://github.com/fw-ai-external/python-sdk/commit/f696fa543034ff2aacef3796660c69149ab42c55))
+* Regenerate OpenAPI specs to add awsS3Config to DPO jobs ([432872b](https://github.com/fw-ai-external/python-sdk/commit/432872b62366b943a49b41298d44e669d4035525))
+
+
+### Chores
+
+* format all `api.md` files ([41f570a](https://github.com/fw-ai-external/python-sdk/commit/41f570afba601f67136aadcf36f526abee3f0ae1))
+* **internal:** bump dependencies ([aa63566](https://github.com/fw-ai-external/python-sdk/commit/aa6356683cc2fdb6e24f0acf710d44d32007f2f4))
+* **internal:** fix lint error on Python 3.14 ([9f67e71](https://github.com/fw-ai-external/python-sdk/commit/9f67e7107cfef0c10984ea1bad0fb67d03e62288))
+
 ## 1.0.0-alpha.26 (2026-01-30)
 
 Full Changelog: [v1.0.0-alpha.25...v1.0.0-alpha.26](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.25...v1.0.0-alpha.26)

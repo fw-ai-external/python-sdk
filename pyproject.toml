@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.0.0-alpha.26"
+version = "1.0.0-alpha.27"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -43,6 +43,10 @@ Homepage = "https://github.com/fw-ai-external/python-sdk"
 Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
+training = [
+  "tinker",
+  "tinker-cookbook",
+]
 
 [tool.rye]
 managed = true
@@ -70,7 +74,7 @@ format = { chain = [
   # run formatting again to fix any inconsistencies when imports are stripped
   "format:ruff",
 ]}
-"format:docs" = "python scripts/utils/ruffen-docs.py README.md api.md"
+"format:docs" = "bash -c 'python scripts/utils/ruffen-docs.py README.md $(find . -type f -name api.md)'"
 "format:ruff" = "ruff format"
 
 "lint" = { chain = [
@@ -152,6 +156,8 @@ exclude = [
     ".nox",
     ".git",
     "examples/**/.venv",
+    "examples/training/**",
+    "src/fireworks/training/tinker_patch.py",
 ]
 
 reportImplicitOverride = true
@@ -170,7 +176,7 @@ show_error_codes = true
 #
 # We also exclude our `tests` as mypy doesn't always infer
 # types correctly and Pyright will still catch any type errors.
-exclude = ['src/fireworks/_files.py', '_dev/.*.py', 'tests/.*']
+exclude = ['src/fireworks/_files.py', 'src/fireworks/training/tinker_patch.py', '_dev/.*.py', 'tests/.*', 'examples/training/.*.py']
 
 strict_equality = true
 implicit_reexport = true

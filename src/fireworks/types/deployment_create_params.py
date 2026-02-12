@@ -175,10 +175,6 @@ class DeploymentCreateParams(TypedDict, total=False):
     ]
 
     hot_load_bucket_url: Annotated[str, PropertyInfo(alias="hotLoadBucketUrl")]
-    """
-    For hot load bucket location e.g for s3: s3://mybucket/..; for GCS:
-    gs://mybucket/..
-    """
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """

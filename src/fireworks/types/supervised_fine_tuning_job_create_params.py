@@ -125,8 +125,15 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
         "US_GEORGIA_4",
         "EU_ICELAND_3",
         "US_OHIO_1",
+        "US_NEWYORK_1",
     ]
     """The region where the fine-tuning job is located."""
+
+    use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
+    """Use dedicated resources for the job.
+
+    The only supported value currently is "pilot". Defaults to empty.
+    """
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""

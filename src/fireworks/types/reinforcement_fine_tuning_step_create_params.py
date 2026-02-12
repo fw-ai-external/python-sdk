@@ -70,6 +70,12 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 
+    use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
+    """Use dedicated resources for the job.
+
+    The only supported value currently is "pilot". Defaults to empty.
+    """
+
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
 

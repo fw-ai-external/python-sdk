@@ -59,6 +59,7 @@ class PlacementParam(TypedDict, total=False):
         "US_GEORGIA_4",
         "EU_ICELAND_3",
         "US_OHIO_1",
+        "US_NEWYORK_1",
     ]
     """The region where the deployment must be placed."""
 
@@ -100,5 +101,6 @@ class PlacementParam(TypedDict, total=False):
             "US_GEORGIA_4",
             "EU_ICELAND_3",
             "US_OHIO_1",
+            "US_NEWYORK_1",
         ]
     ]

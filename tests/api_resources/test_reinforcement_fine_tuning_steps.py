@@ -68,6 +68,7 @@ class TestReinforcementFineTuningSteps:
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",
             },
+            use_purpose="usePurpose",
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,
@@ -470,6 +471,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",
             },
+            use_purpose="usePurpose",
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,

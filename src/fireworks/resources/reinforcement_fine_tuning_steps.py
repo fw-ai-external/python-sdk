@@ -69,6 +69,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
+        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -108,6 +109,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           training_config: Common training configurations.
 
+          use_purpose: Use dedicated resources for the job. The only supported value currently is
+              "pilot". Defaults to empty.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           extra_headers: Send extra headers
@@ -141,6 +145,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
                     "training_config": training_config,
+                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                 },
                 reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
@@ -467,6 +472,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
+        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -506,6 +512,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           training_config: Common training configurations.
 
+          use_purpose: Use dedicated resources for the job. The only supported value currently is
+              "pilot". Defaults to empty.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           extra_headers: Send extra headers
@@ -539,6 +548,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
                     "training_config": training_config,
+                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                 },
                 reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
