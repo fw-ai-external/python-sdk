@@ -9,7 +9,7 @@ from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["DpoJobCreateParams"]
+__all__ = ["DpoJobCreateParams", "AwsS3Config"]
 
 
 class DpoJobCreateParams(TypedDict, total=False):
@@ -20,6 +20,9 @@ class DpoJobCreateParams(TypedDict, total=False):
 
     dpo_job_id: Annotated[str, PropertyInfo(alias="dpoJobId")]
     """ID of the DPO job, a random ID will be generated if not specified."""
+
+    aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
+    """The AWS configuration for S3 dataset access."""
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
@@ -34,3 +37,11 @@ class DpoJobCreateParams(TypedDict, total=False):
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging job progress."""
+
+
+class AwsS3Config(TypedDict, total=False):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+
+    iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]

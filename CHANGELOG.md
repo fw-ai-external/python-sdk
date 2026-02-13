@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.28 (2026-02-13)
+
+Full Changelog: [v1.0.0-alpha.27...v1.0.0-alpha.28](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.27...v1.0.0-alpha.28)
+
+### Features
+
+* Regenerate OpenAPI specs and SDK (v4.24.80) ([ea622fd](https://github.com/fw-ai-external/python-sdk/commit/ea622fd7788900720de1990178b50d34c3da32b9))
+
 ## 1.0.0-alpha.27 (2026-02-12)
 
 Full Changelog: [v1.0.0-alpha.26...v1.0.0-alpha.27](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.26...v1.0.0-alpha.27)
