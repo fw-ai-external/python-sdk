@@ -12,12 +12,23 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["DpoJob"]
+__all__ = ["DpoJob", "AwsS3Config"]
+
+
+class AwsS3Config(BaseModel):
+    """The AWS configuration for S3 dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+
+    iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
 
 
 class DpoJob(BaseModel):
     dataset: str
     """The name of the dataset used for training."""
+
+    aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
+    """The AWS configuration for S3 dataset access."""
 
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 

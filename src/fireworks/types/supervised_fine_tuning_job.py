@@ -10,7 +10,7 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost"]
+__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost", "JobProgress"]
 
 
 class AwsS3Config(BaseModel):
@@ -41,6 +41,43 @@ class EstimatedCost(BaseModel):
     The whole units of the amount. For example if `currencyCode` is `"USD"`, then 1
     unit is one US dollar.
     """
+
+
+class JobProgress(BaseModel):
+    """Job progress."""
+
+    cached_input_token_count: Optional[int] = FieldInfo(alias="cachedInputTokenCount", default=None)
+    """The number of input tokens that hit the prompt cache."""
+
+    epoch: Optional[int] = None
+    """
+    The epoch for which the progress percent is reported, usually starting from 0.
+    This is optional for jobs that don't run in an epoch fasion, e.g. BIJ, EVJ.
+    """
+
+    failed_requests: Optional[int] = FieldInfo(alias="failedRequests", default=None)
+    """Number of requests that failed to process."""
+
+    input_tokens: Optional[int] = FieldInfo(alias="inputTokens", default=None)
+    """Total number of input tokens processed."""
+
+    output_rows: Optional[int] = FieldInfo(alias="outputRows", default=None)
+    """Number of output rows generated."""
+
+    output_tokens: Optional[int] = FieldInfo(alias="outputTokens", default=None)
+    """Total number of output tokens generated."""
+
+    percent: Optional[int] = None
+    """Progress percent, within the range from 0 to 100."""
+
+    successfully_processed_requests: Optional[int] = FieldInfo(alias="successfullyProcessedRequests", default=None)
+    """Number of requests that were processed successfully."""
+
+    total_input_requests: Optional[int] = FieldInfo(alias="totalInputRequests", default=None)
+    """Total number of input requests/rows in the job."""
+
+    total_processed_requests: Optional[int] = FieldInfo(alias="totalProcessedRequests", default=None)
+    """Total number of requests that have been processed (successfully or failed)."""
 
 
 class SupervisedFineTuningJob(BaseModel):
@@ -91,6 +128,9 @@ class SupervisedFineTuningJob(BaseModel):
     """Whether to run the fine-tuning job in turbo mode."""
 
     jinja_template: Optional[str] = FieldInfo(alias="jinjaTemplate", default=None)
+
+    job_progress: Optional[JobProgress] = FieldInfo(alias="jobProgress", default=None)
+    """Job progress."""
 
     learning_rate: Optional[float] = FieldInfo(alias="learningRate", default=None)
     """The learning rate used for training."""
