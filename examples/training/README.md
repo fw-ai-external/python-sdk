@@ -225,7 +225,6 @@ export FIREWORKS_ACCOUNT_ID="..."
 
 ### SFT (Supervised Fine-Tuning)
 
-Adapted from [tinker-cookbook sl_loop.py](https://github.com/thinking-machines-lab/tinker-cookbook/blob/main/tinker_cookbook/recipes/sl_loop.py).
 Trains on assistant messages using cross-entropy loss with linear LR decay.
 
 ```bash

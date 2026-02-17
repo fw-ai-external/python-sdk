@@ -35,12 +35,16 @@ import json
 import logging
 import os
 import time
-from typing import List
 
 import tinker
-# Import shared utilities
-from shared import (RlorServiceEndpoint, create_rlor_service_job_and_wait,
-                    delete_rlor_job, log, parse_additional_headers, warn)
+from shared import (
+    RlorServiceEndpoint,
+    create_rlor_service_job_and_wait,
+    delete_rlor_job,
+    log,
+    parse_additional_headers,
+    warn,
+)
 from tinker_cookbook import model_info, renderers
 from tinker_cookbook.supervised.common import compute_mean_nll
 from tinker_cookbook.supervised.data import conversation_to_datum
