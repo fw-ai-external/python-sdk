@@ -1,12 +1,13 @@
 # Fireworks Training Examples
 
-Training scripts (GRPO, DPO) using the Tinker SDK with Fireworks infrastructure.
+Training scripts (GRPO, DPO, SFT) using the Tinker SDK with Fireworks infrastructure.
 For GRPO, we use both a trainable policy client and a frozen reference client for KL regularization.
 
 ## Scripts
 
 | Script | Algorithm | Hotload Frequency | Importance Sampling |
 |--------|-----------|-------------------|---------------------|
+| `train_sft.py` | SFT (supervised) | N/A | No |
 | `train_grpo.py` | GRPO (on-policy) | Every optimizer step | No (ρ=1) |
 | `train_grpo_off_policy.py` | GRPO (off-policy) | Every N steps | Yes (ρ = π_current / π_behavior) |
 | `train_dpo.py` | DPO | End of training only | No |
@@ -220,6 +221,41 @@ pip install fireworks-ai[training]
 
 export FIREWORKS_API_KEY="..."
 export FIREWORKS_ACCOUNT_ID="..."
+```
+
+### SFT (Supervised Fine-Tuning)
+
+Adapted from [tinker-cookbook sl_loop.py](https://github.com/thinking-machines-lab/tinker-cookbook/blob/main/tinker_cookbook/recipes/sl_loop.py).
+Trains on assistant messages using cross-entropy loss with linear LR decay.
+
+```bash
+# Via RLOR (Fireworks-managed GPU trainer)
+python examples/training/train_sft.py \
+    --use-rlor \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-path /path/to/train.jsonl \
+    --lora-rank 32 \
+    --batch-size 128 \
+    --learning-rate 1e-4 \
+    --max-length 32768 \
+    --epochs 1 \
+    --region EU_ICELAND_2 \
+    --skip-validations \
+    --cleanup-rlor-job
+
+# Via direct Tinker endpoint
+python examples/training/train_sft.py \
+    --base-url https://trainer-...:30443 \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-path /path/to/train.jsonl \
+    --lora-rank 32 --epochs 1
+
+# With HuggingFace dataset (e.g., no_robots)
+python examples/training/train_sft.py \
+    --use-rlor \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-name HuggingFaceH4/no_robots \
+    --lora-rank 32 --epochs 1
 ```
 
 ### GRPO On-Policy
