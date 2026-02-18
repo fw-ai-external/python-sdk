@@ -12,7 +12,7 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningJob", "AwsS3Config", "InferenceParameters", "JobProgress"]
+__all__ = ["ReinforcementFineTuningJob", "AwsS3Config", "AzureBlobStorageConfig", "InferenceParameters", "JobProgress"]
 
 
 class AwsS3Config(BaseModel):
@@ -21,6 +21,26 @@ class AwsS3Config(BaseModel):
     credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
 
     iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
+
+
+class AzureBlobStorageConfig(BaseModel):
+    """The Azure configuration for Blob Storage dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Optional[str] = FieldInfo(alias="managedIdentityClientId", default=None)
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Optional[str] = FieldInfo(alias="tenantId", default=None)
 
 
 class InferenceParameters(BaseModel):
@@ -100,6 +120,11 @@ class ReinforcementFineTuningJob(BaseModel):
     aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
     """The AWS configuration for S3 dataset access."""
 
+    azure_blob_storage_config: Optional[AzureBlobStorageConfig] = FieldInfo(
+        alias="azureBlobStorageConfig", default=None
+    )
+    """The Azure configuration for Blob Storage dataset access."""
+
     chunk_size: Optional[int] = FieldInfo(alias="chunkSize", default=None)
     """Data chunking for rollout, default size 200, enabled when dataset > 300.
 
@@ -139,6 +164,8 @@ class ReinforcementFineTuningJob(BaseModel):
 
     max_concurrent_rollouts: Optional[int] = FieldInfo(alias="maxConcurrentRollouts", default=None)
     """Maximum number of concurrent rollouts during the RFT job."""
+
+    max_inference_replica_count: Optional[int] = FieldInfo(alias="maxInferenceReplicaCount", default=None)
 
     mcp_server: Optional[str] = FieldInfo(alias="mcpServer", default=None)
 

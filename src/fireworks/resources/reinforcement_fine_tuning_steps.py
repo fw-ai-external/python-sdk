@@ -57,10 +57,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        forward_only: bool | Omit = omit,
         hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
@@ -86,11 +88,16 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
           dataset: The name of the dataset used for training.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          forward_only: When true, run the trainer in forward-only mode (no backward/optimizer). Used
+              for reference models in GRPO that only need forward passes.
 
           hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
               deployment's hot load bucket, enabling weight swaps on inference. Only valid for
@@ -136,10 +143,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
             body=maybe_transform(
                 {
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "dataset": dataset,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "forward_only": forward_only,
                     "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
@@ -463,10 +472,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
+        forward_only: bool | Omit = omit,
         hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
@@ -492,11 +503,16 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
           dataset: The name of the dataset used for training.
 
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
+
+          forward_only: When true, run the trainer in forward-only mode (no backward/optimizer). Used
+              for reference models in GRPO that only need forward passes.
 
           hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
               deployment's hot load bucket, enabling weight swaps on inference. Only valid for
@@ -542,10 +558,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             body=await async_maybe_transform(
                 {
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "dataset": dataset,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
+                    "forward_only": forward_only,
                     "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,

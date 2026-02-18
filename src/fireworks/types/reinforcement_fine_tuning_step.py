@@ -12,7 +12,7 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStep", "AwsS3Config", "JobProgress"]
+__all__ = ["ReinforcementFineTuningStep", "AwsS3Config", "AzureBlobStorageConfig", "JobProgress"]
 
 
 class AwsS3Config(BaseModel):
@@ -21,6 +21,26 @@ class AwsS3Config(BaseModel):
     credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
 
     iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
+
+
+class AzureBlobStorageConfig(BaseModel):
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Optional[str] = FieldInfo(alias="managedIdentityClientId", default=None)
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Optional[str] = FieldInfo(alias="tenantId", default=None)
 
 
 class JobProgress(BaseModel):
@@ -70,6 +90,11 @@ class ReinforcementFineTuningStep(BaseModel):
     aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
     """The AWS configuration for S3 dataset access."""
 
+    azure_blob_storage_config: Optional[AzureBlobStorageConfig] = FieldInfo(
+        alias="azureBlobStorageConfig", default=None
+    )
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
@@ -89,6 +114,12 @@ class ReinforcementFineTuningStep(BaseModel):
 
     evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
     """The name of a separate dataset to use for evaluation."""
+
+    forward_only: Optional[bool] = FieldInfo(alias="forwardOnly", default=None)
+    """
+    When true, run the trainer in forward-only mode (no backward/optimizer). Used
+    for reference models in GRPO that only need forward passes.
+    """
 
     hot_load_deployment_id: Optional[str] = FieldInfo(alias="hotLoadDeploymentId", default=None)
     """The deployment ID used for hot loading.

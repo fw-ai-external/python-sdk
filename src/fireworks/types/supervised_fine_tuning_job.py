@@ -10,7 +10,7 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "EstimatedCost", "JobProgress"]
+__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "AzureBlobStorageConfig", "EstimatedCost", "JobProgress"]
 
 
 class AwsS3Config(BaseModel):
@@ -19,6 +19,26 @@ class AwsS3Config(BaseModel):
     credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
 
     iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
+
+
+class AzureBlobStorageConfig(BaseModel):
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Optional[str] = FieldInfo(alias="managedIdentityClientId", default=None)
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Optional[str] = FieldInfo(alias="tenantId", default=None)
 
 
 class EstimatedCost(BaseModel):
@@ -86,6 +106,11 @@ class SupervisedFineTuningJob(BaseModel):
 
     aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
     """The AWS configuration for S3 dataset access."""
+
+    azure_blob_storage_config: Optional[AzureBlobStorageConfig] = FieldInfo(
+        alias="azureBlobStorageConfig", default=None
+    )
+    """The Azure configuration for Azure Blob Storage dataset access."""
 
     base_model: Optional[str] = FieldInfo(alias="baseModel", default=None)
     """

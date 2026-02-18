@@ -40,6 +40,11 @@ class TestSupervisedFineTuningJobs:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             base_model="baseModel",
             batch_size=0,
             batch_size_samples=0,
@@ -379,6 +384,11 @@ class TestAsyncSupervisedFineTuningJobs:
             aws_s3_config={
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
+            },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
             },
             base_model="baseModel",
             batch_size=0,

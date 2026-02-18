@@ -28,7 +28,7 @@ class TestDatasets:
     def test_method_create(self, client: Fireworks) -> None:
         dataset = client.datasets.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
@@ -39,10 +39,10 @@ class TestDatasets:
         dataset = client.datasets.create(
             account_id="account_id",
             dataset={
-                "example_count": "exampleCount",
                 "display_name": "displayName",
                 "eval_protocol": {},
                 "evaluation_result": {"evaluation_job_id": "evaluationJobId"},
+                "example_count": "exampleCount",
                 "external_url": "externalUrl",
                 "format": "FORMAT_UNSPECIFIED",
                 "source_job_name": "sourceJobName",
@@ -65,7 +65,7 @@ class TestDatasets:
     def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.datasets.with_raw_response.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         )
 
@@ -79,7 +79,7 @@ class TestDatasets:
     def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.datasets.with_streaming_response.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         ) as response:
             assert not response.is_closed
@@ -96,7 +96,7 @@ class TestDatasets:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             client.datasets.with_raw_response.create(
                 account_id="",
-                dataset={"example_count": "exampleCount"},
+                dataset={},
                 dataset_id="datasetId",
             )
 
@@ -106,7 +106,6 @@ class TestDatasets:
         dataset = client.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -116,10 +115,10 @@ class TestDatasets:
         dataset = client.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
             display_name="displayName",
             eval_protocol={},
             evaluation_result={"evaluation_job_id": "evaluationJobId"},
+            example_count="exampleCount",
             external_url="externalUrl",
             format="FORMAT_UNSPECIFIED",
             source_job_name="sourceJobName",
@@ -139,7 +138,6 @@ class TestDatasets:
         response = client.datasets.with_raw_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         )
 
         assert response.is_closed is True
@@ -153,7 +151,6 @@ class TestDatasets:
         with client.datasets.with_streaming_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
@@ -170,14 +167,12 @@ class TestDatasets:
             client.datasets.with_raw_response.update(
                 dataset_id="dataset_id",
                 account_id="",
-                example_count="exampleCount",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `dataset_id` but received ''"):
             client.datasets.with_raw_response.update(
                 dataset_id="",
                 account_id="account_id",
-                example_count="exampleCount",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
@@ -610,7 +605,7 @@ class TestAsyncDatasets:
     async def test_method_create(self, async_client: AsyncFireworks) -> None:
         dataset = await async_client.datasets.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
@@ -621,10 +616,10 @@ class TestAsyncDatasets:
         dataset = await async_client.datasets.create(
             account_id="account_id",
             dataset={
-                "example_count": "exampleCount",
                 "display_name": "displayName",
                 "eval_protocol": {},
                 "evaluation_result": {"evaluation_job_id": "evaluationJobId"},
+                "example_count": "exampleCount",
                 "external_url": "externalUrl",
                 "format": "FORMAT_UNSPECIFIED",
                 "source_job_name": "sourceJobName",
@@ -647,7 +642,7 @@ class TestAsyncDatasets:
     async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.datasets.with_raw_response.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         )
 
@@ -661,7 +656,7 @@ class TestAsyncDatasets:
     async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.datasets.with_streaming_response.create(
             account_id="account_id",
-            dataset={"example_count": "exampleCount"},
+            dataset={},
             dataset_id="datasetId",
         ) as response:
             assert not response.is_closed
@@ -678,7 +673,7 @@ class TestAsyncDatasets:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
             await async_client.datasets.with_raw_response.create(
                 account_id="",
-                dataset={"example_count": "exampleCount"},
+                dataset={},
                 dataset_id="datasetId",
             )
 
@@ -688,7 +683,6 @@ class TestAsyncDatasets:
         dataset = await async_client.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -698,10 +692,10 @@ class TestAsyncDatasets:
         dataset = await async_client.datasets.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
             display_name="displayName",
             eval_protocol={},
             evaluation_result={"evaluation_job_id": "evaluationJobId"},
+            example_count="exampleCount",
             external_url="externalUrl",
             format="FORMAT_UNSPECIFIED",
             source_job_name="sourceJobName",
@@ -721,7 +715,6 @@ class TestAsyncDatasets:
         response = await async_client.datasets.with_raw_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         )
 
         assert response.is_closed is True
@@ -735,7 +728,6 @@ class TestAsyncDatasets:
         async with async_client.datasets.with_streaming_response.update(
             dataset_id="dataset_id",
             account_id="account_id",
-            example_count="exampleCount",
         ) as response:
             assert not response.is_closed
             assert response.http_request.headers.get("X-Stainless-Lang") == "python"
@@ -752,14 +744,12 @@ class TestAsyncDatasets:
             await async_client.datasets.with_raw_response.update(
                 dataset_id="dataset_id",
                 account_id="",
-                example_count="exampleCount",
             )
 
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `dataset_id` but received ''"):
             await async_client.datasets.with_raw_response.update(
                 dataset_id="",
                 account_id="account_id",
-                example_count="exampleCount",
             )
 
     @pytest.mark.skip(reason="Prism tests are disabled")
