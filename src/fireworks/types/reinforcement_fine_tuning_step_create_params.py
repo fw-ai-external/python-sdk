@@ -66,6 +66,10 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     """
 
     service_mode: Annotated[bool, PropertyInfo(alias="serviceMode")]
+    """Service-mode RLOR trainers currently support full-parameter tuning only.
+
+    When enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
+    """
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""

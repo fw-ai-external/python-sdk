@@ -128,6 +128,10 @@ class ReinforcementFineTuningStep(BaseModel):
     """
 
     service_mode: Optional[bool] = FieldInfo(alias="serviceMode", default=None)
+    """Service-mode RLOR trainers currently support full-parameter tuning only.
+
+    When enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
+    """
 
     state: Optional[
         Literal[
