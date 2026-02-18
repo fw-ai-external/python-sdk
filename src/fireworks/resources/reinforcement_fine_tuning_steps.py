@@ -107,6 +107,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
 
+          service_mode: Service-mode RLOR trainers currently support full-parameter tuning only. When
+              enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
+
           training_config: Common training configurations.
 
           use_purpose: Use dedicated resources for the job. The only supported value currently is
@@ -509,6 +512,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
+
+          service_mode: Service-mode RLOR trainers currently support full-parameter tuning only. When
+              enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
 
           training_config: Common training configurations.
 
