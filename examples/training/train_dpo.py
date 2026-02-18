@@ -78,8 +78,13 @@ from shared import (
     create_rlor_service_job_and_wait,
 )
 
-# Tinker cookbook helper for datum construction (handles token shifting internally)
-from tinker_cookbook.supervised.common import datum_from_tokens_weights
+# Tinker cookbook helper for datum construction (handles token shifting internally).
+# Support both names: tinker-cookbook builds vary between `datum_from_tokens_weights`
+# and `datum_from_model_input_weights` even within the same version number.
+try:
+    from tinker_cookbook.supervised.common import datum_from_tokens_weights
+except ImportError:
+    from tinker_cookbook.supervised.common import datum_from_model_input_weights as datum_from_tokens_weights
 
 # Importing fireworks.training applies the Fireworks compatibility patches to Tinker
 # automatically (if Tinker is installed). This adds checkpoint_type support to
