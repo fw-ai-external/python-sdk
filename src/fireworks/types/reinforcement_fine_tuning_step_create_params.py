@@ -10,7 +10,7 @@ from .shared_params.wandb_config import WandbConfig
 from .shared_params.training_config import TrainingConfig
 from .shared_params.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStepCreateParams", "AwsS3Config"]
+__all__ = ["ReinforcementFineTuningStepCreateParams", "AwsS3Config", "AzureBlobStorageConfig"]
 
 
 class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
@@ -22,6 +22,9 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
     """The AWS configuration for S3 dataset access."""
 
+    azure_blob_storage_config: Annotated[AzureBlobStorageConfig, PropertyInfo(alias="azureBlobStorageConfig")]
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
     dataset: str
     """The name of the dataset used for training."""
 
@@ -32,6 +35,12 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     evaluation_dataset: Annotated[str, PropertyInfo(alias="evaluationDataset")]
     """The name of a separate dataset to use for evaluation."""
+
+    forward_only: Annotated[bool, PropertyInfo(alias="forwardOnly")]
+    """
+    When true, run the trainer in forward-only mode (no backward/optimizer). Used
+    for reference models in GRPO that only need forward passes.
+    """
 
     hot_load_deployment_id: Annotated[str, PropertyInfo(alias="hotLoadDeploymentId")]
     """The deployment ID used for hot loading.
@@ -90,3 +99,23 @@ class AwsS3Config(TypedDict, total=False):
     credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
 
     iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]
+
+
+class AzureBlobStorageConfig(TypedDict, total=False):
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Annotated[str, PropertyInfo(alias="managedIdentityClientId")]
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Annotated[str, PropertyInfo(alias="tenantId")]

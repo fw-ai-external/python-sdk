@@ -176,7 +176,10 @@ class Deployment(BaseModel):
     """
 
     expire_time: Optional[datetime] = FieldInfo(alias="expireTime", default=None)
-    """The time at which this deployment will automatically be deleted."""
+    """
+    Deprecated: This field is deprecated and no longer causes auto-deletion. The
+    time at which this deployment will automatically be deleted.
+    """
 
     hot_load_bucket_type: Optional[Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"]] = (
         FieldInfo(alias="hotLoadBucketType", default=None)

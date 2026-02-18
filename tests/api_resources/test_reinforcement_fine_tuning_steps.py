@@ -38,10 +38,16 @@ class TestReinforcementFineTuningSteps:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             dataset="dataset",
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            forward_only=True,
             hot_load_deployment_id="hotLoadDeploymentId",
             keep_alive=True,
             loss_config={
@@ -441,10 +447,16 @@ class TestAsyncReinforcementFineTuningSteps:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             dataset="dataset",
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
+            forward_only=True,
             hot_load_deployment_id="hotLoadDeploymentId",
             keep_alive=True,
             loss_config={

@@ -41,6 +41,11 @@ class TestDpoJobs:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             display_name="displayName",
             loss_config={
                 "kl_beta": 0,
@@ -412,6 +417,11 @@ class TestAsyncDpoJobs:
             aws_s3_config={
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
+            },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
             },
             display_name="displayName",
             loss_config={
