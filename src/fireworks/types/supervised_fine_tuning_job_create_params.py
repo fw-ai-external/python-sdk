@@ -7,7 +7,7 @@ from typing_extensions import Literal, Required, Annotated, TypedDict
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config"]
+__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config", "AzureBlobStorageConfig"]
 
 
 class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
@@ -24,6 +24,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
 
     aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
     """The AWS configuration for S3 dataset access."""
+
+    azure_blob_storage_config: Annotated[AzureBlobStorageConfig, PropertyInfo(alias="azureBlobStorageConfig")]
+    """The Azure configuration for Azure Blob Storage dataset access."""
 
     base_model: Annotated[str, PropertyInfo(alias="baseModel")]
     """
@@ -151,3 +154,23 @@ class AwsS3Config(TypedDict, total=False):
     credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
 
     iam_role_arn: Annotated[str, PropertyInfo(alias="iamRoleArn")]
+
+
+class AzureBlobStorageConfig(TypedDict, total=False):
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
+    credentials_secret: Annotated[str, PropertyInfo(alias="credentialsSecret")]
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Annotated[str, PropertyInfo(alias="managedIdentityClientId")]
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Annotated[str, PropertyInfo(alias="tenantId")]

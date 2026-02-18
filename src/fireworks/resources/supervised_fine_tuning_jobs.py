@@ -57,6 +57,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         dataset: str,
         supervised_fine_tuning_job_id: str | Omit = omit,
         aws_s3_config: supervised_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: supervised_fine_tuning_job_create_params.AzureBlobStorageConfig | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
@@ -140,6 +141,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
 
@@ -198,6 +201,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                 {
                     "dataset": dataset,
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,
@@ -481,6 +485,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         dataset: str,
         supervised_fine_tuning_job_id: str | Omit = omit,
         aws_s3_config: supervised_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: supervised_fine_tuning_job_create_params.AzureBlobStorageConfig | Omit = omit,
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
@@ -564,6 +569,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
 
@@ -622,6 +629,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                 {
                     "dataset": dataset,
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,

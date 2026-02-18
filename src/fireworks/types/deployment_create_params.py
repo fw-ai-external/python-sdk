@@ -167,7 +167,10 @@ class DeploymentCreateParams(TypedDict, total=False):
     """
 
     expire_time: Annotated[Union[str, datetime], PropertyInfo(alias="expireTime", format="iso8601")]
-    """The time at which this deployment will automatically be deleted."""
+    """
+    Deprecated: This field is deprecated and no longer causes auto-deletion. The
+    time at which this deployment will automatically be deleted.
+    """
 
     hot_load_bucket_type: Annotated[
         Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"],

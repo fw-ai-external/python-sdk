@@ -42,6 +42,11 @@ class TestReinforcementFineTuningJobs:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             chunk_size=0,
             display_name="displayName",
             eval_auto_carveout=True,
@@ -60,6 +65,7 @@ class TestReinforcementFineTuningJobs:
             },
             max_concurrent_evaluations=0,
             max_concurrent_rollouts=0,
+            max_inference_replica_count=0,
             mcp_server="mcpServer",
             node_count=0,
             training_config={
@@ -463,6 +469,11 @@ class TestAsyncReinforcementFineTuningJobs:
                 "credentials_secret": "credentialsSecret",
                 "iam_role_arn": "iamRoleArn",
             },
+            azure_blob_storage_config={
+                "credentials_secret": "credentialsSecret",
+                "managed_identity_client_id": "managedIdentityClientId",
+                "tenant_id": "tenantId",
+            },
             chunk_size=0,
             display_name="displayName",
             eval_auto_carveout=True,
@@ -481,6 +492,7 @@ class TestAsyncReinforcementFineTuningJobs:
             },
             max_concurrent_evaluations=0,
             max_concurrent_rollouts=0,
+            max_inference_replica_count=0,
             mcp_server="mcpServer",
             node_count=0,
             training_config={
