@@ -36,7 +36,10 @@ class TrainingConfig(BaseModel):
     learning_rate_warmup_steps: Optional[int] = FieldInfo(alias="learningRateWarmupSteps", default=None)
 
     lora_rank: Optional[int] = FieldInfo(alias="loraRank", default=None)
-    """The rank of the LoRA layers."""
+    """The rank of the LoRA layers.
+
+    For service-mode RLOR trainer jobs (`serviceMode=true`), this must be 0.
+    """
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """The maximum context length to use with the model."""

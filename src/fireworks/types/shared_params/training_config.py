@@ -35,7 +35,10 @@ class TrainingConfig(TypedDict, total=False):
     learning_rate_warmup_steps: Annotated[int, PropertyInfo(alias="learningRateWarmupSteps")]
 
     lora_rank: Annotated[int, PropertyInfo(alias="loraRank")]
-    """The rank of the LoRA layers."""
+    """The rank of the LoRA layers.
+
+    For service-mode RLOR trainer jobs (`serviceMode=true`), this must be 0.
+    """
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """The maximum context length to use with the model."""
