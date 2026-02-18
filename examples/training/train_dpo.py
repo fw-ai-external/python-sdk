@@ -27,19 +27,19 @@ Checkpointing & Hotload:
 Usage:
     # Basic training:
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/preference_data.jsonl
 
     # With hotload (saves trained weights to inference deployment):
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/data.jsonl \\
         --create-deployment --hotload-deployment-id "my-dpo-deployment" \\
         --save-sampler --hotload
 
     # Periodic saves with delta hotloading:
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/data.jsonl \\
         --hotload-deployment-id "my-deployment" \\
         --save-interval 2 --hotload-interval \\
@@ -362,7 +362,7 @@ def parse_args():
 
     # Tinker auth (service endpoint is created via control plane)
     parser.add_argument("--api-key", default="tml-local", help="API key for the trainer's Tinker endpoint")
-    parser.add_argument("--base-model", required=True, help="Base model name (e.g., Qwen/Qwen3-8B)")
+    parser.add_argument("--base-model", required=True, help="Base model name (Fireworks path, e.g., accounts/fireworks/models/qwen3-8b)")
 
     # Fireworks control plane
     parser.add_argument("--fireworks-api-key", default=None, help="Defaults to FIREWORKS_API_KEY env var")
