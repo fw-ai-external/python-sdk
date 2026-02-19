@@ -20,7 +20,7 @@ base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 class TestReinforcementFineTuningSteps:
     parametrize = pytest.mark.parametrize("client", [False, True], indirect=True, ids=["loose", "strict"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_create(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.create(
@@ -28,7 +28,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_create_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.create(
@@ -85,7 +85,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.create(
@@ -97,7 +97,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.create(
@@ -111,7 +111,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -119,7 +119,7 @@ class TestReinforcementFineTuningSteps:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
@@ -131,7 +131,7 @@ class TestReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
@@ -148,7 +148,7 @@ class TestReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.list(
@@ -164,7 +164,7 @@ class TestReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.list(
@@ -182,7 +182,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -190,7 +190,7 @@ class TestReinforcementFineTuningSteps:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_delete(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.delete(
@@ -199,7 +199,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.delete(
@@ -212,7 +212,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.delete(
@@ -227,7 +227,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -242,7 +242,7 @@ class TestReinforcementFineTuningSteps:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_execute(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.execute(
@@ -253,7 +253,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_execute(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.execute(
@@ -268,7 +268,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_execute(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
@@ -285,7 +285,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_execute(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -304,7 +304,7 @@ class TestReinforcementFineTuningSteps:
                 output_model="outputModel",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.get(
@@ -313,7 +313,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_with_all_params(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.get(
@@ -323,7 +323,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_get(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.get(
@@ -336,7 +336,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_get(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.get(
@@ -351,7 +351,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_get(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -366,7 +366,7 @@ class TestReinforcementFineTuningSteps:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_resume(self, client: Fireworks) -> None:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.resume(
@@ -376,7 +376,7 @@ class TestReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_resume(self, client: Fireworks) -> None:
         response = client.reinforcement_fine_tuning_steps.with_raw_response.resume(
@@ -390,7 +390,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_resume(self, client: Fireworks) -> None:
         with client.reinforcement_fine_tuning_steps.with_streaming_response.resume(
@@ -406,7 +406,7 @@ class TestReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_resume(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -429,7 +429,7 @@ class TestAsyncReinforcementFineTuningSteps:
         "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
     )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_create(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.create(
@@ -437,7 +437,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.create(
@@ -494,7 +494,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.create(
@@ -506,7 +506,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.create(
@@ -520,7 +520,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -528,7 +528,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
@@ -540,7 +540,7 @@ class TestAsyncReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
@@ -557,7 +557,7 @@ class TestAsyncReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.list(
@@ -573,7 +573,7 @@ class TestAsyncReinforcementFineTuningSteps:
             path=["response"],
         )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.list(
@@ -591,7 +591,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -599,7 +599,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.delete(
@@ -608,7 +608,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
@@ -621,7 +621,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.delete(
@@ -636,7 +636,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -651,7 +651,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_execute(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.execute(
@@ -662,7 +662,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_execute(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
@@ -677,7 +677,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_execute(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
@@ -694,7 +694,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_execute(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -713,7 +713,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 output_model="outputModel",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.get(
@@ -722,7 +722,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_with_all_params(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.get(
@@ -732,7 +732,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_get(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.get(
@@ -745,7 +745,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_get(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.get(
@@ -760,7 +760,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_get(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -775,7 +775,7 @@ class TestAsyncReinforcementFineTuningSteps:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_resume(self, async_client: AsyncFireworks) -> None:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.resume(
@@ -785,7 +785,7 @@ class TestAsyncReinforcementFineTuningSteps:
         )
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_resume(self, async_client: AsyncFireworks) -> None:
         response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.resume(
@@ -799,7 +799,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await response.parse()
         assert_matches_type(ReinforcementFineTuningStep, reinforcement_fine_tuning_step, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_resume(self, async_client: AsyncFireworks) -> None:
         async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.resume(
@@ -815,7 +815,7 @@ class TestAsyncReinforcementFineTuningSteps:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_resume(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):

@@ -18,7 +18,7 @@ base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 class TestLora:
     parametrize = pytest.mark.parametrize("client", [False, True], indirect=True, ids=["loose", "strict"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_update(self, client: Fireworks) -> None:
         lora = client.lora.update(
@@ -27,7 +27,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_update_with_all_params(self, client: Fireworks) -> None:
         lora = client.lora.update(
@@ -43,7 +43,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.lora.with_raw_response.update(
@@ -56,7 +56,7 @@ class TestLora:
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.lora.with_streaming_response.update(
@@ -71,7 +71,7 @@ class TestLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -86,7 +86,7 @@ class TestLora:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list(self, client: Fireworks) -> None:
         lora = client.lora.list(
@@ -94,7 +94,7 @@ class TestLora:
         )
         assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list_with_all_params(self, client: Fireworks) -> None:
         lora = client.lora.list(
@@ -107,7 +107,7 @@ class TestLora:
         )
         assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.lora.with_raw_response.list(
@@ -119,7 +119,7 @@ class TestLora:
         lora = response.parse()
         assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.lora.with_streaming_response.list(
@@ -133,7 +133,7 @@ class TestLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -141,7 +141,7 @@ class TestLora:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get(self, client: Fireworks) -> None:
         lora = client.lora.get(
@@ -150,7 +150,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_with_all_params(self, client: Fireworks) -> None:
         lora = client.lora.get(
@@ -160,7 +160,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_get(self, client: Fireworks) -> None:
         response = client.lora.with_raw_response.get(
@@ -173,7 +173,7 @@ class TestLora:
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_get(self, client: Fireworks) -> None:
         with client.lora.with_streaming_response.get(
@@ -188,7 +188,7 @@ class TestLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_get(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -203,7 +203,7 @@ class TestLora:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_load(self, client: Fireworks) -> None:
         lora = client.lora.load(
@@ -211,7 +211,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_load_with_all_params(self, client: Fireworks) -> None:
         lora = client.lora.load(
@@ -227,7 +227,7 @@ class TestLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_load(self, client: Fireworks) -> None:
         response = client.lora.with_raw_response.load(
@@ -239,7 +239,7 @@ class TestLora:
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_load(self, client: Fireworks) -> None:
         with client.lora.with_streaming_response.load(
@@ -253,7 +253,7 @@ class TestLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_load(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -261,7 +261,7 @@ class TestLora:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_unload(self, client: Fireworks) -> None:
         lora = client.lora.unload(
@@ -270,7 +270,7 @@ class TestLora:
         )
         assert_matches_type(object, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_unload(self, client: Fireworks) -> None:
         response = client.lora.with_raw_response.unload(
@@ -283,7 +283,7 @@ class TestLora:
         lora = response.parse()
         assert_matches_type(object, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_unload(self, client: Fireworks) -> None:
         with client.lora.with_streaming_response.unload(
@@ -298,7 +298,7 @@ class TestLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_unload(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -319,7 +319,7 @@ class TestAsyncLora:
         "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
     )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_update(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.update(
@@ -328,7 +328,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.update(
@@ -344,7 +344,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.lora.with_raw_response.update(
@@ -357,7 +357,7 @@ class TestAsyncLora:
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.lora.with_streaming_response.update(
@@ -372,7 +372,7 @@ class TestAsyncLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -387,7 +387,7 @@ class TestAsyncLora:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.list(
@@ -395,7 +395,7 @@ class TestAsyncLora:
         )
         assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.list(
@@ -408,7 +408,7 @@ class TestAsyncLora:
         )
         assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.lora.with_raw_response.list(
@@ -420,7 +420,7 @@ class TestAsyncLora:
         lora = await response.parse()
         assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.lora.with_streaming_response.list(
@@ -434,7 +434,7 @@ class TestAsyncLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -442,7 +442,7 @@ class TestAsyncLora:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.get(
@@ -451,7 +451,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_with_all_params(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.get(
@@ -461,7 +461,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_get(self, async_client: AsyncFireworks) -> None:
         response = await async_client.lora.with_raw_response.get(
@@ -474,7 +474,7 @@ class TestAsyncLora:
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_get(self, async_client: AsyncFireworks) -> None:
         async with async_client.lora.with_streaming_response.get(
@@ -489,7 +489,7 @@ class TestAsyncLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_get(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -504,7 +504,7 @@ class TestAsyncLora:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_load(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.load(
@@ -512,7 +512,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_load_with_all_params(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.load(
@@ -528,7 +528,7 @@ class TestAsyncLora:
         )
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_load(self, async_client: AsyncFireworks) -> None:
         response = await async_client.lora.with_raw_response.load(
@@ -540,7 +540,7 @@ class TestAsyncLora:
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_load(self, async_client: AsyncFireworks) -> None:
         async with async_client.lora.with_streaming_response.load(
@@ -554,7 +554,7 @@ class TestAsyncLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_load(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -562,7 +562,7 @@ class TestAsyncLora:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_unload(self, async_client: AsyncFireworks) -> None:
         lora = await async_client.lora.unload(
@@ -571,7 +571,7 @@ class TestAsyncLora:
         )
         assert_matches_type(object, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_unload(self, async_client: AsyncFireworks) -> None:
         response = await async_client.lora.with_raw_response.unload(
@@ -584,7 +584,7 @@ class TestAsyncLora:
         lora = await response.parse()
         assert_matches_type(object, lora, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_unload(self, async_client: AsyncFireworks) -> None:
         async with async_client.lora.with_streaming_response.unload(
@@ -599,7 +599,7 @@ class TestAsyncLora:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_unload(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
