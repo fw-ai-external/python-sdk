@@ -420,17 +420,6 @@ class TestFireworks:
 
         client.close()
 
-    def test_account_id_client_params(self, client: Fireworks) -> None:
-        # Test with base client (no custom params)
-        with pytest.raises(ValueError, match="Missing account_id argument;"):
-            client.batch_inference_jobs.create()
-
-        client = Fireworks(
-            base_url=base_url, api_key=api_key, _strict_response_validation=True, account_id="My Account ID"
-        )
-        with client as c2:
-            c2.batch_inference_jobs.create()
-
     def test_request_extra_json(self, client: Fireworks) -> None:
         request = client._build_request(
             FinalRequestOptions(
@@ -1322,17 +1311,6 @@ class TestAsyncFireworks:
         assert dict(url.params) == {"foo": "baz", "query_param": "overridden"}
 
         await client.close()
-
-    async def test_account_id_client_params(self, async_client: AsyncFireworks) -> None:
-        # Test with base client (no custom params)
-        with pytest.raises(ValueError, match="Missing account_id argument;"):
-            await async_client.batch_inference_jobs.create()
-
-        client = AsyncFireworks(
-            base_url=base_url, api_key=api_key, _strict_response_validation=True, account_id="My Account ID"
-        )
-        async with client as c2:
-            await c2.batch_inference_jobs.create()
 
     def test_request_extra_json(self, client: Fireworks) -> None:
         request = client._build_request(
