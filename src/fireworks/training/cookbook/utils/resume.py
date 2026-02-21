@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 import re
+import logging
 
 from fireworks.training.cookbook.utils.client import ReconnectableClient
 from fireworks.training.cookbook.utils.config import ResumeConfig

@@ -8,23 +8,22 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
-import json
-import logging
 import time
-from dataclasses import dataclass, field
+import logging
 from typing import Any
+from dataclasses import dataclass
 
-import requests
 import urllib3
+import requests
 
-from fireworks.training.sdk.deployment import DeploymentManager
 from fireworks.training.sdk.errors import (
     DOCS_RLOR,
     HTTP_STATUS_HINTS,
-    format_sdk_error,
     parse_api_error,
+    format_sdk_error,
     request_with_retries,
 )
+from fireworks.training.sdk.deployment import DeploymentManager
 
 # Suppress SSL warnings for dev/self-signed cert environments
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

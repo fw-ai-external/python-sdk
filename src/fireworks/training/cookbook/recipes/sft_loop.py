@@ -15,36 +15,35 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import os
-from dataclasses import dataclass, field
+import logging
 from typing import Any, Dict, List
+from dataclasses import field, dataclass
 
 import tinker
 
-from fireworks.training.sdk import TrainerJobManager, DeploymentManager
-from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
-from fireworks.training.sdk.weight_syncer import WeightSyncer
-
+from fireworks.training.sdk import DeploymentManager, TrainerJobManager
 from fireworks.training.cookbook.utils import (
     DEFAULT_ADAM,
-    DeployConfig,
-    HotloadConfig,
     InfraConfig,
-    ResumeConfig,
     WandBConfig,
+    DeployConfig,
+    ResumeConfig,
+    HotloadConfig,
     ReconnectableClient,
-    create_trainer_job,
+    wandb_log,
     encode_text,
+    setup_wandb,
+    setup_resume,
+    wandb_finish,
+    validate_config,
     log_metrics_json,
     make_sft_loss_fn,
     setup_deployment,
-    setup_resume,
-    setup_wandb,
-    validate_config,
-    wandb_finish,
-    wandb_log,
+    create_trainer_job,
 )
+from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
+from fireworks.training.sdk.weight_syncer import WeightSyncer
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +132,7 @@ def main(
     # -- Prepare data ------------------------------------------------------
 
     import json
+
     import transformers
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_model)
@@ -182,7 +182,7 @@ def main(
     agg_ppl = 0.0
     agg_count = 0
 
-    for epoch in range(cfg.epochs):
+    for _epoch in range(cfg.epochs):
         for ex in training_data:
             tokens = ex["tokens"]
             prompt_len = ex["prompt_len"]

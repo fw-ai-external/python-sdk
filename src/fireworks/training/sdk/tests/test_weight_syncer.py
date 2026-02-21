@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock
-
-import pytest
+from unittest.mock import MagicMock
 
 from fireworks.training.sdk.client import SaveSamplerResult
 from fireworks.training.sdk.weight_syncer import WeightSyncer

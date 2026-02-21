@@ -10,9 +10,9 @@ Provides:
 
 from __future__ import annotations
 
-import logging
 import time
-from typing import Any, Callable, Tuple
+import logging
+from typing import Any, Tuple, Callable
 
 import requests as _requests
 

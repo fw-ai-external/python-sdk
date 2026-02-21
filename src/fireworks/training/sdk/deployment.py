@@ -6,20 +6,20 @@ and provides a thin wrapper for deployment chat completions API.
 
 from __future__ import annotations
 
-import logging
 import time
-from dataclasses import dataclass
+import logging
 from typing import Any, List
+from dataclasses import dataclass
 
-import requests
 import urllib3
+import requests
 
 from fireworks.training.sdk.errors import (
-    DOCS_DEPLOYMENTS,
     DOCS_HOTLOAD,
+    DOCS_DEPLOYMENTS,
     HTTP_STATUS_HINTS,
-    format_sdk_error,
     parse_api_error,
+    format_sdk_error,
     request_with_retries,
 )
 
@@ -106,8 +106,8 @@ class DeploymentManager:
     @staticmethod
     def _should_verify_ssl(url: str) -> bool:
         """Verify SSL for https URLs with real domain names; skip for http or IPs."""
-        from urllib.parse import urlparse
         import ipaddress
+        from urllib.parse import urlparse
 
         parsed = urlparse(url)
         if parsed.scheme != "https":
@@ -885,7 +885,7 @@ class DeploymentSampler:
         )
 
         completions: List[SampledCompletion] = []
-        for choice_idx, choice in enumerate(result.get("choices", [])):
+        for _choice_idx, choice in enumerate(result.get("choices", [])):
             text = choice.get("message", {}).get("content", "")
             finish_reason = choice.get("finish_reason", "unknown")
             raw = choice.get("raw_output", {})

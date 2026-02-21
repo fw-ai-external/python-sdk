@@ -8,13 +8,13 @@ Requires FIREWORKS_API_KEY to be set.
 
 from __future__ import annotations
 
-import logging
 import os
+import logging
 
 import pytest
 
-from fireworks.training.sdk.deployment import DeploymentManager
 from fireworks.training.sdk.trainer import TrainerJobManager
+from fireworks.training.sdk.deployment import DeploymentManager
 
 DEFAULT_MODEL = "accounts/fireworks/models/qwen3-30b-a3b"
 DEFAULT_REGION = "US_OHIO_1"

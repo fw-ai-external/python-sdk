@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from fireworks.training.sdk.errors import DOCS_API_KEYS, DOCS_DEPLOYMENTS, DOCS_HOTLOAD, format_sdk_error
-
-from fireworks.training.cookbook.utils.config import DeployConfig, HotloadConfig, InfraConfig, ResumeConfig
+from fireworks.training.sdk.errors import DOCS_HOTLOAD, DOCS_API_KEYS, DOCS_DEPLOYMENTS, format_sdk_error
+from fireworks.training.cookbook.utils.config import InfraConfig, DeployConfig, ResumeConfig, HotloadConfig
 
 logger = logging.getLogger(__name__)
 

@@ -5,14 +5,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
 
 from fireworks.training.sdk.deployment import (
     DeploymentConfig,
-    DeploymentInfo,
     DeploymentManager,
     DeploymentSampler,
-    SampledCompletion,
 )
 
 

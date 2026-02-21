@@ -10,15 +10,14 @@ Requires:
 
 from __future__ import annotations
 
+import os
 import json
 import logging
-import os
 import tempfile
-import time
 
 import pytest
 
-from fireworks.training.cookbook.utils import DeployConfig, HotloadConfig, InfraConfig, ResumeConfig
+from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, ResumeConfig, HotloadConfig
 from fireworks.training.cookbook.recipes.sft_loop import Config, main
 
 logger = logging.getLogger(__name__)

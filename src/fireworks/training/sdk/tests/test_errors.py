@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import time
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
 from fireworks.training.sdk.errors import (
-    RETRYABLE_STATUS_CODES,
-    _is_retryable_status_code,
-    format_sdk_error,
     parse_api_error,
+    format_sdk_error,
     request_with_retries,
+    _is_retryable_status_code,
 )
 
 # ---------------------------------------------------------------------------
