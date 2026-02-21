@@ -55,7 +55,7 @@ class TestGRPOResumeE2E:
     ):
         rlor_mgr, deploy_mgr = sdk_managers
 
-        import cookbook.recipes.grpo_loop as grpo_mod
+        import fireworks.training.cookbook.recipes.grpo_loop as grpo_mod
 
         grpo_mod.reward_fn = _gsm8k_reward
 
