@@ -1057,7 +1057,7 @@ def main():
         s0 = sampled[0]
         first_tok = s0.full_tokens[0] if s0.full_tokens else None
         logger.info(
-            "  Server tokenization: first_token=%s, prompt_len=%d",
+            "  Client tokenization: first_token=%s, prompt_len=%d",
             first_tok,
             s0.prompt_len,
         )
