@@ -14,16 +14,16 @@ Requires:
 
 from __future__ import annotations
 
-import logging
 import os
 import re
 import time
+import logging
 
 import pytest
 
-from fireworks.training.cookbook.utils import DeployConfig, HotloadConfig, InfraConfig, ISConfig, ResumeConfig
-from fireworks.training.cookbook.recipes.grpo_loop import Config, main
+from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, ResumeConfig, HotloadConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
+from fireworks.training.cookbook.recipes.grpo_loop import Config, main
 
 logger = logging.getLogger(__name__)
 

@@ -28,9 +28,9 @@ def _apply_r3_patch() -> None:
     ModelInput.model_rebuild(force=True)
 
     from tinker.types.datum import Datum
+    from tinker.types.forward_request import ForwardRequest
     from tinker.types.forward_backward_input import ForwardBackwardInput
     from tinker.types.forward_backward_request import ForwardBackwardRequest
-    from tinker.types.forward_request import ForwardRequest
 
     Datum.model_rebuild(force=True)
     ForwardBackwardInput.model_rebuild(force=True)

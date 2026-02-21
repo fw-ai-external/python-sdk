@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any, Dict, List
 
-import requests
 import torch
+import requests
 
 from fireworks.training.sdk.errors import request_with_retries
 

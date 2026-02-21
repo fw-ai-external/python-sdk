@@ -11,16 +11,17 @@ save_state, load_state, get_tokenizer, etc.) is inherited unchanged from tinker.
 
 from __future__ import annotations
 
-import logging
 import time
 import uuid
+import logging
 from dataclasses import dataclass
+
 from tinker import types
 from tinker.lib.api_future_impl import _APIFuture
+from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
 from tinker.lib.public_interfaces.service_client import ServiceClient
 from tinker.lib.public_interfaces.training_client import TrainingClient
-from tinker.lib.queue_state_logger import QueueStateLogger
 
 logger = logging.getLogger(__name__)
 

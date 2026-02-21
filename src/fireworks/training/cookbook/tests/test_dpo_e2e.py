@@ -11,13 +11,13 @@ Requires:
 
 from __future__ import annotations
 
-import json
 import os
+import json
 import tempfile
 
 import pytest
 
-from fireworks.training.cookbook.utils import DeployConfig, HotloadConfig, InfraConfig
+from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, HotloadConfig
 from fireworks.training.cookbook.recipes.dpo_loop import Config, main
 
 

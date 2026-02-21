@@ -6,7 +6,6 @@ Transparently handles pod preemption so the training loop needs no try/except.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import tinker
 

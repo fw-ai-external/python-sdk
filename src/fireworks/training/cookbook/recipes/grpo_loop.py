@@ -18,41 +18,40 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import os
 import re
+import logging
+from typing import List, Optional
+from dataclasses import field, dataclass
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 import tinker
 
-from fireworks.training.sdk import TrainerJobManager, DeploymentManager
-from fireworks.training.sdk.deployment import DeploymentSampler
-from fireworks.training.sdk.weight_syncer import WeightSyncer
-
+from fireworks.training.sdk import DeploymentManager, TrainerJobManager
 from fireworks.training.cookbook.utils import (
     DEFAULT_ADAM,
-    DeployConfig,
-    HotloadConfig,
     ISConfig,
     InfraConfig,
-    ResumeConfig,
     WandBConfig,
+    DeployConfig,
+    ResumeConfig,
+    HotloadConfig,
     ReconnectableClient,
+    wandb_log,
+    setup_wandb,
+    setup_resume,
+    wandb_finish,
+    validate_config,
+    log_metrics_json,
+    setup_deployment,
+    make_grpo_loss_fn,
     compute_advantages,
     create_trainer_job,
     load_jsonl_dataset,
-    log_metrics_json,
-    make_grpo_loss_fn,
     make_grpo_tis_loss_fn,
-    setup_deployment,
-    setup_resume,
-    setup_wandb,
-    validate_config,
-    wandb_finish,
-    wandb_log,
 )
+from fireworks.training.sdk.deployment import DeploymentSampler
+from fireworks.training.sdk.weight_syncer import WeightSyncer
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
 
 logger = logging.getLogger(__name__)
@@ -209,7 +208,7 @@ def main(
     accum_count = 0
     agg = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "count": 0}
 
-    for epoch in range(cfg.epochs):
+    for _epoch in range(cfg.epochs):
         for prompt_idx, row in enumerate(dataset):
             messages = row.get("messages", [])
             input_messages = [m for m in messages if m.get("role") != "assistant"]

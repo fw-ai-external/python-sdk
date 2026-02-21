@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, List, Tuple, Callable
 
-import tinker
 import torch
+import tinker
 import torch.nn.functional as F
 
 

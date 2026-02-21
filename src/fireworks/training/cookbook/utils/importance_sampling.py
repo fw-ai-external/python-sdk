@@ -20,11 +20,11 @@ Example -- custom function::
 
 from __future__ import annotations
 
+from typing import Dict, List, Tuple, Union, Callable
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Tuple, Union
 
-import tinker
 import torch
+import tinker
 
 TISFunction = Callable[
     [torch.Tensor, torch.Tensor, "ISConfig"],

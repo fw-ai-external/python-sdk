@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
-from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager, TrainerServiceEndpoint
-
-from fireworks.training.cookbook.utils.config import DeployConfig, InfraConfig
+from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
+from fireworks.training.cookbook.utils.config import InfraConfig, DeployConfig
 
 logger = logging.getLogger(__name__)
 

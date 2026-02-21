@@ -16,40 +16,39 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import os
+import logging
+from typing import Any
+from dataclasses import field, dataclass
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
 
 import tinker
 
-from fireworks.training.sdk import TrainerJobManager, DeploymentManager
-from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
-from fireworks.training.sdk.weight_syncer import WeightSyncer
-
+from fireworks.training.sdk import DeploymentManager, TrainerJobManager
 from fireworks.training.cookbook.utils import (
     DEFAULT_ADAM,
-    DeployConfig,
-    HotloadConfig,
     InfraConfig,
-    ResumeConfig,
     WandBConfig,
+    DeployConfig,
+    ResumeConfig,
+    HotloadConfig,
     ReconnectableClient,
-    create_trainer_job,
+    wandb_log,
     encode_text,
+    setup_wandb,
     extract_text,
-    find_common_prefix_length,
-    load_preference_dataset,
+    setup_resume,
+    wandb_finish,
+    validate_config,
     log_metrics_json,
     make_dpo_loss_fn,
     setup_deployment,
-    setup_resume,
-    setup_wandb,
-    validate_config,
-    wandb_finish,
-    wandb_log,
+    create_trainer_job,
+    load_preference_dataset,
+    find_common_prefix_length,
 )
+from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
+from fireworks.training.sdk.weight_syncer import WeightSyncer
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +222,7 @@ def main(
     agg = {"dpo_loss": 0.0, "margin": 0.0, "accuracy": 0.0, "count": 0}
 
     for epoch in range(cfg.epochs):
-        for pair_idx, idx in enumerate(valid_indices):
+        for _pair_idx, idx in enumerate(valid_indices):
             cached = ref_cache[idx]
             response_start = max(0, cached["prompt_len"] - 1)
             chosen_tokens = cached["chosen_tokens"]

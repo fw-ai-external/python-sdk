@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Dict, Callable
 from dataclasses import dataclass
-from typing import Callable, Dict
 
 from fireworks.training.sdk.client import FiretitanTrainingClient
 from fireworks.training.sdk.deployment import DeploymentConfig
