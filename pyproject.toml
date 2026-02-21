@@ -46,6 +46,13 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 training = [
   "tinker",
   "tinker-cookbook",
+  "requests",
+  "torch>=2.0.0",
+  "transformers",
+  "datasets",
+  "tiktoken",
+  "numpy",
+  "wandb",
 ]
 
 [tool.rye]
@@ -158,6 +165,8 @@ exclude = [
     "examples/**/.venv",
     "examples/training/**",
     "src/fireworks/training/tinker_patch.py",
+    "src/fireworks/training/sdk/**",
+    "src/fireworks/training/cookbook/**",
 ]
 
 reportImplicitOverride = true
@@ -176,7 +185,7 @@ show_error_codes = true
 #
 # We also exclude our `tests` as mypy doesn't always infer
 # types correctly and Pyright will still catch any type errors.
-exclude = ['src/fireworks/_files.py', 'src/fireworks/training/tinker_patch.py', '_dev/.*.py', 'tests/.*', 'examples/training/.*.py']
+exclude = ['src/fireworks/_files.py', 'src/fireworks/training/tinker_patch.py', 'src/fireworks/training/sdk/.*', 'src/fireworks/training/cookbook/.*', '_dev/.*.py', 'tests/.*', 'examples/training/.*.py']
 
 strict_equality = true
 implicit_reexport = true
@@ -275,3 +284,5 @@ known-first-party = ["fireworks", "tests"]
 "scripts/**.py" = ["T201", "T203"]
 "tests/**.py" = ["T201", "T203"]
 "examples/**.py" = ["T201", "T203"]
+"src/fireworks/training/sdk/**.py" = ["T201", "T203"]
+"src/fireworks/training/cookbook/**.py" = ["T201", "T203"]

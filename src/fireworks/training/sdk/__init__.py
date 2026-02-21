@@ -1,0 +1,69 @@
+"""Firetitan SDK — Tinker-compatible training interface + Fireworks orchestration.
+
+Training (tinker protocol):
+  - FiretitanServiceClient: creates full-param or LoRA training clients
+  - FiretitanTrainingClient: adds checkpoint_type and list_checkpoints
+
+Orchestration (Fireworks platform):
+  - TrainerJobManager: trainer job lifecycle (algorithm-agnostic)
+  - DeploymentManager: deployment creation, hotloading, warmup
+
+Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
+  - cookbook.algorithms.grpo: GRPOTrainer, GRPOConfig
+  - cookbook.algorithms.dpo:  DPOTrainer, DPOConfig
+"""
+
+from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient, SaveSamplerResult
+from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.sdk.deployment import (
+    DEFAULT_CHECKSUM_FORMAT,
+    DEFAULT_DELTA_COMPRESSION,
+    DeploymentConfig,
+    DeploymentInfo,
+    DeploymentManager,
+    DeploymentSampler,
+    SampledCompletion,
+)
+from fireworks.training.sdk.errors import (
+    DOCS_API_KEYS,
+    DOCS_DEPLOYMENTS,
+    DOCS_HOTLOAD,
+    DOCS_RLOR,
+    HTTP_STATUS_HINTS,
+    format_sdk_error,
+    parse_api_error,
+    request_with_retries,
+)
+from fireworks.training.sdk.trainer import (
+    TrainerJobConfig,
+    TrainerJobManager,
+    TrainerServiceEndpoint,
+)
+
+__all__ = [
+    # Training (tinker protocol)
+    "FiretitanServiceClient",
+    "FiretitanTrainingClient",
+    "SaveSamplerResult",
+    "WeightSyncer",
+    # Orchestration (Fireworks platform)
+    "DEFAULT_CHECKSUM_FORMAT",
+    "DEFAULT_DELTA_COMPRESSION",
+    "DeploymentConfig",
+    "DeploymentInfo",
+    "DeploymentManager",
+    "DeploymentSampler",
+    "SampledCompletion",
+    "TrainerJobConfig",
+    "TrainerJobManager",
+    "TrainerServiceEndpoint",
+    # Error formatting
+    "format_sdk_error",
+    "parse_api_error",
+    "request_with_retries",
+    "HTTP_STATUS_HINTS",
+    "DOCS_HOTLOAD",
+    "DOCS_API_KEYS",
+    "DOCS_RLOR",
+    "DOCS_DEPLOYMENTS",
+]
