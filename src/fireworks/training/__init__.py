@@ -8,7 +8,4 @@ Subpackages:
 Copyright (c) Fireworks AI, Inc. and affiliates.
 """
 
-__all__ = [
-    "sdk",
-    "cookbook",
-]
+__all__: list[str] = []
