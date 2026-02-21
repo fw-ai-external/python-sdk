@@ -534,10 +534,6 @@ def parse_args():
     p.add_argument("--max-new-tokens", type=int, default=512)
     p.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (default 0 = greedy)")
     p.add_argument(
-        "--stochastic", action="store_true",
-        help="Use stochastic sampling (temperature=0.7, group_size=2). Overrides --temperature and --group-size.",
-    )
-    p.add_argument(
         "--debug-completion-tokens", type=int, default=0,
         help="Print top-K logprobs for the first N completion positions (0 = disabled).",
     )
@@ -594,10 +590,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    if args.stochastic:
-        args.temperature = 0.7
-        args.group_size = 2
 
     log_dir = os.path.abspath(args.log_dir)
     os.makedirs(log_dir, exist_ok=True)
