@@ -8,4 +8,6 @@ Subpackages:
 Copyright (c) Fireworks AI, Inc. and affiliates.
 """
 
+from __future__ import annotations
+
 __all__: list[str] = []
