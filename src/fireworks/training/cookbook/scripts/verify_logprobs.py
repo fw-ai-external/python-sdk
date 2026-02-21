@@ -759,7 +759,7 @@ def main():
     inference_model = dep_info.inference_model if dep_info else args.base_model
 
     logger.info("Loading tokenizer from: %s", args.tokenizer_path)
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer_path)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
 
     sampler = DeploymentSampler(
         inference_url=inference_url,

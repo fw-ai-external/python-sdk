@@ -182,7 +182,7 @@ def main(
     reference = ReconnectableClient(rlor_mgr, reference_ep.job_id, cfg.base_model, cfg.lora_rank)
 
     inference_model = dep_info.inference_model if dep_info else cfg.base_model
-    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.deployment.tokenizer_model)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.deployment.tokenizer_model, trust_remote_code=True)
     sampler = DeploymentSampler(
         inference_url=deploy_mgr.inference_url,
         model=inference_model,
