@@ -23,6 +23,8 @@ from .tinker_patch import patch_tinker
 
 __all__ = [
     "patch_tinker",
+    "sdk",
+    "cookbook",
 ]
 
 # Apply patches automatically on import so user scripts don't need to call patch_tinker().
