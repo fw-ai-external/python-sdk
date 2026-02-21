@@ -8,6 +8,7 @@ Requires FIREWORKS_API_KEY to be set.
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pytest
@@ -22,6 +23,15 @@ DEFAULT_DEPLOYMENT_ACCELERATOR = "NVIDIA_B200_180GB"
 DEFAULT_DEPLOYMENT_SHAPE = "accounts/pyroworks-dev/deploymentShapes/rft-qwen3-30b-a3b-r3"
 
 GSM8K_SAMPLE_URL = "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/development/gsm8k_sample.jsonl"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
 
 
 def _get_env(name: str, default: str | None = None) -> str | None:

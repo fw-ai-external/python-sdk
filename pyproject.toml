@@ -71,6 +71,7 @@ dev-dependencies = [
     "importlib-metadata>=6.7.0",
     "rich>=13.7.1",
     "pytest-xdist>=3.6.1",
+    "pytest-timeout",
 ]
 
 [tool.rye.scripts]
@@ -142,12 +143,18 @@ replacement = '[\1](https://github.com/fw-ai-external/python-sdk/tree/main/\g<2>
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--tb=short -n auto"
+addopts = "--tb=short"
 xfail_strict = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
-  "error"
+  "error",
+  "ignore::urllib3.exceptions.InsecureRequestWarning",
+  "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+]
+markers = [
+  "e2e: end-to-end tests that create real RLOR jobs on dev infrastructure",
+  "timeout: test timeout in seconds (requires pytest-timeout plugin to enforce)",
 ]
 
 [tool.pyright]
