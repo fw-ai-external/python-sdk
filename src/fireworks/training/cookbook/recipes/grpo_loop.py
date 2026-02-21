@@ -78,6 +78,7 @@ class Config:
     lora_rank: int = 0
 
     router_replay: bool = False
+    router_replay_completion_only: bool = True
     importance_sampling: ISConfig = field(default_factory=ISConfig)
 
     infra: InfraConfig = field(default_factory=InfraConfig)
@@ -255,7 +256,10 @@ def main(
 
                 rm = None
                 if cfg.router_replay:
-                    rm = build_r3_routing_matrices(s.routing_matrices, s.prompt_len, model_input_len)
+                    rm = build_r3_routing_matrices(
+                        s.routing_matrices, s.prompt_len, model_input_len,
+                        completion_only=cfg.router_replay_completion_only,
+                    )
 
                 datum = tinker.Datum(
                     model_input=tinker.ModelInput.from_ints(tokens[:-1], routing_matrices=rm),
