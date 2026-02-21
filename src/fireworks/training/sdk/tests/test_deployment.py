@@ -138,13 +138,14 @@ class TestWaitForHotload:
         assert mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5) is True
 
     @patch.object(DeploymentManager, "hotload_check_status")
-    def test_legacy_format_ready(self, mock_status, mgr):
+    def test_missing_replicas_key_raises_runtime_error(self, mock_status, mgr):
         mock_status.return_value = {
             "identity": "snap-1",
             "state": "READY",
             "readiness": True,
         }
-        assert mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5) is True
+        with pytest.raises(RuntimeError, match="Expected 'replicas' list"):
+            mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5)
 
     @patch.object(DeploymentManager, "hotload_check_status")
     def test_identity_mismatch_waits(self, mock_status, mgr):
@@ -197,15 +198,6 @@ class TestExtractLogprobs:
         result = DeploymentSampler._extract_logprobs(choice)
         assert result == [-0.5, -1.2]
 
-    def test_legacy_format(self):
-        choice = {
-            "logprobs": {
-                "token_logprobs": [-0.3, -0.7, None],
-            }
-        }
-        result = DeploymentSampler._extract_logprobs(choice)
-        assert result == [-0.3, -0.7, 0.0]
-
     def test_structured_takes_priority(self):
         choice = {
             "logprobs": {
@@ -219,7 +211,7 @@ class TestExtractLogprobs:
     def test_missing_logprobs(self):
         assert DeploymentSampler._extract_logprobs({}) is None
 
-    def test_empty_content_and_no_legacy(self):
+    def test_empty_content_returns_none(self):
         assert DeploymentSampler._extract_logprobs({"logprobs": {"content": []}}) is None
 
     def test_missing_logprob_field_defaults_zero(self):
@@ -291,6 +283,24 @@ class TestCompletions:
         assert payload["prompt"] == [10, 20, 30]
         assert "messages" not in payload
         assert "/v1/completions" in mock_req.call_args[0][1]
+
+
+# ---------------------------------------------------------------------------
+# DeploymentManager.warmup — token-in warmup payload
+# ---------------------------------------------------------------------------
+
+
+class TestWarmup:
+    @patch("fireworks.training.sdk.deployment.requests.post")
+    def test_uses_token_prompt(self, mock_post, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        mock_post.return_value = resp
+
+        assert mgr.warmup("accounts/test/deployments/dep-1", max_retries=1) is True
+        payload = mock_post.call_args[1]["json"]
+        assert isinstance(payload["prompt"], list)
+        assert all(isinstance(tok, int) for tok in payload["prompt"])
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +438,7 @@ class TestSampleWithTokens:
 
     @patch("fireworks.training.sdk.deployment.request_with_retries")
     def test_echo_no_strip_when_prefix_mismatch(self, mock_req):
-        """If completion_token_ids don't start with prompt, don't strip."""
+        """echo=True should fail if completion_token_ids lack prompt prefix."""
         prompt_ids = [1, 100, 200]
         completion_ids = [999, 400, 500, 600, 700]
 
@@ -452,11 +462,8 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer(prompt_ids),
         )
-        results = sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}],
-            echo=True,
-        )
-
-        c = results[0]
-        assert c.full_tokens == prompt_ids + completion_ids
-        assert c.completion_len == len(completion_ids)
+        with pytest.raises(RuntimeError, match="Echo response format mismatch"):
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+                echo=True,
+            )

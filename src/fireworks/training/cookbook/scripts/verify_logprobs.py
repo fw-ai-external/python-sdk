@@ -6,9 +6,12 @@ Sets up a reference RLOR job (forward-only, no backward/optimizer) and a deploym
 samples from the deployment to get inference logprobs, then runs a forward pass on
 the reference trainer to get training logprobs, and compares them token-by-token.
 
+All metrics (KL divergence, abs diff) are computed on completion tokens only.
+
 Usage:
     python verify_logprobs.py \
         --base-model "accounts/fireworks/models/kimi-k2p5" \
+        --tokenizer-path "moonshotai/Kimi-K2-Instruct" \
         --dataset data/ifbench_sample.jsonl \
         --log-dir ./verify_logprobs_run \
         --deployment-shape "accounts/pyroworks-dev/deploymentShapes/rft-kimi-k2p5-r3" \
@@ -28,9 +31,7 @@ import atexit
 import concurrent.futures
 import json
 import logging
-import math
 import os
-import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -51,6 +52,8 @@ from fireworks.training.sdk import (
     TrainerServiceEndpoint,
     SampledCompletion,
 )
+from fireworks.training.cookbook.utils.data import load_jsonl_dataset
+from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,7 +62,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Suppress noisy tinker telemetry 404 warnings
 logging.getLogger("tinker").setLevel(logging.ERROR)
 logging.getLogger("tinker.lib.telemetry").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -79,8 +81,7 @@ def get_prefill_logprobs(
     """Get logprobs for a token sequence by running a prefill scoring pass.
 
     Sends the full token sequence to /inference/v1/completions as a "prompt"
-    with echo=True to get pure prefill logprobs for every position. This gives
-    teacher-forced logprobs that are directly comparable to training logprobs.
+    with echo=True to get pure prefill logprobs for every position.
 
     Alignment: inference[i] = P(tokens[i] | tokens[0:i]), where [0] is None.
     We shift by 1 so result[i] = P(tokens[i+1] | tokens[0:i+1]), matching
@@ -98,7 +99,7 @@ def get_prefill_logprobs(
         "prompt": tokens,
         "max_tokens": 1,
         "echo": True,
-        "logprobs": 1,
+        "logprobs": True,
         "prompt_cache_max_len": 0,
     }
     if model:
@@ -116,8 +117,9 @@ def get_prefill_logprobs(
     if not choices:
         return [0.0] * (len(tokens) - 1)
 
-    logprobs_data = choices[0].get("logprobs", {})
-    token_logprobs = logprobs_data.get("token_logprobs", [])
+    logprobs_data = choices[0].get("logprobs", {}) or {}
+    content = logprobs_data.get("content", [])
+    token_logprobs = [tok.get("logprob", 0.0) for tok in content] if isinstance(content, list) else []
 
     aligned_logprobs = token_logprobs[1 : len(tokens)]
     logprobs = [lp if lp is not None else 0.0 for lp in aligned_logprobs]
@@ -129,7 +131,7 @@ def get_prefill_logprobs(
 
 
 # =============================================================================
-# Logprob Comparison
+# Logprob Comparison (completion tokens only)
 # =============================================================================
 
 
@@ -141,57 +143,29 @@ def compare_logprobs(
     label: str = "",
     router_replay: bool = False,
     routing_matrices: Optional[List[str]] = None,
-    logprobs_echoed: bool = False,
     inference_top_logprobs: Optional[List] = None,
     training_top_k: Optional[Dict] = None,
     debug_completion_tokens: int = 0,
     debug_top_logprobs: int = 5,
 ) -> Dict[str, Any]:
-    """Compare training vs inference logprobs token-by-token.
+    """Compare training vs inference logprobs on completion tokens.
 
-    Args:
-        training_logprobs: Per-token logprobs from reference trainer forward.
-        inference_logprobs: Per-token logprobs from deployment API.
-        tokens: Full token sequence (prompt + completion).
-        prompt_len: Number of prompt tokens.
-        label: Label for this comparison (e.g., "sample-0").
-        router_replay: Whether R3 routing matrices were used.
-        routing_matrices: Per-position routing matrices (if R3).
-        logprobs_echoed: From SampledCompletion.logprobs_echoed. True means
-            inference_logprobs covers all P+C-1 positions (training-aligned).
-        inference_top_logprobs: Per-position top-K logprobs from inference.
-        debug_completion_tokens: Print top-K debug for the first N completion
-            token positions (0 = disabled).
-        debug_top_logprobs: How many top logprobs to show per debug position.
+    Inference logprobs are expected in training-aligned format (P+C-1
+    positions, from echo=True sampling). Only completion-region positions
+    are included in aggregate metrics.
 
     Returns:
-        Dict with detailed comparison metrics.
+        Dict with completion-only comparison metrics.
     """
     response_start = max(0, prompt_len - 1)
 
-    # Use explicit flag from SDK to determine logprob format.
-    # echoed = all positions (training-aligned), not completion-only.
-    inf_is_completion_only = not logprobs_echoed
-
-    # Per-token comparison
-    prompt_diffs = []
     completion_diffs = []
-    all_diffs = []
-    # Log-ratios for KL estimators: log(π_inf / π_train) = inf_lp - train_lp
-    prompt_log_ratios = []
     completion_log_ratios = []
-    all_log_ratios = []
     per_token_details = []
 
     for j in range(len(training_logprobs)):
         train_lp = training_logprobs[j]
-
-        # Map inference logprob index
-        if inf_is_completion_only:
-            inf_idx = j - response_start
-            inf_lp = inference_logprobs[inf_idx] if 0 <= inf_idx < len(inference_logprobs) else None
-        else:
-            inf_lp = inference_logprobs[j] if j < len(inference_logprobs) else None
+        inf_lp = inference_logprobs[j] if j < len(inference_logprobs) else None
 
         diff = abs(train_lp - inf_lp) if inf_lp is not None else None
         log_ratio = (inf_lp - train_lp) if inf_lp is not None else None
@@ -211,26 +185,11 @@ def compare_logprobs(
             detail["has_routing"] = bool(routing_matrices[j])
         per_token_details.append(detail)
 
-        if diff is not None:
-            all_diffs.append(diff)
-            all_log_ratios.append(log_ratio)
-            if j < response_start:
-                prompt_diffs.append(diff)
-                prompt_log_ratios.append(log_ratio)
-            else:
-                completion_diffs.append(diff)
-                completion_log_ratios.append(log_ratio)
+        if diff is not None and j >= response_start:
+            completion_diffs.append(diff)
+            completion_log_ratios.append(log_ratio)
 
-    # Aggregate metrics
     def _kl_stats(log_ratios: List[float]) -> Dict[str, float]:
-        """Compute KL divergence estimators from per-token log-ratios.
-
-        log_ratio = log(π_θ / π_ref) = inf_lp - train_lp
-
-        k1 = E[log_ratio]                         (unbiased, can be negative)
-        k2 = E[0.5 * log_ratio^2]                 (always ≥ 0, low variance)
-        k3 = E[exp(log_ratio) - 1 - log_ratio]    (always ≥ 0, stable)
-        """
         if not log_ratios:
             return {"k1": 0, "k2": 0, "k3": 0}
         t = torch.tensor(log_ratios, dtype=torch.float32)
@@ -258,16 +217,11 @@ def compare_logprobs(
         "total_tokens": len(tokens),
         "training_lp_len": len(training_logprobs),
         "inference_lp_len": len(inference_logprobs),
-        "inf_is_completion_only": inf_is_completion_only,
         "router_replay": router_replay,
-        "all": {**_stats(all_diffs), **_kl_stats(all_log_ratios)},
-        "prompt": {**_stats(prompt_diffs), **_kl_stats(prompt_log_ratios)},
         "completion": {**_stats(completion_diffs), **_kl_stats(completion_log_ratios)},
     }
 
-    # ---- Detailed per-token diagnostic ----
-    # Show: first 10 prompt tokens, boundary (last 5 prompt + first 15 completion),
-    # last 5 tokens, and any tokens with large diffs (> 0.1)
+    # ---- Per-token diagnostic log ----
     HEAD_PROMPT = 10
     BOUNDARY_BEFORE = 5
     BOUNDARY_AFTER = 15
@@ -277,27 +231,21 @@ def compare_logprobs(
     lines = []
     show_indices = set()
 
-    # First HEAD_PROMPT tokens
     for i in range(min(HEAD_PROMPT, len(per_token_details))):
         show_indices.add(i)
-    # Boundary around response_start
     for i in range(
         max(0, response_start - BOUNDARY_BEFORE), min(len(per_token_details), response_start + BOUNDARY_AFTER)
     ):
         show_indices.add(i)
-    # Last TAIL tokens
     for i in range(max(0, len(per_token_details) - TAIL), len(per_token_details)):
         show_indices.add(i)
-    # Large diffs
     large_diff_indices = []
     for i, d in enumerate(per_token_details):
         if d["abs_diff"] is not None and d["abs_diff"] > LARGE_DIFF_THRESHOLD:
             show_indices.add(i)
             large_diff_indices.append(i)
 
-    # Track completion token count for debug_completion_tokens
     completion_count = 0
-    # Also ensure first N completion tokens are always shown when debug is on
     if debug_completion_tokens > 0:
         comp_shown = 0
         for i, d in enumerate(per_token_details):
@@ -324,7 +272,6 @@ def compare_logprobs(
             f"train={d['training_lp']:8.4f}  inf={inf_str:>8s} | "
             f"diff={diff_str:>10s}{routing_str}{flag}"
         )
-        # Debug top-K logprobs for the first N completion positions
         if d["region"] == "COMPLETION":
             completion_count += 1
             if (
@@ -337,7 +284,6 @@ def compare_logprobs(
                 top_entries = inference_top_logprobs[i][:debug_top_logprobs]
                 top_strs = [f"tok={e.get('token', '?'):>8s} lp={e.get('logprob', 0.0):.4f}" for e in top_entries]
                 lines.append(f"      INF top-{len(top_entries)}: {' | '.join(top_strs)}")
-            # Training top-K debug
             if (
                 debug_completion_tokens > 0
                 and completion_count <= debug_completion_tokens
@@ -356,42 +302,21 @@ def compare_logprobs(
                         lines.append(f"      TRN top-{len(trn_entries)}: {' | '.join(trn_entries)}")
         prev_shown = i
 
-    # Count tokens with large diffs by region
-    large_prompt = sum(1 for i in large_diff_indices if per_token_details[i]["region"] == "PROMPT")
     large_completion = sum(1 for i in large_diff_indices if per_token_details[i]["region"] == "COMPLETION")
 
     logger.info(
         "Logprob comparison [%s]:\n"
         "  prompt_len=%d, total_tokens=%d\n"
-        "  training_lps=%d, inference_lps=%d, inf_is_completion_only=%s\n"
-        "  ALL:        mean_diff=%.6f  max_diff=%.6f  std=%.6f  (%d tokens)\n"
-        "              KL: k1=%.6f  k2=%.6f  k3=%.6f\n"
-        "  PROMPT:     mean_diff=%.6f  max_diff=%.6f  std=%.6f  (%d tokens)\n"
-        "              KL: k1=%.6f  k2=%.6f  k3=%.6f\n"
+        "  training_lps=%d, inference_lps=%d\n"
         "  COMPLETION: mean_diff=%.6f  max_diff=%.6f  std=%.6f  (%d tokens)\n"
         "              KL: k1=%.6f  k2=%.6f  k3=%.6f\n"
-        "  Large diffs (>%.2f): %d total (%d prompt, %d completion)\n"
+        "  Large diffs (>%.2f): %d completion\n"
         "  %s\n%s",
         label,
         prompt_len,
         len(tokens),
         len(training_logprobs),
         len(inference_logprobs),
-        inf_is_completion_only,
-        metrics["all"]["mean"],
-        metrics["all"]["max"],
-        metrics["all"]["std"],
-        metrics["all"]["count"],
-        metrics["all"]["k1"],
-        metrics["all"]["k2"],
-        metrics["all"]["k3"],
-        metrics["prompt"]["mean"],
-        metrics["prompt"]["max"],
-        metrics["prompt"]["std"],
-        metrics["prompt"]["count"],
-        metrics["prompt"]["k1"],
-        metrics["prompt"]["k2"],
-        metrics["prompt"]["k3"],
         metrics["completion"]["mean"],
         metrics["completion"]["max"],
         metrics["completion"]["std"],
@@ -400,41 +325,12 @@ def compare_logprobs(
         metrics["completion"]["k2"],
         metrics["completion"]["k3"],
         LARGE_DIFF_THRESHOLD,
-        len(large_diff_indices),
-        large_prompt,
         large_completion,
         "-" * 110,
         "\n".join(lines),
     )
 
     return metrics
-
-
-def build_r3_routing_matrices(
-    routing_matrices: Optional[List[str]], prompt_len: int, model_input_len: int
-) -> Optional[List[str]]:
-    """Build routing matrices aligned to model_input positions for Router Replay (R3).
-
-    Same logic as train_grpo.py _build_r3_routing_matrices.
-    """
-    if not routing_matrices:
-        return None
-
-    rm = list(routing_matrices)
-    if len(rm) == model_input_len:
-        return rm
-
-    expected = model_input_len - (prompt_len - 1)
-    if len(rm) != expected:
-        logger.warning(
-            "R3: routing_matrices length (%d) != expected (%d). " "prompt_len=%d, model_input_len=%d.",
-            len(rm),
-            expected,
-            prompt_len,
-            model_input_len,
-        )
-    rm = [""] * (prompt_len - 1) + rm
-    return rm[:model_input_len]
 
 
 # =============================================================================
@@ -448,6 +344,7 @@ def do_verify_step(
     prompt_idx: int,
     max_seq_len: int = 4096,
     router_replay: bool = False,
+    router_replay_completion_only: bool = True,
     debug_completion_tokens: int = 0,
     debug_top_logprobs: int = 5,
     scoring_pass: bool = False,
@@ -457,14 +354,11 @@ def do_verify_step(
 ) -> Dict[str, Any]:
     """Run forward-only verification: compare training vs inference logprobs.
 
-    No backward pass, no optimizer step.
-
     Returns:
-        Dict with per-sample comparison metrics and aggregate summary.
+        Dict with completion-only comparison metrics aggregated across samples.
     """
     t_start = time.time()
 
-    # Build datums for batched forward
     fwd_datums: List[tinker.Datum] = []
     valid_indices: List[int] = []
     all_routing: List[Optional[List[str]]] = []
@@ -474,15 +368,15 @@ def do_verify_step(
         if len(ft) < 2:
             continue
         if len(ft) > max_seq_len:
-            logger.warning(
-                "  Sample %d exceeds max_seq_len (%d > %d), skipping",
-                i,
-                len(ft),
-                max_seq_len,
-            )
+            logger.warning("  Sample %d exceeds max_seq_len (%d > %d), skipping", i, len(ft), max_seq_len)
             continue
 
-        rm = build_r3_routing_matrices(s.routing_matrices, s.prompt_len, len(ft) - 1) if router_replay else None
+        rm = None
+        if router_replay:
+            rm = build_r3_routing_matrices(
+                s.routing_matrices, s.prompt_len, len(ft) - 1,
+                completion_only=router_replay_completion_only,
+            )
         all_routing.append(rm)
         valid_indices.append(i)
         fwd_datums.append(
@@ -495,13 +389,11 @@ def do_verify_step(
     if not fwd_datums:
         return {"error": "no valid datums", "prompt_idx": prompt_idx}
 
-    # Forward pass on reference trainer (frozen, no gradients)
     t_fwd = time.time()
     ref_future = ref_client.forward(fwd_datums, "cross_entropy")
     rfwd = ref_future.result(timeout=300)
     fwd_elapsed = time.time() - t_fwd
 
-    # Compare logprobs per sample
     per_sample_metrics = []
     for batch_idx, sample_idx in enumerate(valid_indices):
         s = sampled[sample_idx]
@@ -509,7 +401,6 @@ def do_verify_step(
         training_lps = fwd_out["logprobs"].data
         inference_lps = s.inference_logprobs or []
 
-        # Extract training top-K if available
         training_top_k_data = None
         trn_tk_lps_raw = fwd_out.get("top_k_logprobs")
         trn_tk_ids_raw = fwd_out.get("top_k_indices")
@@ -522,13 +413,10 @@ def do_verify_step(
                 training_top_k_data = {"logprobs": trn_tk_lps, "indices": trn_tk_ids, "k": K}
 
         if not inference_lps:
-            logger.warning(
-                "  Sample %d has no inference logprobs, skipping comparison",
-                sample_idx,
-            )
+            logger.warning("  Sample %d has no inference logprobs, skipping comparison", sample_idx)
             continue
 
-        metrics = compare_logprobs(
+        m = compare_logprobs(
             training_logprobs=training_lps,
             inference_logprobs=inference_lps,
             tokens=s.full_tokens,
@@ -536,22 +424,18 @@ def do_verify_step(
             label=f"prompt-{prompt_idx}/sample-{sample_idx}",
             router_replay=router_replay,
             routing_matrices=all_routing[batch_idx] if batch_idx < len(all_routing) else None,
-            logprobs_echoed=getattr(s, "logprobs_echoed", False),
             inference_top_logprobs=getattr(s, "inference_top_logprobs", None),
             training_top_k=training_top_k_data,
             debug_completion_tokens=debug_completion_tokens,
             debug_top_logprobs=debug_top_logprobs,
         )
-        per_sample_metrics.append(metrics)
+        per_sample_metrics.append(m)
 
-        # Scoring pass: compare training prefill logprobs vs inference prefill logprobs
         if scoring_pass and scoring_url:
             try:
                 scoring_lps = get_prefill_logprobs(
-                    url=scoring_url,
-                    tokens=s.full_tokens,
-                    api_key=scoring_api_key,
-                    model=scoring_model,
+                    url=scoring_url, tokens=s.full_tokens,
+                    api_key=scoring_api_key, model=scoring_model,
                 )
                 if scoring_lps:
                     compare_logprobs(
@@ -562,23 +446,17 @@ def do_verify_step(
                         label=f"SCORING-prompt-{prompt_idx}/sample-{sample_idx}",
                         router_replay=False,
                         routing_matrices=None,
-                        logprobs_echoed=True,
                         debug_completion_tokens=debug_completion_tokens,
                         debug_top_logprobs=debug_top_logprobs,
                     )
             except Exception as e:
                 logger.warning("  Scoring pass failed for sample %d: %s", sample_idx, e)
 
-    # Aggregate across samples
     def _avg(vals):
         return sum(vals) / len(vals) if vals else 0
 
-    all_mean_diffs = [m["all"]["mean"] for m in per_sample_metrics if m["all"]["count"] > 0]
-    all_max_diffs = [m["all"]["max"] for m in per_sample_metrics if m["all"]["count"] > 0]
     comp_mean_diffs = [m["completion"]["mean"] for m in per_sample_metrics if m["completion"]["count"] > 0]
     comp_max_diffs = [m["completion"]["max"] for m in per_sample_metrics if m["completion"]["count"] > 0]
-    prompt_mean_diffs = [m["prompt"]["mean"] for m in per_sample_metrics if m["prompt"]["count"] > 0]
-    # KL estimators (completion tokens only — most relevant for training)
     comp_k1s = [m["completion"]["k1"] for m in per_sample_metrics if m["completion"]["count"] > 0]
     comp_k2s = [m["completion"]["k2"] for m in per_sample_metrics if m["completion"]["count"] > 0]
     comp_k3s = [m["completion"]["k3"] for m in per_sample_metrics if m["completion"]["count"] > 0]
@@ -588,11 +466,8 @@ def do_verify_step(
         "num_samples": len(per_sample_metrics),
         "fwd_elapsed_s": fwd_elapsed,
         "total_elapsed_s": time.time() - t_start,
-        "avg_all_mean_diff": _avg(all_mean_diffs),
-        "max_all_max_diff": max(all_max_diffs) if all_max_diffs else 0,
         "avg_completion_mean_diff": _avg(comp_mean_diffs),
         "max_completion_max_diff": max(comp_max_diffs) if comp_max_diffs else 0,
-        "avg_prompt_mean_diff": _avg(prompt_mean_diffs),
         "avg_completion_k1": _avg(comp_k1s),
         "avg_completion_k2": _avg(comp_k2s),
         "avg_completion_k3": _avg(comp_k3s),
@@ -600,14 +475,11 @@ def do_verify_step(
 
     logger.info(
         "Prompt %d summary: %d samples | "
-        "all_diff: mean=%.6f max=%.6f | "
         "completion_diff: mean=%.6f max=%.6f | "
         "KL(completion): k1=%.6f k2=%.6f k3=%.6f | "
         "fwd=%.1fs",
         prompt_idx,
         summary["num_samples"],
-        summary["avg_all_mean_diff"],
-        summary["max_all_max_diff"],
         summary["avg_completion_mean_diff"],
         summary["max_completion_max_diff"],
         summary["avg_completion_k1"],
@@ -652,10 +524,8 @@ def parse_args():
     p.add_argument("--accelerator-count", type=int, default=None)
     p.add_argument("--hot-load-bucket-type", type=str, default="FW_HOSTED")
     p.add_argument(
-        "--deployment-extra-args",
-        type=str,
-        default=None,
-        help="Comma-separated extra args for the deployment (appended to shape args).",
+        "--deployment-extra-args", type=str, default=None,
+        help="Comma-separated extra args for the deployment.",
     )
     p.add_argument("--dataset", required=True, help="Path or URL to JSONL dataset")
     p.add_argument("--max-rows", type=int, default=3, help="Number of prompts to verify")
@@ -664,74 +534,51 @@ def parse_args():
     p.add_argument("--max-new-tokens", type=int, default=512)
     p.add_argument("--temperature", type=float, default=0.7)
     p.add_argument(
-        "--debug-completion-tokens",
-        type=int,
-        default=0,
-        help="Print top-K inference logprobs for the first N completion token " "positions (0 = disabled).",
+        "--debug-completion-tokens", type=int, default=0,
+        help="Print top-K logprobs for the first N completion positions (0 = disabled).",
     )
     p.add_argument(
-        "--debug-top-logprobs",
-        type=int,
-        default=5,
-        help="How many top logprobs to show per debug position (default 5).",
+        "--debug-top-logprobs", type=int, default=5,
+        help="How many top logprobs to show per debug position.",
     )
     p.add_argument(
-        "--reasoning-effort",
-        type=str,
-        default=None,
+        "--reasoning-effort", type=str, default=None,
         help="Reasoning effort for completions (e.g. 'none', 'false').",
     )
     p.add_argument("--lora-rank", type=int, default=0)
     p.add_argument(
-        "--trainer-job-id",
-        type=str,
-        default=None,
+        "--trainer-job-id", type=str, default=None,
         help="Reuse an existing running RLOR trainer job instead of creating a new one.",
     )
     p.add_argument(
-        "--reference-extra-args",
-        type=str,
-        default=None,
+        "--reference-extra-args", type=str, default=None,
         help="Extra args for reference trainer (e.g. '--forward-only --no-compile').",
     )
     p.add_argument(
-        "--router-replay",
-        action="store_true",
+        "--router-replay", action="store_true",
         help="Enable R3: capture routing matrices during sampling and replay in training forward.",
     )
     p.add_argument(
-        "--hotload-api-url",
-        type=str,
-        default="https://api.fireworks.ai",
+        "--router-replay-completion-only", action="store_true", default=True,
+        help="R3 on completion tokens only (default). Use --no-router-replay-completion-only for all tokens.",
     )
     p.add_argument(
-        "--cleanup-on-exit",
-        action="store_true",
-        help="Delete RLOR job and deployment on exit.",
+        "--no-router-replay-completion-only", dest="router_replay_completion_only", action="store_false",
+        help="R3 on all tokens (prompt + completion).",
+    )
+    p.add_argument("--hotload-api-url", type=str, default="https://api.fireworks.ai")
+    p.add_argument("--cleanup-on-exit", action="store_true", help="Delete RLOR job and deployment on exit.")
+    p.add_argument(
+        "--tokenizer-path", type=str, default=None,
+        help="HuggingFace model name for client-side tokenizer (e.g. 'Qwen/Qwen3-1.7B'). Required.",
     )
     p.add_argument(
-        "--tokenizer-path",
-        type=str,
-        default=None,
-        help="Local path or HuggingFace hub name for the tokenizer "
-        "(e.g. 'Qwen/Qwen3-1.7B'). Falls back to --base-model if not set.",
-    )
-    p.add_argument(
-        "--no-echo",
-        action="store_true",
-        help="Use echo=False for sampling (decode-only logprobs, no prompt prefill logprobs).",
-    )
-    p.add_argument(
-        "--prompt-cache-max-len",
-        type=int,
-        default=None,
+        "--prompt-cache-max-len", type=int, default=None,
         help="Set prompt_cache_max_len for sampling API call. 0 = disable cross-request KV cache.",
     )
     p.add_argument(
-        "--scoring-pass",
-        action="store_true",
-        help="After generation, rescore full sequence via /v1/completions prefill "
-        "to get pure prefill logprobs and compare against training.",
+        "--scoring-pass", action="store_true",
+        help="After generation, rescore full sequence via /v1/completions prefill.",
     )
     return p.parse_args()
 
@@ -747,7 +594,6 @@ def main():
     log_dir = os.path.abspath(args.log_dir)
     os.makedirs(log_dir, exist_ok=True)
 
-    # Add file handler so per-token diagnostics are captured even if tmux scrollback overflows
     fh = logging.FileHandler(os.path.join(log_dir, "verify.log"), mode="w")
     fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
@@ -768,6 +614,12 @@ def main():
 
     if not fw_api_key or not fw_account_id:
         raise RuntimeError("Set FIREWORKS_API_KEY and FIREWORKS_ACCOUNT_ID")
+
+    if not args.tokenizer_path:
+        raise ValueError(
+            "--tokenizer-path is required for client-side tokenization. "
+            "Set it to the HuggingFace model name (e.g. 'Qwen/Qwen3-1.7B')."
+        )
 
     hotload_deployment_id = args.hotload_deployment_id
 
@@ -803,7 +655,7 @@ def main():
         base_model=args.base_model,
         lora_rank=args.lora_rank,
         max_context_length=args.max_seq_len,
-        learning_rate=1e-5,  # unused for forward-only
+        learning_rate=1e-5,
         gradient_accumulation_steps=1,
         node_count=args.reference_node_count,
         display_name="verify-logprobs-ref",
@@ -857,7 +709,7 @@ def main():
                 base_model=args.base_model,
                 deployment_shape=args.deployment_shape,
                 region=args.deployment_region or args.region or "US_VIRGINIA_1",
-                min_replica_count=1,  # Prevent scale-to-zero during verification
+                min_replica_count=1,
                 accelerator_type=args.deployment_accelerator_type or args.accelerator_type,
                 hot_load_bucket_type=args.hot_load_bucket_type,
                 skip_shape_validation=args.skip_shape_validation,
@@ -876,14 +728,13 @@ def main():
     deployment_future = executor.submit(_setup_deployment)
 
     if args.trainer_job_id:
-        # Reuse an existing running trainer job.
         logger.info("  Reusing existing trainer job: %s", args.trainer_job_id)
         job = rlor_mgr.get(args.trainer_job_id)
         job_state = job.get("state", "")
         endpoint_url = job.get("directRouteHandle", "")
         if job_state != "JOB_STATE_RUNNING":
             raise RuntimeError(
-                f"Trainer job {args.trainer_job_id} is in state {job_state}, " f"expected JOB_STATE_RUNNING"
+                f"Trainer job {args.trainer_job_id} is in state {job_state}, expected JOB_STATE_RUNNING"
             )
         if not endpoint_url:
             raise RuntimeError(f"Trainer job {args.trainer_job_id} has no directRouteHandle")
@@ -902,17 +753,11 @@ def main():
             ),
         )
 
-    # Wait for deployment first
     dep_info = deployment_future.result()
 
     inference_url = deploy_mgr.inference_url
     inference_model = dep_info.inference_model if dep_info else args.base_model
 
-    if not args.tokenizer_path:
-        raise ValueError(
-            "--tokenizer-path is required for client-side tokenization. "
-            "Set it to the HuggingFace model name (e.g. 'Qwen/Qwen3-1.7B')."
-        )
     logger.info("Loading tokenizer from: %s", args.tokenizer_path)
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer_path)
 
@@ -924,38 +769,16 @@ def main():
     )
 
     # =========================================================================
-    # Load dataset (while reference job may still be provisioning)
+    # Load dataset
     # =========================================================================
     logger.info("\n[2/3] Loading dataset...")
-    dataset = []
-    source = args.dataset
-    if source.startswith("http://") or source.startswith("https://"):
-        import urllib.request
-
-        with urllib.request.urlopen(source) as resp:
-            for line in resp:
-                line = line.decode("utf-8").strip()
-                if line:
-                    dataset.append(json.loads(line))
-    else:
-        with open(source) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    dataset.append(json.loads(line))
-    if args.max_rows:
-        dataset = dataset[: args.max_rows]
-    logger.info("  Loaded %d examples", len(dataset))
-
+    dataset = load_jsonl_dataset(args.dataset, args.max_rows)
     if not dataset:
         raise RuntimeError("No data loaded!")
 
-    # Warmup deployment — use more retries when reusing an existing deployment
-    # since it may have scaled to zero and needs time to rescale.
     warmup_retries = 60 if not args.create_deployment else 30
     deploy_mgr.warmup(inference_model, max_retries=warmup_retries)
 
-    # Wait for reference RLOR job
     if reference_future is not None:
         logger.info("\nWaiting for reference RLOR job...")
         reference_endpoint = reference_future.result()
@@ -963,15 +786,13 @@ def main():
     logger.info("  Reference ready: %s", reference_endpoint.job_id)
 
     # =========================================================================
-    # Helper: create/reconnect reference client (for retry on job death)
+    # Helper: create/reconnect reference client
     # =========================================================================
     def _create_ref_client(endpoint: TrainerServiceEndpoint):
         svc = FiretitanServiceClient(base_url=endpoint.base_url, api_key=args.api_key)
-        client = svc.create_training_client(base_model=args.base_model, lora_rank=args.lora_rank)
-        return client
+        return svc.create_training_client(base_model=args.base_model, lora_rank=args.lora_rank)
 
     def _reconnect_reference() -> Tuple[TrainerServiceEndpoint, FiretitanTrainingClient]:
-        """Recreate RLOR job and training client after a failure."""
         nonlocal reference_endpoint
         logger.info("  Reconnecting: creating new reference RLOR job...")
         reference_endpoint = rlor_mgr.create_and_wait(
@@ -991,6 +812,8 @@ def main():
     logger.info("\n" + "=" * 80)
     logger.info("[3/3] Logprob verification loop (%d prompts, %d samples each)", len(dataset), args.group_size)
     logger.info("  Router Replay (R3): %s", "ENABLED" if args.router_replay else "DISABLED")
+    if args.router_replay:
+        logger.info("  R3 completion-only: %s", args.router_replay_completion_only)
     logger.info("=" * 80)
 
     all_summaries = []
@@ -998,14 +821,12 @@ def main():
 
     for pidx, row in enumerate(dataset):
         messages = row.get("messages", [])
-        gt = row.get("ground_truth", "")
         if not messages:
             continue
         input_msgs = [m for m in messages if m.get("role") != "assistant"]
         if not input_msgs:
             continue
 
-        # Qwen3 /no_think
         sampling_msgs = list(input_msgs)
         if args.reasoning_effort and args.reasoning_effort.lower() in ("none", "false"):
             sampling_msgs = [{"role": "system", "content": "/no_think"}] + sampling_msgs
@@ -1013,18 +834,15 @@ def main():
         prompt_preview = input_msgs[-1].get("content", "")[:80]
         logger.info("\n--- Prompt %d/%d: %s... ---", pidx + 1, len(dataset), prompt_preview)
 
-        # Sample from deployment (token-in) with logprobs + echo (always use
-        # echo to get all logprobs including prompt positions, not just completion)
         try:
             t_sample = time.time()
-            use_echo = not args.no_echo
             sample_kwargs = dict(
                 messages=sampling_msgs,
                 n=args.group_size,
                 max_tokens=args.max_new_tokens,
                 temperature=args.temperature,
                 logprobs=True,
-                echo=use_echo,
+                echo=True,
                 reasoning_effort=args.reasoning_effort,
             )
             if args.prompt_cache_max_len is not None:
@@ -1044,7 +862,7 @@ def main():
             continue
 
         logger.info(
-            "  Sampled %d completions in %.1fs (prompt_len=%d, comp_lens=%s, " "full_token_lens=%s, echoed=%s)",
+            "  Sampled %d completions in %.1fs (prompt_len=%d, comp_lens=%s, full_token_lens=%s, echoed=%s)",
             len(sampled),
             sample_elapsed,
             sampled[0].prompt_len,
@@ -1053,31 +871,21 @@ def main():
             [s.logprobs_echoed for s in sampled],
         )
 
-        # Log first token info (first sample only — prompt is shared)
         s0 = sampled[0]
         first_tok = s0.full_tokens[0] if s0.full_tokens else None
-        logger.info(
-            "  Client tokenization: first_token=%s, prompt_len=%d",
-            first_tok,
-            s0.prompt_len,
-        )
+        logger.info("  Client tokenization: first_token=%s, prompt_len=%d", first_tok, s0.prompt_len)
 
-        # Log inference logprob stats
         for si, s in enumerate(sampled):
             if s.inference_logprobs:
                 logger.info(
-                    "    sample-%d: inf_lps=%d, full_toks=%d, " "prompt_len=%d, echoed=%s, routing=%s",
-                    si,
-                    len(s.inference_logprobs),
-                    len(s.full_tokens),
-                    s.prompt_len,
-                    s.logprobs_echoed,
+                    "    sample-%d: inf_lps=%d, full_toks=%d, prompt_len=%d, echoed=%s, routing=%s",
+                    si, len(s.inference_logprobs), len(s.full_tokens),
+                    s.prompt_len, s.logprobs_echoed,
                     len(s.routing_matrices) if s.routing_matrices else "None",
                 )
             else:
                 logger.warning("    sample-%d: NO inference logprobs!", si)
 
-        # Forward on reference trainer with retry + reconnect
         summary = None
         for attempt in range(1, MAX_FWD_RETRIES + 1):
             try:
@@ -1087,6 +895,7 @@ def main():
                     prompt_idx=pidx,
                     max_seq_len=args.max_seq_len,
                     router_replay=args.router_replay,
+                    router_replay_completion_only=args.router_replay_completion_only,
                     debug_completion_tokens=args.debug_completion_tokens,
                     debug_top_logprobs=args.debug_top_logprobs,
                     scoring_pass=args.scoring_pass,
@@ -1105,16 +914,12 @@ def main():
                     except Exception as re:
                         logger.error("  Reconnect failed: %s", re)
                 else:
-                    logger.error(
-                        "  Forward failed after %d retries, skipping prompt %d",
-                        MAX_FWD_RETRIES,
-                        pidx,
-                    )
+                    logger.error("  Forward failed after %d retries, skipping prompt %d", MAX_FWD_RETRIES, pidx)
         if summary:
             all_summaries.append(summary)
 
     # =========================================================================
-    # Final summary
+    # Final summary (completion-only)
     # =========================================================================
     logger.info("\n" + "=" * 80)
     logger.info("FINAL SUMMARY")
@@ -1123,29 +928,23 @@ def main():
     valid_summaries = [s for s in all_summaries if "error" not in s]
     if valid_summaries:
         n = len(valid_summaries)
-        avg_all_diff = sum(s["avg_all_mean_diff"] for s in valid_summaries) / n
-        max_all_diff = max(s["max_all_max_diff"] for s in valid_summaries)
         avg_comp_diff = sum(s["avg_completion_mean_diff"] for s in valid_summaries) / n
         max_comp_diff = max(s["max_completion_max_diff"] for s in valid_summaries)
-        avg_prompt_diff = sum(s["avg_prompt_mean_diff"] for s in valid_summaries) / n
         avg_comp_k1 = sum(s["avg_completion_k1"] for s in valid_summaries) / n
         avg_comp_k2 = sum(s["avg_completion_k2"] for s in valid_summaries) / n
         avg_comp_k3 = sum(s["avg_completion_k3"] for s in valid_summaries) / n
 
         logger.info("  Verified %d prompts, %d total samples", n, sum(s["num_samples"] for s in valid_summaries))
-        logger.info("  ALL tokens:        avg_mean_diff=%.6f  max_diff=%.6f", avg_all_diff, max_all_diff)
-        logger.info("  PROMPT tokens:     avg_mean_diff=%.6f", avg_prompt_diff)
         logger.info("  COMPLETION tokens: avg_mean_diff=%.6f  max_diff=%.6f", avg_comp_diff, max_comp_diff)
         logger.info("  KL divergence (completion): k1=%.6f  k2=%.6f  k3=%.6f", avg_comp_k1, avg_comp_k2, avg_comp_k3)
 
-        if max_all_diff < 0.01:
-            logger.info("  RESULT: PASS - logprobs match within 0.01 tolerance")
-        elif max_all_diff < 0.1:
-            logger.info("  RESULT: MARGINAL - max diff %.6f is between 0.01 and 0.1", max_all_diff)
+        if max_comp_diff < 0.01:
+            logger.info("  RESULT: PASS - completion logprobs match within 0.01 tolerance")
+        elif max_comp_diff < 0.1:
+            logger.info("  RESULT: MARGINAL - max completion diff %.6f is between 0.01 and 0.1", max_comp_diff)
         else:
-            logger.info("  RESULT: FAIL - max diff %.6f exceeds 0.1 tolerance", max_all_diff)
+            logger.info("  RESULT: FAIL - max completion diff %.6f exceeds 0.1 tolerance", max_comp_diff)
 
-        # Save results to log_dir
         results_path = os.path.join(log_dir, "verify_logprobs_results.json")
         with open(results_path, "w") as f:
             json.dump(
@@ -1153,11 +952,8 @@ def main():
                     "args": vars(args),
                     "summaries": valid_summaries,
                     "final": {
-                        "avg_all_mean_diff": avg_all_diff,
-                        "max_all_max_diff": max_all_diff,
                         "avg_completion_mean_diff": avg_comp_diff,
                         "max_completion_max_diff": max_comp_diff,
-                        "avg_prompt_mean_diff": avg_prompt_diff,
                         "avg_completion_k1": avg_comp_k1,
                         "avg_completion_k2": avg_comp_k2,
                         "avg_completion_k3": avg_comp_k3,

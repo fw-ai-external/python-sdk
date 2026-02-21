@@ -470,26 +470,25 @@ class DeploymentManager:
                     base_model,
                 )
 
-                # Normalize new (replicas) or legacy (flat) format into
-                # (current_identity, stage, readiness).
-                replicas = status.get("replicas", [])
+                # Strict modern schema: hotload status must be replicas-based.
+                replicas = status.get("replicas")
+                if not isinstance(replicas, list):
+                    raise RuntimeError(
+                        format_sdk_error(
+                            "Unrecognized hotload status response format",
+                            f"Expected 'replicas' list, got keys: {list(status.keys())}",
+                            "This may indicate an API version mismatch. Update the SDK.",
+                        )
+                    )
                 if replicas:
                     replica = replicas[0]
                     current_identity = replica.get("current_snapshot_identity")
                     stage = replica.get("loading_state", {}).get("stage", "unknown")
                     readiness = replica.get("readiness", False)
-                elif "identity" in status:
-                    current_identity = status.get("identity")
-                    stage = status.get("state", "UNKNOWN")
-                    readiness = status.get("readiness", False)
                 else:
-                    raise RuntimeError(
-                        format_sdk_error(
-                            "Unrecognized hotload status response format",
-                            f"Expected 'replicas' or 'identity' key, got: {list(status.keys())}",
-                            "This may indicate an API version mismatch. Update the SDK.",
-                        )
-                    )
+                    current_identity = None
+                    stage = "pending"
+                    readiness = False
 
                 elapsed = int(time.time() - start)
 
@@ -569,7 +568,7 @@ class DeploymentManager:
         max_retries: int = 30,
         retry_interval_s: float = 10.0,
     ) -> bool:
-        """Send a test request to the inference deployment and wait until it responds."""
+        """Send a token-in test request to the deployment and wait until it responds."""
         base = self.inference_url.rstrip("/")
         completions_url = f"{base}/inference/v1/completions"
         verify = self._should_verify_ssl(self.inference_url)
@@ -581,7 +580,8 @@ class DeploymentManager:
         }
         payload = {
             "model": model,
-            "prompt": "Hello",
+            # Keep warmup on the same token-in path as training sampling.
+            "prompt": [1, 2],
             "max_tokens": 4,
             "temperature": 0.0,
         }
@@ -774,9 +774,8 @@ class DeploymentSampler:
     def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
         """Extract per-token logprobs from a completions response.
 
-        Handles both formats:
-        - Structured (NewLogProbs): ``choice.logprobs.content[].logprob``
-        - Legacy (LogProbs): ``choice.logprobs.token_logprobs[]``
+        Expects modern structured logprobs format:
+        ``choice.logprobs.content[].logprob``.
 
         Returns:
             List of per-token logprobs, or ``None`` if absent/empty.
@@ -784,14 +783,9 @@ class DeploymentSampler:
         lp_data = choice.get("logprobs")
         if not lp_data or not isinstance(lp_data, dict):
             return None
-        # Structured format (returned by logprobs=True boolean)
         content = lp_data.get("content")
-        if content:
+        if isinstance(content, list) and content:
             return [tok.get("logprob", 0.0) for tok in content]
-        # Legacy format (returned by logprobs=N integer)
-        token_logprobs = lp_data.get("token_logprobs")
-        if token_logprobs:
-            return [lp if lp is not None else 0.0 for lp in token_logprobs]
         return None
 
     @staticmethod
@@ -904,7 +898,17 @@ class DeploymentSampler:
             # and drop the unconditional first-token logprob to get
             # P+C-1 training-aligned entries.
             lp_is_echo = False
-            if echo_mode and len(completion_ids) > len(prompt_ids) and completion_ids[: len(prompt_ids)] == list(prompt_ids):
+            if echo_mode:
+                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
+                    raise RuntimeError(
+                        format_sdk_error(
+                            "Echo response format mismatch",
+                            "echo=True was requested but completion_token_ids do not include the prompt prefix.",
+                            "Ensure the deployment supports token echo with raw_output=True.",
+                            docs_url=DOCS_DEPLOYMENTS,
+                        )
+                    )
+
                 completion_ids = completion_ids[len(prompt_ids):]
                 if token_logprobs is not None:
                     token_logprobs = token_logprobs[1:]
