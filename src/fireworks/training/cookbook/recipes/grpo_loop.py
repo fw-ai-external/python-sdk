@@ -180,6 +180,7 @@ def main(
         inference_url=deploy_mgr.inference_url,
         model=inference_model,
         api_key=api_key,
+        bos_token_id=cfg.deployment.bos_token_id,
     )
     tracker = WeightSyncer(
         policy_client=policy.inner,

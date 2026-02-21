@@ -45,6 +45,7 @@ class DeployConfig:
     hot_load_bucket_type: str = "FW_HOSTED"
     deployment_timeout_s: float = 1800
     deployment_extra_args: list[str] | None = None
+    bos_token_id: int | None = None
 
     def to_deployment_config(
         self,
