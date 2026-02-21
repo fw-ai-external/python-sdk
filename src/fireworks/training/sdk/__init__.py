@@ -13,6 +13,8 @@ Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
   - cookbook.algorithms.dpo:  DPOTrainer, DPOConfig
 """
 
+import fireworks.training.sdk._tinker_r3_patch  # noqa: F401
+
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient, SaveSamplerResult
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 from fireworks.training.sdk.deployment import (
