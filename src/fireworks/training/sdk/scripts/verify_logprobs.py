@@ -908,9 +908,13 @@ def main():
     inference_url = deploy_mgr.inference_url
     inference_model = dep_info.inference_model if dep_info else args.base_model
 
-    tokenizer_name = args.tokenizer_path or args.base_model
-    logger.info("Loading tokenizer from: %s", tokenizer_name)
-    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+    if not args.tokenizer_path:
+        raise ValueError(
+            "--tokenizer-path is required for client-side tokenization. "
+            "Set it to the HuggingFace model name (e.g. 'Qwen/Qwen3-1.7B')."
+        )
+    logger.info("Loading tokenizer from: %s", args.tokenizer_path)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.tokenizer_path)
 
     sampler = DeploymentSampler(
         inference_url=inference_url,

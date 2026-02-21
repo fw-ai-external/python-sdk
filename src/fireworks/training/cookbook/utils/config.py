@@ -47,7 +47,7 @@ class DeployConfig:
     deployment_extra_args: list[str] | None = None
     tokenizer_model: str | None = None
     """HuggingFace model name for the tokenizer (e.g. ``Qwen/Qwen3-1.7B``).
-    Falls back to ``base_model`` in recipes if not set."""
+    Required for recipes that use client-side tokenization (GRPO)."""
 
     def to_deployment_config(
         self,

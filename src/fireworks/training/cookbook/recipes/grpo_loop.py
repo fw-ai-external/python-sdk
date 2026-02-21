@@ -124,6 +124,11 @@ def main(
     cfg = config
 
     validate_config(cfg.base_model, cfg.dataset, cfg.hotload, cfg.deployment, cfg.infra, cfg.resume)
+    if not cfg.deployment.tokenizer_model:
+        raise ValueError(
+            "deployment.tokenizer_model is required for client-side tokenization. "
+            "Set it to the HuggingFace model name (e.g. 'Qwen/Qwen3-1.7B')."
+        )
     setup_wandb(cfg.wandb, {"group_size": cfg.group_size, "kl_beta": cfg.kl_beta, "lr": cfg.learning_rate})
 
     # -- Setup infrastructure (parallel) -----------------------------------
@@ -177,8 +182,7 @@ def main(
     reference = ReconnectableClient(rlor_mgr, reference_ep.job_id, cfg.base_model, cfg.lora_rank)
 
     inference_model = dep_info.inference_model if dep_info else cfg.base_model
-    tokenizer_model = cfg.deployment.tokenizer_model or cfg.base_model
-    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_model)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.deployment.tokenizer_model)
     sampler = DeploymentSampler(
         inference_url=deploy_mgr.inference_url,
         model=inference_model,

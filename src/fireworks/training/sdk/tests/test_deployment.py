@@ -366,3 +366,97 @@ class TestSampleWithTokens:
         tok.apply_chat_template.assert_called_once_with(
             messages, tokenize=True, add_generation_prompt=True,
         )
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_missing_completion_token_ids_raises(self, mock_req):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "ok",
+                    "finish_reason": "stop",
+                    "raw_output": {},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer([1, 2, 3]),
+        )
+        with pytest.raises(RuntimeError, match="missing completion_token_ids"):
+            sampler.sample_with_tokens(messages=[{"role": "user", "content": "hi"}])
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_echo_strips_verified_prefix(self, mock_req):
+        prompt_ids = [1, 100, 200]
+        echoed_completion_ids = [1, 100, 200, 400, 500]
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "gen",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": echoed_completion_ids},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            echo=True,
+        )
+
+        c = results[0]
+        assert c.full_tokens == prompt_ids + [400, 500]
+        assert c.completion_len == 2
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_echo_no_strip_when_prefix_mismatch(self, mock_req):
+        """If completion_token_ids don't start with prompt, don't strip."""
+        prompt_ids = [1, 100, 200]
+        completion_ids = [999, 400, 500, 600, 700]
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "gen",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            echo=True,
+        )
+
+        c = results[0]
+        assert c.full_tokens == prompt_ids + completion_ids
+        assert c.completion_len == len(completion_ids)
