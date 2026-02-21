@@ -163,8 +163,6 @@ exclude = [
     ".nox",
     ".git",
     "examples/**/.venv",
-    "examples/training/**",
-    "src/fireworks/training/tinker_patch.py",
     "src/fireworks/training/sdk/**",
     "src/fireworks/training/cookbook/**",
 ]
@@ -185,7 +183,7 @@ show_error_codes = true
 #
 # We also exclude our `tests` as mypy doesn't always infer
 # types correctly and Pyright will still catch any type errors.
-exclude = ['src/fireworks/_files.py', 'src/fireworks/training/tinker_patch.py', 'src/fireworks/training/sdk/.*', 'src/fireworks/training/cookbook/.*', '_dev/.*.py', 'tests/.*', 'examples/training/.*.py']
+exclude = ['src/fireworks/_files.py', 'src/fireworks/training/sdk/.*', 'src/fireworks/training/cookbook/.*', '_dev/.*.py', 'tests/.*']
 
 strict_equality = true
 implicit_reexport = true
