@@ -45,7 +45,7 @@ class DeploymentInfo:
     state: str
     hot_load_bucket_url: str | None = None
     inference_model: str | None = None
-    """Model string for chat completions API (``accounts/{account}/deployments/{id}``)."""
+    """Model string for completions API (``accounts/{account}/deployments/{id}``)."""
 
 
 @dataclass
@@ -74,7 +74,7 @@ class DeploymentManager:
         api_key: Fireworks API key.
         account_id: Fireworks account ID.
         base_url: Control-plane URL for deployment CRUD operations.
-        inference_url: Gateway URL for chat completions.  Defaults to *base_url*.
+        inference_url: Gateway URL for inference completions.  Defaults to *base_url*.
         hotload_api_url: Gateway URL for hotload operations.  Defaults to *base_url*.
         additional_headers: Extra headers added to every request (e.g. gateway secret).
 
@@ -879,40 +879,10 @@ class DeploymentSampler:
         for choice in result.get("choices", []):
             text = choice.get("text", "")
             finish_reason = choice.get("finish_reason", "unknown")
-            raw = choice.get("raw_output", {})
-            completion_ids = raw.get("completion_token_ids", [])
+            raw = choice.get("raw_output") or {}
+            completion_ids = raw.get("completion_token_ids")
 
-            if completion_ids is not None:
-                token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
-                routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
-
-                # With echo=True the API returns P+C tokens in
-                # completion_token_ids and logprobs cover all P+C positions.
-                # Strip the prompt prefix (we know its exact length from
-                # client-side tokenization) and drop the unconditional
-                # first-token logprob to get P+C-1 training-aligned entries.
-                lp_is_echo = False
-                if echo_mode and len(completion_ids) > len(prompt_ids):
-                    completion_ids = completion_ids[len(prompt_ids):]
-                    if token_logprobs is not None:
-                        token_logprobs = token_logprobs[1:]
-                        lp_is_echo = True
-                    if routing_matrices is not None:
-                        routing_matrices = routing_matrices[1:]
-
-                completions.append(
-                    SampledCompletion(
-                        text=text,
-                        full_tokens=list(prompt_ids) + list(completion_ids),
-                        prompt_len=len(prompt_ids),
-                        finish_reason=finish_reason,
-                        completion_len=len(completion_ids),
-                        inference_logprobs=token_logprobs,
-                        logprobs_echoed=lp_is_echo,
-                        routing_matrices=routing_matrices,
-                    )
-                )
-            else:
+            if completion_ids is None:
                 raise RuntimeError(
                     format_sdk_error(
                         "Deployment did not return raw_output token IDs",
@@ -924,5 +894,35 @@ class DeploymentSampler:
                         docs_url=DOCS_DEPLOYMENTS,
                     )
                 )
+
+            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
+            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
+
+            # With echo=True the API returns P+C tokens in
+            # completion_token_ids and logprobs cover all P+C positions.
+            # Strip the prompt prefix (verified by actual content match)
+            # and drop the unconditional first-token logprob to get
+            # P+C-1 training-aligned entries.
+            lp_is_echo = False
+            if echo_mode and len(completion_ids) > len(prompt_ids) and completion_ids[: len(prompt_ids)] == list(prompt_ids):
+                completion_ids = completion_ids[len(prompt_ids):]
+                if token_logprobs is not None:
+                    token_logprobs = token_logprobs[1:]
+                    lp_is_echo = True
+                if routing_matrices is not None:
+                    routing_matrices = routing_matrices[1:]
+
+            completions.append(
+                SampledCompletion(
+                    text=text,
+                    full_tokens=list(prompt_ids) + list(completion_ids),
+                    prompt_len=len(prompt_ids),
+                    finish_reason=finish_reason,
+                    completion_len=len(completion_ids),
+                    inference_logprobs=token_logprobs,
+                    logprobs_echoed=lp_is_echo,
+                    routing_matrices=routing_matrices,
+                )
+            )
 
         return completions
