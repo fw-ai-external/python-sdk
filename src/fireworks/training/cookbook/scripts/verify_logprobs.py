@@ -530,9 +530,13 @@ def parse_args():
     p.add_argument("--dataset", required=True, help="Path or URL to JSONL dataset")
     p.add_argument("--max-rows", type=int, default=3, help="Number of prompts to verify")
     p.add_argument("--max-seq-len", type=int, default=4096)
-    p.add_argument("--group-size", type=int, default=2, help="Completions per prompt")
+    p.add_argument("--group-size", type=int, default=1, help="Completions per prompt (default 1 for greedy)")
     p.add_argument("--max-new-tokens", type=int, default=512)
-    p.add_argument("--temperature", type=float, default=0.7)
+    p.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (default 0 = greedy)")
+    p.add_argument(
+        "--stochastic", action="store_true",
+        help="Use stochastic sampling (temperature=0.7, group_size=2). Overrides --temperature and --group-size.",
+    )
     p.add_argument(
         "--debug-completion-tokens", type=int, default=0,
         help="Print top-K logprobs for the first N completion positions (0 = disabled).",
@@ -591,6 +595,10 @@ def parse_args():
 def main():
     args = parse_args()
 
+    if args.stochastic:
+        args.temperature = 0.7
+        args.group_size = 2
+
     log_dir = os.path.abspath(args.log_dir)
     os.makedirs(log_dir, exist_ok=True)
 
@@ -599,7 +607,8 @@ def main():
     fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
     logging.getLogger().addHandler(fh)
 
-    logger.info("=== Logprob Verification: Training vs Inference ===")
+    mode = "stochastic (temp=%.1f, group=%d)" % (args.temperature, args.group_size) if args.temperature > 0 else "greedy"
+    logger.info("=== Logprob Verification: Training vs Inference [%s] ===", mode)
 
     fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
     fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
