@@ -180,12 +180,12 @@ class TestWaitForHotload:
 
 
 # ---------------------------------------------------------------------------
-# DeploymentSampler._extract_structured_logprobs
+# DeploymentSampler._extract_logprobs
 # ---------------------------------------------------------------------------
 
 
-class TestExtractStructuredLogprobs:
-    def test_standard_format(self):
+class TestExtractLogprobs:
+    def test_structured_format(self):
         choice = {
             "logprobs": {
                 "content": [
@@ -194,53 +194,58 @@ class TestExtractStructuredLogprobs:
                 ]
             }
         }
-        result = DeploymentSampler._extract_structured_logprobs(choice)
+        result = DeploymentSampler._extract_logprobs(choice)
         assert result == [-0.5, -1.2]
 
-    def test_missing_logprobs(self):
-        assert DeploymentSampler._extract_structured_logprobs({}) is None
+    def test_legacy_format(self):
+        choice = {
+            "logprobs": {
+                "token_logprobs": [-0.3, -0.7, None],
+            }
+        }
+        result = DeploymentSampler._extract_logprobs(choice)
+        assert result == [-0.3, -0.7, 0.0]
 
-    def test_empty_content(self):
-        assert DeploymentSampler._extract_structured_logprobs({"logprobs": {"content": []}}) is None
+    def test_structured_takes_priority(self):
+        choice = {
+            "logprobs": {
+                "content": [{"logprob": -0.5}],
+                "token_logprobs": [-0.9],
+            }
+        }
+        result = DeploymentSampler._extract_logprobs(choice)
+        assert result == [-0.5]
+
+    def test_missing_logprobs(self):
+        assert DeploymentSampler._extract_logprobs({}) is None
+
+    def test_empty_content_and_no_legacy(self):
+        assert DeploymentSampler._extract_logprobs({"logprobs": {"content": []}}) is None
 
     def test_missing_logprob_field_defaults_zero(self):
         choice = {"logprobs": {"content": [{"token": "hi"}]}}
-        result = DeploymentSampler._extract_structured_logprobs(choice)
+        result = DeploymentSampler._extract_logprobs(choice)
         assert result == [0.0]
 
 
 # ---------------------------------------------------------------------------
-# DeploymentSampler._strip_echo_prefix
+# Mock tokenizer for DeploymentSampler tests
 # ---------------------------------------------------------------------------
 
 
-class TestStripEchoPrefix:
-    def test_echo_detected_and_stripped(self):
-        prompt = [1, 2, 3]
-        completion = [1, 2, 3, 4, 5]
-        result, stripped = DeploymentSampler._strip_echo_prefix(prompt, completion)
-        assert result == [4, 5]
-        assert stripped is True
-
-    def test_no_echo(self):
-        prompt = [1, 2, 3]
-        completion = [4, 5]
-        result, stripped = DeploymentSampler._strip_echo_prefix(prompt, completion)
-        assert result == [4, 5]
-        assert stripped is False
-
-    def test_empty_prompt(self):
-        result, stripped = DeploymentSampler._strip_echo_prefix([], [4, 5])
-        assert result == [4, 5]
-        assert stripped is False
+def _make_mock_tokenizer(prompt_ids=None):
+    """Create a mock tokenizer that returns fixed token IDs."""
+    tok = MagicMock()
+    tok.apply_chat_template.return_value = prompt_ids or [1, 100, 200, 300]
+    return tok
 
 
 # ---------------------------------------------------------------------------
-# DeploymentSampler.chat_completions — mock HTTP
+# DeploymentSampler.completions — mock HTTP
 # ---------------------------------------------------------------------------
 
 
-class TestChatCompletions:
+class TestCompletions:
     @patch("fireworks.training.sdk.deployment.time.sleep")
     @patch("fireworks.training.sdk.deployment.request_with_retries")
     def test_425_retry(self, mock_req, mock_sleep):
@@ -258,9 +263,106 @@ class TestChatCompletions:
             inference_url="https://api.example.com",
             model="m",
             api_key="key",
+            tokenizer=_make_mock_tokenizer(),
         )
-        result = sampler.chat_completions(
-            messages=[{"role": "user", "content": "hi"}],
+        result = sampler.completions(
+            prompt=[1, 2, 3],
             hotload_retry_interval=0.01,
         )
         assert mock_req.call_count == 2
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_sends_token_ids_as_prompt(self, mock_req):
+        resp_ok = MagicMock()
+        resp_ok.status_code = 200
+        resp_ok.ok = True
+        resp_ok.json.return_value = {"choices": []}
+        mock_req.return_value = resp_ok
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(),
+        )
+        sampler.completions(prompt=[10, 20, 30])
+
+        payload = mock_req.call_args[1]["json"]
+        assert payload["prompt"] == [10, 20, 30]
+        assert "messages" not in payload
+        assert "/v1/completions" in mock_req.call_args[0][1]
+
+
+# ---------------------------------------------------------------------------
+# DeploymentSampler.sample_with_tokens — client-side tokenization
+# ---------------------------------------------------------------------------
+
+
+class TestSampleWithTokens:
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_basic_sample(self, mock_req):
+        prompt_ids = [1, 100, 200]
+        completion_ids = [400, 500]
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "hello world",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+        assert len(results) == 1
+        c = results[0]
+        assert c.text == "hello world"
+        assert c.full_tokens == prompt_ids + completion_ids
+        assert c.prompt_len == len(prompt_ids)
+        assert c.completion_len == len(completion_ids)
+        assert c.finish_reason == "stop"
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_tokenizer_called_with_messages(self, mock_req):
+        tok = _make_mock_tokenizer([1, 2, 3])
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "ok",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [99]},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=tok,
+        )
+        messages = [{"role": "user", "content": "test"}]
+        sampler.sample_with_tokens(messages=messages)
+
+        tok.apply_chat_template.assert_called_once_with(
+            messages, tokenize=True, add_generation_prompt=True,
+        )

@@ -48,6 +48,7 @@ class TestGRPOResumeE2E:
         sdk_managers,
         e2e_region,
         e2e_model,
+        e2e_tokenizer_model,
         e2e_training_accelerator,
         e2e_deployment_accelerator,
         e2e_deployment_shape,
@@ -93,6 +94,7 @@ class TestGRPOResumeE2E:
                 create_deployment=create_deployment,
                 deployment_shape=e2e_deployment_shape,
                 deployment_region=e2e_region,
+                tokenizer_model=e2e_tokenizer_model,
             ),
             hotload=HotloadConfig(
                 hot_load_interval=1,
@@ -131,6 +133,7 @@ class TestGRPOResumeE2E:
             deployment=DeployConfig(
                 deployment_id=deployment_id,
                 create_deployment=False,
+                tokenizer_model=e2e_tokenizer_model,
             ),
             hotload=HotloadConfig(
                 hot_load_interval=1,

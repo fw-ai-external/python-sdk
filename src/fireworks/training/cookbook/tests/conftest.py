@@ -17,6 +17,7 @@ from fireworks.training.sdk.trainer import TrainerJobManager
 from fireworks.training.sdk.deployment import DeploymentManager
 
 DEFAULT_MODEL = "accounts/fireworks/models/qwen3-30b-a3b"
+DEFAULT_TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B"
 DEFAULT_REGION = "US_OHIO_1"
 DEFAULT_TRAINING_ACCELERATOR = None
 DEFAULT_DEPLOYMENT_ACCELERATOR = "NVIDIA_B200_180GB"
@@ -83,6 +84,12 @@ def e2e_region() -> str:
 @pytest.fixture(scope="module")
 def e2e_model() -> str:
     return _get_env("FIREWORKS_E2E_MODEL", DEFAULT_MODEL)
+
+
+@pytest.fixture(scope="module")
+def e2e_tokenizer_model() -> str:
+    """HuggingFace model name for the tokenizer (client-side tokenization)."""
+    return _get_env("FIREWORKS_E2E_TOKENIZER_MODEL", DEFAULT_TOKENIZER_MODEL)
 
 
 @pytest.fixture(scope="module")

@@ -150,7 +150,6 @@ asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
   "error",
   "ignore::urllib3.exceptions.InsecureRequestWarning",
-  "ignore::pydantic.warnings.PydanticDeprecatedSince20",
 ]
 markers = [
   "e2e: end-to-end tests that create real RLOR jobs on dev infrastructure",
