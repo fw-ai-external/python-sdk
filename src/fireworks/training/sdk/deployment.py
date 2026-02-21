@@ -1,15 +1,19 @@
 """Fireworks Deployment, Hotload & Sampling.
 
 Manages inference deployment lifecycle, hotload operations for weight syncing,
-and provides a thin wrapper for deployment chat completions API.
+and provides a thin wrapper for deployment completions API with client-side
+tokenization (token-in, token-out).
 """
 
 from __future__ import annotations
 
 import time
 import logging
-from typing import Any, List
+from typing import Any, List, TYPE_CHECKING
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 import urllib3
 import requests
@@ -567,7 +571,7 @@ class DeploymentManager:
     ) -> bool:
         """Send a test request to the inference deployment and wait until it responds."""
         base = self.inference_url.rstrip("/")
-        chat_url = f"{base}/inference/v1/chat/completions"
+        completions_url = f"{base}/inference/v1/completions"
         verify = self._should_verify_ssl(self.inference_url)
 
         headers = {
@@ -577,7 +581,7 @@ class DeploymentManager:
         }
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": "Say hello."}],
+            "prompt": "Hello",
             "max_tokens": 4,
             "temperature": 0.0,
         }
@@ -585,7 +589,7 @@ class DeploymentManager:
         logger.info("Warming up inference deployment (%d retries)...", max_retries)
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.post(chat_url, headers=headers, json=payload, timeout=30, verify=verify)
+                resp = requests.post(completions_url, headers=headers, json=payload, timeout=30, verify=verify)
                 if resp.status_code == 200:
                     logger.info("Inference deployment ready after %d attempt(s)", attempt)
                     return True
@@ -609,7 +613,7 @@ class DeploymentManager:
 
 
 # =============================================================================
-# DeploymentSampler — thin wrapper for deployment chat completions API
+# DeploymentSampler — completions API with client-side tokenization
 # =============================================================================
 
 
@@ -617,9 +621,9 @@ class DeploymentManager:
 class SampledCompletion:
     """A single sampled completion with tokenized representation.
 
-    Parsed from the Fireworks deployment chat completions ``raw_output``
-    response format.  Contains the full token sequence (prompt + completion)
-    needed for training, plus metadata about truncation.
+    Contains the full token sequence (prompt + completion) needed for training,
+    with prompt tokens from client-side tokenization and completion tokens from
+    the deployment's ``raw_output`` response.
     """
 
     text: str
@@ -635,30 +639,30 @@ class SampledCompletion:
 
 
 class DeploymentSampler:
-    """Wraps Fireworks deployment chat completions API (server-side tokenization).
+    """Wraps Fireworks deployment completions API with client-side tokenization.
 
-    Sends chat messages to the ``/inference/v1/chat/completions`` gateway
-    endpoint and uses the server's tokenization (``raw_output.prompt_token_ids``)
-    as the single source of truth.  If ``bos_token_id`` is provided, BOS is
-    prepended to the server's prompt tokens (the server's chat template
-    does not include BOS, but training expects it).
+    Uses a local HuggingFace tokenizer to apply chat templates and tokenize
+    prompts, then sends token IDs to the ``/inference/v1/completions`` endpoint
+    (token-in, token-out).  Completion token IDs come back via ``raw_output``.
+
+    BOS and special tokens are handled by the tokenizer's chat template --
+    no manual prepend is needed.
 
     Handles URL construction, auth headers, SSL verification, and basic
-    retries — so training scripts never do raw HTTP for sampling.
+    retries -- so training scripts never do raw HTTP for sampling.
 
     Example::
 
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
         sampler = DeploymentSampler(
             inference_url="https://api.fireworks.ai",
             model="accounts/pyroworks-dev/deployments/my-deploy",
             api_key="...",
-            bos_token_id=163584,  # prepend BOS for training
+            tokenizer=tokenizer,
         )
 
-        # Raw JSON response:
-        resp = sampler.chat_completions(messages=[...], n=4)
-
-        # Structured completions with token IDs (server-side tokenization + BOS):
         completions = sampler.sample_with_tokens(messages=[...], n=4)
         for c in completions:
             print(c.text, len(c.full_tokens), c.finish_reason)
@@ -669,19 +673,19 @@ class DeploymentSampler:
         inference_url: str,
         model: str,
         api_key: str,
-        bos_token_id: int | None = None,
+        tokenizer: PreTrainedTokenizerBase,
     ):
         self.model = model
         self.api_key = api_key
-        self.bos_token_id = bos_token_id
+        self.tokenizer = tokenizer
 
         base = inference_url.rstrip("/")
-        self._chat_url = f"{base}/inference/v1/chat/completions"
+        self._completions_url = f"{base}/inference/v1/completions"
         self._verify_ssl = DeploymentManager._should_verify_ssl(inference_url)
 
-    def chat_completions(
+    def completions(
         self,
-        messages: list[dict[str, str]],
+        prompt: list[int],
         n: int = 1,
         max_tokens: int = 1024,
         temperature: float = 0.7,
@@ -689,14 +693,12 @@ class DeploymentSampler:
         hotload_max_retries: int = 10,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Send a chat completions request to the deployment.
+        """Send a completions request with token IDs to the deployment.
 
         Automatically retries on HTTP 425 (deployment is hot-loading weights).
-        Hot-loads can take minutes for large models, so the retry uses long
-        intervals (default 30s) rather than the generic exponential backoff.
 
         Args:
-            messages: Chat messages (role + content).
+            prompt: Prompt as a list of token IDs (client-side tokenized).
             n: Number of completions to sample.
             max_tokens: Max tokens per completion.
             temperature: Sampling temperature.
@@ -708,7 +710,7 @@ class DeploymentSampler:
                 (e.g., raw_output=True, logprobs=True, reasoning_effort="none").
 
         Returns:
-            Raw JSON response dict from the chat completions API.
+            Raw JSON response dict from the completions API.
 
         Raises:
             requests.HTTPError: On non-2xx responses after retries exhausted.
@@ -720,7 +722,7 @@ class DeploymentSampler:
         }
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": messages,
+            "prompt": prompt,
             "n": n,
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -730,7 +732,7 @@ class DeploymentSampler:
         for hotload_attempt in range(hotload_max_retries + 1):
             resp = request_with_retries(
                 requests.post,
-                self._chat_url,
+                self._completions_url,
                 headers=headers,
                 json=payload,
                 timeout=180,
@@ -738,9 +740,6 @@ class DeploymentSampler:
                 max_wait_time=60,
             )
 
-            # 425 = deployment is hot-loading weights.  This is expected and
-            # transient -- retry with long intervals appropriate for the
-            # minutes-long hot-load duration instead of short backoff.
             if resp.status_code == 425 and hotload_attempt < hotload_max_retries:
                 logger.info(
                     "Deployment is hot-loading, retry %d/%d in %ds...",
@@ -762,7 +761,7 @@ class DeploymentSampler:
                 logger.warning(
                     "\n%s",
                     format_sdk_error(
-                        f"Chat completions error (HTTP {resp.status_code})",
+                        f"Completions error (HTTP {resp.status_code})",
                         error_msg,
                         f"{hint}{extra}",
                         docs_url=DOCS_DEPLOYMENTS,
@@ -772,21 +771,27 @@ class DeploymentSampler:
             return resp.json()
 
     @staticmethod
-    def _extract_structured_logprobs(choice: dict[str, Any]) -> List[float] | None:
-        """Extract per-token logprobs from the OpenAI-compatible structured format.
+    def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
+        """Extract per-token logprobs from a completions response.
 
-        This parses ``choice.logprobs.content[].logprob`` — the standard
-        response format when the caller passes ``logprobs=True`` to the API.
+        Handles both formats:
+        - Structured (NewLogProbs): ``choice.logprobs.content[].logprob``
+        - Legacy (LogProbs): ``choice.logprobs.token_logprobs[]``
 
         Returns:
-            List of per-token logprobs (completion tokens only), or ``None``
-            if the structured logprobs field is absent or empty.
+            List of per-token logprobs, or ``None`` if absent/empty.
         """
         lp_data = choice.get("logprobs")
-        if lp_data and isinstance(lp_data, dict):
-            content = lp_data.get("content", [])
-            if content:
-                return [tok.get("logprob", 0.0) for tok in content]
+        if not lp_data or not isinstance(lp_data, dict):
+            return None
+        # Structured format (returned by logprobs=True boolean)
+        content = lp_data.get("content")
+        if content:
+            return [tok.get("logprob", 0.0) for tok in content]
+        # Legacy format (returned by logprobs=N integer)
+        token_logprobs = lp_data.get("token_logprobs")
+        if token_logprobs:
+            return [lp if lp is not None else 0.0 for lp in token_logprobs]
         return None
 
     @staticmethod
@@ -810,22 +815,6 @@ class DeploymentSampler:
                     return matrices
         return None
 
-    @staticmethod
-    def _strip_echo_prefix(prompt_ids: list[int], completion_ids: list[int]) -> tuple[list[int], bool]:
-        """Strip duplicated prompt prefix from completion_token_ids.
-
-        With ``echo=True`` + ``raw_output=True`` the API sets
-        ``completion_token_ids = prompt_ids + actual_completion_ids``.
-        Detects the prefix and strips it so that ``prompt_ids + completion_ids``
-        gives the correct (non-duplicated) full token sequence.
-
-        Returns:
-            ``(completion_ids, was_stripped)``
-        """
-        if prompt_ids and len(completion_ids) > len(prompt_ids) and completion_ids[: len(prompt_ids)] == prompt_ids:
-            return completion_ids[len(prompt_ids) :], True
-        return completion_ids, False
-
     def sample_with_tokens(
         self,
         messages: list[dict[str, str]],
@@ -836,12 +825,14 @@ class DeploymentSampler:
     ) -> List[SampledCompletion]:
         """Sample completions and return structured results with token IDs.
 
-        Sends a chat completions request with ``raw_output=True`` and uses
-        the server's tokenization as the single source of truth.  The
-        server handles BOS/special tokens — no local tokenizer is needed.
+        Tokenizes the chat messages client-side using the local tokenizer,
+        sends token IDs to ``/inference/v1/completions``, and returns
+        structured completions with the full token sequence.
 
-        To also retrieve per-token inference logprobs (needed for GRPO
-        importance sampling), pass ``logprobs=True``::
+        BOS and special tokens are handled by the tokenizer's chat template.
+
+        To retrieve per-token inference logprobs (needed for GRPO importance
+        sampling), pass ``logprobs=True``::
 
             completions = sampler.sample_with_tokens(
                 messages, n=8, logprobs=True, top_logprobs=1,
@@ -858,25 +849,25 @@ class DeploymentSampler:
                 ``top_logprobs=1``, ``reasoning_effort="none"``).
 
         Returns:
-            List of :class:`SampledCompletion` with token IDs populated from
-            the deployment's ``raw_output`` response.  Both prompt and
-            completion token IDs come from server-side tokenization.
+            List of :class:`SampledCompletion` with token IDs.  Prompt tokens
+            come from client-side tokenization; completion tokens from the
+            deployment's ``raw_output``.
 
         Raises:
             RuntimeError: If the deployment does not return ``raw_output``
                 token IDs.
             requests.HTTPError: On non-2xx responses.
         """
-        # Track whether the *user* explicitly requested logprobs (for IS).
-        # When routing_matrix is requested, we may implicitly enable logprobs
-        # (API requirement), but we don't want to populate inference_logprobs
-        # unless the user asked for it.
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
 
-        result = self.chat_completions(
-            messages=messages,
+        prompt_ids: list[int] = self.tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True,
+        )
+
+        result = self.completions(
+            prompt=prompt_ids,
             n=n,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -885,55 +876,34 @@ class DeploymentSampler:
         )
 
         completions: List[SampledCompletion] = []
-        for _choice_idx, choice in enumerate(result.get("choices", [])):
-            text = choice.get("message", {}).get("content", "")
+        for choice in result.get("choices", []):
+            text = choice.get("text", "")
             finish_reason = choice.get("finish_reason", "unknown")
             raw = choice.get("raw_output", {})
-            prompt_ids = raw.get("prompt_token_ids", [])
             completion_ids = raw.get("completion_token_ids", [])
 
-            if prompt_ids or completion_ids:
-                token_logprobs = self._extract_structured_logprobs(choice) if user_requested_logprobs else None
+            if completion_ids is not None:
+                token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
                 routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
 
-                # Echo + raw_output fixup.
-                #
-                # With echo=True + raw_output=True the API prepends the
-                # prompt tokens to completion_token_ids (so it contains P+C)
-                # while prompt_token_ids still has the original P tokens.
-                # Logprobs/routing also have P+C entries matching
-                # completion_token_ids.
-                #
-                # Fix: strip the echoed prefix from completion_ids, and
-                # shift logprobs/routing by 1 (drop the unconditional
-                # first-token entry) to get P+C-1 training-aligned entries.
+                # With echo=True the API returns P+C tokens in
+                # completion_token_ids and logprobs cover all P+C positions.
+                # Strip the prompt prefix (we know its exact length from
+                # client-side tokenization) and drop the unconditional
+                # first-token logprob to get P+C-1 training-aligned entries.
                 lp_is_echo = False
-                if echo_mode:
-                    completion_ids, echo_stripped = self._strip_echo_prefix(prompt_ids, completion_ids)
-                    if echo_stripped:
-                        if token_logprobs is not None:
-                            token_logprobs = token_logprobs[1:]
-                            lp_is_echo = True
-                        if routing_matrices is not None:
-                            routing_matrices = routing_matrices[1:]
-
-                # Prepend BOS if configured and not already present.
-                # The server's chat template does not include BOS in
-                # raw_output.prompt_token_ids, but training expects it.
-                # When BOS is prepended, also shift inference_logprobs and
-                # routing_matrices by inserting a placeholder at the front
-                # so they stay aligned with the new full_tokens positions.
-                if self.bos_token_id is not None and (not prompt_ids or prompt_ids[0] != self.bos_token_id):
-                    prompt_ids = [self.bos_token_id] + prompt_ids
+                if echo_mode and len(completion_ids) > len(prompt_ids):
+                    completion_ids = completion_ids[len(prompt_ids):]
                     if token_logprobs is not None:
-                        token_logprobs = [None] + token_logprobs
+                        token_logprobs = token_logprobs[1:]
+                        lp_is_echo = True
                     if routing_matrices is not None:
-                        routing_matrices = [""] + routing_matrices
+                        routing_matrices = routing_matrices[1:]
 
                 completions.append(
                     SampledCompletion(
                         text=text,
-                        full_tokens=prompt_ids + completion_ids,
+                        full_tokens=list(prompt_ids) + list(completion_ids),
                         prompt_len=len(prompt_ids),
                         finish_reason=finish_reason,
                         completion_len=len(completion_ids),
@@ -946,7 +916,7 @@ class DeploymentSampler:
                 raise RuntimeError(
                     format_sdk_error(
                         "Deployment did not return raw_output token IDs",
-                        f"The API response is missing prompt_token_ids/completion_token_ids. "
+                        f"The API response is missing completion_token_ids. "
                         f"Got choice keys: {list(choice.keys())}",
                         "Ensure the deployment supports raw_output=True.\n"
                         "  This requires a deployment running a compatible model version.\n"

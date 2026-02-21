@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 import tinker
 import torch
+import transformers
 
 from fireworks.training.sdk import (
     DeploymentConfig,
@@ -713,8 +714,7 @@ def parse_args():
         type=str,
         default=None,
         help="Local path or HuggingFace hub name for the tokenizer "
-        "(e.g. 'moonshotai/Kimi-K2-Instruct'). Not required — "
-        "the sampler uses server-side tokenization.",
+        "(e.g. 'Qwen/Qwen3-1.7B'). Falls back to --base-model if not set.",
     )
     p.add_argument(
         "--no-echo",
@@ -908,10 +908,15 @@ def main():
     inference_url = deploy_mgr.inference_url
     inference_model = dep_info.inference_model if dep_info else args.base_model
 
+    tokenizer_name = args.tokenizer_path or args.base_model
+    logger.info("Loading tokenizer from: %s", tokenizer_name)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+
     sampler = DeploymentSampler(
         inference_url=inference_url,
         model=inference_model,
         api_key=fw_api_key,
+        tokenizer=tokenizer,
     )
 
     # =========================================================================

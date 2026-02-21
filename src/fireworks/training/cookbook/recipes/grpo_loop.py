@@ -8,7 +8,7 @@ strategy to fit your task.
 Architecture:
     - Policy RLOR job:    forward_backward_custom + optim_step (trainable)
     - Reference RLOR job: forward only (frozen, for KL divergence)
-    - Deployment:         sampling (chat completions) + hotload
+    - Deployment:         sampling (completions, token-in/token-out) + hotload
 
 Usage:
     export FIREWORKS_API_KEY=...
@@ -26,6 +26,7 @@ from dataclasses import field, dataclass
 from concurrent.futures import ThreadPoolExecutor
 
 import tinker
+import transformers
 
 from fireworks.training.sdk import DeploymentManager, TrainerJobManager
 from fireworks.training.cookbook.utils import (
@@ -176,11 +177,13 @@ def main(
     reference = ReconnectableClient(rlor_mgr, reference_ep.job_id, cfg.base_model, cfg.lora_rank)
 
     inference_model = dep_info.inference_model if dep_info else cfg.base_model
+    tokenizer_model = cfg.deployment.tokenizer_model or cfg.base_model
+    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_model)
     sampler = DeploymentSampler(
         inference_url=deploy_mgr.inference_url,
         model=inference_model,
         api_key=api_key,
-        bos_token_id=cfg.deployment.bos_token_id,
+        tokenizer=tokenizer,
     )
     tracker = WeightSyncer(
         policy_client=policy.inner,
