@@ -54,7 +54,6 @@ from fireworks.training.cookbook.utils import (
     wandb_log,
 )
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
-from fireworks.training.sdk.r3 import make_r3_model_input
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +259,7 @@ def main(
                     rm = build_r3_routing_matrices(s.routing_matrices, s.prompt_len, model_input_len)
 
                 datum = tinker.Datum(
-                    model_input=make_r3_model_input(tokens[:-1], routing_matrices=rm),
+                    model_input=tinker.ModelInput.from_ints(tokens[:-1], routing_matrices=rm),
                     loss_fn_inputs={
                         "target_tokens": tinker.TensorData(data=tokens[1:], dtype="int64", shape=[model_input_len]),
                     },

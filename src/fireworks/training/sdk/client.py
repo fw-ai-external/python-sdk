@@ -15,18 +15,12 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Dict, List
-
 from tinker import types
-from tinker._compat import model_dump
 from tinker.lib.api_future_impl import _APIFuture
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
 from tinker.lib.public_interfaces.service_client import ServiceClient
 from tinker.lib.public_interfaces.training_client import TrainingClient
 from tinker.lib.queue_state_logger import QueueStateLogger
-from tinker.types.shared.untyped_api_future import UntypedAPIFuture
-
-from fireworks.training.sdk.r3 import get_r3_routing_matrices
 
 logger = logging.getLogger(__name__)
 
@@ -149,59 +143,6 @@ class FiretitanTrainingClient(TrainingClient):
                 kind,
                 name,
             )
-
-    @staticmethod
-    def _inject_r3_routing_matrices(body: dict, data: List[types.Datum], input_key: str) -> None:
-        """Inject R3 routing matrices into a serialized request body."""
-        data_list = body.get(input_key, {}).get("data", [])
-        for i, datum in enumerate(data):
-            rm = get_r3_routing_matrices(datum.model_input)
-            if rm is not None and i < len(data_list):
-                data_list[i].setdefault("model_input", {})["routing_matrices"] = rm
-
-    async def _send_single_forward_request(
-        self,
-        request_id: int,
-        data: List[types.Datum],
-        loss_fn: types.LossFnType,
-        loss_fn_config: Dict[str, float] | None = None,
-    ):
-        has_r3 = any(get_r3_routing_matrices(d.model_input) is not None for d in data)
-        if not has_r3:
-            return await super()._send_single_forward_request(request_id, data, loss_fn, loss_fn_config)
-
-        request = types.ForwardRequest(
-            forward_input=types.ForwardBackwardInput(data=data, loss_fn=loss_fn, loss_fn_config=loss_fn_config),
-            model_id=self._guaranteed_model_id(),
-            seq_id=request_id + 1,
-        )
-        body = model_dump(request, exclude_unset=True, mode="json")
-        self._inject_r3_routing_matrices(body, data, "forward_input")
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.post("/api/v1/forward", body=body, cast_to=UntypedAPIFuture)
-
-    async def _send_single_forward_backward_request(
-        self,
-        request_id: int,
-        data: List[types.Datum],
-        loss_fn: types.LossFnType,
-        loss_fn_config: Dict[str, float] | None = None,
-    ):
-        has_r3 = any(get_r3_routing_matrices(d.model_input) is not None for d in data)
-        if not has_r3:
-            return await super()._send_single_forward_backward_request(request_id, data, loss_fn, loss_fn_config)
-
-        request = types.ForwardBackwardRequest(
-            forward_backward_input=types.ForwardBackwardInput(
-                data=data, loss_fn=loss_fn, loss_fn_config=loss_fn_config
-            ),
-            model_id=self._guaranteed_model_id(),
-            seq_id=request_id + 1,
-        )
-        body = model_dump(request, exclude_unset=True, mode="json")
-        self._inject_r3_routing_matrices(body, data, "forward_backward_input")
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.post("/api/v1/forward_backward", body=body, cast_to=UntypedAPIFuture)
 
     def list_checkpoints(self) -> tuple[list[str], str | None]:
         """List available DCP checkpoints from the trainer.
