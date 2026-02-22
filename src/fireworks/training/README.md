@@ -65,7 +65,6 @@ The key design is unchanged from Tinker: loss is computed on the client, while f
 
 - Want a runnable baseline: start with `cookbook/README.md`.
 - Want low-level lifecycle control: start with `sdk/README.md`.
-- Want train-vs-inference logprob checks: use `cookbook/scripts/verify_logprobs.py`.
 
 ## Tests
 

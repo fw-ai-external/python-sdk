@@ -86,13 +86,13 @@ class DeploymentManager:
             base_url="https://api.fireworks.ai",
         )
 
-        # Dev environment (personal gateway):
+        # Example with separate control-plane and gateway endpoints:
         mgr = DeploymentManager(
             api_key="...",
             account_id="...",
-            base_url="http://GATEWAY_IP:8083",  # personal dev gateway
-            inference_url="https://dev.api.fireworks.ai",
-            hotload_api_url="https://dev.api.fireworks.ai",
+            base_url="http://GATEWAY_IP:8083",
+            inference_url="https://api.fireworks.ai",
+            hotload_api_url="https://api.fireworks.ai",
         )
     """
 

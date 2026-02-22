@@ -1,9 +1,9 @@
 """Shared fixtures for algorithm E2E tests.
 
-These tests create real RLOR jobs and deployments on dev infrastructure.
+These tests create real RLOR jobs and deployments on Fireworks infrastructure.
 All algorithms run on qwen3-30b-a3b (MoE) by default.
 
-Requires FIREWORKS_API_KEY to be set.
+Requires FIREWORKS_API_KEY and FIREWORKS_ACCOUNT_ID to be set.
 
 Override defaults via environment variables:
   FIREWORKS_E2E_MODEL, FIREWORKS_E2E_REGION, FIREWORKS_E2E_DEPLOYMENT_SHAPE,
@@ -25,8 +25,9 @@ DEFAULT_TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B"
 DEFAULT_REGION = "US_OHIO_1"
 DEFAULT_TRAINING_ACCELERATOR = None
 DEFAULT_DEPLOYMENT_ACCELERATOR = "NVIDIA_B200_180GB"
-# Dev-only shape; override via FIREWORKS_E2E_DEPLOYMENT_SHAPE for your account
-DEFAULT_DEPLOYMENT_SHAPE = "accounts/pyroworks-dev/deploymentShapes/rft-qwen3-30b-a3b-r3"
+# For GRPO MoE tests, set FIREWORKS_E2E_DEPLOYMENT_SHAPE to a shape that
+# enables router stats (e.g. --enable-moe-stats).
+DEFAULT_DEPLOYMENT_SHAPE = None
 
 GSM8K_SAMPLE_URL = "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/development/gsm8k_sample.jsonl"
 
@@ -48,15 +49,17 @@ def _get_env(name: str, default: str | None = None) -> str | None:
 def sdk_managers():
     """Create TrainerJobManager + DeploymentManager from env vars.
 
-    Skips the entire module if FIREWORKS_API_KEY is not set.
+    Skips the entire module if FIREWORKS_API_KEY or FIREWORKS_ACCOUNT_ID is not set.
     """
     api_key = _get_env("FIREWORKS_API_KEY")
     if not api_key:
-        pytest.skip("FIREWORKS_API_KEY not set — skipping E2E tests")
+        pytest.skip("FIREWORKS_API_KEY not set -- skipping E2E tests")
 
-    # Default to Fireworks dev environment; override for your own account
-    account_id = _get_env("FIREWORKS_ACCOUNT_ID", "pyroworks-dev")
-    base_url = _get_env("FIREWORKS_BASE_URL", "https://dev.api.fireworks.ai")
+    account_id = _get_env("FIREWORKS_ACCOUNT_ID")
+    if not account_id:
+        pytest.skip("FIREWORKS_ACCOUNT_ID not set -- skipping E2E tests")
+
+    base_url = _get_env("FIREWORKS_BASE_URL", "https://api.fireworks.ai")
     inference_url = _get_env("FIREWORKS_INFERENCE_URL", base_url)
     hotload_api_url = _get_env("FIREWORKS_HOTLOAD_API_URL", base_url)
 
