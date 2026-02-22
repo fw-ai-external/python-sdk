@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import logging
-from typing import Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
