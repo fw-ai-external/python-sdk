@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.0.0-alpha.28 (2026-02-22)
+
+Full Changelog: [v1.0.0-alpha.27...v1.0.0-alpha.28](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.27...v1.0.0-alpha.28)
+
+### Features
+
+* add R3 routing matrix side-channel injection for official tinker compat ([f6b637b](https://github.com/fw-ai-external/python-sdk/commit/f6b637bd66a94501e7ff66ed671e2a8ff30f752a))
+* default prompt_cache_max_len=0 to disable KV cache for verification ([e49ecfb](https://github.com/fw-ai-external/python-sdk/commit/e49ecfbf303eb27c41f69fb19728f8b44843a91c))
+* default to greedy mode, add --stochastic flag, include dataset ([049c4e9](https://github.com/fw-ai-external/python-sdk/commit/049c4e9c8d187cb5459b55563b7e66a78fd8a3bc))
+* port firetitan SDK and cookbook into fireworks.training ([7134d64](https://github.com/fw-ai-external/python-sdk/commit/7134d649fbd51e3c0bd2cfecadc27bd029f92df7))
+* port SDK unit tests from train-firetitan-py ([dac3472](https://github.com/fw-ai-external/python-sdk/commit/dac347290670965c2878179ce2ffe55ff2060c87))
+* Regenerate API Reference / Docs ([d97cb7a](https://github.com/fw-ai-external/python-sdk/commit/d97cb7ab0081236ff6bfa342c62943ad79499261))
+* Regenerate OpenAPI specs and SDK (v4.24.80) ([ea622fd](https://github.com/fw-ai-external/python-sdk/commit/ea622fd7788900720de1990178b50d34c3da32b9))
+* Service mode LoRA documentation ([32edbcd](https://github.com/fw-ai-external/python-sdk/commit/32edbcd89311e2c71acec9a1f795731dcd8eef48))
+
+
+### Bug Fixes
+
+* correct stale "Server tokenization" log label to "Client tokenization" ([5e6fdcc](https://github.com/fw-ai-external/python-sdk/commit/5e6fdccf57e080db5ef4ccd7990048967ead96b5))
+* harden client-side tokenization migration ([7c586fd](https://github.com/fw-ai-external/python-sdk/commit/7c586fd4e0f0269914f7781b85faf2d394ee308f))
+* **internal:** skip tests that depend on mock server ([2aa4aca](https://github.com/fw-ai-external/python-sdk/commit/2aa4acae0a3e58ca77eba14aff8ea0834948d29e))
+* pass trust_remote_code=True to AutoTokenizer.from_pretrained ([7ae2b5d](https://github.com/fw-ai-external/python-sdk/commit/7ae2b5dc01525e09788d017a2e23ba986b58834e))
+* remove sdk/cookbook from training __all__ to fix pyright error ([d185f6f](https://github.com/fw-ai-external/python-sdk/commit/d185f6f22461970e438e0008ee1b392de4ddd841))
+* resolve all ruff lint errors in ported SDK/cookbook code ([5df914d](https://github.com/fw-ai-external/python-sdk/commit/5df914d85953cbfdfa0163fd7e5a7b3257852f2a))
+* resolve e2e test issues found during test runs ([ed2ed28](https://github.com/fw-ai-external/python-sdk/commit/ed2ed286a2d7d6e0d87225fccaab81fdcb47af4d))
+* use proper type annotation for __all__ to satisfy pyright and ruff ([71fb6bc](https://github.com/fw-ai-external/python-sdk/commit/71fb6bcd61b111e86396385fbc4916a72016958b))
+
+
+### Chores
+
+* **internal:** remove bad test ([4ad6fcf](https://github.com/fw-ai-external/python-sdk/commit/4ad6fcf7dfb730be13593e36ac7e793ecc79902d))
+* **internal:** remove mock server code ([fbb2657](https://github.com/fw-ai-external/python-sdk/commit/fbb2657dc23c85bf6d472fd7ed08770fc68330db))
+* move verify_logprobs.py and watch_trainer_pods.sh to fireworks repo ([ae3cf92](https://github.com/fw-ai-external/python-sdk/commit/ae3cf92b09d2fa31e5702f995c59c39a4a1039ad))
+* remove --stochastic flag, keep greedy as the only default ([5502945](https://github.com/fw-ai-external/python-sdk/commit/5502945d3a8fdc23ea9b5d1b099e15e207a03881))
+* remove redundant tinker_patch.py ([27b5521](https://github.com/fw-ai-external/python-sdk/commit/27b55213de1a65f07239c04a7068d455e6d38290))
+* sanitize training code for public release ([36fc2ba](https://github.com/fw-ai-external/python-sdk/commit/36fc2ba78413facbccc1c208e3786ef7966c7e67))
+* sanitize training docs/tests for public release ([ee1fdb7](https://github.com/fw-ai-external/python-sdk/commit/ee1fdb7076d6c43c4b3146e9cf42a8455a123fae))
+* update mock server docs ([db18242](https://github.com/fw-ai-external/python-sdk/commit/db182427328916d87802bd1ba87b5415a9f963d7))
+
+
+### Documentation
+
+* add compact training readmes and fix lint imports ([12d7196](https://github.com/fw-ai-external/python-sdk/commit/12d7196247c46d6fec79a29811628ec6322e8719))
+
+
+### Refactors
+
+* clean up verify_logprobs and move to cookbook ([042c731](https://github.com/fw-ai-external/python-sdk/commit/042c731f574e2aa326952a9e744af60d640bbfa1))
+* replace R3 side-channel with ModelInput monkey-patch ([53bed56](https://github.com/fw-ai-external/python-sdk/commit/53bed56f8e14e712bdd0e9c1a0d01935fcd5baee))
+
 ## 1.0.0-alpha.27 (2026-02-12)
 
 Full Changelog: [v1.0.0-alpha.26...v1.0.0-alpha.27](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.26...v1.0.0-alpha.27)
