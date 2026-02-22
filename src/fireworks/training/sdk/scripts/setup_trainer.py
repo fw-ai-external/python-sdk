@@ -15,12 +15,12 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
-import json
-import logging
 import os
 import sys
+import json
 import time
+import logging
+import argparse
 
 from fireworks.training.sdk import TrainerJobConfig, TrainerJobManager
 

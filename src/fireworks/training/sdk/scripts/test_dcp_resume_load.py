@@ -13,13 +13,13 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
-import logging
 import os
 import time
+import logging
+import argparse
 
-from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager
 from fireworks.training.sdk.client import FiretitanServiceClient
+from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager
 
 logging.basicConfig(
     level=logging.INFO,

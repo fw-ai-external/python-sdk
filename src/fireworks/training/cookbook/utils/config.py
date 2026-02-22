@@ -43,7 +43,7 @@ class DeployConfig:
     deployment_region: str | None = None
     deployment_accelerator_type: str | None = None
     hot_load_bucket_type: str = "FW_HOSTED"
-    deployment_timeout_s: float = 1800
+    deployment_timeout_s: float = 5400
     deployment_extra_args: list[str] | None = None
     tokenizer_model: str | None = None
     """HuggingFace model name for the tokenizer (e.g. ``Qwen/Qwen3-1.7B``).

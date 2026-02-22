@@ -26,31 +26,31 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
-import atexit
-import concurrent.futures
-import json
-import logging
 import os
+import json
 import time
-from typing import Any, Dict, List, Optional, Tuple
+import atexit
+import logging
+import argparse
+import concurrent.futures
+from typing import Any, Dict, List, Tuple, Optional
 
-import requests
-import tinker
 import torch
+import tinker
+import requests
 import transformers
 
 from fireworks.training.sdk import (
-    DeploymentConfig,
     DeploymentInfo,
+    DeploymentConfig,
+    TrainerJobConfig,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanServiceClient,
-    FiretitanTrainingClient,
-    TrainerJobConfig,
-    TrainerJobManager,
-    TrainerServiceEndpoint,
     SampledCompletion,
+    TrainerJobManager,
+    FiretitanServiceClient,
+    TrainerServiceEndpoint,
+    FiretitanTrainingClient,
 )
 from fireworks.training.cookbook.utils.data import load_jsonl_dataset
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
