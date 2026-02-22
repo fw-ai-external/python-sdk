@@ -573,8 +573,8 @@ def parse_args():
         help="HuggingFace model name for client-side tokenizer (e.g. 'Qwen/Qwen3-1.7B'). Required.",
     )
     p.add_argument(
-        "--prompt-cache-max-len", type=int, default=None,
-        help="Set prompt_cache_max_len for sampling API call. 0 = disable cross-request KV cache.",
+        "--prompt-cache-max-len", type=int, default=0,
+        help="prompt_cache_max_len for sampling API call (default 0 = disable cross-request KV cache).",
     )
     p.add_argument(
         "--scoring-pass", action="store_true",
