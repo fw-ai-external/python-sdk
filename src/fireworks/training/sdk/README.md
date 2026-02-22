@@ -42,7 +42,7 @@ deploy_mgr = DeploymentManager(api_key="...", account_id="...", base_url="https:
 deploy = deploy_mgr.create_or_get(
     DeploymentConfig(
         deployment_id="my-run",
-        base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16",
+        base_model="accounts/fireworks/models/qwen3-8b",
         region="US_OHIO_1",
     )
 )
@@ -50,7 +50,7 @@ deploy_mgr.wait_for_ready(deploy.deployment_id)
 
 endpoint = trainer_mgr.create_and_wait(
     TrainerJobConfig(
-        base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16",
+        base_model="accounts/fireworks/models/qwen3-8b",
         display_name="my-trainer",
         hot_load_deployment_id=deploy.deployment_id,
         region="US_OHIO_1",
@@ -58,13 +58,13 @@ endpoint = trainer_mgr.create_and_wait(
 )
 
 service = FiretitanServiceClient(base_url=endpoint.base_url, api_key="tml-local")
-policy = service.create_training_client(base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16")
+policy = service.create_training_client(base_model="accounts/fireworks/models/qwen3-8b")
 
 syncer = WeightSyncer(
     policy_client=policy,
     deploy_mgr=deploy_mgr,
     deployment_id=deploy.deployment_id,
-    base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16",
+    base_model="accounts/fireworks/models/qwen3-8b",
 )
 syncer.save_and_hotload("step-1")
 syncer.save_dcp("step-1")

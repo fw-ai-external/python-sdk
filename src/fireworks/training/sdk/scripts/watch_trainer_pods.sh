@@ -1,10 +1,11 @@
 #!/bin/bash
 # Tight-loop pod watcher: finds trainer pods by job ID and streams logs to local files.
 # Usage: ./watch_trainer_pods.sh <job_id>
-# Logs go to ~/workspace/logs/<job_id>-trainer-<N>.log
+# Set KUBE_CONTEXT to override the default kubectl context.
+# Logs go to $HOME/workspace/logs/<job_id>-trainer-<N>.log
 
 JOB_ID="$1"
-CTX="US_OHIO_1 (lambda us-midwest-2)"
+CTX="${KUBE_CONTEXT:-US_OHIO_1 (lambda us-midwest-2)}"
 LOG_DIR="$HOME/workspace/logs"
 mkdir -p "$LOG_DIR"
 

@@ -29,7 +29,7 @@ from fireworks.training.cookbook.recipes.dpo_loop import Config, main
 from fireworks.training.cookbook.utils import InfraConfig, ResumeConfig
 
 cfg = Config(
-    base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16",
+    base_model="accounts/fireworks/models/qwen3-8b",
     dataset="/path/to/preferences.jsonl",
     epochs=1,
     infra=InfraConfig(region="US_OHIO_1"),

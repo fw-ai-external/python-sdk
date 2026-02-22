@@ -7,7 +7,7 @@ Usage:
     python setup_trainer.py \
         --display-name ablation-eager \
         --extra-args "--forward-only --no-compile" \
-        --custom-image-tag dev-chengxili-r3-v5 \
+        --custom-image-tag your-image-tag \
         --region US_OHIO_1 \
         --node-count 2 \
         --skip-validations
@@ -36,7 +36,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="Create and monitor an RLOR trainer job")
     p.add_argument("--display-name", required=True, help="Display name for the trainer job")
     p.add_argument("--base-model", default="accounts/fireworks/models/kimi-k2p5")
-    p.add_argument("--custom-image-tag", default="dev-chengxili-r3-v5")
+    p.add_argument("--custom-image-tag", default=None, help="Custom trainer image tag")
     p.add_argument("--region", default="US_OHIO_1")
     p.add_argument("--node-count", type=int, default=2)
     p.add_argument(

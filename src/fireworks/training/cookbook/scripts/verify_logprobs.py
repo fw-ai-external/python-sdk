@@ -14,10 +14,9 @@ Usage:
         --tokenizer-path "moonshotai/Kimi-K2-Instruct" \
         --dataset data/ifbench_sample.jsonl \
         --log-dir ./verify_logprobs_run \
-        --deployment-shape "accounts/pyroworks-dev/deploymentShapes/rft-kimi-k2p5-r3" \
+        --deployment-shape "accounts/ACCOUNT/deploymentShapes/YOUR-SHAPE" \
         --create-deployment \
         --hotload-deployment-id "verify-logprobs-$(date +%s)" \
-        --custom-image-tag "dev-chengxili-r3-v5" \
         --region US_OHIO_1 \
         --skip-validations \
         --max-rows 3 \

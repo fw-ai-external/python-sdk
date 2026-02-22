@@ -6,7 +6,7 @@ Outputs deployment ID and info for downstream test scripts.
 Usage:
     python setup_deployment.py \
         --deployment-id verify-ablation-20260216 \
-        --deployment-shape accounts/pyroworks-dev/deploymentShapes/rft-kimi-k2p5-r3 \
+        --deployment-shape accounts/ACCOUNT/deploymentShapes/YOUR-SHAPE \
         --region US_OHIO_1
 """
 
@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument(
         "--deployment-shape",
         required=True,
-        help="Deployment shape (e.g. accounts/pyroworks-dev/deploymentShapes/rft-kimi-k2p5-r3)",
+        help="Deployment shape (e.g. accounts/ACCOUNT/deploymentShapes/YOUR-SHAPE)",
     )
     p.add_argument("--base-model", default="accounts/fireworks/models/kimi-k2p5")
     p.add_argument("--region", default="US_OHIO_1")

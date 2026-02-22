@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
-    base_model: str = "accounts/pyroworks-dev/models/qwen3-1p7b-bf16"
+    base_model: str = "accounts/fireworks/models/qwen3-8b"
     dataset: str = ""
     tokenizer_model: str = ""  # HuggingFace model name for chat template, e.g. "Qwen/Qwen3-1.7B"
 
