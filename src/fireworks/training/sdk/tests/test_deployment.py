@@ -44,16 +44,16 @@ class TestShouldVerifySsl:
         assert DeploymentManager._should_verify_ssl("https://api.fireworks.ai") is True
 
     def test_http_no_verify(self):
-        assert DeploymentManager._should_verify_ssl("http://136.117.233.238:8083") is False
+        assert DeploymentManager._should_verify_ssl("http://203.0.113.10:8083") is False
 
     def test_https_ip_no_verify(self):
-        assert DeploymentManager._should_verify_ssl("https://136.117.233.238:8083") is False
+        assert DeploymentManager._should_verify_ssl("https://203.0.113.10:8083") is False
 
     def test_https_localhost(self):
         assert DeploymentManager._should_verify_ssl("https://127.0.0.1:8080") is False
 
     def test_https_real_domain(self):
-        assert DeploymentManager._should_verify_ssl("https://dev.api.fireworks.ai") is True
+        assert DeploymentManager._should_verify_ssl("https://example.com") is True
 
 
 # ---------------------------------------------------------------------------

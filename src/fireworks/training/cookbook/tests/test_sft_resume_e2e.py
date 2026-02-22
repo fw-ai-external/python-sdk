@@ -3,9 +3,9 @@
 Two-phase test on qwen3-30b-a3b.
 
 Requires:
-  FIREWORKS_API_KEY     -- API key with dev access
-  FIREWORKS_ACCOUNT_ID  -- defaults to "pyroworks-dev"
-  FIREWORKS_BASE_URL    -- defaults to "https://dev.api.fireworks.ai"
+  FIREWORKS_API_KEY     -- API key with training access
+  FIREWORKS_ACCOUNT_ID  -- target account ID
+  FIREWORKS_BASE_URL    -- optional (defaults to "https://api.fireworks.ai")
 """
 
 from __future__ import annotations

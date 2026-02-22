@@ -4,9 +4,10 @@ Full pipeline: policy + reference trainers, deployment with hotloading,
 Router Replay (R3), and Truncated Importance Sampling (TIS).
 
 Requires:
-  FIREWORKS_API_KEY     — API key with dev access
-  FIREWORKS_ACCOUNT_ID  — defaults to "pyroworks-dev"
-  FIREWORKS_BASE_URL    — defaults to "https://dev.api.fireworks.ai"
+  FIREWORKS_API_KEY     -- API key with training/deployment access
+  FIREWORKS_ACCOUNT_ID  -- target account ID
+  FIREWORKS_BASE_URL    -- optional (defaults to "https://api.fireworks.ai")
+  FIREWORKS_E2E_DEPLOYMENT_SHAPE -- required for this MoE GRPO test
 """
 
 from __future__ import annotations
@@ -50,8 +51,10 @@ class TestGRPOE2E:
     ):
         rlor_mgr, deploy_mgr = sdk_managers
         ts = int(time.time())
+        if not e2e_deployment_shape:
+            pytest.skip("Set FIREWORKS_E2E_DEPLOYMENT_SHAPE for GRPO E2E runs")
 
-        # Monkey-patch the reward function into the module
+        # Inject the test reward function into the module.
         import fireworks.training.cookbook.recipes.grpo_loop as grpo_mod
 
         grpo_mod.reward_fn = _gsm8k_reward

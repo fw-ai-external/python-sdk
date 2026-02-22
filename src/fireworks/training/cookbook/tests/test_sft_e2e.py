@@ -4,9 +4,9 @@ Creates a real RLOR trainer job, trains SFT on a small synthetic chat dataset,
 and verifies metrics. No deployment or hotloading.
 
 Requires:
-  FIREWORKS_API_KEY     — API key with dev access
-  FIREWORKS_ACCOUNT_ID  — defaults to "pyroworks-dev"
-  FIREWORKS_BASE_URL    — defaults to "https://dev.api.fireworks.ai"
+  FIREWORKS_API_KEY     -- API key with training access
+  FIREWORKS_ACCOUNT_ID  -- target account ID
+  FIREWORKS_BASE_URL    -- optional (defaults to "https://api.fireworks.ai")
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _make_chat_dataset(path: str, num_examples: int = 10) -> None:
 @pytest.mark.e2e
 @pytest.mark.timeout(3600)
 class TestSFTE2E:
-    """SFT training on qwen3-30b-a3b — trainer only, no deployment."""
+    """SFT training on qwen3-30b-a3b -- trainer only, no deployment."""
 
     def test_sft_trains_several_steps(
         self,

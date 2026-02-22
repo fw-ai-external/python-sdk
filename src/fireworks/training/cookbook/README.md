@@ -46,10 +46,6 @@ main(cfg)
 - Data adapters in `utils/data.py` for your JSONL schema.
 - Resume behavior in `utils/resume.py`.
 
-## Numerics verification
-
-Use `scripts/verify_logprobs.py` to compare inference logprobs (deployment) vs training logprobs (forward-only reference trainer), including token-level diagnostics.
-
 ## Relationship to SDK
 
 The cookbook does not replace the SDK; it composes it:

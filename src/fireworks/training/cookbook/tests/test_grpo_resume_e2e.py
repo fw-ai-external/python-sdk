@@ -7,9 +7,10 @@ hotloading:
   Phase 2: Create new RLOR jobs, reuse deployment, resume from checkpoint.
 
 Requires:
-  FIREWORKS_API_KEY     -- API key with dev access
-  FIREWORKS_ACCOUNT_ID  -- defaults to "pyroworks-dev"
-  FIREWORKS_BASE_URL    -- defaults to "https://dev.api.fireworks.ai"
+  FIREWORKS_API_KEY     -- API key with training/deployment access
+  FIREWORKS_ACCOUNT_ID  -- target account ID
+  FIREWORKS_BASE_URL    -- optional (defaults to "https://api.fireworks.ai")
+  FIREWORKS_E2E_DEPLOYMENT_SHAPE -- required for this MoE GRPO test
 """
 
 from __future__ import annotations
@@ -55,6 +56,8 @@ class TestGRPOResumeE2E:
         custom_image_tag,
     ):
         rlor_mgr, deploy_mgr = sdk_managers
+        if not e2e_deployment_shape:
+            pytest.skip("Set FIREWORKS_E2E_DEPLOYMENT_SHAPE for GRPO E2E runs")
 
         import fireworks.training.cookbook.recipes.grpo_loop as grpo_mod
 
