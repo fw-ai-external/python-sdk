@@ -12,7 +12,7 @@ from .shared.wandb_config import WandbConfig
 from .shared.training_config import TrainingConfig
 from .shared.reinforcement_learning_loss_config import ReinforcementLearningLossConfig
 
-__all__ = ["ReinforcementFineTuningStep", "AwsS3Config"]
+__all__ = ["ReinforcementFineTuningStep", "AwsS3Config", "AzureBlobStorageConfig", "JobProgress"]
 
 
 class AwsS3Config(BaseModel):
@@ -21,6 +21,63 @@ class AwsS3Config(BaseModel):
     credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
 
     iam_role_arn: Optional[str] = FieldInfo(alias="iamRoleArn", default=None)
+
+
+class AzureBlobStorageConfig(BaseModel):
+    """The Azure configuration for Azure Blob Storage dataset access."""
+
+    credentials_secret: Optional[str] = FieldInfo(alias="credentialsSecret", default=None)
+    """
+    Reference to a Secret resource containing Azure credentials. Format:
+    accounts/{account_id}/secrets/{secret_id} The secret value must be JSON:
+    {"connection_string": "..."} or {"sas_token": "..."} or {"account_key": "..."}
+    Mutually exclusive with managed_identity_client_id.
+    """
+
+    managed_identity_client_id: Optional[str] = FieldInfo(alias="managedIdentityClientId", default=None)
+    """
+    Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret.
+    """
+
+    tenant_id: Optional[str] = FieldInfo(alias="tenantId", default=None)
+
+
+class JobProgress(BaseModel):
+    """Job progress."""
+
+    cached_input_token_count: Optional[int] = FieldInfo(alias="cachedInputTokenCount", default=None)
+    """The number of input tokens that hit the prompt cache."""
+
+    epoch: Optional[int] = None
+    """
+    The epoch for which the progress percent is reported, usually starting from 0.
+    This is optional for jobs that don't run in an epoch fasion, e.g. BIJ, EVJ.
+    """
+
+    failed_requests: Optional[int] = FieldInfo(alias="failedRequests", default=None)
+    """Number of requests that failed to process."""
+
+    input_tokens: Optional[int] = FieldInfo(alias="inputTokens", default=None)
+    """Total number of input tokens processed."""
+
+    output_rows: Optional[int] = FieldInfo(alias="outputRows", default=None)
+    """Number of output rows generated."""
+
+    output_tokens: Optional[int] = FieldInfo(alias="outputTokens", default=None)
+    """Total number of output tokens generated."""
+
+    percent: Optional[int] = None
+    """Progress percent, within the range from 0 to 100."""
+
+    successfully_processed_requests: Optional[int] = FieldInfo(alias="successfullyProcessedRequests", default=None)
+    """Number of requests that were processed successfully."""
+
+    total_input_requests: Optional[int] = FieldInfo(alias="totalInputRequests", default=None)
+    """Total number of input requests/rows in the job."""
+
+    total_processed_requests: Optional[int] = FieldInfo(alias="totalProcessedRequests", default=None)
+    """Total number of requests that have been processed (successfully or failed)."""
 
 
 class ReinforcementFineTuningStep(BaseModel):
@@ -32,6 +89,11 @@ class ReinforcementFineTuningStep(BaseModel):
 
     aws_s3_config: Optional[AwsS3Config] = FieldInfo(alias="awsS3Config", default=None)
     """The AWS configuration for S3 dataset access."""
+
+    azure_blob_storage_config: Optional[AzureBlobStorageConfig] = FieldInfo(
+        alias="azureBlobStorageConfig", default=None
+    )
+    """The Azure configuration for Azure Blob Storage dataset access."""
 
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 
@@ -53,12 +115,21 @@ class ReinforcementFineTuningStep(BaseModel):
     evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
     """The name of a separate dataset to use for evaluation."""
 
+    forward_only: Optional[bool] = FieldInfo(alias="forwardOnly", default=None)
+    """
+    When true, run the trainer in forward-only mode (no backward/optimizer). Used
+    for reference models in GRPO that only need forward passes.
+    """
+
     hot_load_deployment_id: Optional[str] = FieldInfo(alias="hotLoadDeploymentId", default=None)
     """The deployment ID used for hot loading.
 
     When set, checkpoints are saved to this deployment's hot load bucket, enabling
     weight swaps on inference. Only valid for service-mode or keep-alive jobs.
     """
+
+    job_progress: Optional[JobProgress] = FieldInfo(alias="jobProgress", default=None)
+    """Job progress."""
 
     keep_alive: Optional[bool] = FieldInfo(alias="keepAlive", default=None)
 
@@ -88,6 +159,10 @@ class ReinforcementFineTuningStep(BaseModel):
     """
 
     service_mode: Optional[bool] = FieldInfo(alias="serviceMode", default=None)
+    """Service-mode RLOR trainers currently support full-parameter tuning only.
+
+    When enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
+    """
 
     state: Optional[
         Literal[

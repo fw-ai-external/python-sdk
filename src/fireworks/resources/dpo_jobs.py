@@ -52,6 +52,8 @@ class DpoJobsResource(SyncAPIResource):
         account_id: str | None = None,
         dataset: str,
         dpo_job_id: str | Omit = omit,
+        aws_s3_config: dpo_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -68,6 +70,10 @@ class DpoJobsResource(SyncAPIResource):
           dataset: The name of the dataset used for training.
 
           dpo_job_id: ID of the DPO job, a random ID will be generated if not specified.
+
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
@@ -95,6 +101,8 @@ class DpoJobsResource(SyncAPIResource):
             body=maybe_transform(
                 {
                     "dataset": dataset,
+                    "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
                     "training_config": training_config,
@@ -377,6 +385,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         account_id: str | None = None,
         dataset: str,
         dpo_job_id: str | Omit = omit,
+        aws_s3_config: dpo_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -393,6 +403,10 @@ class AsyncDpoJobsResource(AsyncAPIResource):
           dataset: The name of the dataset used for training.
 
           dpo_job_id: ID of the DPO job, a random ID will be generated if not specified.
+
+          aws_s3_config: The AWS configuration for S3 dataset access.
+
+          azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
@@ -420,6 +434,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
+                    "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
                     "training_config": training_config,

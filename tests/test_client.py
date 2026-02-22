@@ -420,6 +420,7 @@ class TestFireworks:
 
         client.close()
 
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     def test_account_id_client_params(self, client: Fireworks) -> None:
         # Test with base client (no custom params)
         with pytest.raises(ValueError, match="Missing account_id argument;"):
@@ -1323,6 +1324,7 @@ class TestAsyncFireworks:
 
         await client.close()
 
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     async def test_account_id_client_params(self, async_client: AsyncFireworks) -> None:
         # Test with base client (no custom params)
         with pytest.raises(ValueError, match="Missing account_id argument;"):
