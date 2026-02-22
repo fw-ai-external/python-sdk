@@ -4,6 +4,10 @@ These tests create real RLOR jobs and deployments on dev infrastructure.
 All algorithms run on qwen3-30b-a3b (MoE) by default.
 
 Requires FIREWORKS_API_KEY to be set.
+
+Override defaults via environment variables:
+  FIREWORKS_E2E_MODEL, FIREWORKS_E2E_REGION, FIREWORKS_E2E_DEPLOYMENT_SHAPE,
+  FIREWORKS_E2E_TOKENIZER_MODEL, FIREWORKS_ACCOUNT_ID, FIREWORKS_BASE_URL
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ DEFAULT_TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B"
 DEFAULT_REGION = "US_OHIO_1"
 DEFAULT_TRAINING_ACCELERATOR = None
 DEFAULT_DEPLOYMENT_ACCELERATOR = "NVIDIA_B200_180GB"
+# Dev-only shape; override via FIREWORKS_E2E_DEPLOYMENT_SHAPE for your account
 DEFAULT_DEPLOYMENT_SHAPE = "accounts/pyroworks-dev/deploymentShapes/rft-qwen3-30b-a3b-r3"
 
 GSM8K_SAMPLE_URL = "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/development/gsm8k_sample.jsonl"
@@ -49,6 +54,7 @@ def sdk_managers():
     if not api_key:
         pytest.skip("FIREWORKS_API_KEY not set — skipping E2E tests")
 
+    # Default to Fireworks dev environment; override for your own account
     account_id = _get_env("FIREWORKS_ACCOUNT_ID", "pyroworks-dev")
     base_url = _get_env("FIREWORKS_BASE_URL", "https://dev.api.fireworks.ai")
     inference_url = _get_env("FIREWORKS_INFERENCE_URL", base_url)

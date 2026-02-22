@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
-    base_model: str = "accounts/pyroworks-dev/models/qwen3-1p7b-bf16"
+    base_model: str = "accounts/fireworks/models/qwen3-8b"
     dataset: str = "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/development/gsm8k_sample.jsonl"
 
     learning_rate: float = 1e-5

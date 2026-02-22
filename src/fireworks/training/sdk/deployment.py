@@ -83,7 +83,14 @@ class DeploymentManager:
         mgr = DeploymentManager(
             api_key="...",
             account_id="...",
-            base_url="http://136.117.233.238:8083",
+            base_url="https://api.fireworks.ai",
+        )
+
+        # Dev environment (personal gateway):
+        mgr = DeploymentManager(
+            api_key="...",
+            account_id="...",
+            base_url="http://GATEWAY_IP:8083",  # personal dev gateway
             inference_url="https://dev.api.fireworks.ai",
             hotload_api_url="https://dev.api.fireworks.ai",
         )
@@ -658,7 +665,7 @@ class DeploymentSampler:
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
         sampler = DeploymentSampler(
             inference_url="https://api.fireworks.ai",
-            model="accounts/pyroworks-dev/deployments/my-deploy",
+            model="accounts/your-account/deployments/my-deploy",
             api_key="...",
             tokenizer=tokenizer,
         )

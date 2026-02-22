@@ -33,7 +33,7 @@ from fireworks.training.cookbook.utils import (
 )
 
 cfg = Config(
-    base_model="accounts/pyroworks-dev/models/qwen3-1p7b-bf16",
+    base_model="accounts/fireworks/models/qwen3-8b",
     max_rows=20,
     epochs=1,
     group_size=4,
