@@ -898,7 +898,7 @@ def main():
                 torch.tensor(rejected_tokens, dtype=torch.long), rejected_weights, max_length=args.max_seq_len,
             )
 
-            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()
+            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             ref_chosen = fwd_result.loss_fn_outputs[0]["logprobs"].data
             ref_rejected = fwd_result.loss_fn_outputs[1]["logprobs"].data
 
@@ -945,7 +945,7 @@ def main():
                 torch.tensor(rejected_tokens, dtype=torch.long), rejected_weights, max_length=args.max_seq_len,
             )
 
-            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()
+            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             pi_chosen_list = fwd_result.loss_fn_outputs[0]["logprobs"].data
             pi_rejected_list = fwd_result.loss_fn_outputs[1]["logprobs"].data
 
@@ -1006,8 +1006,8 @@ def main():
                 accum_count += 1
 
                 if accum_count >= args.grad_accum:
-                    training_client.optim_step(
-                        tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)
+                    training_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                        tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)  # type: ignore[reportCallIssue]
                     ).result()
                     step += 1
 
@@ -1025,7 +1025,7 @@ def main():
                         ckpt_type = "delta" if base_checkpoint_saved else args.first_checkpoint_type
                         log(f"  Saving periodic checkpoint: {ckpt_name} (type={ckpt_type})")
                         try:
-                            training_client.save_weights_for_sampler(ckpt_name, checkpoint_type=ckpt_type).result()
+                            training_client.save_weights_for_sampler(ckpt_name, checkpoint_type=ckpt_type).result()  # type: ignore[reportAttributeAccessIssue]
                             actual_ckpt_type = ckpt_type
                             if not base_checkpoint_saved:
                                 base_checkpoint_saved = True
@@ -1067,8 +1067,8 @@ def main():
                     accum_count = 0
 
             if accum_count > 0:
-                training_client.optim_step(
-                    tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)
+                training_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                    tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)  # type: ignore[reportCallIssue]
                 ).result()
                 step += 1
 
@@ -1081,7 +1081,7 @@ def main():
             final_ckpt_type = "delta" if base_checkpoint_saved else args.first_checkpoint_type
             log(f"\nSaving final weights: {sampler_name} (type={final_ckpt_type})")
             try:
-                sampler_result = training_client.save_weights_for_sampler(sampler_name, checkpoint_type=final_ckpt_type).result()
+                sampler_result = training_client.save_weights_for_sampler(sampler_name, checkpoint_type=final_ckpt_type).result()  # type: ignore[reportAttributeAccessIssue]
                 result_path = sampler_result.path
                 log(f"  Saved to: {result_path} (type={final_ckpt_type})")
 
