@@ -26,17 +26,15 @@ from dataclasses import dataclass
 
 try:
     from fireworks import Fireworks
-
-    FIREWORKS_SDK_AVAILABLE = True
 except ImportError:
-    FIREWORKS_SDK_AVAILABLE = False
+    Fireworks = None  # type: ignore[assignment]
 
 from . import log, warn
 
 
-def _get_fireworks_client(api_key: str, base_url: str) -> "Fireworks":
+def _get_fireworks_client(api_key: str, base_url: str) -> Any:
     """Get a Fireworks SDK client."""
-    if not FIREWORKS_SDK_AVAILABLE:
+    if Fireworks is None:
         raise RuntimeError("Fireworks SDK not available. Install with: pip install fireworks-ai")
     return Fireworks(api_key=api_key, base_url=base_url)
 
@@ -63,9 +61,9 @@ def _get_deployment(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     deployment_id: str,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Get deployment status. Returns None if not found."""
     try:
         client = _get_fireworks_client(api_key, base_url)
@@ -87,7 +85,7 @@ def delete_deployment(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     deployment_id: str,
     ignore_checks: bool = True,
 ) -> None:
@@ -107,7 +105,7 @@ def _create_deployment(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     deployment_id: str,
     base_model: str,
     deployment_shape: str | None = None,
@@ -116,7 +114,7 @@ def _create_deployment(
     max_replica_count: int = 1,
     accelerator_type: str | None = None,
     hot_load_bucket_type: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create a hotload-enabled deployment.
 
     This creates an inference endpoint with hotload enabled, allowing you to
@@ -174,7 +172,7 @@ def create_or_get_deployment(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     deployment_id: str,
     base_model: str,
     deployment_shape: str | None = None,
@@ -220,7 +218,7 @@ def wait_for_deployment_ready(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     deployment_id: str,
     timeout_s: float = 600,
     poll_interval_s: float = 15,

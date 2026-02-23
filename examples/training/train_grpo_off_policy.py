@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: basic
 """
 GRPO (Group Relative Policy Optimization) Training via Tinker SDK - OFF-POLICY
 
@@ -41,7 +42,7 @@ from dataclasses import dataclass
 
 import httpx
 import torch
-import tinker
+import tinker  # type: ignore[import]
 
 # Import shared utilities
 from shared import (
@@ -69,21 +70,24 @@ from shared import (
 # Support both names: tinker-cookbook builds vary between `datum_from_tokens_weights`
 # and `datum_from_model_input_weights` even within the same version number.
 try:
-    from tinker_cookbook.supervised.common import datum_from_tokens_weights
+    from tinker_cookbook.supervised.common import datum_from_tokens_weights  # type: ignore[import]
 except ImportError:
-    from tinker_cookbook.supervised.common import datum_from_model_input_weights as datum_from_tokens_weights
+    from tinker_cookbook.supervised.common import (  # type: ignore[import]
+        datum_from_model_input_weights as datum_from_tokens_weights,
+    )
 
 # Importing fireworks.training applies the Fireworks compatibility patches to Tinker
 # automatically (if Tinker is installed). This adds checkpoint_type support to
 # save_weights_for_sampler.
-import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
+import fireworks.training  # noqa: F401  # type: ignore[reportUnusedImport]
 
+WANDB_AVAILABLE: bool = False
 try:
     import wandb
 
     WANDB_AVAILABLE = True
 except ImportError:
-    WANDB_AVAILABLE = False
+    pass
 
 
 # =============================================================================
@@ -247,7 +251,7 @@ class SampledCompletion:
 
 
 def sample_completions_from_deployment(
-    fw_client: "Fireworks",
+    fw_client: Any,
     model: str,
     messages: List[Dict[str, str]],
     n: int,
@@ -498,7 +502,7 @@ def main():
 
     use_wandb = WANDB_AVAILABLE and args.wandb_entity is not None
     if use_wandb:
-        wandb.init(
+        wandb.init(  # type: ignore[possibly-undefined]
             entity=args.wandb_entity,
             project=args.wandb_project,
             name=args.wandb_run_name,
@@ -512,8 +516,8 @@ def main():
             },
         )
 
-    fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
-    fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
+    fw_api_key: str = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY") or ""
+    fw_account_id: str = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID") or ""
     fw_additional_headers = parse_additional_headers(
         args.additional_headers or os.environ.get("FIREWORKS_ADDITIONAL_HEADERS")
     )
@@ -730,7 +734,7 @@ def main():
                     log(f"  Hotloading weights before sampling (step {global_step}, type={ckpt_type})...")
 
                     # Save current weights (patched API accepts checkpoint_type)
-                    policy_client.save_weights_for_sampler(
+                    policy_client.save_weights_for_sampler(  # type: ignore[reportAttributeAccessIssue]
                         sampler_name,
                         checkpoint_type=ckpt_type,
                     ).result()
@@ -872,7 +876,7 @@ def main():
                 continue
 
             # Get reference logprobs in ONE batched call (not one-by-one)
-            ref_fwd = reference_client.forward(datums, "cross_entropy").result()
+            ref_fwd = reference_client.forward(datums, "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             ref_logprobs_list: List[List[float]] = [
                 list(ref_fwd.loss_fn_outputs[i]["logprobs"].data)
                 for i in range(len(datums))
@@ -935,13 +939,13 @@ def main():
             accum_count += 1
 
             if accum_count >= args.grad_accum:
-                policy_client.optim_step(
+                policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
                     tinker.AdamParams(
                         learning_rate=args.lr,
                         beta1=0.9,
                         beta2=0.999,
                         eps=1e-8,
-                        weight_decay=0.01,
+                        weight_decay=0.01,  # type: ignore[reportCallIssue]
                     )
                 ).result()
                 global_step += 1
@@ -959,7 +963,7 @@ def main():
                 log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
                 if use_wandb:
-                    wandb.log(
+                    wandb.log(  # type: ignore[possibly-undefined]
                         {
                             "train/grpo_loss": avg_loss,
                             "train/reward": avg_reward,
@@ -974,13 +978,13 @@ def main():
                 accum_count = 0
 
         if accum_count > 0:
-            policy_client.optim_step(
+            policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
                 tinker.AdamParams(
                     learning_rate=args.lr,
                     beta1=0.9,
                     beta2=0.999,
                     eps=1e-8,
-                    weight_decay=0.01,
+                    weight_decay=0.01,  # type: ignore[reportCallIssue]
                 )
             ).result()
             global_step += 1
@@ -999,7 +1003,7 @@ def main():
             log(json.dumps({"type": "metrics", "step": global_step, "grpo_loss": avg_loss, "reward": avg_reward, "accuracy": avg_acc, "kl": avg_kl}))
 
             if use_wandb:
-                wandb.log(
+                wandb.log(  # type: ignore[possibly-undefined]
                     {
                         "train/grpo_loss": avg_loss,
                         "train/reward": avg_reward,
@@ -1023,7 +1027,7 @@ def main():
         log(f"\nSaving final weights: {sampler_name} (type={final_ckpt_type})")
         try:
             # Patched API accepts checkpoint_type
-            sampler_result = policy_client.save_weights_for_sampler(
+            sampler_result = policy_client.save_weights_for_sampler(  # type: ignore[reportAttributeAccessIssue]
                 sampler_name,
                 checkpoint_type=final_ckpt_type,
             ).result()
@@ -1093,7 +1097,7 @@ def main():
             warn(f"Failed to save weights: {e}")
 
     if use_wandb:
-        wandb.finish()
+        wandb.finish()  # type: ignore[possibly-undefined]
 
     # Cleanup (also registered via atexit for exception handling)
     cleanup_resources()
