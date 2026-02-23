@@ -42,7 +42,7 @@ def extract_answer_digits(text: str) -> Optional[str]:
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict) and "response" in parsed:
-            digits = re.search(r"(-?\d+)", str(parsed["response"]))
+            digits = re.search(r"(-?\d+)", str(parsed["response"]))  # type: ignore[reportUnknownArgumentType]
             return digits.group(1) if digits else None
     except (json.JSONDecodeError, TypeError):
         pass
@@ -93,7 +93,7 @@ def load_gsm8k_dataset(path_or_url: str, max_rows: int) -> List[Dict[str, Any]]:
         with open(path_or_url) as f:
             lines = f.readlines()
 
-    rows = []
+    rows: list[dict[str, Any]] = []
     for line in lines:
         line = line.strip()
         if not line:
