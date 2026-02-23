@@ -46,7 +46,7 @@ def warn(msg: str) -> None:
     logger.warning(msg)
 
 
-def parse_additional_headers(additional_headers_json: str | None) -> dict | None:
+def parse_additional_headers(additional_headers_json: str | None) -> dict[str, str] | None:
     """Parse JSON string to dict for additional HTTP headers."""
     if not additional_headers_json:
         return None
