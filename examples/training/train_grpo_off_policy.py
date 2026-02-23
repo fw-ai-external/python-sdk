@@ -734,7 +734,7 @@ def main():
                     log(f"  Hotloading weights before sampling (step {global_step}, type={ckpt_type})...")
 
                     # Save current weights (patched API accepts checkpoint_type)
-                    policy_client.save_weights_for_sampler(
+                    policy_client.save_weights_for_sampler(  # type: ignore[reportAttributeAccessIssue]
                         sampler_name,
                         checkpoint_type=ckpt_type,
                     ).result()
@@ -876,7 +876,7 @@ def main():
                 continue
 
             # Get reference logprobs in ONE batched call (not one-by-one)
-            ref_fwd = reference_client.forward(datums, "cross_entropy").result()
+            ref_fwd = reference_client.forward(datums, "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             ref_logprobs_list: List[List[float]] = [
                 list(ref_fwd.loss_fn_outputs[i]["logprobs"].data)
                 for i in range(len(datums))
@@ -939,8 +939,8 @@ def main():
             accum_count += 1
 
             if accum_count >= args.grad_accum:
-                policy_client.optim_step(
-                    tinker.AdamParams(
+                policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                    tinker.AdamParams(  # type: ignore[reportCallIssue]
                         learning_rate=args.lr,
                         beta1=0.9,
                         beta2=0.999,
@@ -978,8 +978,8 @@ def main():
                 accum_count = 0
 
         if accum_count > 0:
-            policy_client.optim_step(
-                tinker.AdamParams(
+            policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                tinker.AdamParams(  # type: ignore[reportCallIssue]
                     learning_rate=args.lr,
                     beta1=0.9,
                     beta2=0.999,
@@ -1027,7 +1027,7 @@ def main():
         log(f"\nSaving final weights: {sampler_name} (type={final_ckpt_type})")
         try:
             # Patched API accepts checkpoint_type
-            sampler_result = policy_client.save_weights_for_sampler(
+            sampler_result = policy_client.save_weights_for_sampler(  # type: ignore[reportAttributeAccessIssue]
                 sampler_name,
                 checkpoint_type=final_ckpt_type,
             ).result()
