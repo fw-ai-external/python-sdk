@@ -824,12 +824,12 @@ def main():
 
             if accum_count >= args.grad_accum:
                 policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
-                    tinker.AdamParams(  # type: ignore[reportCallIssue]
+                    tinker.AdamParams(
                         learning_rate=args.lr,
                         beta1=0.9,
                         beta2=0.999,
                         eps=1e-8,
-                        weight_decay=0.01,
+                        weight_decay=0.01,  # type: ignore[reportCallIssue]
                     )
                 ).result()
                 global_step += 1
@@ -862,12 +862,12 @@ def main():
 
         if accum_count > 0:
             policy_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
-                tinker.AdamParams(  # type: ignore[reportCallIssue]
+                tinker.AdamParams(
                     learning_rate=args.lr,
                     beta1=0.9,
                     beta2=0.999,
                     eps=1e-8,
-                    weight_decay=0.01,
+                    weight_decay=0.01,  # type: ignore[reportCallIssue]
                 )
             ).result()
             global_step += 1
