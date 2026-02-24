@@ -7,7 +7,7 @@ For GRPO, we use both a trainable policy client and a frozen reference client fo
 
 | Script | Algorithm | Hotload Frequency | Importance Sampling |
 |--------|-----------|-------------------|---------------------|
-| `train_sft.py` | SFT (supervised fine-tuning) | Configurable | No |
+| `train_sft.py` | SFT (supervised fine-tuning) | N/A | No |
 | `train_grpo.py` | GRPO (on-policy) | Every optimizer step | No (ρ=1) |
 | `train_grpo_off_policy.py` | GRPO (off-policy) | Every N steps | Yes (ρ = π_current / π_behavior) |
 | `train_dpo.py` | DPO | End of training only | No |
@@ -223,6 +223,40 @@ export FIREWORKS_API_KEY="..."
 export FIREWORKS_ACCOUNT_ID="..."
 ```
 
+### SFT (Supervised Fine-Tuning)
+
+Trains on assistant messages using cross-entropy loss with linear LR decay.
+
+```bash
+# Via RLOR (Fireworks-managed GPU trainer)
+python examples/training/train_sft.py \
+    --use-rlor \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-path /path/to/train.jsonl \
+    --lora-rank 32 \
+    --batch-size 128 \
+    --learning-rate 1e-4 \
+    --max-length 32768 \
+    --epochs 1 \
+    --region EU_ICELAND_2 \
+    --skip-validations \
+    --cleanup-rlor-job
+
+# Via direct Tinker endpoint
+python examples/training/train_sft.py \
+    --base-url https://trainer-...:30443 \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-path /path/to/train.jsonl \
+    --lora-rank 32 --epochs 1
+
+# With HuggingFace dataset (e.g., no_robots)
+python examples/training/train_sft.py \
+    --use-rlor \
+    --model-name "accounts/fireworks/models/qwen3-8b" \
+    --dataset-name HuggingFaceH4/no_robots \
+    --lora-rank 32 --epochs 1
+```
+
 ### GRPO On-Policy
 
 ```bash
@@ -262,29 +296,6 @@ Same as on-policy, with these additions:
 The off-policy version uses importance sampling (`ρ = π_current / π_behavior`) to correct
 for the mismatch between the deployment's (stale) weights and the trainer's current weights
 between hotloads.
-
-### SFT
-
-```bash
-python examples/training/train_sft.py \
-    --base-model "accounts/fireworks/models/qwen3-1p7b" \
-    --dataset /path/to/data.jsonl \
-    --lora-rank 0 \
-    --max-seq-len 4096 \
-    --epochs 1 \
-    --max-examples 200 \
-    --lr 1e-5 \
-    --grad-accum 4 \
-    --create-deployment \
-    --hotload-deployment-id "sft-run" \
-    --deployment-shape "accounts/{account}/deploymentShapes/{shape}" \
-    --deployment-region "EU_ICELAND_2" \
-    --skip-validations \
-    --save-sampler \
-    --hotload \
-    --cleanup-rlor-job \
-    --cleanup-deployment
-```
 
 ### DPO
 
