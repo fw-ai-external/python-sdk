@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: basic
 """
 Supervised Fine-Tuning (SFT) via Fireworks' Tinker SDK.
 
@@ -45,25 +46,26 @@ from shared import (
     parse_additional_headers,
     create_rlor_service_job_and_wait,
 )
-from tinker_cookbook import renderers, model_info
-from tinker_cookbook.supervised.data import conversation_to_datum
-from tinker_cookbook.tokenizer_utils import get_tokenizer
-from tinker_cookbook.supervised.common import compute_mean_nll
+from tinker_cookbook import renderers, model_info  # type: ignore[import]
+from tinker_cookbook.supervised.data import conversation_to_datum  # type: ignore[import]
+from tinker_cookbook.tokenizer_utils import get_tokenizer  # type: ignore[import]
+from tinker_cookbook.supervised.common import compute_mean_nll  # type: ignore[import]
 
 # Importing fireworks.training applies Fireworks compatibility patches to Tinker
 # (e.g., checkpoint_type support for save_weights_for_sampler).
 # This is optional for SFT since we don't use hotloading.
 try:
-    import fireworks.training  # noqa: F401
+    import fireworks.training  # noqa: F401  # type: ignore[reportUnusedImport]
 except ImportError:
     pass
 
+WANDB_AVAILABLE: bool = False
 try:
     import wandb
 
     WANDB_AVAILABLE = True
 except ImportError:
-    WANDB_AVAILABLE = False
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +250,7 @@ def main():
     # =========================================================================
     use_wandb = WANDB_AVAILABLE and args.wandb_entity is not None
     if use_wandb:
-        wandb.init(
+        wandb.init(  # type: ignore[possibly-undefined]
             entity=args.wandb_entity,
             project=args.wandb_project,
             name=args.wandb_run_name,
@@ -276,8 +278,8 @@ def main():
         cleanup_done = True
         if args.cleanup_rlor_job and trainer_endpoint is not None:
             log(f"Cleaning up RLOR job: {trainer_endpoint.job_id}")
-            fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
-            fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
+            fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY") or ""
+            fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID") or ""
             fw_base_url = args.fireworks_base_url or os.environ.get("FIREWORKS_BASE_URL") or "https://api.fireworks.ai"
             fw_additional_headers = parse_additional_headers(
                 args.additional_headers or os.environ.get("FIREWORKS_ADDITIONAL_HEADERS")
@@ -340,7 +342,7 @@ def main():
     renderer = renderers.get_renderer(renderer_name, tokenizer)
     log(f"  Renderer: {renderer_name}")
 
-    train_on_what = renderers.TrainOnWhat[args.train_on_what]
+    train_on_what = renderers.TrainOnWhat[args.train_on_what]  # type: ignore[reportInvalidTypeArguments]
 
     service_client = tinker.ServiceClient(base_url=base_url, api_key=args.api_key)
     training_client = service_client.create_lora_training_client(
@@ -390,7 +392,7 @@ def main():
             # Save checkpoint (if enabled) -- only at optimizer step boundaries
             if args.save_every > 0 and global_step > 0 and global_step % args.save_every == 0 and accum_count == 0:
                 try:
-                    from tinker_cookbook import checkpoint_utils
+                    from tinker_cookbook import checkpoint_utils  # type: ignore[import]
 
                     checkpoint_utils.save_checkpoint(
                         training_client=training_client,
@@ -418,7 +420,7 @@ def main():
                         row["messages"],
                         renderer,
                         args.max_length,
-                        train_on_what,
+                        train_on_what,  # type: ignore[reportArgumentType]
                     )
                     batch.append(datum)
                 except Exception as e:
@@ -434,7 +436,7 @@ def main():
                 log(f"  Batch {batch_idx}: {skipped}/{len(batch_rows)} rows skipped")
 
             # Forward + backward (accumulates gradients on the server)
-            fwd_bwd_future = training_client.forward_backward(batch, loss_fn="cross_entropy")
+            fwd_bwd_future = training_client.forward_backward(batch, loss_fn="cross_entropy")  # type: ignore[reportAttributeAccessIssue]
             fwd_bwd_result = fwd_bwd_future.result()
 
             # Track NLL across accumulation window
@@ -470,7 +472,7 @@ def main():
                     eps=1e-8,
                 )
 
-                optim_step_future = training_client.optim_step(adam_params)
+                optim_step_future = training_client.optim_step(adam_params)  # type: ignore[reportAttributeAccessIssue]
                 optim_result = optim_step_future.result()
 
                 if optim_result.metrics:
@@ -510,7 +512,7 @@ def main():
                     }))
 
                 if use_wandb:
-                    wandb.log(
+                    wandb.log(  # type: ignore[possibly-undefined]
                         {
                             "train/nll": train_nll,
                             "train/lr": current_lr,
@@ -531,7 +533,7 @@ def main():
     # Save final checkpoint
     # =========================================================================
     try:
-        from tinker_cookbook import checkpoint_utils
+        from tinker_cookbook import checkpoint_utils  # type: ignore[import]
 
         log("\nSaving final checkpoint...")
         checkpoint_utils.save_checkpoint(
@@ -549,7 +551,7 @@ def main():
     log(f"\nTraining complete: {global_step} optimizer steps over {args.epochs} epoch(s) (grad_accum={grad_accum})")
 
     if use_wandb:
-        wandb.finish()
+        wandb.finish()  # type: ignore[possibly-undefined]
 
     # Cleanup
     cleanup_resources()
