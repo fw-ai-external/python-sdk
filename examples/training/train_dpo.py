@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: basic
 """
 Direct Preference Optimization (DPO) Training via Tinker SDK
 
@@ -27,19 +28,19 @@ Checkpointing & Hotload:
 Usage:
     # Basic training:
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/preference_data.jsonl
 
     # With hotload (saves trained weights to inference deployment):
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/data.jsonl \\
         --create-deployment --hotload-deployment-id "my-dpo-deployment" \\
         --save-sampler --hotload
 
     # Periodic saves with delta hotloading:
     python examples/training/train_dpo.py \\
-        --base-model "Qwen/Qwen3-8B" \\
+        --base-model "accounts/fireworks/models/qwen3-8b" \\
         --dataset /path/to/data.jsonl \\
         --hotload-deployment-id "my-deployment" \\
         --save-interval 2 --hotload-interval \\
@@ -58,7 +59,7 @@ from typing import Any, List, Callable
 
 import httpx
 import torch
-import tinker
+import tinker  # type: ignore[import]
 import torch.nn.functional as F
 
 # Import shared utilities
@@ -78,20 +79,28 @@ from shared import (
     create_rlor_service_job_and_wait,
 )
 
-# Tinker cookbook helper for datum construction (handles token shifting internally)
-from tinker_cookbook.supervised.common import datum_from_tokens_weights
+# Tinker cookbook helper for datum construction (handles token shifting internally).
+# Support both names: tinker-cookbook builds vary between `datum_from_tokens_weights`
+# and `datum_from_model_input_weights` even within the same version number.
+try:
+    from tinker_cookbook.supervised.common import datum_from_tokens_weights  # type: ignore[import]
+except ImportError:
+    from tinker_cookbook.supervised.common import (  # type: ignore[import]
+        datum_from_model_input_weights as datum_from_tokens_weights,
+    )
 
 # Importing fireworks.training applies the Fireworks compatibility patches to Tinker
 # automatically (if Tinker is installed). This adds checkpoint_type support to
 # save_weights_for_sampler.
-import fireworks.training  # noqa: F401 — patches Tinker with checkpoint_type support
+import fireworks.training  # noqa: F401  # type: ignore[reportUnusedImport]
 
+WANDB_AVAILABLE: bool = False
 try:
     import wandb
 
     WANDB_AVAILABLE = True
 except ImportError:
-    WANDB_AVAILABLE = False
+    pass
 
 
 # =============================================================================
@@ -143,10 +152,10 @@ def load_preference_dataset(path: str) -> List[dict[str, Any]]:
     3. {"samples": [...]} with score=1.0 (chosen) and score=0.0 (rejected)
     4. {"input": ..., "preferred_output": ..., "non_preferred_output": ...}
     """
-    data = []
+    data: list[dict[str, Any]] = []
     with open(path) as f:
         for line in f:
-            row = json.loads(line)
+            row: dict[str, Any] = json.loads(line)
 
             # Format 1 & 2: Direct chosen/rejected
             if "chosen" in row and "rejected" in row:
@@ -166,30 +175,33 @@ def load_preference_dataset(path: str) -> List[dict[str, Any]]:
                     data.append({"chosen": chosen, "rejected": rejected})
             # Format 4: input + preferred_output + non_preferred_output (chat messages format)
             elif "preferred_output" in row and "non_preferred_output" in row:
-                input_data = row.get("input", {})
-                preferred = row["preferred_output"]
-                non_preferred = row["non_preferred_output"]
+                input_data: Any = row.get("input", {})
+                preferred: Any = row["preferred_output"]
+                non_preferred: Any = row["non_preferred_output"]
 
                 # Handle input as messages dict or string
+                input_messages: list[Any]
                 if isinstance(input_data, dict) and "messages" in input_data:
-                    input_messages = input_data["messages"]
+                    input_messages = list(input_data["messages"])  # type: ignore[reportUnknownArgumentType]
                 elif isinstance(input_data, list):
-                    input_messages = input_data
+                    input_messages = list(input_data)  # type: ignore[reportUnknownArgumentType]
                 elif isinstance(input_data, str):
                     input_messages = [{"role": "user", "content": input_data}]
                 else:
                     input_messages = []
 
                 # Handle preferred/non_preferred as list of messages or string
+                preferred_messages: list[Any]
                 if isinstance(preferred, list):
-                    preferred_messages = preferred
+                    preferred_messages = list(preferred)  # type: ignore[reportUnknownArgumentType]
                 elif isinstance(preferred, str):
                     preferred_messages = [{"role": "assistant", "content": preferred}]
                 else:
                     preferred_messages = []
 
+                non_preferred_messages: list[Any]
                 if isinstance(non_preferred, list):
-                    non_preferred_messages = non_preferred
+                    non_preferred_messages = list(non_preferred)  # type: ignore[reportUnknownArgumentType]
                 elif isinstance(non_preferred, str):
                     non_preferred_messages = [{"role": "assistant", "content": non_preferred}]
                 else:
@@ -217,7 +229,7 @@ def extract_text(item: dict[str, Any]) -> str:
 
     # Messages format
     if "messages" in item:
-        parts = []
+        parts: list[str] = []
         for msg in item["messages"]:
             role = msg.get("role", "user")
             content = msg.get("content", "")
@@ -362,7 +374,7 @@ def parse_args():
 
     # Tinker auth (service endpoint is created via control plane)
     parser.add_argument("--api-key", default="tml-local", help="API key for the trainer's Tinker endpoint")
-    parser.add_argument("--base-model", required=True, help="Base model name (e.g., Qwen/Qwen3-8B)")
+    parser.add_argument("--base-model", required=True, help="Base model name (Fireworks path, e.g., accounts/fireworks/models/qwen3-8b)")
 
     # Fireworks control plane
     parser.add_argument("--fireworks-api-key", default=None, help="Defaults to FIREWORKS_API_KEY env var")
@@ -513,7 +525,7 @@ def _cleanup_resources(
     api_key: str | None,
     account_id: str | None,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     rlor_job_id: str | None,
     deployment_id: str | None,
 ) -> None:
@@ -588,12 +600,12 @@ def main():
     created_deployment: bool = False
     resources_ready: bool = False
     training_succeeded: bool = False
-    rlor_base_url: str | None = None
+    rlor_base_url = ""
 
     # Initialize WandB
     use_wandb = WANDB_AVAILABLE and args.wandb_entity is not None
     if use_wandb:
-        wandb.init(
+        wandb.init(  # type: ignore[possibly-undefined]
             entity=args.wandb_entity,
             project=args.wandb_project,
             name=args.wandb_run_name,
@@ -607,15 +619,15 @@ def main():
                 "dataset": args.dataset,
             },
         )
-        if wandb.run is not None:
-            log(f"WandB: {wandb.run.url}")
+        if wandb.run is not None:  # type: ignore[possibly-undefined]
+            log(f"WandB: {wandb.run.url}")  # type: ignore[possibly-undefined]
         else:
             log(f"WandB initialized: {args.wandb_entity}/{args.wandb_project}")
     elif args.wandb_entity:
         warn("WandB requested but not available. Install with: pip install wandb")
 
-    fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
-    fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
+    fw_api_key: str = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY") or ""
+    fw_account_id: str = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID") or ""
     additional_headers_json = args.additional_headers or os.environ.get("FIREWORKS_ADDITIONAL_HEADERS")
     additional_headers = parse_additional_headers(additional_headers_json)
     fw_base_url = args.fireworks_base_url or os.environ.get("FIREWORKS_BASE_URL") or "https://api.fireworks.ai"
@@ -886,7 +898,7 @@ def main():
                 torch.tensor(rejected_tokens, dtype=torch.long), rejected_weights, max_length=args.max_seq_len,
             )
 
-            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()
+            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             ref_chosen = fwd_result.loss_fn_outputs[0]["logprobs"].data
             ref_rejected = fwd_result.loss_fn_outputs[1]["logprobs"].data
 
@@ -933,7 +945,7 @@ def main():
                 torch.tensor(rejected_tokens, dtype=torch.long), rejected_weights, max_length=args.max_seq_len,
             )
 
-            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()
+            fwd_result = training_client.forward([chosen_datum, rejected_datum], "cross_entropy").result()  # type: ignore[reportAttributeAccessIssue]
             pi_chosen_list = fwd_result.loss_fn_outputs[0]["logprobs"].data
             pi_rejected_list = fwd_result.loss_fn_outputs[1]["logprobs"].data
 
@@ -994,8 +1006,8 @@ def main():
                 accum_count += 1
 
                 if accum_count >= args.grad_accum:
-                    training_client.optim_step(
-                        tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)
+                    training_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                        tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)  # type: ignore[reportCallIssue]
                     ).result()
                     step += 1
 
@@ -1013,7 +1025,7 @@ def main():
                         ckpt_type = "delta" if base_checkpoint_saved else args.first_checkpoint_type
                         log(f"  Saving periodic checkpoint: {ckpt_name} (type={ckpt_type})")
                         try:
-                            training_client.save_weights_for_sampler(ckpt_name, checkpoint_type=ckpt_type).result()
+                            training_client.save_weights_for_sampler(ckpt_name, checkpoint_type=ckpt_type).result()  # type: ignore[reportAttributeAccessIssue]
                             actual_ckpt_type = ckpt_type
                             if not base_checkpoint_saved:
                                 base_checkpoint_saved = True
@@ -1055,8 +1067,8 @@ def main():
                     accum_count = 0
 
             if accum_count > 0:
-                training_client.optim_step(
-                    tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)
+                training_client.optim_step(  # type: ignore[reportAttributeAccessIssue]
+                    tinker.AdamParams(learning_rate=args.lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01)  # type: ignore[reportCallIssue]
                 ).result()
                 step += 1
 
@@ -1069,7 +1081,7 @@ def main():
             final_ckpt_type = "delta" if base_checkpoint_saved else args.first_checkpoint_type
             log(f"\nSaving final weights: {sampler_name} (type={final_ckpt_type})")
             try:
-                sampler_result = training_client.save_weights_for_sampler(sampler_name, checkpoint_type=final_ckpt_type).result()
+                sampler_result = training_client.save_weights_for_sampler(sampler_name, checkpoint_type=final_ckpt_type).result()  # type: ignore[reportAttributeAccessIssue]
                 result_path = sampler_result.path
                 log(f"  Saved to: {result_path} (type={final_ckpt_type})")
 

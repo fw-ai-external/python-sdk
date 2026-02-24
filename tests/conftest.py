@@ -18,6 +18,18 @@ if TYPE_CHECKING:
 
 pytest.register_assert_rewrite("tests.utils")
 
+
+def pytest_configure(config: pytest.Config) -> None:
+    try:
+        from pydantic.warnings import PydanticDeprecatedSince20 as _  # noqa: F401
+
+        config.addinivalue_line(
+            "filterwarnings",
+            "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+        )
+    except ImportError:
+        pass
+
 logging.getLogger("fireworks").setLevel(logging.DEBUG)
 
 

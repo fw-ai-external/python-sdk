@@ -16,8 +16,6 @@ __all__ = ["Dataset"]
 
 
 class Dataset(BaseModel):
-    example_count: str = FieldInfo(alias="exampleCount")
-
     average_turn_count: Optional[float] = FieldInfo(alias="averageTurnCount", default=None)
     """An estimate of the average number of turns per sample in the dataset."""
 
@@ -34,6 +32,8 @@ class Dataset(BaseModel):
     eval_protocol: Optional[object] = FieldInfo(alias="evalProtocol", default=None)
 
     evaluation_result: Optional[EvaluationResult] = FieldInfo(alias="evaluationResult", default=None)
+
+    example_count: Optional[str] = FieldInfo(alias="exampleCount", default=None)
 
     external_url: Optional[str] = FieldInfo(alias="externalUrl", default=None)
 

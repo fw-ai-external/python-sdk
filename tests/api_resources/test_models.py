@@ -23,7 +23,7 @@ base_url = os.environ.get("TEST_API_BASE_URL", "http://127.0.0.1:4010")
 class TestModels:
     parametrize = pytest.mark.parametrize("client", [False, True], indirect=True, ids=["loose", "strict"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_create(self, client: Fireworks) -> None:
         model = client.models.create(
@@ -32,7 +32,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_create_with_all_params(self, client: Fireworks) -> None:
         model = client.models.create(
@@ -86,7 +86,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_create(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.create(
@@ -99,7 +99,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_create(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.create(
@@ -114,7 +114,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_create(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -123,7 +123,7 @@ class TestModels:
                 model_id="modelId",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_update(self, client: Fireworks) -> None:
         model = client.models.update(
@@ -132,7 +132,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_update_with_all_params(self, client: Fireworks) -> None:
         model = client.models.update(
@@ -183,7 +183,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_update(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.update(
@@ -196,7 +196,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_update(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.update(
@@ -211,7 +211,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_update(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -226,7 +226,7 @@ class TestModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list(self, client: Fireworks) -> None:
         model = client.models.list(
@@ -234,7 +234,7 @@ class TestModels:
         )
         assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_list_with_all_params(self, client: Fireworks) -> None:
         model = client.models.list(
@@ -247,7 +247,7 @@ class TestModels:
         )
         assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_list(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.list(
@@ -259,7 +259,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.list(
@@ -273,7 +273,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_list(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -281,7 +281,7 @@ class TestModels:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_delete(self, client: Fireworks) -> None:
         model = client.models.delete(
@@ -290,7 +290,7 @@ class TestModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_delete(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.delete(
@@ -303,7 +303,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_delete(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.delete(
@@ -318,7 +318,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_delete(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -333,7 +333,7 @@ class TestModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get(self, client: Fireworks) -> None:
         model = client.models.get(
@@ -342,7 +342,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_with_all_params(self, client: Fireworks) -> None:
         model = client.models.get(
@@ -352,7 +352,7 @@ class TestModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_get(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.get(
@@ -365,7 +365,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_get(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.get(
@@ -380,7 +380,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_get(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -395,7 +395,7 @@ class TestModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_download_endpoint(self, client: Fireworks) -> None:
         model = client.models.get_download_endpoint(
@@ -404,7 +404,7 @@ class TestModels:
         )
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_download_endpoint_with_all_params(self, client: Fireworks) -> None:
         model = client.models.get_download_endpoint(
@@ -414,7 +414,7 @@ class TestModels:
         )
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_get_download_endpoint(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.get_download_endpoint(
@@ -427,7 +427,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_get_download_endpoint(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.get_download_endpoint(
@@ -442,7 +442,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_get_download_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -457,7 +457,7 @@ class TestModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_upload_endpoint(self, client: Fireworks) -> None:
         model = client.models.get_upload_endpoint(
@@ -467,7 +467,7 @@ class TestModels:
         )
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_get_upload_endpoint_with_all_params(self, client: Fireworks) -> None:
         model = client.models.get_upload_endpoint(
@@ -479,7 +479,7 @@ class TestModels:
         )
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_get_upload_endpoint(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.get_upload_endpoint(
@@ -493,7 +493,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_get_upload_endpoint(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.get_upload_endpoint(
@@ -509,7 +509,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_get_upload_endpoint(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -526,7 +526,7 @@ class TestModels:
                 filename_to_size={"foo": "string"},
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_prepare(self, client: Fireworks) -> None:
         model = client.models.prepare(
@@ -535,7 +535,7 @@ class TestModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_prepare_with_all_params(self, client: Fireworks) -> None:
         model = client.models.prepare(
@@ -546,7 +546,7 @@ class TestModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_prepare(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.prepare(
@@ -559,7 +559,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_prepare(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.prepare(
@@ -574,7 +574,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_prepare(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -589,7 +589,7 @@ class TestModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_validate_upload(self, client: Fireworks) -> None:
         model = client.models.validate_upload(
@@ -598,7 +598,7 @@ class TestModels:
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_method_validate_upload_with_all_params(self, client: Fireworks) -> None:
         model = client.models.validate_upload(
@@ -610,7 +610,7 @@ class TestModels:
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_raw_response_validate_upload(self, client: Fireworks) -> None:
         response = client.models.with_raw_response.validate_upload(
@@ -623,7 +623,7 @@ class TestModels:
         model = response.parse()
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_streaming_response_validate_upload(self, client: Fireworks) -> None:
         with client.models.with_streaming_response.validate_upload(
@@ -638,7 +638,7 @@ class TestModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     def test_path_params_validate_upload(self, client: Fireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -659,7 +659,7 @@ class TestAsyncModels:
         "async_client", [False, True, {"http_client": "aiohttp"}], indirect=True, ids=["loose", "strict", "aiohttp"]
     )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_create(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.create(
@@ -668,7 +668,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_create_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.create(
@@ -722,7 +722,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_create(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.create(
@@ -735,7 +735,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_create(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.create(
@@ -750,7 +750,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_create(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -759,7 +759,7 @@ class TestAsyncModels:
                 model_id="modelId",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_update(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.update(
@@ -768,7 +768,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_update_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.update(
@@ -819,7 +819,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_update(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.update(
@@ -832,7 +832,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_update(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.update(
@@ -847,7 +847,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_update(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -862,7 +862,7 @@ class TestAsyncModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.list(
@@ -870,7 +870,7 @@ class TestAsyncModels:
         )
         assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_list_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.list(
@@ -883,7 +883,7 @@ class TestAsyncModels:
         )
         assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_list(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.list(
@@ -895,7 +895,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.list(
@@ -909,7 +909,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_list(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -917,7 +917,7 @@ class TestAsyncModels:
                 account_id="",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_delete(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.delete(
@@ -926,7 +926,7 @@ class TestAsyncModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_delete(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.delete(
@@ -939,7 +939,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_delete(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.delete(
@@ -954,7 +954,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_delete(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -969,7 +969,7 @@ class TestAsyncModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get(
@@ -978,7 +978,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get(
@@ -988,7 +988,7 @@ class TestAsyncModels:
         )
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_get(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.get(
@@ -1001,7 +1001,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_get(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.get(
@@ -1016,7 +1016,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_get(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -1031,7 +1031,7 @@ class TestAsyncModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get_download_endpoint(
@@ -1040,7 +1040,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_download_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get_download_endpoint(
@@ -1050,7 +1050,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.get_download_endpoint(
@@ -1063,7 +1063,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.get_download_endpoint(
@@ -1078,7 +1078,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_get_download_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -1093,7 +1093,7 @@ class TestAsyncModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get_upload_endpoint(
@@ -1103,7 +1103,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_get_upload_endpoint_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.get_upload_endpoint(
@@ -1115,7 +1115,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.get_upload_endpoint(
@@ -1129,7 +1129,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.get_upload_endpoint(
@@ -1145,7 +1145,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_get_upload_endpoint(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -1162,7 +1162,7 @@ class TestAsyncModels:
                 filename_to_size={"foo": "string"},
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_prepare(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.prepare(
@@ -1171,7 +1171,7 @@ class TestAsyncModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_prepare_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.prepare(
@@ -1182,7 +1182,7 @@ class TestAsyncModels:
         )
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_prepare(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.prepare(
@@ -1195,7 +1195,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(object, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_prepare(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.prepare(
@@ -1210,7 +1210,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_prepare(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
@@ -1225,7 +1225,7 @@ class TestAsyncModels:
                 account_id="account_id",
             )
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_validate_upload(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.validate_upload(
@@ -1234,7 +1234,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_method_validate_upload_with_all_params(self, async_client: AsyncFireworks) -> None:
         model = await async_client.models.validate_upload(
@@ -1246,7 +1246,7 @@ class TestAsyncModels:
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_raw_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         response = await async_client.models.with_raw_response.validate_upload(
@@ -1259,7 +1259,7 @@ class TestAsyncModels:
         model = await response.parse()
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_streaming_response_validate_upload(self, async_client: AsyncFireworks) -> None:
         async with async_client.models.with_streaming_response.validate_upload(
@@ -1274,7 +1274,7 @@ class TestAsyncModels:
 
         assert cast(Any, response.is_closed) is True
 
-    @pytest.mark.skip(reason="Prism tests are disabled")
+    @pytest.mark.skip(reason="Mock server tests are disabled")
     @parametrize
     async def test_path_params_validate_upload(self, async_client: AsyncFireworks) -> None:
         with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):

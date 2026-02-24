@@ -7,7 +7,7 @@ For GRPO, we use both a trainable policy client and a frozen reference client fo
 
 | Script | Algorithm | Hotload Frequency | Importance Sampling |
 |--------|-----------|-------------------|---------------------|
-| `train_sft.py` | SFT (supervised) | N/A | No |
+| `train_sft.py` | SFT (supervised fine-tuning) | N/A | No |
 | `train_grpo.py` | GRPO (on-policy) | Every optimizer step | No (ρ=1) |
 | `train_grpo_off_policy.py` | GRPO (off-policy) | Every N steps | Yes (ρ = π_current / π_behavior) |
 | `train_dpo.py` | DPO | End of training only | No |

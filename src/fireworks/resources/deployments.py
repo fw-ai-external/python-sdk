@@ -214,7 +214,8 @@ class DeploymentsResource(SyncAPIResource):
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
 
-          expire_time: The time at which this deployment will automatically be deleted.
+          expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
+              time at which this deployment will automatically be deleted.
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
@@ -453,7 +454,8 @@ class DeploymentsResource(SyncAPIResource):
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
 
-          expire_time: The time at which this deployment will automatically be deleted.
+          expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
+              time at which this deployment will automatically be deleted.
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
@@ -996,7 +998,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
 
-          expire_time: The time at which this deployment will automatically be deleted.
+          expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
+              time at which this deployment will automatically be deleted.
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
@@ -1235,7 +1238,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
 
-          expire_time: The time at which this deployment will automatically be deleted.
+          expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
+              time at which this deployment will automatically be deleted.
 
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.

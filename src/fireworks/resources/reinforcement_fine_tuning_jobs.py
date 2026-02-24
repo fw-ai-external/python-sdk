@@ -59,6 +59,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: reinforcement_fine_tuning_job_create_params.AzureBlobStorageConfig | Omit = omit,
         chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
@@ -67,6 +68,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         max_concurrent_evaluations: int | Omit = omit,
         max_concurrent_rollouts: int | Omit = omit,
+        max_inference_replica_count: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -90,6 +92,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
               specified.
 
           aws_s3_config: The AWS configuration for S3 dataset access.
+
+          azure_blob_storage_config: The Azure configuration for Blob Storage dataset access.
 
           chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
               range is 1-10,000.
@@ -135,6 +139,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "dataset": dataset,
                     "evaluator": evaluator,
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
@@ -143,6 +148,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "loss_config": loss_config,
                     "max_concurrent_evaluations": max_concurrent_evaluations,
                     "max_concurrent_rollouts": max_concurrent_rollouts,
+                    "max_inference_replica_count": max_inference_replica_count,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,
@@ -454,6 +460,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         evaluator: str,
         reinforcement_fine_tuning_job_id: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_job_create_params.AwsS3Config | Omit = omit,
+        azure_blob_storage_config: reinforcement_fine_tuning_job_create_params.AzureBlobStorageConfig | Omit = omit,
         chunk_size: int | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
@@ -462,6 +469,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         max_concurrent_evaluations: int | Omit = omit,
         max_concurrent_rollouts: int | Omit = omit,
+        max_inference_replica_count: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
@@ -485,6 +493,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
               specified.
 
           aws_s3_config: The AWS configuration for S3 dataset access.
+
+          azure_blob_storage_config: The Azure configuration for Blob Storage dataset access.
 
           chunk_size: Data chunking for rollout, default size 200, enabled when dataset > 300. Valid
               range is 1-10,000.
@@ -530,6 +540,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "dataset": dataset,
                     "evaluator": evaluator,
                     "aws_s3_config": aws_s3_config,
+                    "azure_blob_storage_config": azure_blob_storage_config,
                     "chunk_size": chunk_size,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
@@ -538,6 +549,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "loss_config": loss_config,
                     "max_concurrent_evaluations": max_concurrent_evaluations,
                     "max_concurrent_rollouts": max_concurrent_rollouts,
+                    "max_inference_replica_count": max_inference_replica_count,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
                     "training_config": training_config,

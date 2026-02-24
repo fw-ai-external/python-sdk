@@ -38,17 +38,15 @@ import httpx
 
 try:
     from fireworks import Fireworks
-
-    FIREWORKS_SDK_AVAILABLE = True
 except ImportError:
-    FIREWORKS_SDK_AVAILABLE = False
+    Fireworks = None  # type: ignore[assignment]
 
 from . import log, warn
 
 
-def _get_fireworks_client(api_key: str, base_url: str) -> "Fireworks":
+def _get_fireworks_client(api_key: str, base_url: str) -> Any:
     """Get a Fireworks SDK client."""
-    if not FIREWORKS_SDK_AVAILABLE:
+    if Fireworks is None:
         raise RuntimeError("Fireworks SDK not available. Install with: pip install fireworks-ai")
     return Fireworks(api_key=api_key, base_url=base_url)
 
@@ -68,22 +66,11 @@ class RlorServiceEndpoint:
     base_url: str
 
 
-def _build_headers(api_key: str, additional_headers: dict | None = None) -> dict:
-    """Build headers for REST API requests."""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-    }
-    if additional_headers:
-        headers.update(additional_headers)
-    return headers
-
-
 def _create_rlor_job(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     base_model: str,
     lora_rank: int,
     max_context_length: int,
@@ -96,7 +83,7 @@ def _create_rlor_job(
     skip_validations: bool = False,
     custom_image_tag: str | None = None,
     extra_args: list[str] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create an RLOR trainer job via the Fireworks SDK.
 
     The job is created in "service mode" (serviceMode=True) which means it
@@ -146,7 +133,7 @@ def _create_rlor_job(
 
     # Fields not in the SDK's typed TrainingConfig go via extra_body
     if extra_args:
-        flat_extra_args = []
+        flat_extra_args: list[str] = []
         for arg in extra_args:
             if " " in arg:
                 flat_extra_args.extend(arg.split())
@@ -185,9 +172,9 @@ def _get_rlor_job(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     job_id: str,
-) -> dict:
+) -> dict[str, Any]:
     """Get RLOR trainer job status."""
     client = _get_fireworks_client(api_key, base_url)
     kwargs: dict[str, Any] = {
@@ -204,7 +191,7 @@ def delete_rlor_job(
     api_key: str,
     account_id: str,
     base_url: str,
-    additional_headers: dict | None,
+    additional_headers: dict[str, str] | None,
     job_id: str,
 ) -> None:
     """Delete an RLOR trainer job, releasing its GPU resources."""
@@ -235,7 +222,7 @@ def create_rlor_service_job_and_wait(
     custom_image_tag: str | None = None,
     extra_args: list[str] | None = None,
     base_url: str | None = None,
-    additional_headers: dict | None = None,
+    additional_headers: dict[str, str] | None = None,
     poll_interval_s: float = 5.0,
     timeout_s: float = 15 * 60,
 ) -> RlorServiceEndpoint:
