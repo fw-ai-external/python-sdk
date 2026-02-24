@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, HotloadConfig
+from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, HotloadConfig, ISConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
 from fireworks.training.cookbook.recipes.grpo_loop import Config, main
 
@@ -68,7 +68,8 @@ class TestGRPOE2E:
             grad_accum=2,
             max_seq_len=4096,
             router_replay=True,
-            importance_sampling=ISConfig(enabled=True, clip_high=10.0),
+            policy_loss="tis",
+            tis=ISConfig(clip_high=10.0),
             infra=InfraConfig(
                 region=e2e_region,
                 skip_validations=True,

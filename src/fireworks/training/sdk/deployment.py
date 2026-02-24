@@ -183,6 +183,14 @@ class DeploymentManager:
         resp = request_with_retries(
             requests.post, url, headers=self._headers(), json=body, timeout=60, verify=self._verify_ssl
         )
+        if resp.status_code == 409:
+            logger.info(
+                "Deployment %s already exists (409 Conflict), fetching existing deployment",
+                config.deployment_id,
+            )
+            existing = self._get_deployment(config.deployment_id)
+            if existing:
+                return existing
         if not resp.ok:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
@@ -191,11 +199,6 @@ class DeploymentManager:
                 extra = (
                     "\n  Check region, deployment shape, and model name are valid."
                     "\n  Try --skip-shape-validation if the shape version is unsupported."
-                )
-            elif resp.status_code == 409:
-                extra = (
-                    "\n  A deployment with this ID may already exist. "
-                    "Use a different --hotload-deployment-id or delete the existing one."
                 )
             logger.warning(
                 "\n%s",
@@ -287,8 +290,22 @@ class DeploymentManager:
         timeout_s: float = 600,
         poll_interval_s: float = 15,
     ) -> DeploymentInfo:
-        """Wait for a deployment to reach READY state."""
+        """Wait for a deployment to reach READY state.
+
+        Polls the control-plane state and probes the deployment with an
+        inference request on every cycle.  The deployment is considered
+        ready as soon as either condition is met:
+
+        1. Control-plane state transitions to READY, or
+        2. The deployment responds to a warmup inference request (HTTP 200).
+
+        Condition 2 handles hotload-enabled deployments whose background
+        reconciliation is intentionally skipped -- the control-plane
+        state may stay CREATING even though the deployment is already
+        serving.
+        """
         start = time.time()
+        model = f"accounts/{self.account_id}/deployments/{deployment_id}"
         while time.time() - start < timeout_s:
             data = self._get_deployment(deployment_id)
             if not data:
@@ -301,8 +318,9 @@ class DeploymentManager:
                     )
                 )
             state = data.get("state", "UNKNOWN")
-            logger.info("[%ds] Deployment %s: %s", int(time.time() - start), deployment_id, state)
+            elapsed = int(time.time() - start)
             if state == "READY":
+                logger.info("[%ds] Deployment %s: READY", elapsed, deployment_id)
                 return self._parse_deployment_info(deployment_id, data)
             if state in ("FAILED", "DELETED", "DELETING"):
                 raise RuntimeError(
@@ -315,6 +333,14 @@ class DeploymentManager:
                         docs_url=DOCS_DEPLOYMENTS,
                     )
                 )
+            if state == "CREATING" and self.warmup(model, max_retries=1, retry_interval_s=0):
+                logger.info(
+                    "[%ds] Deployment %s: CREATING but serving requests -- treating as ready",
+                    elapsed,
+                    deployment_id,
+                )
+                return self._parse_deployment_info(deployment_id, data)
+            logger.info("[%ds] Deployment %s: %s", elapsed, deployment_id, state)
             time.sleep(poll_interval_s)
         raise TimeoutError(
             format_sdk_error(

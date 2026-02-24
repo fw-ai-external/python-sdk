@@ -2,14 +2,62 @@
 
 from __future__ import annotations
 
+import re
+import time
 import logging
 
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
-from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager, TrainerServiceEndpoint
+from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager, TrainerServiceEndpoint, TrainingShapeProfile
 from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 from fireworks.training.cookbook.utils.config import InfraConfig, DeployConfig
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_and_apply_shape(
+    rlor_mgr: TrainerJobManager,
+    base_model: str,
+    infra: InfraConfig,
+    deploy_cfg: DeployConfig,
+) -> TrainingShapeProfile:
+    """Fetch training shape and apply it to infra/deploy configs.
+
+    Calls ``GET /v1/accounts/{id}/trainingShapes/{shapeId}`` to fetch
+    the shape, then populates unset fields on ``infra`` and ``deploy_cfg``
+    from the shape.  Fields already set by the customer are left as-is.
+
+    Returns the resolved profile for inspection/logging.
+    """
+    if not infra.training_shape_id:
+        raise ValueError("training_shape_id is required for shape resolution")
+    profile = rlor_mgr.resolve_training_profile(
+        training_shape_id=infra.training_shape_id,
+    )
+    logger.info(
+        "Resolved training shape: %s (accel=%s, image=%s)",
+        profile.training_shape_version,
+        profile.accelerator_type,
+        profile.trainer_image_tag,
+    )
+
+    if not infra.accelerator_type and profile.accelerator_type and profile.accelerator_type != "ACCELERATOR_TYPE_UNSPECIFIED":
+        infra.accelerator_type = profile.accelerator_type
+    if not infra.accelerator_count and profile.accelerator_count:
+        infra.accelerator_count = profile.accelerator_count
+    if not infra.custom_image_tag and profile.trainer_image_tag:
+        infra.custom_image_tag = profile.trainer_image_tag
+    if profile.node_count and infra.node_count == 1:
+        infra.node_count = profile.node_count
+
+    if not deploy_cfg.deployment_shape and profile.deployment_shape_version:
+        dsv = profile.deployment_shape_version
+        shape_name = re.sub(r"/versions/[^/]+$", "", dsv)
+        deploy_cfg.deployment_shape = shape_name
+    if not deploy_cfg.deployment_id:
+        model_short = base_model.rsplit("/", 1)[-1]
+        deploy_cfg.deployment_id = f"{model_short}-{int(time.time())}"
+
+    return profile
 
 
 def create_trainer_job(

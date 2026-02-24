@@ -19,7 +19,8 @@ def make_grpo_loss_fn(
 
     This is the basic (on-policy) GRPO loss without importance weighting.
     For importance-weighted GRPO, use ``make_grpo_tis_loss_fn`` via
-    ``ISConfig(enabled=True)``.
+    ``policy_loss="tis"``.  For CISPO, use ``make_cispo_loss_fn`` via
+    ``policy_loss="cispo"``.
     """
 
     def loss_fn(

@@ -1,12 +1,14 @@
-"""Importance Sampling (TIS) for GRPO training.
+"""Truncated Importance Sampling (TIS) for GRPO training.
 
 Provides a pluggable importance sampling system: a built-in ``vanilla_tis``
 strategy (clamped importance ratios) and a ``TISFunction`` type so users
 can supply their own.
 
+Activated by setting ``policy_loss="tis"`` on the GRPO Config.
+
 Example -- built-in vanilla::
 
-    ISConfig(enabled=True, clip_high=10.0)
+    Config(policy_loss="tis", tis=ISConfig(clip_high=10.0))
 
 Example -- custom function::
 
@@ -15,7 +17,7 @@ Example -- custom function::
         weights = torch.where(rho < 3.0, rho, torch.zeros_like(rho))
         return weights, {"custom_mean_rho": rho.mean().item()}
 
-    ISConfig(enabled=True, method=my_tis)
+    Config(policy_loss="tis", tis=ISConfig(method=my_tis))
 """
 
 from __future__ import annotations
@@ -34,9 +36,11 @@ TISFunction = Callable[
 
 @dataclass
 class ISConfig:
-    """Importance sampling configuration."""
+    """TIS (Truncated Importance Sampling) configuration.
 
-    enabled: bool = False
+    Only used when ``policy_loss="tis"`` is set on the GRPO Config.
+    """
+
     clip_high: float = 10.0
     clip_low: float = 0.0
     method: Union[str, TISFunction] = "vanilla"
@@ -78,7 +82,7 @@ def make_grpo_tis_loss_fn(
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
     """Build a GRPO loss closure with Truncated Importance Sampling."""
     if is_config is None:
-        is_config = ISConfig(enabled=True)
+        is_config = ISConfig()
     tis_fn = resolve_tis_function(is_config.method)
 
     def loss_fn(

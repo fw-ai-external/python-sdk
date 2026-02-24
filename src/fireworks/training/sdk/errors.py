@@ -110,8 +110,12 @@ def parse_api_error(resp) -> str:
 # Retry utility (mirrors Tinker SDK's execute_with_retries pattern)
 # =============================================================================
 
-RETRYABLE_STATUS_CODES: Tuple[int, ...] = (408, 409, 429, 500, 502, 503, 504)
+RETRYABLE_STATUS_CODES: Tuple[int, ...] = (408, 429, 500, 502, 503, 504)
 """HTTP status codes that should trigger a retry.
+
+Note: 409 (Conflict) is NOT retried -- for create operations it means the
+resource already exists and retrying the same POST is futile.  Callers that
+need idempotent create-or-get behavior should handle 409 explicitly.
 
 Note: 425 (Too Early / hot-loading) is intentionally NOT retried here.
 Hot-loads take minutes (not seconds), so the SDK's ~60s exponential backoff

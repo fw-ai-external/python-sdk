@@ -29,6 +29,7 @@ from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     TrainerJobManager,
     TrainerServiceEndpoint,
+    TrainingShapeProfile,
 )
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,
@@ -58,6 +59,7 @@ __all__ = [
     "TrainerJobConfig",
     "TrainerJobManager",
     "TrainerServiceEndpoint",
+    "TrainingShapeProfile",
     # Error formatting
     "format_sdk_error",
     "parse_api_error",
