@@ -5,11 +5,18 @@ base policy loss (GRPO, DAPO, GSPO, etc.).  The architecture follows
 slime's orthogonal design: base loss computes per-token loss, TIS
 multiplies by clipped importance weights, then the result is summed.
 
-Usage -- enable TIS on any loss via ``tis_enabled``::
+Two built-in methods (matching slime):
 
-    Config(policy_loss="grpo", tis_enabled=True, tis=ISConfig(clip_high=10.0))
-    Config(policy_loss="dapo", tis_enabled=True)   # TIS on top of PPO clipping
-    Config(policy_loss="gspo", tis_enabled=True)   # TIS on top of seq-KL
+- ``"vanilla"`` -- clamp the ratio to ``[clip_low, clip_high]``.
+- ``"icepop"``  -- zero out tokens whose ratio falls outside
+  ``[clip_low, clip_high]`` (rejection-sampling style).
+
+Usage::
+
+    Config(policy_loss="grpo", tis_enabled=True)                        # vanilla, default
+    Config(policy_loss="grpo", tis_enabled=True, tis=ISConfig(method="icepop"))
+    Config(policy_loss="dapo", tis_enabled=True)                        # TIS on top of PPO clipping
+    Config(policy_loss="gspo", tis_enabled=True)                        # TIS on top of seq-KL
 
 Custom TIS function::
 
@@ -39,6 +46,8 @@ TISWeightsFn = Callable[
 ]
 """Per-sample TIS weights function: ``(pi_detached, sample_idx) -> (weights, metrics)``."""
 
+_LOG_RATIO_BOUND = 20.0
+
 
 @dataclass
 class ISConfig:
@@ -48,9 +57,21 @@ class ISConfig:
     any ``policy_loss`` setting.
     """
 
-    clip_high: float = 10.0
+    clip_high: float = 2.0
+    """Upper clipping bound (slime default: 2.0)."""
     clip_low: float = 0.0
+    """Lower clipping bound."""
     method: Union[str, TISFunction] = "vanilla"
+    """``"vanilla"`` (clamp), ``"icepop"`` (zero), or a custom callable."""
+
+
+def _safe_ratio(
+    policy_lp: torch.Tensor,
+    inference_lp: torch.Tensor,
+) -> torch.Tensor:
+    """Compute importance ratio with numerical safety clamp."""
+    log_ratio = torch.clamp(policy_lp - inference_lp, min=-_LOG_RATIO_BOUND, max=_LOG_RATIO_BOUND)
+    return torch.exp(log_ratio)
 
 
 def vanilla_tis(
@@ -58,16 +79,45 @@ def vanilla_tis(
     inference_lp: torch.Tensor,
     config: ISConfig,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
-    """Vanilla Truncated Importance Sampling with clamping."""
-    rho = torch.exp(policy_lp - inference_lp)
-    clamped = torch.clamp(rho, min=config.clip_low, max=config.clip_high)
-    clip_frac = (clamped != rho).float().mean().item()
+    """Vanilla TIS: clamp the ratio to ``[clip_low, clip_high]``."""
+    rho = _safe_ratio(policy_lp, inference_lp)
+    weights = torch.clamp(rho, min=config.clip_low, max=config.clip_high)
+    clip_frac = (weights != rho).float().mean().item()
+    rho_abs = (rho - 1.0).abs()
     metrics = {
         "tis_mean_ratio": rho.mean().item(),
         "tis_max_ratio": rho.max().item(),
         "tis_clip_frac": clip_frac,
+        "tis_abs": rho_abs.mean().item(),
     }
-    return clamped, metrics
+    return weights, metrics
+
+
+def icepop_tis(
+    policy_lp: torch.Tensor,
+    inference_lp: torch.Tensor,
+    config: ISConfig,
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    """ICEPOP: zero out tokens whose ratio falls outside ``[clip_low, clip_high]``.
+
+    Unlike vanilla TIS which clamps to the boundary, icepop drops the
+    contribution entirely (rejection-sampling style).
+    """
+    rho = _safe_ratio(policy_lp, inference_lp)
+    weights = torch.where(
+        (rho >= config.clip_low) & (rho <= config.clip_high),
+        rho,
+        torch.zeros_like(rho),
+    )
+    clip_frac = (weights != rho).float().mean().item()
+    rho_abs = (rho - 1.0).abs()
+    metrics = {
+        "tis_mean_ratio": rho.mean().item(),
+        "tis_max_ratio": rho.max().item(),
+        "tis_clip_frac": clip_frac,
+        "tis_abs": rho_abs.mean().item(),
+    }
+    return weights, metrics
 
 
 def resolve_tis_function(method: Union[str, TISFunction]) -> TISFunction:
@@ -76,7 +126,9 @@ def resolve_tis_function(method: Union[str, TISFunction]) -> TISFunction:
         return method
     if method == "vanilla":
         return vanilla_tis
-    raise ValueError(f"Unknown IS method: {method!r}. Use 'vanilla' or a custom callable.")
+    if method == "icepop":
+        return icepop_tis
+    raise ValueError(f"Unknown IS method: {method!r}. Use 'vanilla', 'icepop', or a custom callable.")
 
 
 def make_tis_weights_fn(
