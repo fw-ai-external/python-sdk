@@ -73,8 +73,8 @@ class Config:
     learning_rate: float = 1e-5
     kl_beta: float = 0.001
     group_size: int = 4
-    max_completion_tokens: int = 512
-    temperature: float = 0.7
+    max_completion_tokens: int = 1024
+    temperature: float = 1.0
     epochs: int = 1
     max_rows: int = 100
     grad_accum: int = 4
@@ -231,6 +231,7 @@ def main(
     global_step = step_offset
     accum_count = 0
     agg = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "count": 0}
+    seq_filter_stats = {"prompts_filtered": 0, "completions_filtered": 0, "total_prompts": 0}
 
     for _epoch in range(cfg.epochs):
         for prompt_idx, row in enumerate(dataset):
@@ -238,13 +239,14 @@ def main(
             input_messages = [m for m in messages if m.get("role") != "assistant"]
             if not input_messages:
                 continue
+            seq_filter_stats["total_prompts"] += 1
 
-            # Sample completions from deployment
             sample_kwargs: dict = dict(
                 messages=input_messages,
                 n=cfg.group_size,
                 max_tokens=cfg.max_completion_tokens,
                 temperature=cfg.temperature,
+                max_seq_len=cfg.max_seq_len,
             )
             needs_inf_lp = cfg.policy_loss in {"dapo", "gspo"} or cfg.tis_enabled
             if cfg.router_replay:
@@ -256,7 +258,11 @@ def main(
             except Exception as e:
                 logger.warning("Sampling failed for prompt %d: %s", prompt_idx, e)
                 continue
+            if not sampled:
+                seq_filter_stats["prompts_filtered"] += 1
+                continue
             if len(sampled) < cfg.group_size:
+                seq_filter_stats["completions_filtered"] += cfg.group_size - len(sampled)
                 continue
 
             # Compute rewards & advantages
@@ -274,7 +280,7 @@ def main(
 
             for idx, s in enumerate(sampled):
                 tokens = s.full_tokens
-                if len(tokens) < 2 or len(tokens) > cfg.max_seq_len:
+                if len(tokens) < 2:
                     continue
                 model_input_len = len(tokens) - 1
 
@@ -389,6 +395,14 @@ def main(
         except Exception as e:
             logger.warning("Failed to save final checkpoint: %s", e)
 
+    if seq_filter_stats["prompts_filtered"] > 0 or seq_filter_stats["completions_filtered"] > 0:
+        logger.info(
+            "Seq-length filter stats: %d/%d prompts skipped (prompt >= max_seq_len), "
+            "%d completions dropped (prompt+completion > max_seq_len)",
+            seq_filter_stats["prompts_filtered"],
+            seq_filter_stats["total_prompts"],
+            seq_filter_stats["completions_filtered"],
+        )
     logger.info("Training complete: %d steps", global_step)
     wandb_finish()
     return {"steps": global_step, "policy_job_id": policy.job_id, "reference_job_id": reference.job_id}

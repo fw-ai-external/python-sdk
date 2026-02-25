@@ -374,7 +374,7 @@ class TestSampleWithTokens:
         sampler.sample_with_tokens(messages=messages)
 
         tok.apply_chat_template.assert_called_once_with(
-            messages, tokenize=True, add_generation_prompt=True,
+            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
 
     @patch("fireworks.training.sdk.deployment.request_with_retries")
@@ -467,3 +467,60 @@ class TestSampleWithTokens:
                 messages=[{"role": "user", "content": "hi"}],
                 echo=True,
             )
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_prompt_prefilter(self, mock_req):
+        """Prompt >= max_seq_len returns empty list without calling inference."""
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer([1, 100, 200, 300, 400]),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "long prompt"}],
+            max_seq_len=5,
+        )
+
+        assert results == []
+        mock_req.assert_not_called()
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_completion_postfilter(self, mock_req):
+        """Completions exceeding max_seq_len are dropped; short ones kept."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {"text": "short", "finish_reason": "stop", "raw_output": {"completion_token_ids": [400]}},
+                {"text": "too long", "finish_reason": "length", "raw_output": {"completion_token_ids": [4, 5, 6]}},
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer([1, 100, 200]),  # 3 prompt tokens
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}], n=2, max_seq_len=5,
+        )
+
+        assert len(results) == 1
+        assert results[0].text == "short"
+
+
+# ---------------------------------------------------------------------------
+# Default values
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultValues:
+    def test_default_temperature_is_1(self):
+        import inspect
+
+        for method in (DeploymentSampler.completions, DeploymentSampler.sample_with_tokens):
+            assert inspect.signature(method).parameters["temperature"].default == 1.0
