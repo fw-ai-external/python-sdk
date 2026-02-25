@@ -40,6 +40,7 @@ __all__ = [
     "wandb_log",
 ]
 
+from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
 from fireworks.training.cookbook.utils.data import (
     encode_text,
     extract_text,
@@ -48,6 +49,7 @@ from fireworks.training.cookbook.utils.data import (
     load_preference_dataset,
     find_common_prefix_length,
 )
+from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.cookbook.utils.infra import (
     setup_deployment,
     create_trainer_job,
@@ -80,6 +82,4 @@ from fireworks.training.cookbook.utils.logging import (
 )
 from fireworks.training.cookbook.utils.validation import validate_config, validate_preflight
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
-from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
-from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.cookbook.utils.importance_sampling import ISConfig, make_tis_weights_fn

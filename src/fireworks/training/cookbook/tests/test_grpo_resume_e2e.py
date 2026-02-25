@@ -22,7 +22,7 @@ import logging
 
 import pytest
 
-from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, ResumeConfig, HotloadConfig, ISConfig
+from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, ResumeConfig, HotloadConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
 from fireworks.training.cookbook.recipes.grpo_loop import Config, main
 

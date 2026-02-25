@@ -52,10 +52,10 @@ from fireworks.training.cookbook.utils import (
     make_tis_weights_fn,
     resolve_and_apply_shape,
 )
-from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
-from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.sdk.deployment import DeploymentSampler
 from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
+from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
 
 logger = logging.getLogger(__name__)

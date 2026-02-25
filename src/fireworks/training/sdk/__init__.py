@@ -28,8 +28,8 @@ from fireworks.training.sdk.errors import (
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     TrainerJobManager,
-    TrainerServiceEndpoint,
     TrainingShapeProfile,
+    TrainerServiceEndpoint,
 )
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,

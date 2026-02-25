@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, HotloadConfig, ISConfig
+from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, HotloadConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
 from fireworks.training.cookbook.recipes.grpo_loop import Config, main
 

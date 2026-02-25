@@ -7,7 +7,12 @@ import time
 import logging
 
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
-from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager, TrainerServiceEndpoint, TrainingShapeProfile
+from fireworks.training.sdk.trainer import (
+    TrainerJobConfig,
+    TrainerJobManager,
+    TrainingShapeProfile,
+    TrainerServiceEndpoint,
+)
 from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 from fireworks.training.cookbook.utils.config import InfraConfig, DeployConfig
 
