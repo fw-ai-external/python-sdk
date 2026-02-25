@@ -14,12 +14,12 @@ def make_grpo_loss_fn(
     ref_logprobs: List[List[float]],
     prompt_len: int,
     kl_beta: float = 0.001,
+    tis_weights_fn: Callable | None = None,
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
     """GRPO policy-gradient loss with KL penalty against a reference model.
 
-    This is the basic (on-policy) GRPO loss without importance weighting.
-    For importance-weighted GRPO, use ``make_grpo_tis_loss_fn`` via
-    ``ISConfig(enabled=True)``.
+    Pass *tis_weights_fn* (from :func:`make_tis_weights_fn`) to apply
+    TIS train-inference mismatch correction on top of the base loss.
     """
 
     def loss_fn(
@@ -28,8 +28,10 @@ def make_grpo_loss_fn(
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         total_loss = torch.tensor(0.0, requires_grad=True)
         total_kl = 0.0
+        total_rho = 0.0
         num_tokens = 0
         response_start = max(0, prompt_len - 1)
+        agg_tis: Dict[str, float] = {}
 
         for i, pi_logprobs in enumerate(logprobs_list):
             adv = advantages[i]
@@ -45,15 +47,27 @@ def make_grpo_loss_fn(
                 dtype=torch.float32,
             )
 
-            loss_i = ((-adv + kl_beta) * resp_pi).sum()
-            total_loss = total_loss + loss_i
+            per_token_loss = (-adv + kl_beta) * resp_pi
 
+            if tis_weights_fn:
+                weights, tis_metrics = tis_weights_fn(resp_pi.detach(), i)
+                per_token_loss = per_token_loss * weights
+                total_rho += weights.sum().item()
+                for k, v in tis_metrics.items():
+                    agg_tis[k] = agg_tis.get(k, 0.0) + v
+
+            total_loss = total_loss + per_token_loss.sum()
             total_kl += (resp_pi.detach() - resp_ref).sum().item()
             num_tokens += resp_len
 
         metrics: Dict[str, float] = {
             "mean_kl": total_kl / num_tokens if num_tokens > 0 else 0.0,
         }
+        if tis_weights_fn:
+            metrics["mean_importance_ratio"] = total_rho / num_tokens if num_tokens > 0 else 1.0
+            n_samples = len(logprobs_list) or 1
+            for k, v in agg_tis.items():
+                metrics[k] = v / n_samples
         return total_loss, metrics
 
     return loss_fn

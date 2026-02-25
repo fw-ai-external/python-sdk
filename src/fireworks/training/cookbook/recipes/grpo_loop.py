@@ -49,10 +49,13 @@ from fireworks.training.cookbook.utils import (
     compute_advantages,
     create_trainer_job,
     load_jsonl_dataset,
-    make_grpo_tis_loss_fn,
+    make_tis_weights_fn,
+    resolve_and_apply_shape,
 )
 from fireworks.training.sdk.deployment import DeploymentSampler
 from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
+from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
 
 logger = logging.getLogger(__name__)
@@ -80,7 +83,18 @@ class Config:
 
     router_replay: bool = False
     router_replay_completion_only: bool = True
-    importance_sampling: ISConfig = field(default_factory=ISConfig)
+
+    policy_loss: str = "grpo"
+    """Base policy gradient loss: ``"grpo"`` (vanilla REINFORCE + KL),
+    ``"dapo"`` (token-level PPO clipping), or ``"gspo"`` (sequence-level clipped PPO)."""
+
+    tis_enabled: bool = False
+    """Enable TIS (Truncated Importance Sampling) correction on top of the
+    base ``policy_loss``.  Orthogonal -- composes with any loss type."""
+
+    tis: ISConfig = field(default_factory=ISConfig)
+    dapo: DAPOConfig = field(default_factory=DAPOConfig)
+    gspo: GSPOConfig = field(default_factory=GSPOConfig)
 
     infra: InfraConfig = field(default_factory=InfraConfig)
     deployment: DeployConfig = field(default_factory=DeployConfig)
@@ -142,14 +156,18 @@ def main(
     if deploy_mgr is None:
         deploy_mgr = DeploymentManager(api_key=api_key, account_id=account, base_url=base_url)
 
+    if cfg.infra.training_shape_id:
+        resolve_and_apply_shape(rlor_mgr, cfg.base_model, cfg.infra, cfg.deployment)
+
     ref_extra = list(cfg.infra.extra_args or [])
     if "--forward-only" not in ref_extra:
         ref_extra.append("--forward-only")
     if "--no-compile" not in ref_extra:
         ref_extra.append("--no-compile")
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        dep_fut = pool.submit(setup_deployment, deploy_mgr, cfg.deployment, cfg.base_model, cfg.infra)
+    dep_info = setup_deployment(deploy_mgr, cfg.deployment, cfg.base_model, cfg.infra)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
         pol_fut = pool.submit(
             create_trainer_job,
             rlor_mgr,
@@ -174,7 +192,6 @@ def main(
             display_name="grpo-reference",
             extra_args=ref_extra,
         )
-        dep_info = dep_fut.result()
         policy_ep = pol_fut.result()
         reference_ep = ref_fut.result()
 
@@ -204,8 +221,6 @@ def main(
         name = f"resume-{step_offset}-base" if step_offset > 0 else "step-0-base"
         tracker.save_and_hotload(name, checkpoint_type="base")
 
-    deploy_mgr.warmup(inference_model)
-
     # -- Load data ---------------------------------------------------------
 
     dataset = load_jsonl_dataset(cfg.dataset, cfg.max_rows)
@@ -231,9 +246,10 @@ def main(
                 max_tokens=cfg.max_completion_tokens,
                 temperature=cfg.temperature,
             )
+            needs_inf_lp = cfg.policy_loss in {"dapo", "gspo"} or cfg.tis_enabled
             if cfg.router_replay:
                 sample_kwargs.update(include_routing_matrix=True, echo=True, logprobs=True)
-            if cfg.importance_sampling.enabled:
+            if needs_inf_lp:
                 sample_kwargs["logprobs"] = True
             try:
                 sampled = sampler.sample_with_tokens(**sample_kwargs)
@@ -278,7 +294,13 @@ def main(
                 data.append(datum)
                 adv_filtered.append(advantages[idx])
 
-                if cfg.importance_sampling.enabled and s.inference_logprobs:
+                if needs_inf_lp:
+                    if not s.inference_logprobs:
+                        raise RuntimeError(
+                            f"Inference logprobs required (policy_loss='{cfg.policy_loss}', "
+                            f"tis_enabled={cfg.tis_enabled}) but sample {idx} has none. "
+                            f"Ensure the deployment returns logprobs."
+                        )
                     response_start = max(0, prompt_len - 1)
                     echoed = getattr(s, "logprobs_echoed", False)
                     aligned = (
@@ -295,18 +317,26 @@ def main(
             ref_fwd = reference.forward(data, "cross_entropy").result()
             ref_logprobs = [out["logprobs"].data for out in ref_fwd.loss_fn_outputs]
 
-            # Training step
-            if cfg.importance_sampling.enabled:
-                loss_fn = make_grpo_tis_loss_fn(
-                    adv_filtered,
-                    ref_logprobs,
+            # TIS weights (orthogonal -- composes with any base loss)
+            tis_wf = make_tis_weights_fn(inf_logprobs_aligned, prompt_len, cfg.tis) if cfg.tis_enabled else None
+
+            # Base policy loss
+            if cfg.policy_loss == "dapo":
+                loss_fn = make_dapo_loss_fn(
+                    adv_filtered, ref_logprobs, inf_logprobs_aligned,
+                    prompt_len, cfg.dapo, tis_weights_fn=tis_wf,
+                )
+            elif cfg.policy_loss == "gspo":
+                loss_fn = make_gspo_loss_fn(
+                    adv_filtered, ref_logprobs,
                     inf_logprobs_aligned,
-                    prompt_len,
-                    cfg.kl_beta,
-                    cfg.importance_sampling,
+                    prompt_len, cfg.gspo, tis_weights_fn=tis_wf,
                 )
             else:
-                loss_fn = make_grpo_loss_fn(adv_filtered, ref_logprobs, prompt_len, cfg.kl_beta)
+                loss_fn = make_grpo_loss_fn(
+                    adv_filtered, ref_logprobs,
+                    prompt_len, cfg.kl_beta, tis_weights_fn=tis_wf,
+                )
 
             result = policy.forward_backward_custom(data, loss_fn).result()
 

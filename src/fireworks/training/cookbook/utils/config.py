@@ -22,7 +22,18 @@ StepCallback = Callable[[int, Dict[str, float]], None]
 
 @dataclass
 class InfraConfig:
-    """GPU, region, and image settings."""
+    """GPU, region, and image settings.
+
+    When ``training_shape_id`` is set, the SDK resolves the training shape
+    from the control plane and auto-populates region, accelerator, image tag,
+    node count, etc.  Manual overrides are still accepted but may be rejected
+    by the CP's training shape validation (use ``skip_validations=True`` to
+    bypass).
+    """
+
+    training_shape_id: str | None = None
+    """Training shape ID (e.g. ``ts-qwen3-8b-policy``).  When set, infra
+    config is auto-derived from the shape."""
 
     region: str | None = None
     custom_image_tag: str | None = None
@@ -56,12 +67,15 @@ class DeployConfig:
     ) -> DeploymentConfig:
         """Produce an SDK-level DeploymentConfig from cookbook settings."""
         skip_validation = infra.skip_validations and not self.deployment_shape
+        accel = self.deployment_accelerator_type
+        if not accel and not self.deployment_shape:
+            accel = infra.accelerator_type
         return DeploymentConfig(
             deployment_id=self.deployment_id,
             base_model=base_model,
             deployment_shape=self.deployment_shape,
             region=self.deployment_region or infra.region or "US_VIRGINIA_1",
-            accelerator_type=self.deployment_accelerator_type or infra.accelerator_type,
+            accelerator_type=accel,
             hot_load_bucket_type=self.hot_load_bucket_type,
             skip_shape_validation=skip_validation,
             extra_args=self.deployment_extra_args,
