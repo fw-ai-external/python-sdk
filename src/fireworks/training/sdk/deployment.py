@@ -890,7 +890,7 @@ class DeploymentSampler:
         echo_mode = kwargs.get("echo", False)
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True,
+            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
 
         result = self.completions(
