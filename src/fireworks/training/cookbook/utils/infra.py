@@ -82,8 +82,9 @@ def create_trainer_job(
     if job_id:
         return _reuse_or_resume_job(rlor_mgr, job_id)
 
+    using_shape = bool(infra.training_shape_id and not infra.skip_validations)
     node_count = infra.node_count if infra.node_count is not None else 1
-    logger.info("Creating trainer job '%s' (nodes=%d)...", display_name, node_count)
+    logger.info("Creating trainer job '%s' (nodes=%d, shape=%s)...", display_name, node_count, using_shape)
     return rlor_mgr.create_and_wait(
         TrainerJobConfig(
             base_model=base_model,
@@ -95,10 +96,10 @@ def create_trainer_job(
             display_name=display_name,
             hot_load_deployment_id=hot_load_deployment_id,
             region=infra.region,
-            custom_image_tag=infra.custom_image_tag,
+            custom_image_tag=infra.custom_image_tag if not using_shape else None,
             extra_args=extra_args or infra.extra_args,
-            accelerator_type=infra.accelerator_type,
-            accelerator_count=infra.accelerator_count,
+            accelerator_type=infra.accelerator_type if not using_shape else None,
+            accelerator_count=infra.accelerator_count if not using_shape else None,
             skip_validations=infra.skip_validations,
         )
     )

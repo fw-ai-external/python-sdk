@@ -221,8 +221,6 @@ def main(
         name = f"resume-{step_offset}-base" if step_offset > 0 else "step-0-base"
         tracker.save_and_hotload(name, checkpoint_type="base")
 
-    deploy_mgr.warmup(inference_model)
-
     # -- Load data ---------------------------------------------------------
 
     dataset = load_jsonl_dataset(cfg.dataset, cfg.max_rows)
