@@ -31,10 +31,14 @@ class DAPOConfig:
     ``eps_clip`` is the lower clipping bound (ratio >= 1 - eps_clip).
     ``eps_clip_high`` is the upper clipping bound (ratio <= 1 + eps_clip_high).
     Setting them equal recovers standard PPO clipping.
+    ``eps_clip_c`` enables optional dual-clip PPO for negative-advantage tokens.
+    ``ratio_log_cap`` clamps log-ratio before exp() for numerical stability.
     """
 
     eps_clip: float = 0.2
     eps_clip_high: float = 0.28
+    eps_clip_c: float | None = None
+    ratio_log_cap: float = 20.0
 
 
 def make_dapo_loss_fn(
@@ -82,7 +86,8 @@ def make_dapo_loss_fn(
 
             resp_ref = torch.tensor(
                 [ref_lp[response_start + j] if (response_start + j) < len(ref_lp) else 0.0 for j in range(resp_len)],
-                dtype=torch.float32,
+                dtype=resp_pi.dtype,
+                device=resp_pi.device,
             )
 
             pi_detached = resp_pi.detach()
@@ -98,11 +103,16 @@ def make_dapo_loss_fn(
                     inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
                     for j in range(resp_len)
                 ],
-                dtype=torch.float32,
+                dtype=resp_pi.dtype,
+                device=resp_pi.device,
             )
 
             # PPO clipped surrogate
-            log_ratio = resp_pi - resp_inf
+            log_ratio = torch.clamp(
+                resp_pi - resp_inf,
+                min=-dapo_config.ratio_log_cap,
+                max=dapo_config.ratio_log_cap,
+            )
             ratio = torch.exp(log_ratio)
             clipped_ratio = torch.clamp(
                 ratio,
@@ -112,10 +122,20 @@ def make_dapo_loss_fn(
             clip_frac_sum += (clipped_ratio != ratio).float().mean().item()
             clip_frac_count += 1
 
-            adv_t = torch.tensor(adv, dtype=torch.float32)
+            adv_t = torch.as_tensor(adv, dtype=resp_pi.dtype, device=resp_pi.device)
             surr1 = -ratio * adv_t
             surr2 = -clipped_ratio * adv_t
-            per_token_loss = torch.maximum(surr1, surr2)
+            clipped_surrogate = torch.maximum(surr1, surr2)
+            if dapo_config.eps_clip_c is not None:
+                if dapo_config.eps_clip_c <= 1.0:
+                    raise ValueError(
+                        f"DAPO dual-clip bound eps_clip_c must be > 1.0, got {dapo_config.eps_clip_c}."
+                    )
+                surr3 = -dapo_config.eps_clip_c * adv_t
+                lower_clipped = torch.minimum(surr3, clipped_surrogate)
+                per_token_loss = torch.where(adv_t < 0, lower_clipped, clipped_surrogate)
+            else:
+                per_token_loss = clipped_surrogate
 
             # TIS on top of PPO clipping (orthogonal)
             if tis_weights_fn:

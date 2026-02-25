@@ -85,7 +85,8 @@ def make_gspo_loss_fn(
 
             resp_ref = torch.tensor(
                 [ref_lp[response_start + j] if (response_start + j) < len(ref_lp) else 0.0 for j in range(resp_len)],
-                dtype=torch.float32,
+                dtype=resp_pi.dtype,
+                device=resp_pi.device,
             )
 
             pi_detached = resp_pi.detach()
@@ -100,7 +101,8 @@ def make_gspo_loss_fn(
                     inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
                     for j in range(resp_len)
                 ],
-                dtype=torch.float32,
+                dtype=resp_pi.dtype,
+                device=resp_pi.device,
             )
 
             # GSPO ratio: geometric mean over sequence, then broadcast to tokens.
@@ -119,7 +121,7 @@ def make_gspo_loss_fn(
             clip_frac_sum += (clipped_seq_ratio != seq_ratio).float().mean().item()
             clip_frac_count += 1
 
-            adv_t = torch.tensor(adv, dtype=torch.float32)
+            adv_t = torch.as_tensor(adv, dtype=resp_pi.dtype, device=resp_pi.device)
             surr1 = -seq_ratio * adv_t
             surr2 = -clipped_seq_ratio * adv_t
             per_token_loss = torch.maximum(surr1, surr2)
