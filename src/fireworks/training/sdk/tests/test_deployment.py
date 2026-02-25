@@ -374,7 +374,7 @@ class TestSampleWithTokens:
         sampler.sample_with_tokens(messages=messages)
 
         tok.apply_chat_template.assert_called_once_with(
-            messages, tokenize=True, add_generation_prompt=True,
+            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
 
     @patch("fireworks.training.sdk.deployment.request_with_retries")
@@ -467,3 +467,171 @@ class TestSampleWithTokens:
                 messages=[{"role": "user", "content": "hi"}],
                 echo=True,
             )
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_prompt_prefilter(self, mock_req):
+        """Prompt that already meets max_seq_len should return empty, no API call."""
+        prompt_ids = [1, 100, 200, 300, 400]  # 5 tokens
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "long prompt"}],
+            max_seq_len=5,
+        )
+
+        assert results == []
+        mock_req.assert_not_called()
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_prompt_prefilter_exceeds(self, mock_req):
+        """Prompt longer than max_seq_len should return empty, no API call."""
+        prompt_ids = [1, 100, 200, 300, 400, 500]  # 6 tokens
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "long prompt"}],
+            max_seq_len=5,
+        )
+
+        assert results == []
+        mock_req.assert_not_called()
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_completion_postfilter(self, mock_req):
+        """Completions exceeding max_seq_len are dropped."""
+        prompt_ids = [1, 100, 200]  # 3 tokens
+        short_completion = [400]  # total = 4
+        long_completion = [400, 500, 600]  # total = 6
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "short",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": short_completion},
+                },
+                {
+                    "text": "long completion",
+                    "finish_reason": "length",
+                    "raw_output": {"completion_token_ids": long_completion},
+                },
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            n=2,
+            max_seq_len=5,
+        )
+
+        assert len(results) == 1
+        assert results[0].text == "short"
+        assert len(results[0].full_tokens) == 4
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_allows_valid(self, mock_req):
+        """Completions within max_seq_len are kept."""
+        prompt_ids = [1, 100]
+        completion_ids = [400, 500]
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "ok",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            max_seq_len=100,
+        )
+
+        assert len(results) == 1
+        assert results[0].full_tokens == [1, 100, 400, 500]
+
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_max_seq_len_none_no_filtering(self, mock_req):
+        """When max_seq_len is None, no filtering occurs."""
+        prompt_ids = [1] * 50
+        completion_ids = [2] * 50
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "text": "long",
+                    "finish_reason": "length",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                }
+            ]
+        }
+        mock_req.return_value = resp
+
+        sampler = DeploymentSampler(
+            inference_url="https://api.example.com",
+            model="m",
+            api_key="key",
+            tokenizer=_make_mock_tokenizer(prompt_ids),
+        )
+        results = sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            max_seq_len=None,
+        )
+
+        assert len(results) == 1
+        assert len(results[0].full_tokens) == 100
+
+
+# ---------------------------------------------------------------------------
+# Default values
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultValues:
+    def test_sampler_default_temperature(self):
+        """Default temperature should be 1.0 (standard for GRPO sampling)."""
+        import inspect
+
+        sig = inspect.signature(DeploymentSampler.sample_with_tokens)
+        assert sig.parameters["temperature"].default == 1.0
+
+    def test_completions_default_temperature(self):
+        import inspect
+
+        sig = inspect.signature(DeploymentSampler.completions)
+        assert sig.parameters["temperature"].default == 1.0

@@ -34,7 +34,6 @@ from fireworks.training.cookbook.utils import (
     HotloadConfig,
     ReconnectableClient,
     wandb_log,
-    encode_text,
     setup_wandb,
     extract_text,
     setup_resume,
@@ -61,6 +60,7 @@ logger = logging.getLogger(__name__)
 class Config:
     base_model: str = "accounts/fireworks/models/qwen3-8b"
     dataset: str = ""
+    tokenizer_model: str = ""  # HuggingFace model name for client-side tokenization
 
     beta: float = 0.1
     learning_rate: float = 1e-5
@@ -90,6 +90,11 @@ def main(
     cfg = config
 
     validate_config(cfg.base_model, cfg.dataset, cfg.hotload, cfg.deployment, cfg.infra, cfg.resume)
+    if not cfg.tokenizer_model:
+        raise ValueError(
+            "Config.tokenizer_model is required for client-side tokenization. "
+            "Set it to the HuggingFace model name (e.g. 'Qwen/Qwen3-1.7B')."
+        )
     setup_wandb(cfg.wandb, {"beta": cfg.beta, "lr": cfg.learning_rate, "epochs": cfg.epochs})
 
     # -- Setup infrastructure ----------------------------------------------
@@ -162,13 +167,17 @@ def main(
 
     # -- Cache reference logprobs (from frozen reference model) ------------
 
+    import transformers
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_model, trust_remote_code=True)
+
     raw_data = load_preference_dataset(cfg.dataset, cfg.max_pairs)
     if not raw_data:
         raise RuntimeError(f"No data loaded from {cfg.dataset}")
 
     logger.info("Computing reference logprobs for %d pairs...", len(raw_data))
     ref_cache: dict[int, dict[str, Any]] = {}
-    tokenizer_url = policy.endpoint.base_url
+    filtered_count = 0
 
     for i, example in enumerate(raw_data):
         chosen_text = extract_text(example["chosen"])
@@ -176,9 +185,10 @@ def main(
         if not chosen_text or not rejected_text:
             continue
 
-        chosen_tokens = encode_text(tokenizer_url, chosen_text)
-        rejected_tokens = encode_text(tokenizer_url, rejected_text)
+        chosen_tokens = tokenizer.encode(chosen_text)
+        rejected_tokens = tokenizer.encode(rejected_text)
         if len(chosen_tokens) > cfg.max_seq_len or len(rejected_tokens) > cfg.max_seq_len:
+            filtered_count += 1
             continue
         if len(chosen_tokens) < 2 or len(rejected_tokens) < 2:
             continue
@@ -210,6 +220,11 @@ def main(
         }
 
     valid_indices = list(ref_cache.keys())
+    if filtered_count > 0:
+        logger.info(
+            "Seq-length filter: %d/%d pairs filtered (chosen or rejected > %d tokens)",
+            filtered_count, len(raw_data), cfg.max_seq_len,
+        )
     logger.info("Prepared %d preference pairs", len(valid_indices))
     if not valid_indices:
         raise RuntimeError("No valid pairs after tokenization")

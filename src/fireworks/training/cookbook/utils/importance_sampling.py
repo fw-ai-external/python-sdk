@@ -38,7 +38,7 @@ TISWeightsFn = Callable[
 class ISConfig:
     """TIS (Truncated Importance Sampling) configuration."""
 
-    clip_high: float = 10.0
+    clip_high: float = 2.0
     clip_low: float = 0.0
 
 

@@ -32,7 +32,6 @@ from fireworks.training.cookbook.utils import (
     HotloadConfig,
     ReconnectableClient,
     wandb_log,
-    encode_text,
     setup_wandb,
     setup_resume,
     wandb_finish,
@@ -135,8 +134,7 @@ def main(
 
     import transformers
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_model)
-    tokenizer_url = client.endpoint.base_url
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_model, trust_remote_code=True)
 
     raw_data: List[Dict[str, Any]] = []
     with open(cfg.dataset) as f:
@@ -150,22 +148,28 @@ def main(
     logger.info("Loaded %d examples from %s", len(raw_data), cfg.dataset)
 
     training_data: List[Dict[str, Any]] = []
+    filtered_count = 0
     for row in raw_data:
         messages = row.get("messages", [])
         if not messages:
             continue
 
-        full_text = tokenizer.apply_chat_template(messages, tokenize=False)
-        prompt_messages = [m for m in messages if m.get("role") != "assistant"]
-        prompt_text = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
-
-        full_tokens = encode_text(tokenizer_url, full_text)
-        prompt_tokens = encode_text(tokenizer_url, prompt_text)
-
+        full_tokens = tokenizer.apply_chat_template(messages, tokenize=True, return_dict=False)
         if len(full_tokens) > cfg.max_seq_len or len(full_tokens) < 2:
+            filtered_count += 1
             continue
+
+        prompt_messages = [m for m in messages if m.get("role") != "assistant"]
+        prompt_tokens = tokenizer.apply_chat_template(
+            prompt_messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+        )
         training_data.append({"tokens": full_tokens, "prompt_len": len(prompt_tokens)})
 
+    if filtered_count > 0:
+        logger.info(
+            "Seq-length filter: %d/%d examples filtered (len > %d or len < 2)",
+            filtered_count, len(raw_data), cfg.max_seq_len,
+        )
     logger.info("Prepared %d training examples", len(training_data))
     if not training_data:
         raise RuntimeError("No valid training examples after tokenization")

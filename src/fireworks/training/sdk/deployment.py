@@ -721,7 +721,7 @@ class DeploymentSampler:
         prompt: list[int],
         n: int = 1,
         max_tokens: int = 1024,
-        temperature: float = 0.7,
+        temperature: float = 1.0,
         hotload_retry_interval: float = 30.0,
         hotload_max_retries: int = 10,
         **kwargs: Any,
@@ -847,7 +847,8 @@ class DeploymentSampler:
         messages: list[dict[str, str]],
         n: int = 1,
         max_tokens: int = 1024,
-        temperature: float = 0.7,
+        temperature: float = 1.0,
+        max_seq_len: int | None = None,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
         """Sample completions and return structured results with token IDs.
@@ -857,6 +858,15 @@ class DeploymentSampler:
         structured completions with the full token sequence.
 
         BOS and special tokens are handled by the tokenizer's chat template.
+
+        When ``max_seq_len`` is set, two levels of filtering are applied:
+
+        1. **Prompt pre-filter**: If the tokenized prompt already meets or
+           exceeds ``max_seq_len``, the method returns an empty list
+           immediately — no inference call is made.
+        2. **Completion post-filter**: After sampling, any completion whose
+           full token sequence (prompt + completion) exceeds ``max_seq_len``
+           is silently dropped from the returned list.
 
         To retrieve per-token inference logprobs (needed for GRPO importance
         sampling), pass ``logprobs=True``::
@@ -872,6 +882,9 @@ class DeploymentSampler:
             n: Number of completions to sample.
             max_tokens: Max tokens per completion.
             temperature: Sampling temperature.
+            max_seq_len: If set, filter out sequences that exceed this length.
+                Prompts that already meet or exceed the limit are rejected
+                before calling the inference API.
             **kwargs: Extra fields passed to the API (e.g., ``logprobs=True``,
                 ``top_logprobs=1``, ``reasoning_effort="none"``).
 
@@ -892,6 +905,13 @@ class DeploymentSampler:
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
             messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
+
+        if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
+            logger.info(
+                "Prompt pre-filtered: %d prompt tokens >= max_seq_len %d, skipping inference",
+                len(prompt_ids), max_seq_len,
+            )
+            return []
 
         result = self.completions(
             prompt=prompt_ids,
@@ -949,10 +969,18 @@ class DeploymentSampler:
                 if routing_matrices is not None:
                     routing_matrices = routing_matrices[1:]
 
+            full_tokens = list(prompt_ids) + list(completion_ids)
+            if max_seq_len is not None and len(full_tokens) > max_seq_len:
+                logger.debug(
+                    "Completion post-filtered: %d tokens > max_seq_len %d",
+                    len(full_tokens), max_seq_len,
+                )
+                continue
+
             completions.append(
                 SampledCompletion(
                     text=text,
-                    full_tokens=list(prompt_ids) + list(completion_ids),
+                    full_tokens=full_tokens,
                     prompt_len=len(prompt_ids),
                     finish_reason=finish_reason,
                     completion_len=len(completion_ids),
