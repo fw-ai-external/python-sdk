@@ -86,7 +86,7 @@ class Config:
 
     policy_loss: str = "grpo"
     """Base policy gradient loss: ``"grpo"`` (vanilla REINFORCE + KL),
-    ``"dapo"`` (PPO clipping), or ``"gspo"`` (sequence-level KL)."""
+    ``"dapo"`` (token-level PPO clipping), or ``"gspo"`` (sequence-level clipped PPO)."""
 
     tis_enabled: bool = False
     """Enable TIS (Truncated Importance Sampling) correction on top of the
@@ -246,7 +246,7 @@ def main(
                 max_tokens=cfg.max_completion_tokens,
                 temperature=cfg.temperature,
             )
-            needs_inf_lp = cfg.policy_loss == "dapo" or cfg.tis_enabled
+            needs_inf_lp = cfg.policy_loss in {"dapo", "gspo"} or cfg.tis_enabled
             if cfg.router_replay:
                 sample_kwargs.update(include_routing_matrix=True, echo=True, logprobs=True)
             if needs_inf_lp:
@@ -329,6 +329,7 @@ def main(
             elif cfg.policy_loss == "gspo":
                 loss_fn = make_gspo_loss_fn(
                     adv_filtered, ref_logprobs,
+                    inf_logprobs_aligned,
                     prompt_len, cfg.gspo, tis_weights_fn=tis_wf,
                 )
             else:

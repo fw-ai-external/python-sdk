@@ -1,15 +1,14 @@
 """GSPO (Group Sequence Policy Optimization) loss for GRPO training.
 
-Like GRPO but uses **sequence-level KL** divergence instead of per-token KL.
-The KL is averaged across all response tokens in each sequence, then
-broadcast back to every token as a uniform penalty.  This prevents
-individual high-KL tokens from dominating the penalty signal.
+Implements PPO-style clipping with a **sequence-level importance ratio**
+(geometric mean of per-token ratios), then broadcasts that ratio to tokens.
+This matches GSPO behavior used in AReaL/verl/slime families.
 
 TIS can be composed on top via ``tis_weights_fn``.
 
 Example::
 
-    Config(policy_loss="gspo", gspo=GSPOConfig(kl_beta=0.001))
+    Config(policy_loss="gspo", gspo=GSPOConfig(clip_ratio=0.2))
     Config(policy_loss="gspo", tis_enabled=True)  # GSPO + TIS
 """
 
@@ -24,28 +23,42 @@ import tinker
 
 @dataclass
 class GSPOConfig:
-    """GSPO configuration."""
+    """GSPO clipping configuration.
 
+    ``clip_ratio`` is the symmetric fallback clip epsilon.
+    Set ``clip_ratio_low`` / ``clip_ratio_high`` for asymmetric clipping.
+    """
+
+    clip_ratio: float = 0.2
+    clip_ratio_low: float | None = None
+    clip_ratio_high: float | None = None
+    seq_ratio_log_cap: float = 10.0
+    # Kept for backward compatibility with older configs; unused by GSPO clip loss.
     kl_beta: float = 0.001
-    """KL penalty coefficient (applied to the sequence-level KL)."""
 
 
 def make_gspo_loss_fn(
     advantages: List[float],
     ref_logprobs: List[List[float]],
+    inf_logprobs: List[List[float]],
     prompt_len: int,
     gspo_config: GSPOConfig | None = None,
     tis_weights_fn: Callable | None = None,
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
     """Build a GSPO loss closure.
 
-    Same as GRPO but the KL penalty uses sequence-level KL (mean over
-    response tokens per sequence) instead of per-token KL.
+    Uses sequence-level importance ratio:
+      ``r_seq = exp(mean_t(log pi_t - log pi_old_t))``
+    followed by PPO clipping on that broadcasted ratio.
+
+    ``inf_logprobs`` is required (rollout/old-policy logprobs for ratio).
 
     Pass *tis_weights_fn* to apply TIS correction on top.
     """
     if gspo_config is None:
         gspo_config = GSPOConfig()
+    clip_low = gspo_config.clip_ratio if gspo_config.clip_ratio_low is None else gspo_config.clip_ratio_low
+    clip_high = gspo_config.clip_ratio if gspo_config.clip_ratio_high is None else gspo_config.clip_ratio_high
 
     def loss_fn(
         data: List[tinker.Datum],
@@ -55,12 +68,15 @@ def make_gspo_loss_fn(
         total_kl = 0.0
         total_rho = 0.0
         num_tokens = 0
+        clip_frac_sum = 0.0
+        clip_frac_count = 0
         response_start = max(0, prompt_len - 1)
         agg_tis: Dict[str, float] = {}
 
         for i, pi_logprobs in enumerate(logprobs_list):
             adv = advantages[i]
             ref_lp = ref_logprobs[i]
+            inf_lp = inf_logprobs[i]
 
             resp_pi = pi_logprobs[response_start:]
             resp_len = len(resp_pi)
@@ -73,10 +89,40 @@ def make_gspo_loss_fn(
             )
 
             pi_detached = resp_pi.detach()
-            per_token_kl = pi_detached - resp_ref
-            seq_kl = per_token_kl.mean()
+            if not inf_lp:
+                raise ValueError(
+                    f"GSPO requires inference logprobs for sample {i} but got empty list. "
+                    f"Ensure logprobs=True is set when using policy_loss='gspo'."
+                )
 
-            per_token_loss = (-adv + gspo_config.kl_beta * seq_kl) * resp_pi
+            resp_inf = torch.tensor(
+                [
+                    inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
+                    for j in range(resp_len)
+                ],
+                dtype=torch.float32,
+            )
+
+            # GSPO ratio: geometric mean over sequence, then broadcast to tokens.
+            # Keep token-level gradient path via (resp_pi - resp_pi.detach()).
+            log_ratio = resp_pi - resp_inf
+            seq_log_ratio = log_ratio.mean()
+            log_seq_ratio = resp_pi - resp_pi.detach() + seq_log_ratio.detach()
+            log_seq_ratio = torch.clamp(log_seq_ratio, max=gspo_config.seq_ratio_log_cap)
+            seq_ratio = torch.exp(log_seq_ratio)
+
+            clipped_seq_ratio = torch.clamp(
+                seq_ratio,
+                min=1.0 - clip_low,
+                max=1.0 + clip_high,
+            )
+            clip_frac_sum += (clipped_seq_ratio != seq_ratio).float().mean().item()
+            clip_frac_count += 1
+
+            adv_t = torch.tensor(adv, dtype=torch.float32)
+            surr1 = -seq_ratio * adv_t
+            surr2 = -clipped_seq_ratio * adv_t
+            per_token_loss = torch.maximum(surr1, surr2)
 
             if tis_weights_fn:
                 weights, tis_metrics = tis_weights_fn(pi_detached, i)
@@ -86,11 +132,12 @@ def make_gspo_loss_fn(
                     agg_tis[k] = agg_tis.get(k, 0.0) + v
 
             total_loss = total_loss + per_token_loss.sum()
-            total_kl += seq_kl.item() * resp_len
+            total_kl += (pi_detached - resp_ref).sum().item()
             num_tokens += resp_len
 
         metrics: Dict[str, float] = {
             "mean_kl": total_kl / num_tokens if num_tokens > 0 else 0.0,
+            "gspo_clip_frac": clip_frac_sum / clip_frac_count if clip_frac_count > 0 else 0.0,
         }
         if tis_weights_fn:
             metrics["mean_importance_ratio"] = total_rho / num_tokens if num_tokens > 0 else 1.0

@@ -155,11 +155,23 @@ class TrainerJobManager:
         )
         if not resp.ok:
             error_msg = parse_api_error(resp)
+            if resp.status_code == 404:
+                solution = (
+                    f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
+                    f"Verify the training_shape_id is correct and the shape exists."
+                )
+            elif resp.status_code == 403:
+                solution = (
+                    f"Permission denied for training shape '{training_shape_id}'. "
+                    f"Ensure your account owns or has access to this shape."
+                )
+            else:
+                solution = "Verify the training_shape_id and account have the shape registered."
             raise RuntimeError(
                 format_sdk_error(
                     f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
                     error_msg,
-                    "Verify the training_shape_id and account have the shape registered.",
+                    solution,
                     docs_url=DOCS_RLOR,
                 )
             )

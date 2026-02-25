@@ -22,7 +22,7 @@ All recipes compose these dataclasses from `utils/config.py`:
 - `WandBConfig`: optional experiment logging.
 - `ISConfig`: TIS (Truncated Importance Sampling) controls for GRPO.
 - `DAPOConfig`: DAPO asymmetric PPO clipping thresholds for GRPO.
-- `GSPOConfig`: GSPO sequence-level KL configuration for GRPO.
+- `GSPOConfig`: GSPO sequence-level clipped-ratio PPO configuration for GRPO.
 
 ## Minimal usage
 
