@@ -44,7 +44,7 @@ cfg = Config(
         tokenizer_model="Qwen/Qwen3-1.7B",
     ),
     hotload=HotloadConfig(hot_load_interval=1),
-    policy_loss="tis",  # or "cispo" for CISPO
+    tis_enabled=True,  # orthogonal -- works with any policy_loss
 )
 
 main(cfg)

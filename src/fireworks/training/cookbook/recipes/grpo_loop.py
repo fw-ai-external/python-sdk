@@ -49,7 +49,7 @@ from fireworks.training.cookbook.utils import (
     compute_advantages,
     create_trainer_job,
     load_jsonl_dataset,
-    make_grpo_tis_loss_fn,
+    make_tis_weights_fn,
     resolve_and_apply_shape,
 )
 from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
@@ -57,8 +57,6 @@ from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.sdk.deployment import DeploymentSampler
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
-
-_OFFPOLICY_LOSSES = ("tis", "dapo")
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +85,12 @@ class Config:
     router_replay_completion_only: bool = True
 
     policy_loss: str = "grpo"
-    """Policy gradient loss type: ``"grpo"`` (vanilla REINFORCE + KL),
-    ``"tis"`` (Truncated Importance Sampling), ``"dapo"`` (Dynamic
-    Advantage Policy Optimization -- asymmetric PPO clipping), or
-    ``"gspo"`` (Group Sequence Policy Optimization -- sequence-level KL)."""
+    """Base policy gradient loss: ``"grpo"`` (vanilla REINFORCE + KL),
+    ``"dapo"`` (PPO clipping), or ``"gspo"`` (sequence-level KL)."""
+
+    tis_enabled: bool = False
+    """Enable TIS (Truncated Importance Sampling) correction on top of the
+    base ``policy_loss``.  Orthogonal -- composes with any loss type."""
 
     tis: ISConfig = field(default_factory=ISConfig)
     dapo: DAPOConfig = field(default_factory=DAPOConfig)
@@ -248,9 +248,10 @@ def main(
                 max_tokens=cfg.max_completion_tokens,
                 temperature=cfg.temperature,
             )
+            needs_inf_lp = cfg.policy_loss == "dapo" or cfg.tis_enabled
             if cfg.router_replay:
                 sample_kwargs.update(include_routing_matrix=True, echo=True, logprobs=True)
-            if cfg.policy_loss in _OFFPOLICY_LOSSES:
+            if needs_inf_lp:
                 sample_kwargs["logprobs"] = True
             try:
                 sampled = sampler.sample_with_tokens(**sample_kwargs)
@@ -295,7 +296,13 @@ def main(
                 data.append(datum)
                 adv_filtered.append(advantages[idx])
 
-                if cfg.policy_loss in _OFFPOLICY_LOSSES and s.inference_logprobs:
+                if needs_inf_lp:
+                    if not s.inference_logprobs:
+                        raise RuntimeError(
+                            f"Inference logprobs required (policy_loss='{cfg.policy_loss}', "
+                            f"tis_enabled={cfg.tis_enabled}) but sample {idx} has none. "
+                            f"Ensure the deployment returns logprobs."
+                        )
                     response_start = max(0, prompt_len - 1)
                     echoed = getattr(s, "logprobs_echoed", False)
                     aligned = (
@@ -312,33 +319,25 @@ def main(
             ref_fwd = reference.forward(data, "cross_entropy").result()
             ref_logprobs = [out["logprobs"].data for out in ref_fwd.loss_fn_outputs]
 
-            # Training step -- select loss based on policy_loss config
+            # TIS weights (orthogonal -- composes with any base loss)
+            tis_wf = make_tis_weights_fn(inf_logprobs_aligned, prompt_len, cfg.tis) if cfg.tis_enabled else None
+
+            # Base policy loss
             if cfg.policy_loss == "dapo":
                 loss_fn = make_dapo_loss_fn(
-                    adv_filtered,
-                    ref_logprobs,
-                    inf_logprobs_aligned,
-                    prompt_len,
-                    cfg.dapo,
+                    adv_filtered, ref_logprobs, inf_logprobs_aligned,
+                    prompt_len, cfg.dapo, tis_weights_fn=tis_wf,
                 )
             elif cfg.policy_loss == "gspo":
                 loss_fn = make_gspo_loss_fn(
-                    adv_filtered,
-                    ref_logprobs,
-                    prompt_len,
-                    cfg.gspo,
-                )
-            elif cfg.policy_loss == "tis":
-                loss_fn = make_grpo_tis_loss_fn(
-                    adv_filtered,
-                    ref_logprobs,
-                    inf_logprobs_aligned,
-                    prompt_len,
-                    cfg.kl_beta,
-                    cfg.tis,
+                    adv_filtered, ref_logprobs,
+                    prompt_len, cfg.gspo, tis_weights_fn=tis_wf,
                 )
             else:
-                loss_fn = make_grpo_loss_fn(adv_filtered, ref_logprobs, prompt_len, cfg.kl_beta)
+                loss_fn = make_grpo_loss_fn(
+                    adv_filtered, ref_logprobs,
+                    prompt_len, cfg.kl_beta, tis_weights_fn=tis_wf,
+                )
 
             result = policy.forward_backward_custom(data, loss_fn).result()
 

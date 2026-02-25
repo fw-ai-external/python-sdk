@@ -46,7 +46,7 @@ def resolve_and_apply_shape(
         infra.accelerator_count = profile.accelerator_count
     if not infra.custom_image_tag and profile.trainer_image_tag:
         infra.custom_image_tag = profile.trainer_image_tag
-    if profile.node_count and infra.node_count == 1:
+    if profile.node_count and profile.node_count > infra.node_count:
         infra.node_count = profile.node_count
 
     if not deploy_cfg.deployment_shape and profile.deployment_shape_version:
@@ -82,7 +82,8 @@ def create_trainer_job(
     if job_id:
         return _reuse_or_resume_job(rlor_mgr, job_id)
 
-    logger.info("Creating trainer job '%s' (nodes=%d)...", display_name, infra.node_count)
+    node_count = infra.node_count if infra.node_count is not None else 1
+    logger.info("Creating trainer job '%s' (nodes=%d)...", display_name, node_count)
     return rlor_mgr.create_and_wait(
         TrainerJobConfig(
             base_model=base_model,
@@ -90,7 +91,7 @@ def create_trainer_job(
             max_context_length=max_seq_len,
             learning_rate=learning_rate,
             gradient_accumulation_steps=grad_accum,
-            node_count=infra.node_count,
+            node_count=node_count,
             display_name=display_name,
             hot_load_deployment_id=hot_load_deployment_id,
             region=infra.region,

@@ -68,7 +68,7 @@ class TestGRPOE2E:
             grad_accum=2,
             max_seq_len=4096,
             router_replay=True,
-            policy_loss="tis",
+            tis_enabled=True,
             tis=ISConfig(clip_high=10.0),
             infra=InfraConfig(
                 region=e2e_region,

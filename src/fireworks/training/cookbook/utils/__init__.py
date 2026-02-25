@@ -27,7 +27,7 @@ __all__ = [
     "make_dapo_loss_fn",
     "make_dpo_loss_fn",
     "make_grpo_loss_fn",
-    "make_grpo_tis_loss_fn",
+    "make_tis_weights_fn",
     "make_gspo_loss_fn",
     "make_sft_loss_fn",
     "setup_deployment",
@@ -82,4 +82,4 @@ from fireworks.training.cookbook.utils.validation import validate_config, valida
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
 from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
 from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
-from fireworks.training.cookbook.utils.importance_sampling import ISConfig, make_grpo_tis_loss_fn
+from fireworks.training.cookbook.utils.importance_sampling import ISConfig, make_tis_weights_fn

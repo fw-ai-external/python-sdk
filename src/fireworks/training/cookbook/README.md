@@ -21,7 +21,8 @@ All recipes compose these dataclasses from `utils/config.py`:
 - `ResumeConfig`: checkpoint source + optional step offset.
 - `WandBConfig`: optional experiment logging.
 - `ISConfig`: TIS (Truncated Importance Sampling) controls for GRPO.
-- `CISPOConfig`: CISPO clipping thresholds for GRPO.
+- `DAPOConfig`: DAPO asymmetric PPO clipping thresholds for GRPO.
+- `GSPOConfig`: GSPO sequence-level KL configuration for GRPO.
 
 ## Minimal usage
 
@@ -43,7 +44,7 @@ main(cfg)
 ## What to customize first
 
 - Reward logic in `recipes/grpo_loop.py` (`reward_fn`).
-- Loss functions in `utils/losses.py`, `utils/importance_sampling.py`, and `utils/cispo.py`.
+- Loss functions in `utils/losses.py`, `utils/importance_sampling.py`, `utils/dapo.py`, and `utils/gspo.py`.
 - Data adapters in `utils/data.py` for your JSONL schema.
 - Resume behavior in `utils/resume.py`.
 

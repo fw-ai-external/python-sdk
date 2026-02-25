@@ -1,23 +1,24 @@
-"""Truncated Importance Sampling (TIS) for GRPO training.
+"""Truncated Importance Sampling (TIS) for train-inference mismatch correction.
 
-Provides a pluggable importance sampling system: a built-in ``vanilla_tis``
-strategy (clamped importance ratios) and a ``TISFunction`` type so users
-can supply their own.
+Provides per-token importance weighting that can be composed with **any**
+base policy loss (GRPO, DAPO, GSPO, etc.).  The architecture follows
+slime's orthogonal design: base loss computes per-token loss, TIS
+multiplies by clipped importance weights, then the result is summed.
 
-Activated by setting ``policy_loss="tis"`` on the GRPO Config.
+Usage -- enable TIS on any loss via ``tis_enabled``::
 
-Example -- built-in vanilla::
+    Config(policy_loss="grpo", tis_enabled=True, tis=ISConfig(clip_high=10.0))
+    Config(policy_loss="dapo", tis_enabled=True)   # TIS on top of PPO clipping
+    Config(policy_loss="gspo", tis_enabled=True)   # TIS on top of seq-KL
 
-    Config(policy_loss="tis", tis=ISConfig(clip_high=10.0))
-
-Example -- custom function::
+Custom TIS function::
 
     def my_tis(policy_lp, inf_lp, config):
         rho = torch.exp(policy_lp - inf_lp)
         weights = torch.where(rho < 3.0, rho, torch.zeros_like(rho))
         return weights, {"custom_mean_rho": rho.mean().item()}
 
-    Config(policy_loss="tis", tis=ISConfig(method=my_tis))
+    Config(tis_enabled=True, tis=ISConfig(method=my_tis))
 """
 
 from __future__ import annotations
@@ -26,19 +27,25 @@ from typing import Dict, List, Tuple, Union, Callable
 from dataclasses import dataclass
 
 import torch
-import tinker
 
 TISFunction = Callable[
     [torch.Tensor, torch.Tensor, "ISConfig"],
     Tuple[torch.Tensor, Dict[str, float]],
 ]
 
+TISWeightsFn = Callable[
+    [torch.Tensor, int],
+    Tuple[torch.Tensor, Dict[str, float]],
+]
+"""Per-sample TIS weights function: ``(pi_detached, sample_idx) -> (weights, metrics)``."""
+
 
 @dataclass
 class ISConfig:
     """TIS (Truncated Importance Sampling) configuration.
 
-    Only used when ``policy_loss="tis"`` is set on the GRPO Config.
+    Used when ``tis_enabled=True`` on the GRPO Config.  Composable with
+    any ``policy_loss`` setting.
     """
 
     clip_high: float = 10.0
@@ -72,75 +79,48 @@ def resolve_tis_function(method: Union[str, TISFunction]) -> TISFunction:
     raise ValueError(f"Unknown IS method: {method!r}. Use 'vanilla' or a custom callable.")
 
 
-def make_grpo_tis_loss_fn(
-    advantages: List[float],
-    ref_logprobs: List[List[float]],
+def make_tis_weights_fn(
     inf_logprobs: List[List[float]],
     prompt_len: int,
-    kl_beta: float = 0.001,
-    is_config: ISConfig | None = None,
-) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
-    """Build a GRPO loss closure with Truncated Importance Sampling."""
-    if is_config is None:
-        is_config = ISConfig()
-    tis_fn = resolve_tis_function(is_config.method)
+    tis_config: ISConfig | None = None,
+) -> TISWeightsFn:
+    """Create a per-sample TIS weights function.
 
-    def loss_fn(
-        data: List[tinker.Datum],
-        logprobs_list: List[torch.Tensor],
+    Returns a callable ``(pi_detached, sample_idx) -> (weights, metrics)``
+    suitable for passing to any loss function's ``tis_weights_fn`` parameter.
+
+    This decouples TIS from any specific loss algorithm -- the same weights
+    function can be passed to ``make_grpo_loss_fn``, ``make_dapo_loss_fn``,
+    ``make_gspo_loss_fn``, etc.
+
+    Args:
+        inf_logprobs: Per-sample inference logprobs (aligned to model_input).
+        prompt_len: Number of prompt tokens (for response slicing).
+        tis_config: Clipping thresholds and TIS method.
+    """
+    if tis_config is None:
+        tis_config = ISConfig()
+    tis_fn = resolve_tis_function(tis_config.method)
+    response_start = max(0, prompt_len - 1)
+
+    def weights_fn(
+        pi_detached: torch.Tensor,
+        sample_idx: int,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        total_loss = torch.tensor(0.0, requires_grad=True)
-        total_kl = 0.0
-        total_rho = 0.0
-        num_tokens = 0
-        response_start = max(0, prompt_len - 1)
-        agg_tis: Dict[str, float] = {}
-
-        for i, pi_logprobs in enumerate(logprobs_list):
-            adv = advantages[i]
-            ref_lp = ref_logprobs[i]
-            inf_lp = inf_logprobs[i]
-
-            resp_pi = pi_logprobs[response_start:]
-            resp_len = len(resp_pi)
-            if resp_len == 0:
-                continue
-
-            resp_ref = torch.tensor(
-                [ref_lp[response_start + j] if (response_start + j) < len(ref_lp) else 0.0 for j in range(resp_len)],
-                dtype=torch.float32,
+        inf_lp = inf_logprobs[sample_idx]
+        if not inf_lp:
+            raise ValueError(
+                f"TIS requires inference logprobs for sample {sample_idx} but got empty list. "
+                f"Ensure logprobs=True is set when tis_enabled=True."
             )
+        resp_len = len(pi_detached)
+        resp_inf = torch.tensor(
+            [
+                inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
+                for j in range(resp_len)
+            ],
+            dtype=torch.float32,
+        )
+        return tis_fn(pi_detached, resp_inf, tis_config)
 
-            pi_detached = resp_pi.detach()
-
-            if inf_lp:
-                resp_inf = torch.tensor(
-                    [
-                        inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
-                        for j in range(resp_len)
-                    ],
-                    dtype=torch.float32,
-                )
-                weights, tis_metrics = tis_fn(pi_detached, resp_inf, is_config)
-                for k, v in tis_metrics.items():
-                    agg_tis[k] = agg_tis.get(k, 0.0) + v
-            else:
-                weights = torch.ones_like(pi_detached)
-
-            loss_i = (weights * (-adv + kl_beta) * resp_pi).sum()
-            total_loss = total_loss + loss_i
-
-            total_kl += (pi_detached - resp_ref).sum().item()
-            total_rho += weights.sum().item()
-            num_tokens += resp_len
-
-        metrics: Dict[str, float] = {
-            "mean_kl": total_kl / num_tokens if num_tokens > 0 else 0.0,
-            "mean_importance_ratio": total_rho / num_tokens if num_tokens > 0 else 1.0,
-        }
-        n_samples = len(logprobs_list) or 1
-        for k, v in agg_tis.items():
-            metrics[k] = v / n_samples
-        return total_loss, metrics
-
-    return loss_fn
+    return weights_fn
