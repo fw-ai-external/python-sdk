@@ -2,14 +2,67 @@
 
 from __future__ import annotations
 
+import re
+import time
 import logging
 
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
-from fireworks.training.sdk.trainer import TrainerJobConfig, TrainerJobManager, TrainerServiceEndpoint
+from fireworks.training.sdk.trainer import (
+    TrainerJobConfig,
+    TrainerJobManager,
+    TrainingShapeProfile,
+    TrainerServiceEndpoint,
+)
 from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 from fireworks.training.cookbook.utils.config import InfraConfig, DeployConfig
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_and_apply_shape(
+    rlor_mgr: TrainerJobManager,
+    base_model: str,
+    infra: InfraConfig,
+    deploy_cfg: DeployConfig,
+) -> TrainingShapeProfile:
+    """Fetch training shape and apply it to infra/deploy configs.
+
+    Calls ``GET /v1/accounts/{id}/trainingShapes/{shapeId}`` to fetch
+    the shape, then populates unset fields on ``infra`` and ``deploy_cfg``
+    from the shape.  Fields already set by the customer are left as-is.
+
+    Returns the resolved profile for inspection/logging.
+    """
+    if not infra.training_shape_id:
+        raise ValueError("training_shape_id is required for shape resolution")
+    profile = rlor_mgr.resolve_training_profile(
+        training_shape_id=infra.training_shape_id,
+    )
+    logger.info(
+        "Resolved training shape: %s (accel=%s, image=%s)",
+        profile.training_shape_version,
+        profile.accelerator_type,
+        profile.trainer_image_tag,
+    )
+
+    if not infra.accelerator_type and profile.accelerator_type and profile.accelerator_type != "ACCELERATOR_TYPE_UNSPECIFIED":
+        infra.accelerator_type = profile.accelerator_type
+    if not infra.accelerator_count and profile.accelerator_count:
+        infra.accelerator_count = profile.accelerator_count
+    if not infra.custom_image_tag and profile.trainer_image_tag:
+        infra.custom_image_tag = profile.trainer_image_tag
+    if profile.node_count and profile.node_count > infra.node_count:
+        infra.node_count = profile.node_count
+
+    if not deploy_cfg.deployment_shape and profile.deployment_shape_version:
+        dsv = profile.deployment_shape_version
+        shape_name = re.sub(r"/versions/[^/]+$", "", dsv)
+        deploy_cfg.deployment_shape = shape_name
+    if not deploy_cfg.deployment_id:
+        model_short = base_model.rsplit("/", 1)[-1]
+        deploy_cfg.deployment_id = f"{model_short}-{int(time.time())}"
+
+    return profile
 
 
 def create_trainer_job(
@@ -34,7 +87,9 @@ def create_trainer_job(
     if job_id:
         return _reuse_or_resume_job(rlor_mgr, job_id)
 
-    logger.info("Creating trainer job '%s' (nodes=%d)...", display_name, infra.node_count)
+    using_shape = bool(infra.training_shape_id and not infra.skip_validations)
+    node_count = infra.node_count if infra.node_count is not None else 1
+    logger.info("Creating trainer job '%s' (nodes=%d, shape=%s)...", display_name, node_count, using_shape)
     return rlor_mgr.create_and_wait(
         TrainerJobConfig(
             base_model=base_model,
@@ -42,14 +97,14 @@ def create_trainer_job(
             max_context_length=max_seq_len,
             learning_rate=learning_rate,
             gradient_accumulation_steps=grad_accum,
-            node_count=infra.node_count,
+            node_count=node_count,
             display_name=display_name,
             hot_load_deployment_id=hot_load_deployment_id,
             region=infra.region,
-            custom_image_tag=infra.custom_image_tag,
+            custom_image_tag=infra.custom_image_tag if not using_shape else None,
             extra_args=extra_args or infra.extra_args,
-            accelerator_type=infra.accelerator_type,
-            accelerator_count=infra.accelerator_count,
+            accelerator_type=infra.accelerator_type if not using_shape else None,
+            accelerator_count=infra.accelerator_count if not using_shape else None,
             skip_validations=infra.skip_validations,
         )
     )

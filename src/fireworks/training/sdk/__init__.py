@@ -28,6 +28,7 @@ from fireworks.training.sdk.errors import (
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     TrainerJobManager,
+    TrainingShapeProfile,
     TrainerServiceEndpoint,
 )
 from fireworks.training.sdk.deployment import (
@@ -58,6 +59,7 @@ __all__ = [
     "TrainerJobConfig",
     "TrainerJobManager",
     "TrainerServiceEndpoint",
+    "TrainingShapeProfile",
     # Error formatting
     "format_sdk_error",
     "parse_api_error",

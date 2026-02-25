@@ -1,6 +1,7 @@
 """Cookbook utilities -- infrastructure, losses, data, logging, and more."""
 
 __all__ = [
+    "DAPOConfig",
     "DEFAULT_ADAM",
     "DeployConfig",
     "EvalFn",
@@ -15,15 +16,19 @@ __all__ = [
     "build_r3_routing_matrices",
     "compute_advantages",
     "create_trainer_job",
+    "resolve_and_apply_shape",
     "encode_text",
     "extract_text",
     "find_common_prefix_length",
     "load_jsonl_dataset",
     "load_preference_dataset",
     "log_metrics_json",
+    "GSPOConfig",
+    "make_dapo_loss_fn",
     "make_dpo_loss_fn",
     "make_grpo_loss_fn",
-    "make_grpo_tis_loss_fn",
+    "make_tis_weights_fn",
+    "make_gspo_loss_fn",
     "make_sft_loss_fn",
     "setup_deployment",
     "setup_resume",
@@ -35,6 +40,7 @@ __all__ = [
     "wandb_log",
 ]
 
+from fireworks.training.cookbook.utils.dapo import DAPOConfig, make_dapo_loss_fn
 from fireworks.training.cookbook.utils.data import (
     encode_text,
     extract_text,
@@ -43,10 +49,12 @@ from fireworks.training.cookbook.utils.data import (
     load_preference_dataset,
     find_common_prefix_length,
 )
+from fireworks.training.cookbook.utils.gspo import GSPOConfig, make_gspo_loss_fn
 from fireworks.training.cookbook.utils.infra import (
     setup_deployment,
     create_trainer_job,
     setup_training_client,
+    resolve_and_apply_shape,
 )
 from fireworks.training.cookbook.utils.client import ReconnectableClient
 from fireworks.training.cookbook.utils.config import (
@@ -74,4 +82,4 @@ from fireworks.training.cookbook.utils.logging import (
 )
 from fireworks.training.cookbook.utils.validation import validate_config, validate_preflight
 from fireworks.training.cookbook.utils.router_replay import build_r3_routing_matrices
-from fireworks.training.cookbook.utils.importance_sampling import ISConfig, make_grpo_tis_loss_fn
+from fireworks.training.cookbook.utils.importance_sampling import ISConfig, make_tis_weights_fn

@@ -44,7 +44,7 @@ cfg = Config(
         tokenizer_model="Qwen/Qwen3-1.7B",
     ),
     hotload=HotloadConfig(hot_load_interval=1),
-    importance_sampling=ISConfig(enabled=True),
+    tis_enabled=True,  # orthogonal -- works with any policy_loss
 )
 
 main(cfg)
