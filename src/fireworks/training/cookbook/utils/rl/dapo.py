@@ -17,11 +17,13 @@ Example::
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple, Union, Callable
 from dataclasses import dataclass
 
 import torch
 import tinker
+
+from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
 
 
 @dataclass
@@ -45,7 +47,7 @@ def make_dapo_loss_fn(
     advantages: List[float],
     ref_logprobs: List[List[float]],
     inf_logprobs: List[List[float]],
-    prompt_len: int,
+    prompt_len: Union[int, List[int]],
     dapo_config: DAPOConfig | None = None,
     tis_weights_fn: Callable | None = None,
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
@@ -55,11 +57,15 @@ def make_dapo_loss_fn(
     The importance ratio ``pi/pi_old`` is clipped to
     ``[1 - eps_clip, 1 + eps_clip_high]``.
 
+    ``prompt_len`` may be a single int or a per-datum list for multi-prompt
+    batched calls.
+
     *inf_logprobs* is always required (used for the PPO ratio).
     Pass *tis_weights_fn* to apply additional TIS correction on top.
     """
     if dapo_config is None:
         dapo_config = DAPOConfig()
+    prompt_lens = _normalize_prompt_lens(prompt_len, len(advantages))
 
     def loss_fn(
         data: List[tinker.Datum],
@@ -71,13 +77,13 @@ def make_dapo_loss_fn(
         num_tokens = 0
         clip_frac_sum = 0.0
         clip_frac_count = 0
-        response_start = max(0, prompt_len - 1)
         agg_tis: Dict[str, float] = {}
 
         for i, pi_logprobs in enumerate(logprobs_list):
             adv = advantages[i]
             ref_lp = ref_logprobs[i]
             inf_lp = inf_logprobs[i]
+            response_start = max(0, prompt_lens[i] - 1)
 
             resp_pi = pi_logprobs[response_start:]
             resp_len = len(resp_pi)
@@ -137,7 +143,6 @@ def make_dapo_loss_fn(
             else:
                 per_token_loss = clipped_surrogate
 
-            # TIS on top of PPO clipping (orthogonal)
             if tis_weights_fn:
                 weights, tis_metrics = tis_weights_fn(pi_detached, i)
                 per_token_loss = per_token_loss * weights

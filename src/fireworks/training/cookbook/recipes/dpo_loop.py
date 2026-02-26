@@ -150,7 +150,7 @@ def main(
     policy = ReconnectableClient(rlor_mgr, policy_ep.job_id, cfg.base_model, cfg.lora_rank)
     reference = ReconnectableClient(rlor_mgr, reference_ep.job_id, cfg.base_model, cfg.lora_rank)
 
-    tracker = WeightSyncer(
+    weight_syncer = WeightSyncer(
         policy_client=policy.inner,
         deploy_mgr=deploy_mgr,
         deployment_id=cfg.deployment.deployment_id,
@@ -302,9 +302,9 @@ def main(
 
                 hl = cfg.hotload
                 if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
-                    tracker.save_and_hotload(f"step-{step}")
+                    weight_syncer.save_and_hotload(f"step-{step}")
                 if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
-                    tracker.save_dcp(f"step-{step}")
+                    weight_syncer.save_dcp(f"step-{step}")
 
                 agg = {"dpo_loss": 0.0, "margin": 0.0, "accuracy": 0.0, "count": 0}
 
@@ -318,7 +318,7 @@ def main(
 
     hl = cfg.hotload
     if step > step_offset and (hl.hot_load_interval > 0 or hl.dcp_save_interval > 0):
-        tracker.save_and_hotload(f"final-step-{step}")
+        weight_syncer.save_and_hotload(f"final-step-{step}")
 
     logger.info("Training complete: %d optimizer steps (%d new)", step, step - step_offset)
     wandb_finish()

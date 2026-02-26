@@ -128,7 +128,7 @@ def main(
     )
     client = ReconnectableClient(rlor_mgr, endpoint.job_id, cfg.base_model, cfg.lora_rank)
 
-    tracker = WeightSyncer(
+    weight_syncer = WeightSyncer(
         policy_client=client.inner,
         deploy_mgr=deploy_mgr,
         deployment_id=cfg.deployment.deployment_id,
@@ -244,9 +244,9 @@ def main(
 
             hl = cfg.hotload
             if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
-                tracker.save_and_hotload(f"step-{step}")
+                weight_syncer.save_and_hotload(f"step-{step}")
             if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
-                tracker.save_dcp(f"step-{step}")
+                weight_syncer.save_dcp(f"step-{step}")
 
             agg_loss_sum = 0.0
             agg_resp_tokens = 0
@@ -271,9 +271,9 @@ def main(
     # -- Final checkpoint --------------------------------------------------
 
     if step > step_offset:
-        tracker.save_dcp(f"step-{step}")
+        weight_syncer.save_dcp(f"step-{step}")
     if cfg.hotload.hot_load_interval > 0 or cfg.deployment.deployment_id:
-        tracker.save_and_hotload(f"final-step-{step}")
+        weight_syncer.save_and_hotload(f"final-step-{step}")
 
     logger.info("Training complete: %d optimizer steps", step)
     wandb_finish()

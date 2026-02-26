@@ -14,11 +14,13 @@ Example::
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple, Union, Callable
 from dataclasses import dataclass
 
 import torch
 import tinker
+
+from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
 
 
 @dataclass
@@ -33,7 +35,6 @@ class GSPOConfig:
     clip_ratio_low: float | None = None
     clip_ratio_high: float | None = None
     seq_ratio_log_cap: float = 10.0
-    # Kept for backward compatibility with older configs; unused by GSPO clip loss.
     kl_beta: float = 0.001
 
 
@@ -41,7 +42,7 @@ def make_gspo_loss_fn(
     advantages: List[float],
     ref_logprobs: List[List[float]],
     inf_logprobs: List[List[float]],
-    prompt_len: int,
+    prompt_len: Union[int, List[int]],
     gspo_config: GSPOConfig | None = None,
     tis_weights_fn: Callable | None = None,
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
@@ -51,6 +52,9 @@ def make_gspo_loss_fn(
       ``r_seq = exp(mean_t(log pi_t - log pi_old_t))``
     followed by PPO clipping on that broadcasted ratio.
 
+    ``prompt_len`` may be a single int or a per-datum list for multi-prompt
+    batched calls.
+
     ``inf_logprobs`` is required (rollout/old-policy logprobs for ratio).
 
     Pass *tis_weights_fn* to apply TIS correction on top.
@@ -59,6 +63,7 @@ def make_gspo_loss_fn(
         gspo_config = GSPOConfig()
     clip_low = gspo_config.clip_ratio if gspo_config.clip_ratio_low is None else gspo_config.clip_ratio_low
     clip_high = gspo_config.clip_ratio if gspo_config.clip_ratio_high is None else gspo_config.clip_ratio_high
+    prompt_lens = _normalize_prompt_lens(prompt_len, len(advantages))
 
     def loss_fn(
         data: List[tinker.Datum],
@@ -70,13 +75,13 @@ def make_gspo_loss_fn(
         num_tokens = 0
         clip_frac_sum = 0.0
         clip_frac_count = 0
-        response_start = max(0, prompt_len - 1)
         agg_tis: Dict[str, float] = {}
 
         for i, pi_logprobs in enumerate(logprobs_list):
             adv = advantages[i]
             ref_lp = ref_logprobs[i]
             inf_lp = inf_logprobs[i]
+            response_start = max(0, prompt_lens[i] - 1)
 
             resp_pi = pi_logprobs[response_start:]
             resp_len = len(resp_pi)
@@ -105,8 +110,6 @@ def make_gspo_loss_fn(
                 device=resp_pi.device,
             )
 
-            # GSPO ratio: geometric mean over sequence, then broadcast to tokens.
-            # Keep token-level gradient path via (resp_pi - resp_pi.detach()).
             log_ratio = resp_pi - resp_inf
             seq_log_ratio = log_ratio.mean()
             log_seq_ratio = resp_pi - resp_pi.detach() + seq_log_ratio.detach()
