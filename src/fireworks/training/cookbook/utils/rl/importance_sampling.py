@@ -18,10 +18,12 @@ signature and pass it to the loss via ``tis_weights_fn=``.
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple, Union, Callable
 from dataclasses import dataclass
 
 import torch
+
+from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
 
 SAFETY_CLAMP = 20.0
 """Clamp log-ratio to [-SAFETY_CLAMP, SAFETY_CLAMP] before exp() to
@@ -44,7 +46,7 @@ class ISConfig:
 
 def make_tis_weights_fn(
     inf_logprobs: List[List[float]],
-    prompt_len: int,
+    prompt_len: Union[int, List[int]],
     tis_config: ISConfig | None = None,
 ) -> TISWeightsFn:
     """Create a per-sample TIS weights function (vanilla clamped IS).
@@ -52,12 +54,15 @@ def make_tis_weights_fn(
     Computes ``weights = clamp(exp(train_lp - rollout_lp), low, high)``
     per response token -- the same formula used by slime and VERL.
 
+    ``prompt_len`` may be a single int or a per-datum list for multi-prompt
+    batched calls.
+
     Returns a callable ``(pi_detached, sample_idx) -> (weights, metrics)``
     suitable for passing to any loss function's ``tis_weights_fn`` parameter.
     """
     if tis_config is None:
         tis_config = ISConfig()
-    response_start = max(0, prompt_len - 1)
+    prompt_lens = _normalize_prompt_lens(prompt_len, len(inf_logprobs))
 
     def weights_fn(
         pi_detached: torch.Tensor,
@@ -69,6 +74,7 @@ def make_tis_weights_fn(
                 f"TIS requires inference logprobs for sample {sample_idx} but got empty list. "
                 f"Ensure logprobs=True is set when tis_enabled=True."
             )
+        response_start = max(0, prompt_lens[sample_idx] - 1)
         resp_len = len(pi_detached)
         resp_inf = torch.tensor(
             [

@@ -39,10 +39,11 @@ def resolve_and_apply_shape(
         training_shape_id=infra.training_shape_id,
     )
     logger.info(
-        "Resolved training shape: %s (accel=%s, image=%s)",
+        "Resolved training shape: %s (accel=%s, image=%s, pp=%d)",
         profile.training_shape_version,
         profile.accelerator_type,
         profile.trainer_image_tag,
+        profile.pipeline_parallelism,
     )
 
     if not infra.accelerator_type and profile.accelerator_type and profile.accelerator_type != "ACCELERATOR_TYPE_UNSPECIFIED":

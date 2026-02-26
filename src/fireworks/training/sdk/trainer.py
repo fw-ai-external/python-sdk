@@ -58,6 +58,8 @@ class TrainingShapeProfile:
     accelerator_type: str
     accelerator_count: int
     base_model_weight_precision: str
+    pipeline_parallelism: int = 1
+    """Pipeline parallelism degree from the training shape's sharding scheme."""
 
 
 @dataclass
@@ -176,6 +178,8 @@ class TrainerJobManager:
                 )
             )
         data = resp.json()
+        sharding = data.get("trainerShardingScheme", {}) or {}
+        pp = int(sharding.get("pipelineParallelism", 1) or 1)
         return TrainingShapeProfile(
             training_shape_version=data.get("name", ""),
             trainer_image_tag=data.get("trainerImageTag", ""),
@@ -186,6 +190,7 @@ class TrainerJobManager:
             accelerator_type=data.get("acceleratorType", ""),
             accelerator_count=data.get("acceleratorCount", 0),
             base_model_weight_precision=data.get("baseModelWeightPrecision", ""),
+            pipeline_parallelism=pp,
         )
 
     # -- Low-level REST calls --------------------------------------------------
