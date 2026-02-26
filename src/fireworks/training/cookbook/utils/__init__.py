@@ -29,6 +29,7 @@ __all__ = [
     "make_grpo_loss_fn",
     "make_tis_weights_fn",
     "make_gspo_loss_fn",
+    "make_batch_sft_loss_fn",
     "make_sft_loss_fn",
     "setup_deployment",
     "setup_resume",
@@ -72,6 +73,7 @@ from fireworks.training.cookbook.utils.losses import (
     make_dpo_loss_fn,
     make_sft_loss_fn,
     make_grpo_loss_fn,
+    make_batch_sft_loss_fn,
 )
 from fireworks.training.cookbook.utils.resume import setup_resume
 from fireworks.training.cookbook.utils.logging import (
