@@ -254,7 +254,7 @@ def main(
         inference_url=deploy_mgr.inference_url,
         model=inference_model, api_key=api_key, tokenizer=tokenizer,
     )
-    tracker = WeightSyncer(
+    weight_syncer = WeightSyncer(
         policy_client=policy.inner, deploy_mgr=deploy_mgr,
         deployment_id=cfg.deployment.deployment_id, base_model=cfg.base_model,
         hotload_timeout=cfg.hotload.hot_load_timeout,
@@ -264,7 +264,7 @@ def main(
     step_offset, _ = setup_resume(policy, cfg.resume)
     if cfg.hotload.hot_load_before_training and cfg.deployment.deployment_id:
         name = f"resume-{step_offset}-base" if step_offset > 0 else "step-0-base"
-        tracker.save_and_hotload(name, checkpoint_type="base")
+        weight_syncer.save_and_hotload(name, checkpoint_type="base")
 
     # -- Load data -----------------------------------------------------------
 
@@ -331,9 +331,9 @@ def main(
 
         # -- Hotload ---
         if cfg.hotload.hot_load_interval > 0 and global_step % cfg.hotload.hot_load_interval == 0:
-            tracker.save_and_hotload(f"step-{global_step}")
+            weight_syncer.save_and_hotload(f"step-{global_step}")
         if cfg.hotload.dcp_save_interval > 0 and global_step % cfg.hotload.dcp_save_interval == 0:
-            tracker.save_dcp(f"step-{global_step}")
+            weight_syncer.save_dcp(f"step-{global_step}")
 
         agg = {"reward": 0.0, "accuracy": 0.0, "kl": 0.0, "count": 0}
 
