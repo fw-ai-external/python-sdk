@@ -430,7 +430,6 @@ def main(
             if not data:
                 continue
 
-            ref_fwd = reference.forward(ref_data, "cross_entropy").result()
             # -- Reference forward ---
             ref_fwd = reference.forward(ref_data, "cross_entropy").result()
             ref_logprobs = [out["logprobs"].data for out in ref_fwd.loss_fn_outputs]
