@@ -20,6 +20,7 @@ import logging
 from typing import Any, Dict, List
 from dataclasses import field, dataclass
 
+import torch
 import tinker
 
 from fireworks.training.sdk import DeploymentManager, TrainerJobManager
@@ -37,7 +38,7 @@ from fireworks.training.cookbook.utils import (
     wandb_finish,
     validate_config,
     log_metrics_json,
-    make_sft_loss_fn,
+    make_batch_sft_loss_fn,
     setup_deployment,
     create_trainer_job,
 )
@@ -59,6 +60,7 @@ class Config:
 
     learning_rate: float = 1e-4
     epochs: int = 3
+    batch_size: int = 32
     grad_accum: int = 4
     max_seq_len: int = 4096
     max_examples: int | None = None
@@ -84,7 +86,12 @@ def main(
     cfg = config
 
     validate_config(cfg.base_model, cfg.dataset, cfg.hotload, cfg.deployment, cfg.infra, cfg.resume)
-    setup_wandb(cfg.wandb, {"lr": cfg.learning_rate, "epochs": cfg.epochs, "grad_accum": cfg.grad_accum})
+    setup_wandb(cfg.wandb, {
+        "lr": cfg.learning_rate,
+        "epochs": cfg.epochs,
+        "batch_size": cfg.batch_size,
+        "grad_accum": cfg.grad_accum,
+    })
 
     if not cfg.tokenizer_model:
         raise ValueError(
@@ -177,60 +184,80 @@ def main(
     step_offset, _ = setup_resume(client, cfg.resume)
     adam_params = tinker.AdamParams(learning_rate=cfg.learning_rate, **DEFAULT_ADAM)
 
-    # -- Training loop -----------------------------------------------------
+    # -- Training loop (batched) -------------------------------------------
 
+    batch_size = cfg.batch_size
     step = step_offset
-    total_steps = len(training_data) * cfg.epochs // cfg.grad_accum
+    total_steps = len(training_data) * cfg.epochs // (cfg.grad_accum * batch_size)
     accum = 0
-    agg_loss = 0.0
-    agg_ppl = 0.0
-    agg_count = 0
+    agg_loss_sum = 0.0
+    agg_resp_tokens = 0
 
-    for _epoch in range(cfg.epochs):
-        for ex in training_data:
-            tokens = ex["tokens"]
-            prompt_len = ex["prompt_len"]
+    def _create_datum(tokens: list[int]) -> tinker.Datum:
+        return tinker.Datum(
+            model_input=tinker.ModelInput.from_ints(tokens[:-1]),
+            loss_fn_inputs={
+                "target_tokens": tinker.TensorData(
+                    data=tokens[1:], dtype="int64", shape=[len(tokens) - 1]
+                ),
+            },
+        )
 
-            datum = tinker.Datum(
-                model_input=tinker.ModelInput.from_ints(tokens[:-1]),
-                loss_fn_inputs={
-                    "target_tokens": tinker.TensorData(data=tokens[1:], dtype="int64", shape=[len(tokens) - 1]),
-                },
-            )
-            loss_fn = make_sft_loss_fn(response_start=max(0, prompt_len - 1), target_tokens=tokens[1:])
-            result = client.forward_backward_custom([datum], loss_fn).result()
+    def _flush_batch(batch_buf: list[dict], step: int, accum: int) -> tuple[int, int]:
+        """Send a batch through forward_backward_custom and return (step, accum)."""
+        nonlocal agg_loss_sum, agg_resp_tokens
 
-            agg_loss += result.metrics["ce_loss"]
-            agg_ppl += result.metrics["ppl"]
-            agg_count += 1
-            accum += 1
+        datums = [_create_datum(ex["tokens"]) for ex in batch_buf]
+        prompt_counts = [ex["prompt_len"] for ex in batch_buf]
 
-            # Optimizer step
-            if accum >= cfg.grad_accum:
-                client.optim_step(adam_params).result()
-                step += 1
-                accum = 0
+        loss_fn = make_batch_sft_loss_fn(prompt_counts)
+        result = client.forward_backward_custom(datums, loss_fn).result()
 
-                if agg_count > 0:
-                    avg_loss = agg_loss / agg_count
-                    avg_ppl = agg_ppl / agg_count
-                    logger.info("Step %d/%d | Loss: %.4f | PPL: %.2f", step, total_steps, avg_loss, avg_ppl)
-                    log_metrics_json(step, ce_loss=avg_loss, ppl=avg_ppl)
-                    wandb_log({"train/ce_loss": avg_loss, "train/ppl": avg_ppl}, step)
+        metrics = result.metrics
+        agg_loss_sum += metrics.get("ce_loss_sum", 0.0)
+        agg_resp_tokens += metrics.get("response_tokens", 0)
+        accum += 1
 
-                hl = cfg.hotload
-                if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
-                    tracker.save_and_hotload(f"step-{step}")
-                if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
-                    tracker.save_dcp(f"step-{step}")
-
-                agg_loss = agg_ppl = agg_count = 0
-
-        # Flush remaining gradients
-        if accum > 0:
+        if accum >= cfg.grad_accum:
             client.optim_step(adam_params).result()
             step += 1
             accum = 0
+
+            if agg_resp_tokens > 0:
+                avg_loss = agg_loss_sum / agg_resp_tokens
+                ppl = torch.exp(torch.tensor(avg_loss)).item()
+                logger.info(
+                    "Step %d/%d | Loss: %.4f | PPL: %.2f",
+                    step, total_steps, avg_loss, ppl,
+                )
+                log_metrics_json(step, ce_loss=avg_loss, ppl=ppl)
+                wandb_log({"train/ce_loss": avg_loss, "train/ppl": ppl}, step)
+
+            hl = cfg.hotload
+            if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
+                tracker.save_and_hotload(f"step-{step}")
+            if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
+                tracker.save_dcp(f"step-{step}")
+
+            agg_loss_sum = 0.0
+            agg_resp_tokens = 0
+
+        return step, accum
+
+    for _epoch in range(cfg.epochs):
+        batch_buffer: list[dict] = []
+        for ex in training_data:
+            batch_buffer.append(ex)
+            if len(batch_buffer) >= batch_size:
+                step, accum = _flush_batch(batch_buffer, step, accum)
+                batch_buffer = []
+
+        if batch_buffer:
+            step, accum = _flush_batch(batch_buffer, step, accum)
+
+    if accum > 0:
+        client.optim_step(adam_params).result()
+        step += 1
 
     # -- Final checkpoint --------------------------------------------------
 
