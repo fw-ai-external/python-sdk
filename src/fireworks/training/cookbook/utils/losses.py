@@ -1,4 +1,7 @@
-"""Loss functions for GRPO, DPO, and SFT training."""
+"""Loss functions for DPO and SFT training.
+
+RL losses (GRPO, DAPO, GSPO) live in ``utils.rl``.
+"""
 
 from __future__ import annotations
 
@@ -7,56 +10,6 @@ from typing import Dict, List, Tuple, Callable
 import torch
 import tinker
 import torch.nn.functional as F
-
-
-def make_grpo_loss_fn(
-    advantages: List[float],
-    ref_logprobs: List[List[float]],
-    prompt_len: int,
-    kl_beta: float = 0.001,
-) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
-    """GRPO policy-gradient loss with KL penalty against a reference model.
-
-    This is the basic (on-policy) GRPO loss without importance weighting.
-    For importance-weighted GRPO, use ``make_grpo_tis_loss_fn`` via
-    ``ISConfig(enabled=True)``.
-    """
-
-    def loss_fn(
-        data: List[tinker.Datum],
-        logprobs_list: List[torch.Tensor],
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
-        total_loss = torch.tensor(0.0, requires_grad=True)
-        total_kl = 0.0
-        num_tokens = 0
-        response_start = max(0, prompt_len - 1)
-
-        for i, pi_logprobs in enumerate(logprobs_list):
-            adv = advantages[i]
-            ref_lp = ref_logprobs[i]
-
-            resp_pi = pi_logprobs[response_start:]
-            resp_len = len(resp_pi)
-            if resp_len == 0:
-                continue
-
-            resp_ref = torch.tensor(
-                [ref_lp[response_start + j] if (response_start + j) < len(ref_lp) else 0.0 for j in range(resp_len)],
-                dtype=torch.float32,
-            )
-
-            loss_i = ((-adv + kl_beta) * resp_pi).sum()
-            total_loss = total_loss + loss_i
-
-            total_kl += (resp_pi.detach() - resp_ref).sum().item()
-            num_tokens += resp_len
-
-        metrics: Dict[str, float] = {
-            "mean_kl": total_kl / num_tokens if num_tokens > 0 else 0.0,
-        }
-        return total_loss, metrics
-
-    return loss_fn
 
 
 def make_dpo_loss_fn(
@@ -99,7 +52,7 @@ def make_sft_loss_fn(
     response_start: int,
     target_tokens: List[int],
 ) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
-    """Cross-entropy loss over response tokens only."""
+    """Cross-entropy loss over response tokens only (single-sample)."""
     targets = torch.tensor(target_tokens, dtype=torch.long)
 
     def loss_fn(
@@ -114,5 +67,62 @@ def make_sft_loss_fn(
         with torch.no_grad():
             ppl = torch.exp(ce).item()
         return ce, {"ce_loss": ce.item(), "ppl": ppl, "response_tokens": len(resp_t)}
+
+    return loss_fn
+
+
+def make_batch_sft_loss_fn(
+    prompt_token_counts: List[int],
+) -> Callable[[List[tinker.Datum], List[torch.Tensor]], Tuple[torch.Tensor, Dict[str, float]]]:
+    """Cross-entropy loss over response tokens for a *batch* of samples.
+
+    Each sample may have a different prompt length. The loss is averaged across
+    all response tokens in the batch (token-level mean), matching the behaviour
+    of ``train_sft_tinker_sdk.py``.
+
+    Args:
+        prompt_token_counts: Per-sample prompt token counts. Tokens before this
+            boundary are masked (no gradient contribution).
+    """
+
+    def loss_fn(
+        data: List[tinker.Datum],
+        logprobs_list: List[torch.Tensor],
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+        assert len(data) == len(logprobs_list)
+        assert len(prompt_token_counts) == len(logprobs_list)
+
+        total_loss = torch.tensor(0.0)
+        total_response_tokens = 0
+        total_nll = 0.0
+
+        for i, logprobs in enumerate(logprobs_list):
+            response_start = max(0, prompt_token_counts[i] - 1)
+            response_logprobs = logprobs[response_start:]
+            n = len(response_logprobs)
+            if n == 0:
+                continue
+            sample_nll = -response_logprobs.sum()
+            total_loss = total_loss + sample_nll
+            total_response_tokens += n
+            with torch.no_grad():
+                total_nll += sample_nll.item()
+
+        if total_response_tokens > 0:
+            avg_loss = total_loss / total_response_tokens
+        else:
+            avg_loss = total_loss
+
+        with torch.no_grad():
+            avg_nll = total_nll / total_response_tokens if total_response_tokens > 0 else 0.0
+            ppl = torch.exp(torch.tensor(avg_nll)).item()
+
+        return avg_loss, {
+            "ce_loss": avg_nll,
+            "ce_loss_sum": total_nll,
+            "ppl": ppl,
+            "response_tokens": total_response_tokens,
+            "batch_size": len(logprobs_list),
+        }
 
     return loss_fn

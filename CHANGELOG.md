@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.0.0-alpha.29 (2026-02-26)
+
+Full Changelog: [v1.0.0-alpha.28...v1.0.0-alpha.29](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.28...v1.0.0-alpha.29)
+
+### Features
+
+* add client-side max seq length filter and align defaults ([cbac95f](https://github.com/fw-ai-external/python-sdk/commit/cbac95ff8d2b1a1b8776b0ddb6ca0107460c063b))
+* training shape auto-config, DAPO/GSPO losses, deployment readiness probing ([4d1f333](https://github.com/fw-ai-external/python-sdk/commit/4d1f3337b9c8da3f46e9a6fb3318188b004955a3))
+
+
+### Bug Fixes
+
+* align DAPO/GSPO loss behavior with reference implementations ([4f65e1e](https://github.com/fw-ai-external/python-sdk/commit/4f65e1e3dbc3d6837204c7066a1bbd95be9dc6b6))
+* align TIS with slime -- add icepop, safe ratio, default clip=2.0 ([2acdcc3](https://github.com/fw-ai-external/python-sdk/commit/2acdcc3a3e19752ae5de7eb300d0f153d5521a33))
+* clarify weight sync variable naming in cookbook recipes ([f213b88](https://github.com/fw-ai-external/python-sdk/commit/f213b889d70ffc7c1b9258f6e592243ec5a56633))
+* orthogonal TIS, deployment parallelization, stale CISPO refs ([0a90ecb](https://github.com/fw-ai-external/python-sdk/commit/0a90ecb24974711e8905034a693ad073f9bf149e))
+* pass return_dict=False to apply_chat_template for transformers&gt;=5 compat ([5a660aa](https://github.com/fw-ai-external/python-sdk/commit/5a660aa65933e0b7e3efd109a627679318c0542f))
+* resolve pyright lint errors in train_sft.py ([586f1c1](https://github.com/fw-ai-external/python-sdk/commit/586f1c1262ef0f1b3e9b075254fa1a32501e07a3))
+* return_dict compatibility, training shape error messages, GSPO PPO clipping ([928a09e](https://github.com/fw-ai-external/python-sdk/commit/928a09ee4203dac42f903c0961eed2c20b259831))
+* skip shape-derived fields in trainer API when using training shapes ([72e0bcc](https://github.com/fw-ai-external/python-sdk/commit/72e0bccb7642878ea004f1770a86684f2beb4a2c))
+* sort imports to pass ruff I001 lint ([0d3d8ec](https://github.com/fw-ai-external/python-sdk/commit/0d3d8ec08584dfc24f39b507b5edc77b3acd3716))
+* trim redundant and over-mocked tests ([df3060e](https://github.com/fw-ai-external/python-sdk/commit/df3060e7d6807ec50874dc2bcb669361dc00eb2e))
+
+
+### Chores
+
+* **internal:** make `test_proxy_environment_variables` more resilient to env ([6de8f74](https://github.com/fw-ai-external/python-sdk/commit/6de8f74802069b6323d670835955bcdaae92a009))
+
+
+### Refactors
+
+* simplify TIS to vanilla implementation with safety clamp ([7f2d7f1](https://github.com/fw-ai-external/python-sdk/commit/7f2d7f1342c18c2f3e5043698b8c657121e1e7df))
+
 ## 1.0.0-alpha.28 (2026-02-23)
 
 Full Changelog: [v1.0.0-alpha.27...v1.0.0-alpha.28](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.27...v1.0.0-alpha.28)

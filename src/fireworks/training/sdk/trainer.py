@@ -41,6 +41,28 @@ class TrainerServiceEndpoint:
 
 
 @dataclass
+class TrainingShapeProfile:
+    """Resolved training shape profile from the control plane.
+
+    Contains all shape-derived config: region, accelerator, image tag,
+    sharding, deployment shape, etc.  Returned by
+    :meth:`TrainerJobManager.resolve_training_profile`.
+    """
+
+    training_shape_version: str
+    trainer_image_tag: str
+    max_supported_context_length: int
+    node_count: int
+    deployment_shape_version: str
+    deployment_image_tag: str
+    accelerator_type: str
+    accelerator_count: int
+    base_model_weight_precision: str
+    pipeline_parallelism: int = 1
+    """Pipeline parallelism degree from the training shape's sharding scheme."""
+
+
+@dataclass
 class TrainerJobConfig:
     """Configuration for creating a trainer job."""
 
@@ -107,6 +129,69 @@ class TrainerJobManager:
         if self.additional_headers:
             headers.update(self.additional_headers)
         return headers
+
+    # -- Training shape resolution ------------------------------------------------
+
+    def resolve_training_profile(
+        self,
+        training_shape_id: str,
+        **_kwargs,
+    ) -> TrainingShapeProfile:
+        """Fetch a training shape from the control plane.
+
+        Reads the training shape resource and extracts all shape-derived
+        config (region, accelerator, image tag, deployment shape, etc.).
+        Uses the standard ``GET /v1/accounts/{id}/trainingShapes/{shapeId}``
+        endpoint which is accessible to account owners.
+
+        Args:
+            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``).
+
+        Returns:
+            :class:`TrainingShapeProfile` with all shape-derived fields.
+        """
+        url = f"{self.base_url}/v1/accounts/{self.account_id}/trainingShapes/{training_shape_id}"
+        resp = request_with_retries(
+            requests.get, url, headers=self._headers(),
+            timeout=30, verify=self._verify_ssl,
+        )
+        if not resp.ok:
+            error_msg = parse_api_error(resp)
+            if resp.status_code == 404:
+                solution = (
+                    f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
+                    f"Verify the training_shape_id is correct and the shape exists."
+                )
+            elif resp.status_code == 403:
+                solution = (
+                    f"Permission denied for training shape '{training_shape_id}'. "
+                    f"Ensure your account owns or has access to this shape."
+                )
+            else:
+                solution = "Verify the training_shape_id and account have the shape registered."
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
+                    error_msg,
+                    solution,
+                    docs_url=DOCS_RLOR,
+                )
+            )
+        data = resp.json()
+        sharding = data.get("trainerShardingScheme", {}) or {}
+        pp = int(sharding.get("pipelineParallelism", 1) or 1)
+        return TrainingShapeProfile(
+            training_shape_version=data.get("name", ""),
+            trainer_image_tag=data.get("trainerImageTag", ""),
+            max_supported_context_length=data.get("maxSupportedContextLength", 0),
+            node_count=data.get("nodeCount", 1),
+            deployment_shape_version=data.get("deploymentShapeVersion", ""),
+            deployment_image_tag=data.get("deploymentImageTag", ""),
+            accelerator_type=data.get("acceleratorType", ""),
+            accelerator_count=data.get("acceleratorCount", 0),
+            base_model_weight_precision=data.get("baseModelWeightPrecision", ""),
+            pipeline_parallelism=pp,
+        )
 
     # -- Low-level REST calls --------------------------------------------------
 

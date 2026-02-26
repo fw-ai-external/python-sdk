@@ -34,6 +34,7 @@ Usage::
 
 from __future__ import annotations
 
+import time
 import logging
 from dataclasses import field, dataclass
 
@@ -138,18 +139,56 @@ class WeightSyncer:
             logger.warning("Could not check deployment state: %s", e)
             return None
 
+    def wait_for_hotload_ready(self, timeout_s: int = 300, poll_interval_s: int = 5) -> None:
+        """Block until the deployment's hot load manager is initialized.
+
+        The deployment's healthz may return 200 before the internal process
+        group and hot load subsystem are fully ready.  Sending a hotload
+        request in that window crashes the serving container.  This method
+        polls the hotload status endpoint and waits for a valid ``replicas``
+        response, which indicates the hot load manager is accepting requests.
+        """
+        if not self._hotload_enabled:
+            return
+        start = time.time()
+        while time.time() - start < timeout_s:
+            try:
+                status = self.deploy_mgr.hotload_check_status(
+                    deployment_id=self.deployment_id,
+                    base_model=self.base_model,
+                )
+                replicas = status.get("replicas", [])
+                if replicas:
+                    logger.info(
+                        "Hotload manager ready (replicas=%d, %ds)",
+                        len(replicas),
+                        int(time.time() - start),
+                    )
+                    return
+            except Exception:
+                pass
+            elapsed = int(time.time() - start)
+            logger.info("Waiting for hotload manager to initialize (%ds)...", elapsed)
+            time.sleep(poll_interval_s)
+        raise TimeoutError(
+            f"Deployment hotload manager not ready after {timeout_s}s. "
+            f"The serving container may still be initializing its process group."
+        )
+
     def _ensure_deployment_checked(self) -> None:
         """One-time check of deployment state before the first hotload.
 
-        Detects if the deployment has a snapshot from a previous session.
-        Forces the first hotload to be FULL (no incremental) regardless
-        of internal state, since the previous session's delta chain is
-        incompatible with this session's snapshots.
+        Waits for the hotload manager to be initialized, then detects if the
+        deployment has a snapshot from a previous session.  Forces the first
+        hotload to be FULL (no incremental) regardless of internal state,
+        since the previous session's delta chain is incompatible with this
+        session's snapshots.
         """
         if self._deployment_checked:
             return
         self._deployment_checked = True
 
+        self.wait_for_hotload_ready()
         current = self.check_deployment_state()
         if current:
             # Deployment has an existing snapshot. Our session's snapshots

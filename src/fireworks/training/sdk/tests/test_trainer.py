@@ -144,3 +144,33 @@ class TestReconnectAndWait:
         mock_get.return_value = {"state": "JOB_STATE_CREATING"}
         with pytest.raises(RuntimeError, match="stuck"):
             mgr.reconnect_and_wait("j", max_wait_for_resumable_s=5)
+
+
+class TestResolveTrainingProfile:
+    def test_parses_sharding(self):
+        """resolve_training_profile extracts pipeline_parallelism from API response."""
+        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        with patch("fireworks.training.sdk.trainer.request_with_retries") as mock_req:
+            resp = MagicMock()
+            resp.ok = True
+            resp.json.return_value = {
+                "name": "shape-v1",
+                "trainerImageTag": "0.33.0",
+                "maxSupportedContextLength": 8192,
+                "nodeCount": 2,
+                "deploymentShapeVersion": "dsv",
+                "deploymentImageTag": "img",
+                "acceleratorType": "NVIDIA_H100_80GB",
+                "acceleratorCount": 8,
+                "baseModelWeightPrecision": "bfloat16",
+                "trainerShardingScheme": {
+                    "tensorParallelism": 1,
+                    "pipelineParallelism": 4,
+                    "contextParallelism": 1,
+                    "expertParallelism": 1,
+                },
+            }
+            mock_req.return_value = resp
+            profile = mgr.resolve_training_profile("ts-test")
+            assert profile.pipeline_parallelism == 4
+            assert profile.max_supported_context_length == 8192
