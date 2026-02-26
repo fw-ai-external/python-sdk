@@ -38,9 +38,9 @@ from fireworks.training.cookbook.utils import (
     wandb_finish,
     validate_config,
     log_metrics_json,
-    make_batch_sft_loss_fn,
     setup_deployment,
     create_trainer_job,
+    make_batch_sft_loss_fn,
 )
 from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
 from fireworks.training.sdk.weight_syncer import WeightSyncer
@@ -86,12 +86,15 @@ def main(
     cfg = config
 
     validate_config(cfg.base_model, cfg.dataset, cfg.hotload, cfg.deployment, cfg.infra, cfg.resume)
-    setup_wandb(cfg.wandb, {
-        "lr": cfg.learning_rate,
-        "epochs": cfg.epochs,
-        "batch_size": cfg.batch_size,
-        "grad_accum": cfg.grad_accum,
-    })
+    setup_wandb(
+        cfg.wandb,
+        {
+            "lr": cfg.learning_rate,
+            "epochs": cfg.epochs,
+            "batch_size": cfg.batch_size,
+            "grad_accum": cfg.grad_accum,
+        },
+    )
 
     if not cfg.tokenizer_model:
         raise ValueError(
@@ -168,14 +171,19 @@ def main(
 
         prompt_messages = [m for m in messages if m.get("role") != "assistant"]
         prompt_tokens = tokenizer.apply_chat_template(
-            prompt_messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            prompt_messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
         training_data.append({"tokens": full_tokens, "prompt_len": len(prompt_tokens)})
 
     if filtered_count > 0:
         logger.info(
             "Seq-length filter: %d/%d examples filtered (len > %d or len < 2)",
-            filtered_count, len(raw_data), cfg.max_seq_len,
+            filtered_count,
+            len(raw_data),
+            cfg.max_seq_len,
         )
     logger.info("Prepared %d training examples", len(training_data))
     if not training_data:
@@ -197,9 +205,7 @@ def main(
         return tinker.Datum(
             model_input=tinker.ModelInput.from_ints(tokens[:-1]),
             loss_fn_inputs={
-                "target_tokens": tinker.TensorData(
-                    data=tokens[1:], dtype="int64", shape=[len(tokens) - 1]
-                ),
+                "target_tokens": tinker.TensorData(data=tokens[1:], dtype="int64", shape=[len(tokens) - 1]),
             },
         )
 
@@ -228,7 +234,10 @@ def main(
                 ppl = torch.exp(torch.tensor(avg_loss)).item()
                 logger.info(
                     "Step %d/%d | Loss: %.4f | PPL: %.2f",
-                    step, total_steps, avg_loss, ppl,
+                    step,
+                    total_steps,
+                    avg_loss,
+                    ppl,
                 )
                 log_metrics_json(step, ce_loss=avg_loss, ppl=ppl)
                 wandb_log({"train/ce_loss": avg_loss, "train/ppl": ppl}, step)
