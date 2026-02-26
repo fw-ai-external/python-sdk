@@ -94,10 +94,14 @@ class SaveSamplerResult:
             SDK users -- they are only logged server-side.
         snapshot_name: The actual snapshot name used (with session_id suffix).
             Use this for ``hotload(snapshot_identity=...)`` calls.
+        rdma_manifest_ref: If the trainer published an RDMA weight manifest,
+            this is the etcd key.  None when RDMA is not configured or the
+            trainer is in a different region.
     """
 
     path: str
     snapshot_name: str
+    rdma_manifest_ref: str | None = None
 
 
 # -- FiretitanTrainingClient ---------------------------------------------------
@@ -274,11 +278,15 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
             assert resp.path is not None
-            return resp.path
+            return resp.path, getattr(resp, "rdma_manifest_ref", None)
 
-        path = self.holder.run_coroutine_threadsafe(_save()).result()
+        path, rdma_manifest_ref = self.holder.run_coroutine_threadsafe(_save()).result()
         self._saved_sampler_names.add(actual_name)
-        return SaveSamplerResult(path=path, snapshot_name=actual_name)
+        return SaveSamplerResult(
+            path=path,
+            snapshot_name=actual_name,
+            rdma_manifest_ref=rdma_manifest_ref,
+        )
 
     def save_state(
         self,

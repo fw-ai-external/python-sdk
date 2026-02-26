@@ -200,6 +200,7 @@ class WeightSyncer:
                 name,
                 checkpoint_type=ckpt_type,
             )
+            self._last_rdma_manifest_ref = save_result.rdma_manifest_ref
             snapshot_name = save_result.snapshot_name
             self._mark_first_save_done()
             return snapshot_name
@@ -207,11 +208,16 @@ class WeightSyncer:
             logger.warning("Save error for '%s': %s.", name, e)
             return None
 
-    def hotload(self, snapshot_name: str) -> bool:
+    def hotload(self, snapshot_name: str, rdma_manifest_ref: str | None = None) -> bool:
         """Hotload a previously saved snapshot to the deployment.
 
         Use after :meth:`save_only` when save and hotload need to be
         separated (e.g., with a deployment warmup in between).
+
+        Args:
+            snapshot_name: The snapshot identity to hotload.
+            rdma_manifest_ref: etcd key for RDMA manifest.  If None, uses
+                the ref from the last :meth:`save_only` call (if any).
 
         Returns:
             True on success, False on failure.
@@ -219,6 +225,7 @@ class WeightSyncer:
         if not self._hotload_enabled:
             return False
         self._ensure_deployment_checked()
+        rdma_ref = rdma_manifest_ref or getattr(self, "_last_rdma_manifest_ref", None)
         try:
             ckpt_type = "delta" if self.base_identity and self.base_identity != snapshot_name else "base"
             incremental = self._build_incremental_metadata(ckpt_type)
@@ -227,6 +234,7 @@ class WeightSyncer:
                 base_model=self.base_model,
                 snapshot_identity=snapshot_name,
                 incremental_snapshot_metadata=incremental,
+                rdma_manifest_ref=rdma_ref,
                 timeout_seconds=self.hotload_timeout,
             )
             if ok:
@@ -261,6 +269,7 @@ class WeightSyncer:
                 checkpoint_type=ckpt_type,
             )
             snapshot_name = save_result.snapshot_name
+            rdma_ref = save_result.rdma_manifest_ref
             self._mark_first_save_done()
 
             if self._hotload_enabled:
@@ -271,6 +280,7 @@ class WeightSyncer:
                     base_model=self.base_model,
                     snapshot_identity=snapshot_name,
                     incremental_snapshot_metadata=incremental,
+                    rdma_manifest_ref=rdma_ref,
                     timeout_seconds=self.hotload_timeout,
                 )
                 if ok:

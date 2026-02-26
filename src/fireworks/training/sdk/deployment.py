@@ -382,6 +382,7 @@ class DeploymentManager:
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
+        rdma_manifest_ref: str | None = None,
         timeout: int = 60,
     ) -> dict[str, Any]:
         """Load a weight snapshot onto a deployment via the gateway.
@@ -392,6 +393,9 @@ class DeploymentManager:
             snapshot_identity: Snapshot identity to load.
             incremental_snapshot_metadata: For delta loads — must include
                 previous_snapshot_identity, compression_format, checksum_format.
+            rdma_manifest_ref: etcd key for RDMA weight manifest.  When set,
+                the inference deployment will attempt to pull weights via RDMA
+                instead of from GCS.
             timeout: Request timeout in seconds.
         """
         headers = {
@@ -406,6 +410,8 @@ class DeploymentManager:
         payload: dict[str, Any] = {"identity": snapshot_identity}
         if incremental_snapshot_metadata:
             payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
+        if rdma_manifest_ref:
+            payload["rdma_manifest_ref"] = rdma_manifest_ref
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
         logger.info("Hotloading %s snapshot '%s' to deployment '%s'", ckpt_type, snapshot_identity, deployment_id)
@@ -553,6 +559,7 @@ class DeploymentManager:
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
+        rdma_manifest_ref: str | None = None,
         timeout_seconds: int = 400,
     ) -> bool:
         """Hotload a snapshot and wait for it to complete. Returns True on success."""
@@ -561,6 +568,7 @@ class DeploymentManager:
             base_model=base_model,
             snapshot_identity=snapshot_identity,
             incremental_snapshot_metadata=incremental_snapshot_metadata,
+            rdma_manifest_ref=rdma_manifest_ref,
         )
         return self.wait_for_hotload(
             deployment_id=deployment_id,
