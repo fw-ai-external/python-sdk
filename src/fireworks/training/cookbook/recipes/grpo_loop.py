@@ -377,6 +377,7 @@ def main(
             # -- Build datums ---
             prompt_len = sampled[0].prompt_len
             data: List[tinker.Datum] = []
+            ref_data: List[tinker.Datum] = []
             adv_filtered: List[float] = []
             inf_logprobs_aligned: List[List[float]] = []
 
@@ -393,13 +394,21 @@ def main(
                         completion_only=cfg.router_replay_completion_only,
                     )
 
-                datum = tinker.Datum(
+                policy_datum = tinker.Datum(
                     model_input=tinker.ModelInput.from_ints(tokens[:-1], routing_matrices=rm),
                     loss_fn_inputs={
                         "target_tokens": tinker.TensorData(data=tokens[1:], dtype="int64", shape=[model_input_len]),
                     },
                 )
-                data.append(datum)
+                # Keep reference forward router-agnostic.
+                ref_datum = tinker.Datum(
+                    model_input=tinker.ModelInput.from_ints(tokens[:-1]),
+                    loss_fn_inputs={
+                        "target_tokens": tinker.TensorData(data=tokens[1:], dtype="int64", shape=[model_input_len]),
+                    },
+                )
+                data.append(policy_datum)
+                ref_data.append(ref_datum)
                 adv_filtered.append(advantages[idx])
 
                 if needs_inf_lp:
@@ -421,8 +430,9 @@ def main(
             if not data:
                 continue
 
+            ref_fwd = reference.forward(ref_data, "cross_entropy").result()
             # -- Reference forward ---
-            ref_fwd = reference.forward(data, "cross_entropy").result()
+            ref_fwd = reference.forward(ref_data, "cross_entropy").result()
             ref_logprobs = [out["logprobs"].data for out in ref_fwd.loss_fn_outputs]
 
             # -- Collect into buffer ---
