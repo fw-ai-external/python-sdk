@@ -1,30 +1,36 @@
 #!/usr/bin/env python3
-"""Minimal ORPO (Odds Ratio Preference Optimization) training loop.
+"""ORPO (Odds Ratio Preference Optimization) training loop.
 
-A readable, modifiable preference-optimization loop using the Fireworks RLOR API.
-Unlike DPO, ORPO does *not* require a reference model -- it combines SFT loss on
-the chosen response with an odds-ratio loss contrasting chosen vs rejected, all
-from a single policy model.
-
-Architecture:
-    - Single RLOR job: forward_backward_custom + optim_step (trainable)
-    - No reference model needed (key advantage over DPO)
+Uses a single RLOR trainer job -- no reference model needed (unlike DPO).
 
 Loss:
     L_ORPO = L_SFT(chosen) + lambda * L_OR
-    L_SFT  = -mean(logprobs_chosen)   (cross-entropy on chosen response)
     L_OR   = -log(sigmoid(log(odds_chosen / odds_rejected)))
 
-Dataset format (JSONL, preference pairs -- same as DPO):
+Dataset format (JSONL, same as DPO):
     {"chosen": {"messages": [...]}, "rejected": {"messages": [...]}}
 
 Usage:
     export FIREWORKS_API_KEY=...
     export FIREWORKS_ACCOUNT_ID=...
-    python cookbook/recipes/orpo_loop.py --dataset /path/to/preference_data.jsonl
+    export FIREWORKS_BASE_URL=...          # optional, defaults to https://api.fireworks.ai
+    python cookbook/recipes/orpo_loop.py
 
-Default config targets Qwen3-235B on 2 nodes (16 GPUs) with expert parallelism.
-Adjust Config below for other models/setups.
+    # override dataset / tokenizer via env vars:
+    ORPO_DATASET=/path/to/data.jsonl ORPO_TOKENIZER=Qwen/Qwen3-8B python ...
+
+Config args:
+    base_model       Fireworks model ID (default: qwen3-235b-a22b-instruct-2507)
+    dataset          Path to preference JSONL file
+    tokenizer_model  HuggingFace model name for client-side tokenization
+    orpo_lambda      Weight for odds-ratio loss term (default: 1.0)
+    learning_rate    Adam learning rate (default: 1e-5)
+    epochs           Number of passes over the dataset (default: 1)
+    grad_accum       Gradient accumulation steps (default: 4)
+    max_seq_len      Max token length per sequence (default: 128000)
+    lora_rank        LoRA rank, 0 for full fine-tuning (default: 0)
+
+Infrastructure defaults target Qwen3-235B on 2 nodes with CP=16, EP=8.
 """
 
 from __future__ import annotations
@@ -69,13 +75,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
-    # -- Model ---------------------------------------------------------------
     base_model: str = "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
     dataset: str = ""
-    tokenizer_model: str = ""  # HuggingFace model name, e.g. "Qwen/Qwen3-235B-A22B-Instruct-2507"
+    tokenizer_model: str = ""
 
-    # -- ORPO hyper-parameters -----------------------------------------------
-    orpo_lambda: float = 1.0  # weight for the odds-ratio loss term
+    orpo_lambda: float = 1.0
     learning_rate: float = 1e-5
     epochs: int = 1
     grad_accum: int = 4
@@ -83,7 +87,6 @@ class Config:
     max_pairs: int | None = None
     lora_rank: int = 0
 
-    # -- Infrastructure (Qwen3-235B defaults from firectl) -------------------
     infra: InfraConfig = field(
         default_factory=lambda: InfraConfig(
             region="US_VIRGINIA_1",
@@ -116,7 +119,7 @@ class Config:
 
 
 # ---------------------------------------------------------------------------
-# Main training loop
+# Main
 # ---------------------------------------------------------------------------
 
 
@@ -145,7 +148,7 @@ def main(
         },
     )
 
-    # -- Setup infrastructure ------------------------------------------------
+    # -- Infrastructure ------------------------------------------------------
 
     api_key = os.environ["FIREWORKS_API_KEY"]
     account = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
@@ -162,7 +165,6 @@ def main(
 
     setup_deployment(deploy_mgr, cfg.deployment, cfg.base_model, cfg.infra)
 
-    # Single RLOR job -- ORPO needs no reference model
     endpoint = create_trainer_job(
         rlor_mgr,
         base_model=cfg.base_model,
@@ -191,7 +193,7 @@ def main(
     step_offset, _ = setup_resume(client, cfg.resume)
     adam_params = tinker.AdamParams(learning_rate=cfg.learning_rate, **DEFAULT_ADAM)
 
-    # -- Prepare data --------------------------------------------------------
+    # -- Data ----------------------------------------------------------------
 
     import transformers
 
@@ -229,9 +231,7 @@ def main(
         if len(chosen_tokens) < 2 or len(rejected_tokens) < 2:
             continue
 
-        # Prompt = common prefix between chosen/rejected token sequences
         prompt_len = find_common_prefix_length(chosen_tokens, rejected_tokens)
-
         pair_cache.append(
             {
                 "chosen_tokens": chosen_tokens,
@@ -307,7 +307,6 @@ def main(
             agg["count"] += 1
             accum_count += 1
 
-            # Optimizer step
             if accum_count >= cfg.grad_accum:
                 client.optim_step(adam_params).result()
                 step += 1
@@ -348,7 +347,6 @@ def main(
 
                 agg = {k: 0.0 for k in agg}
 
-        # Flush remaining gradients at end of epoch
         if accum_count > 0:
             client.optim_step(adam_params).result()
             step += 1
@@ -360,8 +358,6 @@ def main(
     if step > step_offset and (hl.hot_load_interval > 0 or hl.dcp_save_interval > 0):
         weight_syncer.save_and_hotload(f"final-step-{step}")
 
-    # Always save a full base checkpoint so the trained weights are persisted
-    # on the trainer's GCS storage (HF safetensors format).
     if step > step_offset:
         logger.info("Saving final base checkpoint (step %d)...", step)
         client.inner.save_weights_for_sampler_ext(
@@ -384,7 +380,6 @@ if __name__ == "__main__":
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
 
-    # Default dataset: sample_orpo_data.jsonl next to this script
     default_dataset = str(pathlib.Path(__file__).parent / "sample_orpo_data.jsonl")
     cfg = Config(
         dataset=os.environ.get("ORPO_DATASET", default_dataset),
