@@ -149,6 +149,7 @@ def main(
         rlor_mgr, endpoint.job_id, cfg.base_model, cfg.lora_rank
     )
 
+    job_id = endpoint.job_id
     step_offset, _ = setup_resume(client, cfg.resume)
     adam_params = tinker.AdamParams(learning_rate=cfg.learning_rate, **DEFAULT_ADAM)
 
@@ -225,113 +226,119 @@ def main(
         "count": 0,
     }
 
-    for epoch in range(cfg.epochs):
-        random.shuffle(pair_cache)
-        step_t0 = time.monotonic()
-        for pair in pair_cache:
-            chosen_tokens = pair["chosen_tokens"]
-            rejected_tokens = pair["rejected_tokens"]
-            response_start = max(0, pair["prompt_len"] - 1)
+    try:
+        for epoch in range(cfg.epochs):
+            random.shuffle(pair_cache)
+            step_t0 = time.monotonic()
+            for pair in pair_cache:
+                chosen_tokens = pair["chosen_tokens"]
+                rejected_tokens = pair["rejected_tokens"]
+                response_start = max(0, pair["prompt_len"] - 1)
 
-            chosen_datum = tinker.Datum(
-                model_input=tinker.ModelInput.from_ints(chosen_tokens[:-1]),
-                loss_fn_inputs={
-                    "target_tokens": tinker.TensorData(
-                        data=chosen_tokens[1:],
-                        dtype="int64",
-                        shape=[len(chosen_tokens) - 1],
-                    )
-                },
-            )
-            rejected_datum = tinker.Datum(
-                model_input=tinker.ModelInput.from_ints(rejected_tokens[:-1]),
-                loss_fn_inputs={
-                    "target_tokens": tinker.TensorData(
-                        data=rejected_tokens[1:],
-                        dtype="int64",
-                        shape=[len(rejected_tokens) - 1],
-                    )
-                },
-            )
+                chosen_datum = tinker.Datum(
+                    model_input=tinker.ModelInput.from_ints(chosen_tokens[:-1]),
+                    loss_fn_inputs={
+                        "target_tokens": tinker.TensorData(
+                            data=chosen_tokens[1:],
+                            dtype="int64",
+                            shape=[len(chosen_tokens) - 1],
+                        )
+                    },
+                )
+                rejected_datum = tinker.Datum(
+                    model_input=tinker.ModelInput.from_ints(rejected_tokens[:-1]),
+                    loss_fn_inputs={
+                        "target_tokens": tinker.TensorData(
+                            data=rejected_tokens[1:],
+                            dtype="int64",
+                            shape=[len(rejected_tokens) - 1],
+                        )
+                    },
+                )
 
-            loss_fn = make_orpo_loss_fn(response_start, cfg.orpo_lambda)
-            result = client.forward_backward_custom(
-                [chosen_datum, rejected_datum], loss_fn
-            ).result()
+                loss_fn = make_orpo_loss_fn(response_start, cfg.orpo_lambda)
+                result = client.forward_backward_custom(
+                    [chosen_datum, rejected_datum], loss_fn
+                ).result()
 
-            metrics = result.metrics
-            agg["orpo_loss"] += metrics["orpo_loss"]
-            agg["sft_loss"] += metrics["sft_loss"]
-            agg["or_loss"] += metrics["or_loss"]
-            agg["log_odds_ratio"] += metrics["log_odds_ratio"]
-            agg["accuracy"] += metrics["accuracy"]
-            agg["tokens"] += len(chosen_tokens) + len(rejected_tokens)
-            agg["count"] += 1
-            accum_count += 1
+                metrics = result.metrics
+                agg["orpo_loss"] += metrics["orpo_loss"]
+                agg["sft_loss"] += metrics["sft_loss"]
+                agg["or_loss"] += metrics["or_loss"]
+                agg["log_odds_ratio"] += metrics["log_odds_ratio"]
+                agg["accuracy"] += metrics["accuracy"]
+                agg["tokens"] += len(chosen_tokens) + len(rejected_tokens)
+                agg["count"] += 1
+                accum_count += 1
 
-            if accum_count >= cfg.grad_accum:
+                if accum_count >= cfg.grad_accum:
+                    client.optim_step(adam_params).result()
+                    step += 1
+                    accum_count = 0
+
+                    step_elapsed = time.monotonic() - step_t0
+                    step_tokens = agg["tokens"]
+                    tokens_per_sec = step_tokens / step_elapsed if step_elapsed > 0 else 0.0
+
+                    n = agg["count"]
+                    if n > 0:
+                        avg = {k: agg[k] / n for k in agg if k not in ("count", "tokens")}
+                        logger.info(
+                            "Step %d/%d | ORPO: %.4f | SFT: %.4f | OR: %.4f | "
+                            "LogOR: %+.4f | Acc: %.1f%% | %.1f tok/s (%.1fs)",
+                            step,
+                            total_steps,
+                            avg["orpo_loss"],
+                            avg["sft_loss"],
+                            avg["or_loss"],
+                            avg["log_odds_ratio"],
+                            avg["accuracy"] * 100,
+                            tokens_per_sec,
+                            step_elapsed,
+                        )
+                        log_metrics_json(step, tokens_per_sec=tokens_per_sec, **avg)
+                        wandb_log(
+                            {
+                                "train/orpo_loss": avg["orpo_loss"],
+                                "train/sft_loss": avg["sft_loss"],
+                                "train/or_loss": avg["or_loss"],
+                                "train/log_odds_ratio": avg["log_odds_ratio"],
+                                "train/accuracy": avg["accuracy"],
+                                "train/tokens_per_sec": tokens_per_sec,
+                                "train/step_time_sec": step_elapsed,
+                                "train/step_tokens": step_tokens,
+                                "train/epoch": epoch + 1,
+                            },
+                            step,
+                        )
+
+                    agg = {k: 0.0 for k in agg}
+                    step_t0 = time.monotonic()
+
+            if accum_count > 0:
                 client.optim_step(adam_params).result()
                 step += 1
                 accum_count = 0
 
-                step_elapsed = time.monotonic() - step_t0
-                step_tokens = agg["tokens"]
-                tokens_per_sec = step_tokens / step_elapsed if step_elapsed > 0 else 0.0
+        # -- Final checkpoint ------------------------------------------------
 
-                n = agg["count"]
-                if n > 0:
-                    avg = {k: agg[k] / n for k in agg if k not in ("count", "tokens")}
-                    logger.info(
-                        "Step %d/%d | ORPO: %.4f | SFT: %.4f | OR: %.4f | "
-                        "LogOR: %+.4f | Acc: %.1f%% | %.1f tok/s (%.1fs)",
-                        step,
-                        total_steps,
-                        avg["orpo_loss"],
-                        avg["sft_loss"],
-                        avg["or_loss"],
-                        avg["log_odds_ratio"],
-                        avg["accuracy"] * 100,
-                        tokens_per_sec,
-                        step_elapsed,
-                    )
-                    log_metrics_json(step, tokens_per_sec=tokens_per_sec, **avg)
-                    wandb_log(
-                        {
-                            "train/orpo_loss": avg["orpo_loss"],
-                            "train/sft_loss": avg["sft_loss"],
-                            "train/or_loss": avg["or_loss"],
-                            "train/log_odds_ratio": avg["log_odds_ratio"],
-                            "train/accuracy": avg["accuracy"],
-                            "train/tokens_per_sec": tokens_per_sec,
-                            "train/step_time_sec": step_elapsed,
-                            "train/step_tokens": step_tokens,
-                            "train/epoch": epoch + 1,
-                        },
-                        step,
-                    )
+        if step > step_offset:
+            logger.info("Saving final base checkpoint (step %d)...", step)
+            client.inner.save_weights_for_sampler_ext(
+                f"final-step-{step}", checkpoint_type="base"
+            ).result(timeout=1800)
+            logger.info("Final base checkpoint saved.")
 
-                agg = {k: 0.0 for k in agg}
-                step_t0 = time.monotonic()
-
-        if accum_count > 0:
-            client.optim_step(adam_params).result()
-            step += 1
-            accum_count = 0
-
-    # -- Final checkpoint ----------------------------------------------------
-
-    if step > step_offset:
-        logger.info("Saving final base checkpoint (step %d)...", step)
-        client.inner.save_weights_for_sampler_ext(
-            f"final-step-{step}", checkpoint_type="base"
-        ).result(timeout=1800)
-        logger.info("Final base checkpoint saved.")
+    finally:
+        # -- Cleanup: always delete the trainer job to free GPU resources ----
+        logger.info("Deleting trainer job %s...", job_id)
+        rlor_mgr.delete(job_id)
+        wandb_finish()
 
     logger.info(
         "Training complete: %d optimizer steps (%d new)", step, step - step_offset
     )
-    wandb_finish()
-    return {"steps": step, "job_id": client.job_id}
+    return {"steps": step, "job_id": job_id}
 
 
 if __name__ == "__main__":
