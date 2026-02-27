@@ -36,35 +36,30 @@ Infrastructure defaults target Qwen3-235B on 2 nodes with CP=16, EP=8.
 from __future__ import annotations
 
 import os
+import time
 import random
 import logging
 from dataclasses import field, dataclass
 
 import tinker
 
-from fireworks.training.sdk import DeploymentManager, TrainerJobManager
+from fireworks.training.sdk import TrainerJobManager
 from fireworks.training.cookbook.utils import (
     DEFAULT_ADAM,
     InfraConfig,
     WandBConfig,
-    DeployConfig,
     ResumeConfig,
-    HotloadConfig,
     ReconnectableClient,
     wandb_log,
     setup_wandb,
     setup_resume,
     wandb_finish,
-    validate_config,
     log_metrics_json,
     make_orpo_loss_fn,
-    setup_deployment,
     create_trainer_job,
     load_preference_dataset,
     find_common_prefix_length,
 )
-from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
-from fireworks.training.sdk.weight_syncer import WeightSyncer
 
 logger = logging.getLogger(__name__)
 
@@ -88,26 +83,7 @@ class Config:
     lora_rank: int = 0
 
     infra: InfraConfig = field(
-        default_factory=lambda: InfraConfig(
-            region="US_VIRGINIA_1",
-            node_count=2,
-            skip_validations=True,
-            extra_args=[
-                "--cp=16",
-                "--ep-comm-backend=deepep",
-                "--ep=8",
-                "--no-compile",
-                "--profile",
-                "--enable-optimizer-offload",
-                "--profile-active-ops=2",
-            ],
-        )
-    )
-    deployment: DeployConfig = field(
-        default_factory=lambda: DeployConfig(create_deployment=False)
-    )
-    hotload: HotloadConfig = field(
-        default_factory=lambda: HotloadConfig(hot_load_interval=0)
+        default_factory=lambda: InfraConfig()
     )
     wandb: WandBConfig = field(
         default_factory=lambda: WandBConfig(
@@ -126,13 +102,13 @@ class Config:
 def main(
     config: Config,
     rlor_mgr: TrainerJobManager | None = None,
-    deploy_mgr: DeploymentManager | None = None,
 ):
     cfg = config
 
-    validate_config(
-        cfg.base_model, cfg.dataset, cfg.hotload, cfg.deployment, cfg.infra, cfg.resume
-    )
+    if not cfg.base_model or not cfg.base_model.startswith("accounts/"):
+        raise ValueError(f"Invalid base_model: '{cfg.base_model}' (expected accounts/...)")
+    if not cfg.dataset:
+        raise ValueError("Config.dataset is required.")
     if not cfg.tokenizer_model:
         raise ValueError(
             "Config.tokenizer_model is required for client-side tokenization. "
@@ -158,12 +134,6 @@ def main(
         rlor_mgr = TrainerJobManager(
             api_key=api_key, account_id=account, base_url=base_url
         )
-    if deploy_mgr is None:
-        deploy_mgr = DeploymentManager(
-            api_key=api_key, account_id=account, base_url=base_url
-        )
-
-    setup_deployment(deploy_mgr, cfg.deployment, cfg.base_model, cfg.infra)
 
     endpoint = create_trainer_job(
         rlor_mgr,
@@ -174,20 +144,9 @@ def main(
         learning_rate=cfg.learning_rate,
         grad_accum=cfg.grad_accum,
         display_name="orpo-trainer",
-        hot_load_deployment_id=cfg.deployment.deployment_id,
     )
     client = ReconnectableClient(
         rlor_mgr, endpoint.job_id, cfg.base_model, cfg.lora_rank
-    )
-
-    weight_syncer = WeightSyncer(
-        policy_client=client.inner,
-        deploy_mgr=deploy_mgr,
-        deployment_id=cfg.deployment.deployment_id,
-        base_model=cfg.base_model,
-        hotload_timeout=cfg.hotload.hot_load_timeout,
-        first_checkpoint_type=cfg.hotload.first_checkpoint_type,
-        compression_format=DEFAULT_DELTA_COMPRESSION,
     )
 
     step_offset, _ = setup_resume(client, cfg.resume)
@@ -262,11 +221,13 @@ def main(
         "or_loss": 0.0,
         "log_odds_ratio": 0.0,
         "accuracy": 0.0,
+        "tokens": 0,
         "count": 0,
     }
 
     for epoch in range(cfg.epochs):
         random.shuffle(pair_cache)
+        step_t0 = time.monotonic()
         for pair in pair_cache:
             chosen_tokens = pair["chosen_tokens"]
             rejected_tokens = pair["rejected_tokens"]
@@ -304,6 +265,7 @@ def main(
             agg["or_loss"] += metrics["or_loss"]
             agg["log_odds_ratio"] += metrics["log_odds_ratio"]
             agg["accuracy"] += metrics["accuracy"]
+            agg["tokens"] += len(chosen_tokens) + len(rejected_tokens)
             agg["count"] += 1
             accum_count += 1
 
@@ -312,12 +274,16 @@ def main(
                 step += 1
                 accum_count = 0
 
+                step_elapsed = time.monotonic() - step_t0
+                step_tokens = agg["tokens"]
+                tokens_per_sec = step_tokens / step_elapsed if step_elapsed > 0 else 0.0
+
                 n = agg["count"]
                 if n > 0:
-                    avg = {k: agg[k] / n for k in agg if k != "count"}
+                    avg = {k: agg[k] / n for k in agg if k not in ("count", "tokens")}
                     logger.info(
                         "Step %d/%d | ORPO: %.4f | SFT: %.4f | OR: %.4f | "
-                        "LogOR: %+.4f | Acc: %.1f%%",
+                        "LogOR: %+.4f | Acc: %.1f%% | %.1f tok/s (%.1fs)",
                         step,
                         total_steps,
                         avg["orpo_loss"],
@@ -325,8 +291,10 @@ def main(
                         avg["or_loss"],
                         avg["log_odds_ratio"],
                         avg["accuracy"] * 100,
+                        tokens_per_sec,
+                        step_elapsed,
                     )
-                    log_metrics_json(step, **avg)
+                    log_metrics_json(step, tokens_per_sec=tokens_per_sec, **avg)
                     wandb_log(
                         {
                             "train/orpo_loss": avg["orpo_loss"],
@@ -334,18 +302,16 @@ def main(
                             "train/or_loss": avg["or_loss"],
                             "train/log_odds_ratio": avg["log_odds_ratio"],
                             "train/accuracy": avg["accuracy"],
+                            "train/tokens_per_sec": tokens_per_sec,
+                            "train/step_time_sec": step_elapsed,
+                            "train/step_tokens": step_tokens,
                             "train/epoch": epoch + 1,
                         },
                         step,
                     )
 
-                hl = cfg.hotload
-                if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
-                    weight_syncer.save_and_hotload(f"step-{step}")
-                if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
-                    weight_syncer.save_dcp(f"step-{step}")
-
                 agg = {k: 0.0 for k in agg}
+                step_t0 = time.monotonic()
 
         if accum_count > 0:
             client.optim_step(adam_params).result()
@@ -353,10 +319,6 @@ def main(
             accum_count = 0
 
     # -- Final checkpoint ----------------------------------------------------
-
-    hl = cfg.hotload
-    if step > step_offset and (hl.hot_load_interval > 0 or hl.dcp_save_interval > 0):
-        weight_syncer.save_and_hotload(f"final-step-{step}")
 
     if step > step_offset:
         logger.info("Saving final base checkpoint (step %d)...", step)
