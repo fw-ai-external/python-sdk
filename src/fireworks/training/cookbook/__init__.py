@@ -5,6 +5,8 @@ Recipes (fork and customise):
     losses -- set ``policy_loss`` to ``"grpo"``, ``"dapo"``, or ``"gspo"``;
     enable TIS on any loss with ``tis_enabled=True``
   - cookbook/recipes/dpo_loop.py:  DPO (preference) training
+  - cookbook/recipes/orpo_loop.py: ORPO (preference) training -- no reference model
+    needed; combines SFT loss with odds-ratio preference loss
   - cookbook/recipes/sft_loop.py:  SFT (supervised) training
 
 Utilities (import from recipes):
