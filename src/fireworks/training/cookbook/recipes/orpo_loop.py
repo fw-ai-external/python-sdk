@@ -324,10 +324,10 @@ def main(
 
         if step > step_offset:
             logger.info("Saving final base checkpoint (step %d)...", step)
-            client.inner.save_weights_for_sampler_ext(
+            result = client.inner.save_weights_for_sampler_ext(
                 f"final-step-{step}", checkpoint_type="base"
-            ).result(timeout=1800)
-            logger.info("Final base checkpoint saved.")
+            )
+            logger.info("Final base checkpoint saved: %s", result.path)
 
     finally:
         # -- Cleanup: always delete the trainer job to free GPU resources ----
