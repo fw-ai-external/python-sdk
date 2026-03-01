@@ -1,6 +1,7 @@
 """Cookbook utilities -- infrastructure, losses, data, logging, and more.
 
-RL-specific utilities (GRPO/DAPO/GSPO losses, TIS, R3, batching) live in
+RL-specific utilities (losses, training loop, PP recommendation,
+importance sampling, router replay) live in
 ``fireworks.training.cookbook.utils.rl``.
 """
 
@@ -16,6 +17,7 @@ __all__ = [
     "StepCallback",
     "WandBConfig",
     "compute_advantages",
+    "compute_pass_at_k",
     "create_trainer_job",
     "resolve_and_apply_shape",
     "encode_text",
@@ -31,8 +33,12 @@ __all__ = [
     "setup_resume",
     "setup_training_client",
     "setup_wandb",
+    "flush_timing",
+    "timed",
+    "timer",
     "validate_config",
     "validate_preflight",
+    "validate_streaming_config",
     "wandb_finish",
     "wandb_log",
 ]
@@ -51,6 +57,7 @@ from fireworks.training.cookbook.utils.infra import (
     setup_training_client,
     resolve_and_apply_shape,
 )
+from fireworks.training.cookbook.utils.timer import timed, timer, flush_timing
 from fireworks.training.cookbook.utils.client import ReconnectableClient
 from fireworks.training.cookbook.utils.config import (
     DEFAULT_ADAM,
@@ -74,5 +81,6 @@ from fireworks.training.cookbook.utils.logging import (
     setup_wandb,
     wandb_finish,
     log_metrics_json,
+    compute_pass_at_k,
 )
-from fireworks.training.cookbook.utils.validation import validate_config, validate_preflight
+from fireworks.training.cookbook.utils.validation import validate_config, validate_preflight, validate_streaming_config

@@ -2,7 +2,7 @@
 
 Provides per-token importance weighting that can be composed with **any**
 base policy loss (GRPO, DAPO, GSPO, etc.).  The architecture follows
-slime/VERL's orthogonal design: base loss computes per-token loss, TIS
+an orthogonal design: base loss computes per-token loss, TIS
 multiplies by clipped importance weights, then the result is summed.
 
 Usage::
@@ -52,7 +52,7 @@ def make_tis_weights_fn(
     """Create a per-sample TIS weights function (vanilla clamped IS).
 
     Computes ``weights = clamp(exp(train_lp - rollout_lp), low, high)``
-    per response token -- the same formula used by slime and VERL.
+    per response token -- the same formula used in common open-source RL stacks.
 
     ``prompt_len`` may be a single int or a per-datum list for multi-prompt
     batched calls.

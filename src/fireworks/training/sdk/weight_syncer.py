@@ -77,6 +77,9 @@ class WeightSyncer:
     base_saved: bool = field(default=False, init=False)
     base_identity: str | None = field(default=None, init=False)
     _deployment_checked: bool = field(default=False, init=False)
+    last_timing: dict = field(default_factory=dict, init=False)
+    """Timing breakdown from the most recent operation (seconds).
+    Reset at the start of each save/hotload/dcp call."""
 
     @property
     def _hotload_enabled(self) -> bool:
@@ -233,12 +236,15 @@ class WeightSyncer:
         Returns:
             The snapshot_name on success, None on failure.
         """
+        self.last_timing = {}
         ckpt_type = checkpoint_type or self._next_checkpoint_type()
         try:
+            t0 = time.time()
             save_result = self.policy_client.save_weights_for_sampler_ext(
                 name,
                 checkpoint_type=ckpt_type,
             )
+            self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
             self._mark_first_save_done()
             return snapshot_name
@@ -255,12 +261,14 @@ class WeightSyncer:
         Returns:
             True on success, False on failure.
         """
+        self.last_timing = {}
         if not self._hotload_enabled:
             return False
         self._ensure_deployment_checked()
         try:
             ckpt_type = "delta" if self.base_identity and self.base_identity != snapshot_name else "base"
             incremental = self._build_incremental_metadata(ckpt_type)
+            t0 = time.time()
             ok = self.deploy_mgr.hotload_and_wait(
                 deployment_id=self.deployment_id,
                 base_model=self.base_model,
@@ -268,10 +276,13 @@ class WeightSyncer:
                 incremental_snapshot_metadata=incremental,
                 timeout_seconds=self.hotload_timeout,
             )
+            self.last_timing["hotload_time_s"] = time.time() - t0
             if ok:
                 self.base_identity = snapshot_name
                 logger.info("Hotload complete: %s", snapshot_name)
+                t1 = time.time()
                 self._warmup_after_hotload()
+                self.last_timing["warmup_time_s"] = time.time() - t1
             else:
                 logger.warning("Hotload failed for snapshot '%s'.", snapshot_name)
             return ok
@@ -293,18 +304,23 @@ class WeightSyncer:
         Returns:
             The snapshot_name on success, None on failure.
         """
+        self.last_timing = {}
+        t_total = time.time()
         ckpt_type = checkpoint_type or self._next_checkpoint_type()
         try:
+            t0 = time.time()
             save_result = self.policy_client.save_weights_for_sampler_ext(
                 name,
                 checkpoint_type=ckpt_type,
             )
+            self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
             self._mark_first_save_done()
 
             if self._hotload_enabled:
                 self._ensure_deployment_checked()
                 incremental = self._build_incremental_metadata(ckpt_type)
+                t1 = time.time()
                 ok = self.deploy_mgr.hotload_and_wait(
                     deployment_id=self.deployment_id,
                     base_model=self.base_model,
@@ -312,17 +328,22 @@ class WeightSyncer:
                     incremental_snapshot_metadata=incremental,
                     timeout_seconds=self.hotload_timeout,
                 )
+                self.last_timing["hotload_time_s"] = time.time() - t1
                 if ok:
                     self.base_identity = snapshot_name
                     logger.info("Hotload complete: %s", snapshot_name)
+                    t2 = time.time()
                     self._warmup_after_hotload()
+                    self.last_timing["warmup_time_s"] = time.time() - t2
                 else:
                     raise RuntimeError(
                         f"Hotload failed for '{name}': deployment did not accept snapshot. "
                         f"Check deployment hotLoadBucketUrl and base model match."
                     )
+            self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name
         except Exception as e:
+            self.last_timing["total_time_s"] = time.time() - t_total
             logger.error(
                 "Save/hotload error for '%s': %s",
                 name,
@@ -335,9 +356,12 @@ class WeightSyncer:
 
         Returns True on success, False on failure.
         """
+        self.last_timing = {}
         try:
             logger.info("Saving DCP checkpoint: %s", name)
+            t0 = time.time()
             self.policy_client.save_state(name).result(timeout=1800)
+            self.last_timing["dcp_save_time_s"] = time.time() - t0
             return True
         except Exception as e:
             logger.warning(

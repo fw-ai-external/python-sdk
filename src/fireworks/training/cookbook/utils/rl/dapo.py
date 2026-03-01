@@ -5,7 +5,7 @@ the lower bound (eps_clip) and upper bound (eps_clip_high) can differ.
 No explicit KL penalty -- divergence is controlled solely via clipping.
 
 TIS can be composed on top via ``tis_weights_fn`` for additional
-train-inference mismatch correction (matches slime's orthogonal design).
+train-inference mismatch correction.
 
 Reference: https://arxiv.org/abs/2503.14476
 

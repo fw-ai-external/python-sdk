@@ -2,7 +2,7 @@
 
 Implements PPO-style clipping with a **sequence-level importance ratio**
 (geometric mean of per-token ratios), then broadcasts that ratio to tokens.
-This matches GSPO behavior used in AReaL/verl/slime families.
+This matches common GSPO implementations in open-source RL training stacks.
 
 TIS can be composed on top via ``tis_weights_fn``.
 

@@ -1,16 +1,16 @@
-"""Tests for defaults changed in this PR (aligned with slime/AReaL)."""
+"""Tests for cookbook and SDK default values."""
 
 from __future__ import annotations
 
 
 def test_grpo_temperature():
-    from fireworks.training.cookbook.recipes.grpo_loop import Config
+    from fireworks.training.cookbook.recipes.rl_loop import Config
 
     assert Config().temperature == 1.0
 
 
 def test_grpo_max_completion_tokens():
-    from fireworks.training.cookbook.recipes.grpo_loop import Config
+    from fireworks.training.cookbook.recipes.rl_loop import Config
 
     assert Config().max_completion_tokens == 1024
 
