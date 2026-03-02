@@ -44,8 +44,8 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
 training = [
-  "tinker",
-  "tinker-cookbook",
+  "tinker @ git+https://github.com/thinking-machines-lab/tinker.git@77cc8a0810e5d1370585a4c08d729db5d2800802 ; python_version >= '3.11'",
+  "tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git@f57a8ba9668af75dd1654f9aec93c64e82a0f67d ; python_version >= '3.11'",
   "requests",
   "torch>=2.0.0",
   "transformers",
@@ -106,6 +106,9 @@ typecheck = { chain = [
 [build-system]
 requires = ["hatchling==1.26.3", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build]
 include = [
