@@ -67,6 +67,8 @@ class WeightSyncer:
     base_model: str = ""
     hotload_timeout: int = 600
     first_checkpoint_type: str = "base"
+    dcp_timeout: int = 2700
+    """Timeout in seconds for DCP save_state (default 45 min)."""
     compression_format: str = "arc_v2"
     warmup_after_hotload: bool = True
     """If True, send a warmup request after each successful hotload."""
@@ -360,7 +362,7 @@ class WeightSyncer:
         try:
             logger.info("Saving DCP checkpoint: %s", name)
             t0 = time.time()
-            self.policy_client.save_state(name).result(timeout=1800)
+            self.policy_client.save_state(name, timeout=self.dcp_timeout)
             self.last_timing["dcp_save_time_s"] = time.time() - t0
             return True
         except Exception as e:

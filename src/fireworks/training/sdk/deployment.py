@@ -771,6 +771,7 @@ class DeploymentSampler:
             "Authorization": f"Bearer {self.api_key}",
             "X-Api-Key": self.api_key,
         }
+        http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
@@ -779,14 +780,13 @@ class DeploymentSampler:
             "temperature": temperature,
             **kwargs,
         }
-
         for hotload_attempt in range(hotload_max_retries + 1):
             resp = request_with_retries(
                 requests.post,
                 self._completions_url,
                 headers=headers,
                 json=payload,
-                timeout=600,
+                timeout=http_timeout,
                 verify=self._verify_ssl,
                 max_wait_time=60,
             )

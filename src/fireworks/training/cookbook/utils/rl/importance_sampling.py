@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import torch
 
-from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
+from fireworks.training.cookbook.utils.rl.common import _normalize_prompt_lens
 
 SAFETY_CLAMP = 20.0
 """Clamp log-ratio to [-SAFETY_CLAMP, SAFETY_CLAMP] before exp() to
@@ -76,12 +76,15 @@ def make_tis_weights_fn(
             )
         response_start = max(0, prompt_lens[sample_idx] - 1)
         resp_len = len(pi_detached)
+        if len(inf_lp) < response_start + resp_len:
+            raise ValueError(
+                f"TIS requires at least {response_start + resp_len} inference logprobs "
+                f"for sample {sample_idx}, got {len(inf_lp)}."
+            )
         resp_inf = torch.tensor(
-            [
-                inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
-                for j in range(resp_len)
-            ],
-            dtype=torch.float32,
+            inf_lp[response_start : response_start + resp_len],
+            dtype=pi_detached.dtype,
+            device=pi_detached.device,
         )
 
         log_ratio = torch.clamp(pi_detached - resp_inf, min=-SAFETY_CLAMP, max=SAFETY_CLAMP)

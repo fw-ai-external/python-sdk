@@ -7,7 +7,6 @@ from typing import Any, Sequence
 
 import tinker
 
-from fireworks.training.cookbook.utils.logging import compute_pass_at_k
 from fireworks.training.cookbook.utils.rl.losses import PromptGroup
 
 logger = logging.getLogger(__name__)
@@ -48,10 +47,6 @@ def total_target_tokens(prompt_groups: Sequence[PromptGroup]) -> int:
     )
 
 
-def sum_completion_tokens(prompt_groups: Sequence[PromptGroup]) -> int:
-    return sum(sum(pg.completion_lens) for pg in prompt_groups)
-
-
 def add_response_length_stats(metrics: dict[str, Any], completion_lens: Sequence[int]) -> None:
     if not completion_lens:
         return
@@ -82,60 +77,14 @@ def add_train_perf_metrics(metrics: dict[str, Any], *, total_model_tokens: int) 
 
 def build_loop_metrics(
     *,
-    prompt_groups: Sequence[PromptGroup],
     train_step: int,
-    total_wait_time: float,
-    filter_drops: int,
     sample_fails: int,
-    step_metrics: dict[str, Any],
-    all_raw_rewards: Sequence[float],
     staleness_steps: Sequence[int] | None = None,
-    step_wall_time: float = 0.0,
 ) -> dict[str, Any]:
-    prompts_completed = len(prompt_groups)
-    samples_completed = sum(len(pg.rewards) for pg in prompt_groups)
-    tokens_completed = sum_completion_tokens(prompt_groups)
-    total_attempts = prompts_completed + filter_drops + sample_fails
-    accepted_plus_dropped = prompts_completed + filter_drops
-
     loop_metrics: dict[str, Any] = {
         "train/step": train_step,
-        "perf/sample_wait_time": total_wait_time,
-        "rollout/filter_drop_count": filter_drops,
         "rollout/sample_fail_count": sample_fails,
-        "rollout/prompts_completed": prompts_completed,
-        "rollout/samples_completed": samples_completed,
-        "rollout/tokens_completed": tokens_completed,
     }
-
-    step_time = step_metrics.get("perf/step_time", 0.0)
-    if step_time == 0.0:
-        step_time = sum(
-            step_metrics.get(k, 0.0)
-            for k in ("perf/ref_forward_time", "perf/fwd_bwd_time",
-                       "perf/optim_step_time", "perf/weight_sync_time",
-                       "perf/dcp_save_time")
-        )
-    total_time = total_wait_time + step_time
-    if total_time > 0:
-        wait_ratio = total_wait_time / total_time
-        loop_metrics["perf/wait_time_ratio"] = wait_ratio
-        loop_metrics["perf/overlap_ratio"] = 1.0 - wait_ratio
-
-    throughput_time = step_wall_time if step_wall_time > 0 else total_time
-    if throughput_time > 0:
-        loop_metrics["perf/step_wall_time"] = throughput_time
-        loop_metrics["perf/rollout_samples_per_s"] = samples_completed / throughput_time
-        loop_metrics["perf/rollout_tokens_per_s"] = tokens_completed / throughput_time
-
-    if all_raw_rewards:
-        loop_metrics["rollout/raw_reward"] = sum(all_raw_rewards) / len(all_raw_rewards)
-    if accepted_plus_dropped > 0:
-        # In the default GRPO filter, drops correspond to zero-variance groups.
-        ratio = filter_drops / accepted_plus_dropped
-        loop_metrics["rollout/filter_reject_ratio"] = ratio
-    if total_attempts > 0:
-        loop_metrics["rollout/sample_fail_ratio"] = sample_fails / total_attempts
 
     if staleness_steps:
         loop_metrics["version/sample_staleness_avg"] = sum(staleness_steps) / len(staleness_steps)
@@ -156,7 +105,7 @@ def compute_step_metrics(
 ) -> dict[str, Any]:
     """Compute all per-step wandb metrics from prompt groups and remote results.
 
-    Consolidates reward/accuracy/entropy/pass@k/truncation/filter/batch stats
+    Consolidates reward/accuracy/entropy/truncation/filter/batch stats
     into a single metrics dict.  Called by ``finish_step`` in the recipe.
     """
     metrics = dict(timing_metrics)
@@ -179,7 +128,6 @@ def compute_step_metrics(
     all_rewards: list[float] = []
     all_comp_lens: list[int] = []
     all_truncated: list[bool] = []
-    reward_groups: list[list[float]] = []
     correct_count = 0
     total_samples = 0
 
@@ -187,10 +135,10 @@ def compute_step_metrics(
         all_rewards.extend(pg.rewards)
         all_comp_lens.extend(pg.completion_lens)
         all_truncated.extend(pg.truncated)
-        reward_groups.append(list(pg.rewards))
         correct_count += sum(1 for r in pg.rewards if r > 0.5)
         total_samples += len(pg.rewards)
 
+    metrics["rollout/samples_completed"] = total_samples
     if total_samples > 0:
         metrics["rollout/reward"] = sum(all_rewards) / total_samples
         metrics["rollout/accuracy"] = correct_count / total_samples
@@ -208,8 +156,6 @@ def compute_step_metrics(
     if entropy_vals:
         metrics["rollout/entropy"] = sum(entropy_vals) / len(entropy_vals)
 
-    metrics.update(compute_pass_at_k(reward_groups, k_values=[1, 2, 4]))
-
     if loop_stats:
         valid = loop_stats["valid_prompt_groups"]
         filtered = loop_stats["filter_drops"]
@@ -220,11 +166,27 @@ def compute_step_metrics(
         metrics["rollout/sample_fail_count"] = loop_stats["sample_fails"]
         metrics["rollout/fwd_bwd_count"] = n_accum
 
-        raw_rewards = loop_stats.get("all_raw_rewards", [])
+        sample_wait_time = float(loop_stats["sample_wait_time"])
+        metrics["perf/sample_wait_time"] = sample_wait_time
+        # The ratio is defined over the same sampling window that drives
+        # fwd_bwd firing: queue-wait time divided by sampling-loop wall time.
+        step_wall_time = float(loop_stats["step_wall_time"])
+        if step_wall_time > 0:
+            wait_ratio = sample_wait_time / step_wall_time
+            metrics["perf/wait_time_ratio"] = wait_ratio
+            metrics["perf/overlap_ratio"] = 1.0 - wait_ratio
+
+        throughput_time = step_wall_time
+        if throughput_time > 0:
+            metrics["perf/step_wall_time"] = throughput_time
+            metrics["perf/rollout_samples_per_s"] = total_samples / throughput_time
+            metrics["perf/rollout_tokens_per_s"] = sum(all_comp_lens) / throughput_time
+
+        raw_rewards = loop_stats["all_raw_rewards"]
         if raw_rewards:
             metrics["rollout/raw_reward"] = sum(raw_rewards) / len(raw_rewards)
 
-        fwd_bwd_group_counts = loop_stats.get("fwd_bwd_group_counts", [])
+        fwd_bwd_group_counts = loop_stats["fwd_bwd_group_counts"]
         if fwd_bwd_group_counts:
             mean_group_count = sum(fwd_bwd_group_counts) / len(fwd_bwd_group_counts)
             max_group_count = max(fwd_bwd_group_counts)

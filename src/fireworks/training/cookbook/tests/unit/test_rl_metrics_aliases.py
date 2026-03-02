@@ -24,18 +24,24 @@ def _make_prompt_group() -> PromptGroup:
 
 
 class TestBuildLoopMetrics:
-    def test_filter_reject_ratio(self):
+    def test_excludes_loop_rollout_count_metrics(self):
         loop_metrics = build_loop_metrics(
-            prompt_groups=[_make_prompt_group()],
             train_step=3,
-            total_wait_time=1.0,
-            filter_drops=2,
             sample_fails=1,
-            step_metrics={"perf/step_time": 2.0},
-            all_raw_rewards=[1.0, 0.0],
         )
 
-        assert loop_metrics["rollout/filter_reject_ratio"] == 2 / 3
+        assert "rollout/filter_drop_count" not in loop_metrics
+        assert "rollout/prompts_completed" not in loop_metrics
+        assert "rollout/samples_completed" not in loop_metrics
+        assert "rollout/tokens_completed" not in loop_metrics
+        assert "rollout/sample_fail_ratio" not in loop_metrics
+        assert "rollout/raw_reward" not in loop_metrics
+        assert "perf/sample_wait_time" not in loop_metrics
+        assert "perf/wait_time_ratio" not in loop_metrics
+        assert "perf/overlap_ratio" not in loop_metrics
+        assert "perf/step_wall_time" not in loop_metrics
+        assert "perf/rollout_samples_per_s" not in loop_metrics
+        assert "perf/rollout_tokens_per_s" not in loop_metrics
         assert "rollout/filter_drop_ratio" not in loop_metrics
         assert "rollout/zero_std_ratio" not in loop_metrics
 
@@ -53,6 +59,8 @@ class TestComputeStepMetrics:
                 "total_sampled": 7,
                 "filter_drops": 1,
                 "sample_fails": 2,
+                "sample_wait_time": 3.0,
+                "step_wall_time": 4.0,
                 "all_raw_rewards": [1.0, 0.0],
                 "fwd_bwd_group_counts": [2, 4],
             },
@@ -60,13 +68,23 @@ class TestComputeStepMetrics:
         )
 
         assert metrics["rollout/valid_prompt_groups"] == 6
+        assert metrics["rollout/samples_completed"] == 1
         assert metrics["rollout/filter_reject_ratio"] == 1 / 7
         assert metrics["rollout/sample_fail_count"] == 2
         assert metrics["batch/mean_prompt_groups_per_fwd_bwd"] == 3.0
         assert metrics["batch/max_prompt_groups_per_fwd_bwd"] == 4
         assert metrics["batch/min_prompt_groups_per_fwd_bwd"] == 2
         assert metrics["batch/mean_samples_per_fwd_bwd"] == 24.0
+        assert metrics["perf/sample_wait_time"] == 3.0
+        assert metrics["perf/wait_time_ratio"] == 0.75
+        assert metrics["perf/overlap_ratio"] == 0.25
+        assert metrics["perf/step_wall_time"] == 4.0
+        assert metrics["perf/rollout_samples_per_s"] == 0.25
+        assert metrics["perf/rollout_tokens_per_s"] == 0.5
 
+        assert "rollout/pass@1" not in metrics
+        assert "rollout/pass@2" not in metrics
+        assert "rollout/pass@4" not in metrics
         assert "rollout/valid_prompts" not in metrics
         assert "rollout/filter_ratio" not in metrics
         assert "rollout/sample_fails" not in metrics

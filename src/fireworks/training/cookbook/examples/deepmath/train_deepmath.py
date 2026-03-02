@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""GRPO Training on DeepMath-103K with Qwen3-30B-A3B.
+"""GRPO Training on DeepMath-Probability-Hard with Qwen3-30B-A3B-Instruct.
 
 Uses the cookbook rl_loop recipe with a math-verification reward function.
 Infrastructure is resolved entirely from validated training/deployment shapes:
-  - Training shape: ts-qwen3-30b-a3b-policy (8xB200, PP=1, image 0.33.0)
-  - Deployment shape: rft-qwen3-30b-a3b-r3 (2xB200, EP, image 4.24.22)
+  - Training shape: ts-qwen3-30b-a3b-instruct-policy (8xB200, PP=1)
+  - Deployment shape: rft-qwen3-30b-a3b-instruct-r3 (8xB200, EP, FP8)
   - Region: US_OHIO_1
 
 Run prepare_data.py first to generate the JSONL dataset, then:
@@ -32,6 +32,7 @@ from fireworks.training.cookbook.utils import (
     DeployConfig,
     HotloadConfig,
 )
+from fireworks.training.cookbook.utils.rl import ISConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,20 +51,20 @@ FIREWORKS_BASE_URL = "https://dev.api.fireworks.ai"
 
 BASE_MODEL = "accounts/fireworks/models/qwen3-30b-a3b-instruct-2507"
 TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-DATASET_PATH = os.path.join(os.path.dirname(__file__), "deepmath_103k.jsonl")
+DATASET_PATH = os.path.join(os.path.dirname(__file__), "deepmath_probability_hard.jsonl")
 
 TRAINING_SHAPE = "ts-qwen3-30b-a3b-instruct-policy"
 DEPLOYMENT_SHAPE = "accounts/pyroworks-dev/deploymentShapes/rft-qwen3-30b-a3b-instruct-r3"
-DEPLOYMENT_ID = "qwen3-30b-instruct-deepmath-v4"
+DEPLOYMENT_ID = "qwen3-30b-instruct-deepmath-prob-hard"
 REGION = "US_OHIO_1"
 
-MAX_ROWS = 500
+MAX_ROWS = 1804
 EPOCHS = 3
 COMPLETIONS_PER_PROMPT = 8
 LEARNING_RATE = 1e-5
 KL_BETA = 0.001
 TEMPERATURE = 1.0
-MAX_COMPLETION_TOKENS = 8192
+MAX_COMPLETION_TOKENS = 12 * 1024
 MAX_SEQ_LEN = 16384
 
 PROMPT_GROUPS_PER_STEP = 16
@@ -72,7 +73,6 @@ MAX_SAMPLES_PER_FWD_BWD = 256
 
 WANDB_ENTITY = "myh97"
 WANDB_PROJECT = "grpo-tinker"
-WANDB_RUN_NAME = "deepmath-30b-instruct-v4"
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ def deepmath_reward(completion: str, row: dict) -> float:
 
 
 def main():
-    logger.info("GRPO DeepMath-103K training with Qwen3-30B-A3B")
+    logger.info("GRPO DeepMath-Probability-Hard training with Qwen3-30B-A3B-Instruct")
 
     if not os.path.exists(DATASET_PATH):
         raise FileNotFoundError(
@@ -214,6 +214,10 @@ def main():
         prompt_groups_per_step=PROMPT_GROUPS_PER_STEP,
         min_samples_per_fwd_bwd=MIN_SAMPLES_PER_FWD_BWD,
         max_samples_per_fwd_bwd=MAX_SAMPLES_PER_FWD_BWD,
+        tis_enabled=True,
+        tis=ISConfig(clip_high=2.0, clip_low=0.0),
+        router_replay=True,
+        router_replay_completion_only=True,
         infra=InfraConfig(
             training_shape_id=TRAINING_SHAPE,
             region=REGION,
@@ -222,9 +226,12 @@ def main():
             deployment_id=DEPLOYMENT_ID,
             deployment_shape=DEPLOYMENT_SHAPE,
             tokenizer_model=TOKENIZER_MODEL,
+            sample_timeout=1200,
         ),
         hotload=HotloadConfig(
             hot_load_interval=1,
+            dcp_save_interval=20,
+            dcp_timeout=2700,
             first_checkpoint_type="base",
             hot_load_before_training=True,
             hot_load_timeout=600,
@@ -232,7 +239,7 @@ def main():
         wandb=WandBConfig(
             entity=WANDB_ENTITY,
             project=WANDB_PROJECT,
-            run_name=WANDB_RUN_NAME,
+            run_name=DEPLOYMENT_ID,
         ),
     )
 

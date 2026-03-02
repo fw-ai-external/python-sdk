@@ -54,13 +54,12 @@ class MinibatchTrainFns:
     data arrives.
     """
 
-    ref_forward_one: Callable[[PromptGroup], None]
-    """Compute reference logprobs for one prompt group."""
+    ref_forward_batch: Callable[[list[PromptGroup]], None]
+    """Compute reference logprobs for a batch of prompt groups (one HTTP call)."""
 
     fwd_bwd_one: Callable[[list[PromptGroup]], Any]
-    """Run forward_backward_custom on one micro-batch. Returns an APIFuture
-    (non-blocking). Fired when the buffer reaches
-    ``max_prompt_groups_per_fwd_bwd``."""
+    """Run forward_backward_custom on one micro-batch.  Fired when the buffer
+    reaches ``min_prompt_groups_per_fwd_bwd``."""
 
     finish_step: Callable[[int, list[PromptGroup], list, int, dict], tuple[int, dict]]
     """optim_step + hotload + metrics. Called after all fwd_bwd calls for a
@@ -166,7 +165,7 @@ async def _stream_loop(
 
     minibatch_prompt_groups: list[PromptGroup] = []
     step_prompt_groups: list[PromptGroup] = []
-    fwd_bwd_futures: list = []
+    fwd_bwd_results: list = []
     fwd_bwd_prompt_group_counts: list[int] = []
     fwd_bwd_call_count = 0
 
@@ -177,56 +176,61 @@ async def _stream_loop(
         nonlocal global_step, fwd_bwd_call_count
         nonlocal total_wait_time, filter_drops, sample_fails
         nonlocal total_sampled, step_start_time
-        nonlocal minibatch_prompt_groups, step_prompt_groups, fwd_bwd_futures, fwd_bwd_prompt_group_counts
+        nonlocal minibatch_prompt_groups, step_prompt_groups, fwd_bwd_results, fwd_bwd_prompt_group_counts
         nonlocal all_raw_rewards
 
+        idle_start = time.time()
+
+        step_num = global_step + 1
         if minibatch_prompt_groups:
-            logger.info(
-                "[stream] step %d | fwd_bwd %d (%d groups, %d samples)",
-                global_step + 1, fwd_bwd_call_count + 1,
-                len(minibatch_prompt_groups), len(minibatch_prompt_groups) * completions_per_prompt,
-            )
+            n_datums = sum(len(pg.ref_data) for pg in minibatch_prompt_groups)
             fwd_bwd_prompt_group_counts.append(len(minibatch_prompt_groups))
+
+            logger.info("[step %d] ref_forward_batch: %d groups, %d datums...", step_num, len(minibatch_prompt_groups), n_datums)
             t0 = time.time()
-            fut = await asyncio.to_thread(fns.fwd_bwd_one, minibatch_prompt_groups)
+            await asyncio.to_thread(fns.ref_forward_batch, minibatch_prompt_groups)
+            Timer().add("ref_forward", time.time() - t0)
+            logger.info("[step %d] ref_forward_batch: done (%.1fs)", step_num, time.time() - t0)
+
+            logger.info("[step %d] fwd_bwd %d: %d groups, %d samples...", step_num, fwd_bwd_call_count + 1, len(minibatch_prompt_groups), len(minibatch_prompt_groups) * completions_per_prompt)
+            t0 = time.time()
+            result = await asyncio.to_thread(fns.fwd_bwd_one, minibatch_prompt_groups)
             Timer().add("fwd_bwd", time.time() - t0)
-            fwd_bwd_futures.append(fut)
+            logger.info("[step %d] fwd_bwd %d: done (%.1fs)", step_num, fwd_bwd_call_count + 1, time.time() - t0)
+            fwd_bwd_results.append(result)
             minibatch_prompt_groups = []
             fwd_bwd_call_count += 1
 
-        logger.info(
-            "[stream] step %d | %d fwd_bwd done, running optim_step",
-            global_step + 1, fwd_bwd_call_count,
-        )
-        fwd_bwd_results = [f.result() for f in fwd_bwd_futures]
+        logger.info("[step %d] optim_step...", step_num)
+        step_wall_time = time.time() - step_start_time
         loop_stats = {
             "valid_prompt_groups": len(step_prompt_groups),
             "total_sampled": total_sampled,
             "filter_drops": filter_drops,
             "sample_fails": sample_fails,
+            "sample_wait_time": total_wait_time,
+            "step_wall_time": step_wall_time,
             "all_raw_rewards": list(all_raw_rewards),
             "fwd_bwd_group_counts": fwd_bwd_prompt_group_counts,
         }
-        global_step, step_metrics = await asyncio.to_thread(
+        global_step, _ = await asyncio.to_thread(
             fns.finish_step, global_step, step_prompt_groups,
             fwd_bwd_results, fwd_bwd_call_count, loop_stats,
         )
+
+        sample_idle_time = time.time() - idle_start
+
         if metrics_callback is not None:
             loop_metrics = build_loop_metrics(
-                prompt_groups=step_prompt_groups,
                 train_step=global_step,
-                total_wait_time=total_wait_time,
-                filter_drops=filter_drops,
                 sample_fails=sample_fails,
-                step_metrics=step_metrics,
-                all_raw_rewards=all_raw_rewards,
-                step_wall_time=time.time() - step_start_time,
             )
+            loop_metrics["perf/sample_idle_time"] = sample_idle_time
             metrics_callback(loop_metrics)
 
         minibatch_prompt_groups = []
         step_prompt_groups = []
-        fwd_bwd_futures = []
+        fwd_bwd_results = []
         fwd_bwd_prompt_group_counts = []
         fwd_bwd_call_count = 0
         total_wait_time = 0.0
@@ -261,10 +265,6 @@ async def _stream_loop(
             pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
             continue
 
-        t0 = time.time()
-        await asyncio.to_thread(fns.ref_forward_one, item)
-        Timer().add("ref_forward", time.time() - t0)
-
         minibatch_prompt_groups.append(item)
         step_prompt_groups.append(item)
         pbar.update(1)
@@ -273,16 +273,22 @@ async def _stream_loop(
         if len(minibatch_prompt_groups) >= min_prompt_groups_per_fwd_bwd:
             batch = minibatch_prompt_groups[:max_prompt_groups_per_fwd_bwd]
             minibatch_prompt_groups = minibatch_prompt_groups[max_prompt_groups_per_fwd_bwd:]
-            logger.info(
-                "[stream] step %d | fwd_bwd %d (%d groups, %d samples)",
-                global_step + 1, fwd_bwd_call_count + 1,
-                len(batch), len(batch) * completions_per_prompt,
-            )
-            fwd_bwd_prompt_group_counts.append(len(batch))
+            n_datums = sum(len(pg.ref_data) for pg in batch)
+            step_num = global_step + 1
+
+            logger.info("[step %d] ref_forward_batch: %d groups, %d datums...", step_num, len(batch), n_datums)
             t0 = time.time()
-            fut = await asyncio.to_thread(fns.fwd_bwd_one, batch)
+            await asyncio.to_thread(fns.ref_forward_batch, batch)
+            Timer().add("ref_forward", time.time() - t0)
+            logger.info("[step %d] ref_forward_batch: done (%.1fs)", step_num, time.time() - t0)
+
+            fwd_bwd_prompt_group_counts.append(len(batch))
+            logger.info("[step %d] fwd_bwd %d: %d groups, %d samples...", step_num, fwd_bwd_call_count + 1, len(batch), len(batch) * completions_per_prompt)
+            t0 = time.time()
+            result = await asyncio.to_thread(fns.fwd_bwd_one, batch)
             Timer().add("fwd_bwd", time.time() - t0)
-            fwd_bwd_futures.append(fut)
+            logger.info("[step %d] fwd_bwd %d: done (%.1fs)", step_num, fwd_bwd_call_count + 1, time.time() - t0)
+            fwd_bwd_results.append(result)
             fwd_bwd_call_count += 1
 
         if len(step_prompt_groups) >= prompt_groups_per_step:

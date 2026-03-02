@@ -141,7 +141,7 @@ async def _cache_ref_logprobs(
 
         async with semaphore:
             fwd = await asyncio.to_thread(
-                lambda: reference.forward([chosen_datum, rejected_datum], "cross_entropy").result()
+                lambda: reference.forward([chosen_datum, rejected_datum], "cross_entropy")
             )
 
         return i, {
@@ -222,26 +222,23 @@ async def _train_loop(
             loss_fn = make_dpo_loss_fn(
                 cached["ref_chosen"], cached["ref_rejected"], response_start, cfg.beta,
             )
-            fwd_bwd_future = policy.forward_backward_custom(
+            fwd_bwd_result = policy.forward_backward_custom(
                 [chosen_datum, rejected_datum], loss_fn,
             )
-            fwd_bwd_futures.append(fwd_bwd_future)
+            fwd_bwd_futures.append(fwd_bwd_result)
             accum_count += 1
 
             if accum_count >= cfg.grad_accum:
-                optim_future = policy.optim_step(adam_params)
+                optim_result = policy.optim_step(adam_params)
 
                 step_metrics: dict[str, Any] = {}
-                for fut in fwd_bwd_futures:
-                    result = fut.result()
+                for result in fwd_bwd_futures:
                     fwd_metrics = result.metrics
                     agg["dpo_loss"] += fwd_metrics["dpo_loss"]
                     agg["margin"] += fwd_metrics["margin"]
                     agg["accuracy"] += fwd_metrics["accuracy"]
                     agg["count"] += 1
                 fwd_bwd_futures = []
-
-                optim_result = optim_future.result()
                 step += 1
                 accum_count = 0
 
@@ -281,8 +278,7 @@ async def _train_loop(
                 agg = {"dpo_loss": 0.0, "margin": 0.0, "accuracy": 0.0, "count": 0}
 
         if accum_count > 0:
-            for fut in fwd_bwd_futures:
-                result = fut.result()
+            for result in fwd_bwd_futures:
                 metrics = result.metrics
                 agg["dpo_loss"] += metrics["dpo_loss"]
                 agg["margin"] += metrics["margin"]
@@ -290,7 +286,7 @@ async def _train_loop(
                 agg["count"] += 1
             fwd_bwd_futures = []
 
-            policy.optim_step(adam_params).result()
+            policy.optim_step(adam_params)
             step += 1
             accum_count = 0
 

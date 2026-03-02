@@ -285,6 +285,7 @@ def main(
         deployment_id=cfg.deployment.deployment_id, base_model=cfg.base_model,
         hotload_timeout=cfg.hotload.hot_load_timeout,
         first_checkpoint_type=cfg.hotload.first_checkpoint_type,
+        dcp_timeout=cfg.hotload.dcp_timeout,
     )
 
     infra_boot_time = _time.time() - _infra_start
@@ -310,16 +311,15 @@ def main(
         tis_enabled=cfg.tis_enabled, tis_config=cfg.tis,
         dapo_config=cfg.dapo, gspo_config=cfg.gspo,
     )
-    needs_inf_lp = cfg.policy_loss in {"dapo", "gspo"} or cfg.tis_enabled
 
     sample_kwargs: dict = dict(
         max_tokens=cfg.max_completion_tokens, temperature=cfg.temperature,
         max_seq_len=cfg.max_seq_len,
+        http_timeout=cfg.deployment.sample_timeout,
     )
     if cfg.router_replay:
         sample_kwargs.update(include_routing_matrix=True, echo=True, logprobs=True)
-    if needs_inf_lp:
-        sample_kwargs["logprobs"] = True
+    sample_kwargs["logprobs"] = True
 
     # -- Sample one prompt (VISIBLE -- customise this) ----------------------
 
@@ -383,20 +383,17 @@ def main(
             reference_data.append(reference_datum)
             adv_filtered.append(advantages[idx])
 
-            if needs_inf_lp:
-                if not s.inference_logprobs:
-                    raise RuntimeError(
-                        f"Inference logprobs required but sample {idx} has none. "
-                        f"Ensure the deployment returns logprobs."
-                    )
-                response_start = max(0, prompt_len - 1)
-                echoed = getattr(s, "logprobs_echoed", False)
-                aligned = (
-                    list(s.inference_logprobs) if echoed else [0.0] * response_start + list(s.inference_logprobs)
+            if not s.inference_logprobs:
+                raise RuntimeError(
+                    f"Inference logprobs required but sample {idx} has none. "
+                    f"Ensure the deployment returns logprobs."
                 )
-                inf_logprobs_aligned.append(aligned)
-            else:
-                inf_logprobs_aligned.append([])
+            response_start = max(0, prompt_len - 1)
+            echoed = getattr(s, "logprobs_echoed", False)
+            aligned = (
+                list(s.inference_logprobs) if echoed else [0.0] * response_start + list(s.inference_logprobs)
+            )
+            inf_logprobs_aligned.append(aligned)
 
         if not policy_data:
             return None
@@ -413,14 +410,20 @@ def main(
 
     # -- Streaming callbacks (per-group / per-minibatch / per-step) ----------
 
-    def ref_forward_one(pg: PromptGroup) -> None:
-        """Compute reference logprobs for a single prompt group."""
-        ref_inputs = pg.ref_data if pg.ref_data else pg.data
-        ref_fwd = reference.forward(ref_inputs, "cross_entropy").result()
-        pg.ref_logprobs = [out["logprobs"].data for out in ref_fwd.loss_fn_outputs]
+    def ref_forward_batch(groups: list[PromptGroup]) -> None:
+        """Compute reference logprobs for a batch of prompt groups (one call)."""
+        all_ref_data = [d for pg in groups for d in pg.ref_data]
+        ref_fwd = reference.forward(all_ref_data, "cross_entropy")
+        idx = 0
+        for pg in groups:
+            n = len(pg.ref_data)
+            pg.ref_logprobs = [
+                ref_fwd.loss_fn_outputs[idx + i]["logprobs"].data for i in range(n)
+            ]
+            idx += n
 
-    def fwd_bwd_one(sub: list[PromptGroup]) -> tinker.APIFuture:
-        """Run forward_backward_custom on one micro-batch. Returns a future (non-blocking)."""
+    def fwd_bwd_one(sub: list[PromptGroup]):
+        """Run forward_backward_custom on one micro-batch."""
         data, adv, ref_lp, prompt_lens, inf_lp = combine_prompt_groups(sub)
         return policy.forward_backward_custom(data, loss_builder(adv, ref_lp, prompt_lens, inf_lp))
 
@@ -432,16 +435,24 @@ def main(
         loop_stats: dict | None = None,
     ) -> tuple[int, dict]:
         """optim_step + hotload + metrics. Called after all fwd_bwd complete."""
-        with timer("optim_step"):
-            optim_result = policy.optim_step(adam_params).result()
+        import time as _t
+        t0 = _t.time()
+        optim_result = policy.optim_step(adam_params)
         step += 1
+        logger.info("[step %d] optim_step: done (%.1fs)", step, _t.time() - t0)
 
         if cfg.hotload.hot_load_interval > 0 and step % cfg.hotload.hot_load_interval == 0:
+            logger.info("[step %d] hotload: saving + loading...", step)
+            t0 = _t.time()
             with timer("weight_sync"):
                 weight_syncer.save_and_hotload(f"step-{step}")
+            logger.info("[step %d] hotload: done (%.1fs)", step, _t.time() - t0)
         if cfg.hotload.dcp_save_interval > 0 and step % cfg.hotload.dcp_save_interval == 0:
+            logger.info("[step %d] dcp_save...", step)
+            t0 = _t.time()
             with timer("dcp_save"):
                 weight_syncer.save_dcp(f"step-{step}")
+            logger.info("[step %d] dcp_save: done (%.1fs)", step, _t.time() - t0)
 
         metrics = compute_step_metrics(
             prompt_groups=prompt_groups,
@@ -472,7 +483,7 @@ def main(
         wandb_log(loop_metrics, step=loop_metrics.get("train/step", 0))
 
     minibatch_fns = MinibatchTrainFns(
-        ref_forward_one=ref_forward_one,
+        ref_forward_batch=ref_forward_batch,
         fwd_bwd_one=fwd_bwd_one,
         finish_step=finish_step,
     )
@@ -496,7 +507,7 @@ def main(
 
     if global_step > step_offset:
         try:
-            policy.save_state(f"step-{global_step}").result(timeout=1800)
+            policy.save_state(f"step-{global_step}", timeout=cfg.hotload.dcp_timeout)
         except Exception as e:
             logger.warning("Failed to save final checkpoint: %s", e)
 

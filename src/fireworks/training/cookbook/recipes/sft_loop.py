@@ -219,7 +219,7 @@ def main(
 
         loss_fn = make_batch_sft_loss_fn(prompt_counts)
         with timer("fwd_bwd"):
-            result = client.forward_backward_custom(datums, loss_fn).result()
+            result = client.forward_backward_custom(datums, loss_fn)
 
         fwd_metrics = result.metrics
         agg_loss_sum += fwd_metrics.get("ce_loss_sum", 0.0)
@@ -228,7 +228,7 @@ def main(
 
         if accum >= cfg.grad_accum:
             with timer("optim_step"):
-                optim_result = client.optim_step(adam_params).result()
+                optim_result = client.optim_step(adam_params)
             step += 1
             accum = 0
 
@@ -281,7 +281,7 @@ def main(
             step, accum = _flush_batch(batch_buffer, step, accum)
 
     if accum > 0:
-        client.optim_step(adam_params).result()
+        client.optim_step(adam_params)
         step += 1
 
     # -- Final checkpoint --------------------------------------------------

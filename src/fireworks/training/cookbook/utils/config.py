@@ -59,6 +59,9 @@ class DeployConfig:
     tokenizer_model: str | None = None
     """HuggingFace model name for the tokenizer (e.g. ``Qwen/Qwen3-1.7B``).
     Required for recipes that use client-side tokenization (GRPO)."""
+    sample_timeout: int = 600
+    """HTTP read timeout in seconds for sampling completions (default 10 min).
+    Increase for R3 + long completions where responses can be very large."""
 
     def to_deployment_config(
         self,
@@ -88,6 +91,8 @@ class HotloadConfig:
 
     hot_load_interval: int = 1
     dcp_save_interval: int = 0
+    dcp_timeout: int = 2700
+    """Timeout in seconds for DCP save_state / load_state_with_optimizer (default 45 min)."""
     first_checkpoint_type: str = "base"
     hot_load_before_training: bool = False
     hot_load_timeout: int = 600
