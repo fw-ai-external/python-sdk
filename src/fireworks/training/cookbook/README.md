@@ -7,35 +7,47 @@ Think of it like a Fireworks-adapted `tinker-cookbook`: same client-side loss pa
 
 | Recipe | File | Notes |
 | --- | --- | --- |
-| GRPO | `recipes/rl_loop.py` | Policy + reference trainers, deployment sampling, optional router replay (R3), optional truncated importance sampling (TIS). |
-| DPO | `recipes/dpo_loop.py` | Policy + reference trainers; reference logprobs are cached, then DPO loss is optimized. |
+| GRPO / DAPO / GSPO / CISPO | `recipes/rl_loop.py` | Streaming RL loop with greedy rollout batching, pluggable policy loss (`policy_loss="grpo"/"dapo"/"gspo"/"cispo"`), optional TIS and R3 router replay. |
+| DPO | `recipes/dpo_loop.py` | Policy + reference trainers; reference logprobs are cached concurrently, then DPO loss is optimized. |
+| ORPO | `recipes/orpo_loop.py` | Odds-ratio preference optimization — no reference model needed. Combined SFT + odds-ratio loss. |
 | SFT | `recipes/sft_loop.py` | Single trainer with response-only cross-entropy loss. |
+
+## Streaming RL loop
+
+`rl_loop.py` uses an async streaming architecture: sampling coroutines run concurrently, completions accumulate in a greedy-batching buffer, and `forward_backward_custom` fires as soon as enough samples arrive. Rollout, reference forward, and training overlap automatically.
+
+Key scheduling parameters: `prompt_groups_per_step` (groups per optimizer step), `min_samples_per_fwd_bwd` / `max_samples_per_fwd_bwd` (micro-batch bounds), and `max_concurrent` (in-flight sampling cap).
 
 ## Shared config blocks
 
 All recipes compose these dataclasses from `utils/config.py`:
 
-- `InfraConfig`: region, accelerators, image tag, extra args, node count.
-- `DeployConfig`: deployment lifecycle and sampling/hotload settings.
+- `InfraConfig`: region, accelerators, image tag, node count. Supports `training_shape_id` for auto-config from control-plane training shapes.
+- `DeployConfig`: deployment lifecycle, sampling/hotload settings, `tokenizer_model` (required for RL).
 - `HotloadConfig`: hotload cadence, base/delta behavior, timeout.
 - `ResumeConfig`: checkpoint source + optional step offset.
 - `WandBConfig`: optional experiment logging.
-- `ISConfig`: TIS (Truncated Importance Sampling) controls for GRPO.
-- `DAPOConfig`: DAPO asymmetric PPO clipping thresholds for GRPO.
-- `GSPOConfig`: GSPO sequence-level clipped-ratio PPO configuration for GRPO.
+- `ISConfig`, `DAPOConfig`, `GSPOConfig`, `CISPOConfig`: per-algorithm tuning knobs (see source for fields and defaults).
 
 ## Minimal usage
 
 ```python
-from fireworks.training.cookbook.recipes.dpo_loop import Config, main
-from fireworks.training.cookbook.utils import InfraConfig, ResumeConfig
+from fireworks.training.cookbook.recipes.rl_loop import Config, main
+from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, HotloadConfig
 
 cfg = Config(
     base_model="accounts/fireworks/models/qwen3-8b",
-    dataset="/path/to/preferences.jsonl",
+    max_rows=20,
     epochs=1,
+    completions_per_prompt=4,
+    policy_loss="grpo",
     infra=InfraConfig(region="US_OHIO_1"),
-    resume=ResumeConfig(resume_from="step-10", resume_job_id="old-job-id"),
+    deployment=DeployConfig(
+        deployment_id="my-grpo-run",
+        create_deployment=True,
+        tokenizer_model="Qwen/Qwen3-8B",
+    ),
+    hotload=HotloadConfig(hot_load_interval=1),
 )
 
 main(cfg)
@@ -44,7 +56,7 @@ main(cfg)
 ## What to customize first
 
 - Reward logic in `recipes/rl_loop.py` (`reward_fn`).
-- Loss functions in `utils/losses.py`, `utils/importance_sampling.py`, `utils/dapo.py`, and `utils/gspo.py`.
+- Loss functions in `utils/rl/` (`grpo.py`, `dapo.py`, `gspo.py`, `cispo.py`, `importance_sampling.py`).
 - Data adapters in `utils/data.py` for your JSONL schema.
 - Resume behavior in `utils/resume.py`.
 
@@ -58,4 +70,3 @@ The cookbook does not replace the SDK; it composes it:
 - token-in/token-out sampling: `DeploymentSampler`
 
 If you need a custom algorithm loop, copy the closest recipe and keep using the same SDK primitives.
-
