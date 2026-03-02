@@ -66,8 +66,8 @@ from fireworks.training.cookbook.utils.config import (
 )
 from fireworks.training.cookbook.utils.losses import (
     make_dpo_loss_fn,
-    make_orpo_loss_fn,
     make_sft_loss_fn,
+    make_orpo_loss_fn,
     make_batch_sft_loss_fn,
 )
 from fireworks.training.cookbook.utils.resume import setup_resume
