@@ -2,6 +2,7 @@
 
 __all__ = [
     # Losses & algorithms
+    "CISPOConfig",
     "DAPOConfig",
     "GSPOConfig",
     "ISConfig",
@@ -9,6 +10,7 @@ __all__ = [
     "PromptGroup",
     "build_r3_routing_matrices",
     "compute_pp_recommendation",
+    "make_cispo_loss_fn",
     "make_dapo_loss_fn",
     "make_grpo_loss_fn",
     "make_gspo_loss_fn",
@@ -28,6 +30,7 @@ from fireworks.training.cookbook.utils.rl.pp import PPBatchRecommendation, compu
 from fireworks.training.cookbook.utils.rl.dapo import DAPOConfig, make_dapo_loss_fn
 from fireworks.training.cookbook.utils.rl.grpo import make_grpo_loss_fn
 from fireworks.training.cookbook.utils.rl.gspo import GSPOConfig, make_gspo_loss_fn
+from fireworks.training.cookbook.utils.rl.cispo import CISPOConfig, make_cispo_loss_fn
 from fireworks.training.cookbook.utils.rl.train import (
     DynamicFilterFn,
     MinibatchTrainFns,
