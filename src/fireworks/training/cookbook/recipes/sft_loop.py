@@ -44,6 +44,7 @@ from fireworks.training.cookbook.utils import (
 )
 from fireworks.training.sdk.deployment import DEFAULT_DELTA_COMPRESSION
 from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.cookbook.utils.timer import timer, flush_timing
 
 logger = logging.getLogger(__name__)
 
@@ -217,17 +218,33 @@ def main(
         prompt_counts = [ex["prompt_len"] for ex in batch_buf]
 
         loss_fn = make_batch_sft_loss_fn(prompt_counts)
-        result = client.forward_backward_custom(datums, loss_fn).result()
+        with timer("fwd_bwd"):
+            result = client.forward_backward_custom(datums, loss_fn)
 
-        metrics = result.metrics
-        agg_loss_sum += metrics.get("ce_loss_sum", 0.0)
-        agg_resp_tokens += metrics.get("response_tokens", 0)
+        fwd_metrics = result.metrics
+        agg_loss_sum += fwd_metrics.get("ce_loss_sum", 0.0)
+        agg_resp_tokens += fwd_metrics.get("response_tokens", 0)
         accum += 1
 
         if accum >= cfg.grad_accum:
-            client.optim_step(adam_params).result()
+            with timer("optim_step"):
+                optim_result = client.optim_step(adam_params)
             step += 1
             accum = 0
+
+            hl = cfg.hotload
+            if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
+                with timer("weight_sync"):
+                    weight_syncer.save_and_hotload(f"step-{step}")
+            if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
+                with timer("dcp_save"):
+                    weight_syncer.save_dcp(f"step-{step}")
+
+            step_metrics: Dict[str, Any] = flush_timing()
+
+            if optim_result and hasattr(optim_result, "metrics") and optim_result.metrics:
+                for k, v in optim_result.metrics.items():
+                    step_metrics[f"train/{k}"] = v
 
             if agg_resp_tokens > 0:
                 avg_loss = agg_loss_sum / agg_resp_tokens
@@ -240,13 +257,12 @@ def main(
                     ppl,
                 )
                 log_metrics_json(step, ce_loss=avg_loss, ppl=ppl)
-                wandb_log({"train/ce_loss": avg_loss, "train/ppl": ppl}, step)
-
-            hl = cfg.hotload
-            if hl.hot_load_interval > 0 and step % hl.hot_load_interval == 0:
-                weight_syncer.save_and_hotload(f"step-{step}")
-            if hl.dcp_save_interval > 0 and step % hl.dcp_save_interval == 0:
-                weight_syncer.save_dcp(f"step-{step}")
+                step_metrics.update({
+                    "train/step": step,
+                    "train/ce_loss": avg_loss,
+                    "train/ppl": ppl,
+                })
+                wandb_log(step_metrics, step)
 
             agg_loss_sum = 0.0
             agg_resp_tokens = 0
@@ -265,7 +281,7 @@ def main(
             step, accum = _flush_batch(batch_buffer, step, accum)
 
     if accum > 0:
-        client.optim_step(adam_params).result()
+        client.optim_step(adam_params)
         step += 1
 
     # -- Final checkpoint --------------------------------------------------

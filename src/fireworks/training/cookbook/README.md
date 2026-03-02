@@ -7,7 +7,7 @@ Think of it like a Fireworks-adapted `tinker-cookbook`: same client-side loss pa
 
 | Recipe | File | Notes |
 | --- | --- | --- |
-| GRPO | `recipes/grpo_loop.py` | Policy + reference trainers, deployment sampling, optional router replay (R3), optional truncated importance sampling (TIS). |
+| GRPO | `recipes/rl_loop.py` | Policy + reference trainers, deployment sampling, optional router replay (R3), optional truncated importance sampling (TIS). |
 | DPO | `recipes/dpo_loop.py` | Policy + reference trainers; reference logprobs are cached, then DPO loss is optimized. |
 | SFT | `recipes/sft_loop.py` | Single trainer with response-only cross-entropy loss. |
 
@@ -43,7 +43,7 @@ main(cfg)
 
 ## What to customize first
 
-- Reward logic in `recipes/grpo_loop.py` (`reward_fn`).
+- Reward logic in `recipes/rl_loop.py` (`reward_fn`).
 - Loss functions in `utils/losses.py`, `utils/importance_sampling.py`, `utils/dapo.py`, and `utils/gspo.py`.
 - Data adapters in `utils/data.py` for your JSONL schema.
 - Resume behavior in `utils/resume.py`.

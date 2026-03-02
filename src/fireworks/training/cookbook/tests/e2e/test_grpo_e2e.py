@@ -19,7 +19,7 @@ import pytest
 
 from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, HotloadConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
-from fireworks.training.cookbook.recipes.grpo_loop import Config, main
+from fireworks.training.cookbook.recipes.rl_loop import Config, main
 
 
 def _gsm8k_reward(completion: str, row: dict) -> float:
@@ -55,14 +55,14 @@ class TestGRPOE2E:
             pytest.skip("Set FIREWORKS_E2E_DEPLOYMENT_SHAPE for GRPO E2E runs")
 
         # Inject the test reward function into the module.
-        import fireworks.training.cookbook.recipes.grpo_loop as grpo_mod
+        import fireworks.training.cookbook.recipes.rl_loop as grpo_mod
 
         grpo_mod.reward_fn = _gsm8k_reward
 
         config = Config(
             base_model=e2e_model,
             dataset=GSM8K_SAMPLE_URL,
-            group_size=4,
+            completions_per_prompt=4,
             max_rows=10,
             epochs=1,
             grad_accum=2,

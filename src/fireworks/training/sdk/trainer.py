@@ -120,6 +120,8 @@ class TrainerJobManager:
         self.base_url = base_url
         self.additional_headers = additional_headers
         self._verify_ssl = verify_ssl if verify_ssl is not None else DeploymentManager._should_verify_ssl(base_url)
+        self.boot_time_s: float | None = None
+        """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -345,6 +347,7 @@ class TrainerJobManager:
                 service_ready = self._check_healthz(base_url)
 
             if service_ready:
+                self.boot_time_s = time.time() - start
                 logger.info(
                     "[%ds] Trainer job %s: state=%s, healthz=OK -- service ready",
                     elapsed,

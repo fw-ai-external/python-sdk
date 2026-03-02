@@ -24,7 +24,7 @@ import pytest
 
 from fireworks.training.cookbook.utils import ISConfig, InfraConfig, DeployConfig, ResumeConfig, HotloadConfig
 from fireworks.training.cookbook.tests.conftest import GSM8K_SAMPLE_URL
-from fireworks.training.cookbook.recipes.grpo_loop import Config, main
+from fireworks.training.cookbook.recipes.rl_loop import Config, main
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class TestGRPOResumeE2E:
         if not e2e_deployment_shape:
             pytest.skip("Set FIREWORKS_E2E_DEPLOYMENT_SHAPE for GRPO E2E runs")
 
-        import fireworks.training.cookbook.recipes.grpo_loop as grpo_mod
+        import fireworks.training.cookbook.recipes.rl_loop as grpo_mod
 
         grpo_mod.reward_fn = _gsm8k_reward
 
@@ -84,7 +84,7 @@ class TestGRPOResumeE2E:
         phase1_config = Config(
             base_model=e2e_model,
             dataset=GSM8K_SAMPLE_URL,
-            group_size=4,
+            completions_per_prompt=4,
             max_rows=8,
             epochs=1,
             grad_accum=2,
@@ -126,7 +126,7 @@ class TestGRPOResumeE2E:
         phase2_config = Config(
             base_model=e2e_model,
             dataset=GSM8K_SAMPLE_URL,
-            group_size=4,
+            completions_per_prompt=4,
             max_rows=6,
             epochs=1,
             grad_accum=2,

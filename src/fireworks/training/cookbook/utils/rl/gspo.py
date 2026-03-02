@@ -2,7 +2,7 @@
 
 Implements PPO-style clipping with a **sequence-level importance ratio**
 (geometric mean of per-token ratios), then broadcasts that ratio to tokens.
-This matches GSPO behavior used in AReaL/verl/slime families.
+This matches common GSPO implementations in open-source RL training stacks.
 
 TIS can be composed on top via ``tis_weights_fn``.
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import torch
 import tinker
 
-from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
+from fireworks.training.cookbook.utils.rl.common import _normalize_prompt_lens
 
 
 @dataclass
@@ -72,6 +72,9 @@ def make_gspo_loss_fn(
         total_loss = torch.tensor(0.0, requires_grad=True)
         total_kl = 0.0
         total_rho = 0.0
+        total_inf_diff = 0.0
+        total_inf_kld = 0.0
+        inf_num_samples = 0
         num_tokens = 0
         clip_frac_sum = 0.0
         clip_frac_count = 0
@@ -100,15 +103,21 @@ def make_gspo_loss_fn(
                     f"GSPO requires inference logprobs for sample {i} but got empty list. "
                     f"Ensure logprobs=True is set when using policy_loss='gspo'."
                 )
+            if len(inf_lp) < response_start + resp_len:
+                raise ValueError(
+                    f"GSPO requires at least {response_start + resp_len} inference logprobs "
+                    f"for sample {i}, got {len(inf_lp)}."
+                )
 
             resp_inf = torch.tensor(
-                [
-                    inf_lp[response_start + j] if (response_start + j) < len(inf_lp) else pi_detached[j].item()
-                    for j in range(resp_len)
-                ],
+                inf_lp[response_start : response_start + resp_len],
                 dtype=resp_pi.dtype,
                 device=resp_pi.device,
             )
+            inf_log_diff = pi_detached - resp_inf
+            total_inf_diff += inf_log_diff.abs().mean().item()
+            total_inf_kld += (torch.exp(inf_log_diff) - inf_log_diff - 1.0).mean().item()
+            inf_num_samples += 1
 
             log_ratio = resp_pi - resp_inf
             seq_log_ratio = log_ratio.mean()
@@ -144,6 +153,9 @@ def make_gspo_loss_fn(
             "mean_kl": total_kl / num_tokens if num_tokens > 0 else 0.0,
             "gspo_clip_frac": clip_frac_sum / clip_frac_count if clip_frac_count > 0 else 0.0,
         }
+        if inf_num_samples > 0:
+            metrics["inference_diff"] = total_inf_diff / inf_num_samples
+            metrics["inference_kld"] = total_inf_kld / inf_num_samples
         if tis_weights_fn:
             metrics["mean_importance_ratio"] = total_rho / num_tokens if num_tokens > 0 else 1.0
             n_samples = len(logprobs_list) or 1

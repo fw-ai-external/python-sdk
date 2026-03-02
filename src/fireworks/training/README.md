@@ -24,7 +24,7 @@ export FIREWORKS_BASE_URL="https://api.fireworks.ai"
 ## Quick start (recipe-first)
 
 ```python
-from fireworks.training.cookbook.recipes.grpo_loop import Config, main
+from fireworks.training.cookbook.recipes.rl_loop import Config, main
 from fireworks.training.cookbook.utils import (
     InfraConfig,
     DeployConfig,

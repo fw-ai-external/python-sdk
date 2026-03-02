@@ -99,6 +99,87 @@ def validate_config(
         raise RuntimeError("\n\n".join(errors))
 
 
+def validate_streaming_config(
+    prompt_groups_per_step: int,
+    completions_per_prompt: int,
+    max_samples_per_fwd_bwd: int,
+    min_samples_per_fwd_bwd: int | None = None,
+) -> None:
+    """Validate streaming / batching parameters before creating resources.
+
+    Catches config mismatches that would otherwise surface as silent
+    training bugs or OOMs deep into a run.
+    """
+    errors: list[str] = []
+
+    effective_min_samples = (
+        min_samples_per_fwd_bwd
+        if min_samples_per_fwd_bwd is not None
+        else max_samples_per_fwd_bwd
+    )
+
+    if completions_per_prompt < 1:
+        errors.append(
+            f"completions_per_prompt must be >= 1, got {completions_per_prompt}"
+        )
+    if prompt_groups_per_step < 1:
+        errors.append(
+            f"prompt_groups_per_step must be >= 1, got {prompt_groups_per_step}"
+        )
+    if max_samples_per_fwd_bwd < completions_per_prompt:
+        errors.append(
+            f"max_samples_per_fwd_bwd ({max_samples_per_fwd_bwd}) must be >= completions_per_prompt ({completions_per_prompt}) "
+            f"so at least one full prompt group fits per fwd_bwd call"
+        )
+    if (
+        completions_per_prompt > 0
+        and max_samples_per_fwd_bwd % completions_per_prompt != 0
+    ):
+        errors.append(
+            f"max_samples_per_fwd_bwd ({max_samples_per_fwd_bwd}) should be divisible by completions_per_prompt ({completions_per_prompt}) "
+            f"to avoid partial groups in a fwd_bwd call"
+        )
+
+    if effective_min_samples < completions_per_prompt:
+        errors.append(
+            f"min_samples_per_fwd_bwd ({effective_min_samples}) must be >= completions_per_prompt ({completions_per_prompt}) "
+            f"so at least one full prompt group fits per fwd_bwd call"
+        )
+    if effective_min_samples > max_samples_per_fwd_bwd:
+        errors.append(
+            f"min_samples_per_fwd_bwd ({effective_min_samples}) must be <= max_samples_per_fwd_bwd ({max_samples_per_fwd_bwd})"
+        )
+    if (
+        completions_per_prompt > 0
+        and effective_min_samples % completions_per_prompt != 0
+    ):
+        errors.append(
+            f"min_samples_per_fwd_bwd ({effective_min_samples}) should be divisible by completions_per_prompt ({completions_per_prompt}) "
+            f"to avoid partial groups in a fwd_bwd call"
+        )
+
+    if errors:
+        raise ValueError("\n".join(errors))
+
+    min_prompt_groups = effective_min_samples // completions_per_prompt
+    max_prompt_groups = max_samples_per_fwd_bwd // completions_per_prompt
+    fwd_bwd_calls_per_step = -(-prompt_groups_per_step // min_prompt_groups)
+    logger.info(
+        "Streaming config: min_samples_per_fwd_bwd=%d, max_samples_per_fwd_bwd=%d, "
+        "completions_per_prompt=%d -> fire fwd_bwd at %d prompt_groups (%d samples), "
+        "cap at %d prompt_groups (%d samples), ~%d fwd_bwd calls per step (%d prompt_groups/step)",
+        effective_min_samples,
+        max_samples_per_fwd_bwd,
+        completions_per_prompt,
+        min_prompt_groups,
+        effective_min_samples,
+        max_prompt_groups,
+        max_samples_per_fwd_bwd,
+        fwd_bwd_calls_per_step,
+        prompt_groups_per_step,
+    )
+
+
 def validate_preflight(
     args,
     fw_api_key: str | None,

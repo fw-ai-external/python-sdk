@@ -55,7 +55,7 @@ class DeploymentConfig:
     deployment_id: str
     base_model: str
     deployment_shape: str | None = None
-    region: str = "US_VIRGINIA_1"
+    region: str = "US_OHIO_1"
     min_replica_count: int = 0
     max_replica_count: int = 1
     accelerator_type: str = "NVIDIA_H200_141GB"
@@ -113,6 +113,8 @@ class DeploymentManager:
         self.hotload_api_url = hotload_api_url or base_url
         self.additional_headers = additional_headers
         self._verify_ssl = verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        self.boot_time_s: float | None = None
+        """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
     @staticmethod
     def _should_verify_ssl(url: str) -> bool:
@@ -148,10 +150,15 @@ class DeploymentManager:
         resp.raise_for_status()
         return resp.json()
 
-    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True) -> None:
+    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        params = []
         if ignore_checks:
-            url = f"{url}?ignoreChecks=true"
+            params.append("ignoreChecks=true")
+        if hard:
+            params.append("hard=true")
+        if params:
+            url = f"{url}?{'&'.join(params)}"
         resp = request_with_retries(requests.delete, url, headers=self._headers(), timeout=60, verify=self._verify_ssl)
         resp.raise_for_status()
 
@@ -321,6 +328,7 @@ class DeploymentManager:
             elapsed = int(time.time() - start)
             if state == "READY":
                 logger.info("[%ds] Deployment %s: READY", elapsed, deployment_id)
+                self.boot_time_s = time.time() - start
                 return self._parse_deployment_info(deployment_id, data)
             if state in ("FAILED", "DELETED", "DELETING"):
                 raise RuntimeError(
@@ -333,12 +341,13 @@ class DeploymentManager:
                         docs_url=DOCS_DEPLOYMENTS,
                     )
                 )
-            if state == "CREATING" and self.warmup(model, max_retries=1, retry_interval_s=0):
+            if state == "CREATING" and self._probe_inference(model):
                 logger.info(
                     "[%ds] Deployment %s: CREATING but serving requests -- treating as ready",
                     elapsed,
                     deployment_id,
                 )
+                self.boot_time_s = time.time() - start
                 return self._parse_deployment_info(deployment_id, data)
             logger.info("[%ds] Deployment %s: %s", elapsed, deployment_id, state)
             time.sleep(poll_interval_s)
@@ -595,6 +604,19 @@ class DeploymentManager:
             timeout_seconds=timeout_seconds,
         )
 
+    def _probe_inference(self, model: str) -> bool:
+        """Silent single-shot probe: returns True if deployment responds HTTP 200."""
+        base = self.inference_url.rstrip("/")
+        url = f"{base}/inference/v1/completions"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        payload = {"model": model, "prompt": [1, 2], "max_tokens": 4, "temperature": 0.0}
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=10,
+                                 verify=self._should_verify_ssl(self.inference_url))
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def warmup(
         self,
         model: str,
@@ -733,6 +755,7 @@ class DeploymentSampler:
         Args:
             prompt: Prompt as a list of token IDs (client-side tokenized).
             n: Number of completions to sample.
+                In cookbook GRPO, this maps to ``completions_per_prompt``.
             max_tokens: Max tokens per completion.
             temperature: Sampling temperature.
             hotload_retry_interval: Seconds between retries when deployment
@@ -753,6 +776,7 @@ class DeploymentSampler:
             "Authorization": f"Bearer {self.api_key}",
             "X-Api-Key": self.api_key,
         }
+        http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
@@ -761,21 +785,21 @@ class DeploymentSampler:
             "temperature": temperature,
             **kwargs,
         }
-
         for hotload_attempt in range(hotload_max_retries + 1):
             resp = request_with_retries(
                 requests.post,
                 self._completions_url,
                 headers=headers,
                 json=payload,
-                timeout=180,
+                timeout=http_timeout,
                 verify=self._verify_ssl,
                 max_wait_time=60,
             )
 
-            if resp.status_code == 425 and hotload_attempt < hotload_max_retries:
+            if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
                 logger.info(
-                    "Deployment is hot-loading, retry %d/%d in %ds...",
+                    "Deployment not ready (HTTP %d), retry %d/%d in %ds...",
+                    resp.status_code,
                     hotload_attempt + 1,
                     hotload_max_retries,
                     int(hotload_retry_interval),
@@ -880,6 +904,7 @@ class DeploymentSampler:
         Args:
             messages: Chat messages (role + content).
             n: Number of completions to sample.
+                In cookbook GRPO, this is usually ``completions_per_prompt``.
             max_tokens: Max tokens per completion.
             temperature: Sampling temperature.
             max_seq_len: If set, filter out sequences that exceed this length.
@@ -901,6 +926,7 @@ class DeploymentSampler:
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
+        num_completions = n
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
             messages, tokenize=True, add_generation_prompt=True, return_dict=False,
@@ -915,7 +941,7 @@ class DeploymentSampler:
 
         result = self.completions(
             prompt=prompt_ids,
-            n=n,
+            n=num_completions,
             max_tokens=max_tokens,
             temperature=temperature,
             raw_output=True,

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0-alpha.30 (2026-03-02)
+
+Full Changelog: [v1.0.0-alpha.29...v1.0.0-alpha.30](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.29...v1.0.0-alpha.30)
+
+### Bug Fixes
+
+* keep GRPO router replay policy-only ([353b45e](https://github.com/fw-ai-external/python-sdk/commit/353b45eeb6ca697af0ff454716a52f9062892896))
+* Optimize metrics, batch forward, configurable timeout ([#41](https://github.com/fw-ai-external/python-sdk/issues/41)) ([4d754c8](https://github.com/fw-ai-external/python-sdk/commit/4d754c8f0381e66e0c7a0cdfafc12572d3fa5918))
+* remove duplicate GRPO reference forward call ([6af3b03](https://github.com/fw-ai-external/python-sdk/commit/6af3b038ae654bde9608fd5fa6dee024dfdeace2))
+
 ## 1.0.0-alpha.29 (2026-02-26)
 
 Full Changelog: [v1.0.0-alpha.28...v1.0.0-alpha.29](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.28...v1.0.0-alpha.29)
