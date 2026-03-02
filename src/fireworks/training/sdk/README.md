@@ -7,11 +7,23 @@ It provides trainer/deployment lifecycle APIs, hotload orchestration, and thin T
 
 | Component | Purpose |
 | --- | --- |
-| `TrainerJobManager` + `TrainerJobConfig` | Create/resume/delete RLOR trainer jobs and wait for healthy endpoints. |
-| `DeploymentManager` + `DeploymentConfig` | Create/get/delete deployments, hotload snapshots, wait for readiness, warmup. |
-| `DeploymentSampler` | Token-in/token-out completions wrapper with local tokenizer integration. |
-| `FiretitanServiceClient` + `FiretitanTrainingClient` | Tinker-compatible training clients with Fireworks-specific extensions. |
-| `WeightSyncer` | Save sampler checkpoints and sync them to deployments (base/delta chain). |
+| `TrainerJobManager` + `TrainerJobConfig` | Create/resume/delete RLOR trainer jobs and wait for healthy endpoints. Supports training shape resolution via `resolve_training_profile`. |
+| `DeploymentManager` + `DeploymentConfig` | Create/get/delete deployments, hotload snapshots, wait for readiness, warmup. Supports separate control-plane, inference, and hotload URLs. |
+| `DeploymentSampler` | Token-in/token-out completions wrapper with client-side tokenizer, echo mode, logprobs, and routing matrix extraction. |
+| `FiretitanServiceClient` + `FiretitanTrainingClient` | Tinker-compatible training clients with Fireworks-specific extensions (sampler weights, cross-job resume, session-scoped checkpoints). |
+| `WeightSyncer` | Save sampler checkpoints and sync them to deployments via delta chain management. |
+
+## Training shape resolution
+
+When using training shapes, the SDK resolves all infrastructure configuration from the control plane:
+
+```python
+mgr = TrainerJobManager(api_key="...", account_id="...", base_url="...")
+profile = mgr.resolve_training_profile("my-training-shape")
+# profile.region, profile.accelerator_type, profile.node_count, etc.
+```
+
+The resolved `TrainingShapeProfile` auto-populates region, accelerator, image tag, and node count. When a training shape is used, accelerator fields are omitted from the trainer API request (the control plane derives them from the shape).
 
 ## Tinker compatibility and extensions
 
@@ -19,7 +31,7 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 
 Fireworks-specific additions:
 
-- `save_weights_for_sampler_ext(name, checkpoint_type=...)`
+- `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support.
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
 - automatic model-input patch for router replay (`_tinker_r3_patch.py`)
@@ -70,6 +82,21 @@ syncer.save_and_hotload("step-1")
 syncer.save_dcp("step-1")
 ```
 
+## WeightSyncer lifecycle
+
+`WeightSyncer` manages the save-then-hotload pattern:
+
+| Method | Purpose |
+| --- | --- |
+| `save_and_hotload(name)` | Save sampler weights + hotload + warmup. |
+| `save_only(name)` | Save without hotloading (for split workflows). |
+| `hotload(snapshot_name)` | Hotload a previously saved snapshot. |
+| `save_dcp(name)` | Save DCP checkpoint for resume (independent of weight sync). |
+| `check_deployment_state()` | Query current hotload identity/readiness. |
+| `wait_for_hotload_ready(timeout_s)` | Block until hotload manager is initialized. |
+
+The syncer automatically manages the delta chain (`base_saved`/`base_identity`), forces full hotload when detecting stale deployment state, and tracks timing breakdowns via `last_timing`.
+
 ## Error handling and retries
 
 - `errors.py` provides `request_with_retries`, structured error formatting, and status hints.
@@ -78,5 +105,4 @@ syncer.save_dcp("step-1")
 
 ## Next step
 
-Use this layer directly when building your own algorithm loop, or use `fireworks.training.cookbook` for ready-to-run GRPO/DPO/SFT recipes.
-
+Use this layer directly when building your own algorithm loop, or use `fireworks.training.cookbook` for ready-to-run GRPO/DAPO/GSPO/DPO/ORPO/SFT recipes.
