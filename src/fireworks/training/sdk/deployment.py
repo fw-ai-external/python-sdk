@@ -55,7 +55,7 @@ class DeploymentConfig:
     deployment_id: str
     base_model: str
     deployment_shape: str | None = None
-    region: str = "US_VIRGINIA_1"
+    region: str = "US_OHIO_1"
     min_replica_count: int = 0
     max_replica_count: int = 1
     accelerator_type: str = "NVIDIA_H200_141GB"
@@ -150,10 +150,15 @@ class DeploymentManager:
         resp.raise_for_status()
         return resp.json()
 
-    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True) -> None:
+    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        params = []
         if ignore_checks:
-            url = f"{url}?ignoreChecks=true"
+            params.append("ignoreChecks=true")
+        if hard:
+            params.append("hard=true")
+        if params:
+            url = f"{url}?{'&'.join(params)}"
         resp = request_with_retries(requests.delete, url, headers=self._headers(), timeout=60, verify=self._verify_ssl)
         resp.raise_for_status()
 
