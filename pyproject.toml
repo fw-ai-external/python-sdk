@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.0.0-alpha.34"
+version = "1.0.0-alpha.35"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -44,8 +44,8 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
 training = [
-  "tinker @ git+https://github.com/thinking-machines-lab/tinker.git@77cc8a0810e5d1370585a4c08d729db5d2800802 ; python_version >= '3.11'",
-  "tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git@f57a8ba9668af75dd1654f9aec93c64e82a0f67d ; python_version >= '3.11'",
+  "tinker>=0.14.0 ; python_version >= '3.11'",
+  "tinker-cookbook>=0.1.0 ; python_version >= '3.11'",
   "requests",
   "torch>=2.0.0",
   "transformers",
