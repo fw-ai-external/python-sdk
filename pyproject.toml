@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.0.0-alpha.33"
+version = "1.0.0-alpha.34"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -173,7 +173,6 @@ exclude = [
     ".git",
     "examples/**/.venv",
     "src/fireworks/training/sdk/**",
-    "src/fireworks/training/cookbook/**",
 ]
 
 reportImplicitOverride = true
@@ -192,7 +191,7 @@ show_error_codes = true
 #
 # We also exclude our `tests` as mypy doesn't always infer
 # types correctly and Pyright will still catch any type errors.
-exclude = ['src/fireworks/_files.py', 'src/fireworks/training/sdk/.*', 'src/fireworks/training/cookbook/.*', '_dev/.*.py', 'tests/.*', 'examples/.*']
+exclude = ['src/fireworks/_files.py', 'src/fireworks/training/sdk/.*', '_dev/.*.py', 'tests/.*', 'examples/.*']
 
 strict_equality = true
 implicit_reexport = true
@@ -292,4 +291,3 @@ known-first-party = ["fireworks", "tests"]
 "tests/**.py" = ["T201", "T203"]
 "examples/**.py" = ["T201", "T203"]
 "src/fireworks/training/sdk/**.py" = ["T201", "T203", "ARG001", "ARG002"]
-"src/fireworks/training/cookbook/**.py" = ["T201", "T203", "ARG001", "ARG002"]
