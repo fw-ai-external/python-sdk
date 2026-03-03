@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.32 (2026-03-03)
+
+Full Changelog: [v1.0.0-alpha.31...v1.0.0-alpha.32](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.31...v1.0.0-alpha.32)
+
+### Bug Fixes
+
+* proper forward_only shape resolution and separate ref training shape support ([#45](https://github.com/fw-ai-external/python-sdk/issues/45)) ([6de7555](https://github.com/fw-ai-external/python-sdk/commit/6de7555712885397ef6363610b624ddbfd95b823))
+
 ## 1.0.0-alpha.31 (2026-03-03)
 
 Full Changelog: [v1.0.0-alpha.30...v1.0.0-alpha.31](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.30...v1.0.0-alpha.31)
