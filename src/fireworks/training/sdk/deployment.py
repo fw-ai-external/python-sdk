@@ -61,6 +61,7 @@ class DeploymentConfig:
     accelerator_type: str = "NVIDIA_H200_141GB"
     hot_load_bucket_type: str | None = "FW_HOSTED"
     skip_shape_validation: bool = False
+    disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
 
 
@@ -166,6 +167,8 @@ class DeploymentManager:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
         if config.skip_shape_validation:
             url = f"{url}&skipShapeValidation=true"
+        if config.disable_speculative_decoding:
+            url = f"{url}&disableSpeculativeDecoding=true"
 
         body: dict[str, Any] = {
             "baseModel": config.base_model,

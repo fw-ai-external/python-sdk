@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.33 (2026-03-03)
+
+Full Changelog: [v1.0.0-alpha.32...v1.0.0-alpha.33](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.32...v1.0.0-alpha.33)
+
+### Bug Fixes
+
+* on-policy sampling and disable speculative decoding for hotload ([#46](https://github.com/fw-ai-external/python-sdk/issues/46)) ([2fb012b](https://github.com/fw-ai-external/python-sdk/commit/2fb012b64bccc122680b98b3108923dfff4a93b4))
+
 ## 1.0.0-alpha.32 (2026-03-03)
 
 Full Changelog: [v1.0.0-alpha.31...v1.0.0-alpha.32](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.31...v1.0.0-alpha.32)

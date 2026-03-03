@@ -44,28 +44,28 @@ FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks
 
 BASE_MODEL = "accounts/fireworks/models/qwen3-30b-a3b-instruct-2507"
 TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-DATASET_PATH = os.path.join(os.path.dirname(__file__), "deepmath_probability_hard.jsonl")
+DATASET_PATH = os.path.join(os.path.dirname(__file__), "deepmath_103k.jsonl")
 
-TRAINING_SHAPE = "ts-qwen3-30b-a3b-instruct-128k-rft-dev-v1"
+TRAINING_SHAPE = "ts-qwen3-30b-a3b-instruct-32k-rft-dev-cp1-v1"
 DEPLOYMENT_SHAPE = "accounts/pyroworks/deploymentShapes/rft-dev-qwen3-30b-a3b-throughput-moe-stats-v1"
-DEPLOYMENT_ID = f"deepmath-prob-hard-{int(__import__('time').time()) % 100000}"
-REGION = "US_VIRGINIA_1"
+DEPLOYMENT_ID = f"deepmath-{int(__import__('time').time()) % 100000}"
+REGION = "US_OHIO_1"
 
-MAX_ROWS = 1804
+MAX_ROWS = 500
 EPOCHS = 3
 COMPLETIONS_PER_PROMPT = 8
 LEARNING_RATE = 1e-5
 KL_BETA = 0.001
 TEMPERATURE = 1.0
-MAX_COMPLETION_TOKENS = 32 * 1024
+MAX_COMPLETION_TOKENS = 16 * 1024
 MAX_SEQ_LEN = 32 * 1024
 
-PROMPT_GROUPS_PER_STEP = 16
-MIN_SAMPLES_PER_FWD_BWD = 32
+PROMPT_GROUPS_PER_STEP = 8
+MIN_SAMPLES_PER_FWD_BWD = 8
 MAX_SAMPLES_PER_FWD_BWD = 256
 
-WANDB_ENTITY = "myh97"
-WANDB_PROJECT = "grpo-tinker"
+WANDB_ENTITY = os.environ.get("WANDB_ENTITY", "")
+WANDB_PROJECT = os.environ.get("WANDB_PROJECT", "grpo-tinker")
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +218,7 @@ def main():
         deployment=DeployConfig(
             deployment_id=DEPLOYMENT_ID,
             deployment_shape=DEPLOYMENT_SHAPE,
+            deployment_region="US_VIRGINIA_1",
             tokenizer_model=TOKENIZER_MODEL,
             sample_timeout=1200,
         ),
