@@ -1,10 +1,11 @@
 # Fireworks Training (`fireworks.training`)
 
 `fireworks.training` is the training layer built on top of the Fireworks Python SDK and the Tinker protocol.
-It is split into two layers:
+This repo now contains the SDK/orchestration layer:
 
 - `sdk/`: infrastructure + orchestration primitives (trainer jobs, deployments, hotload, sampling).
-- `cookbook/`: compact, runnable training loops (GRPO, DAPO, GSPO, CISPO, DPO, ORPO, SFT) you can fork and modify.
+
+Runnable recipe loops (GRPO, DAPO, GSPO, CISPO, DPO, ORPO, SFT) now live in the standalone cookbook repo under `../cookbook/training`.
 
 ## Install
 
@@ -17,6 +18,8 @@ export FIREWORKS_BASE_URL="https://api.fireworks.ai"  # optional
 ```
 
 ## Quick start
+
+After installing the standalone cookbook package/code, you can run recipe loops with:
 
 ```python
 from fireworks.training.cookbook.recipes.rl_loop import Config, main
@@ -41,13 +44,12 @@ main(cfg)
 
 ## Where to start
 
-- Want a runnable baseline: start with `cookbook/README.md`.
+- Want a runnable baseline: start with `../cookbook/training/src/fireworks/training/cookbook/README.md`.
 - Want low-level lifecycle control: start with `sdk/README.md`.
-- Want a full worked example: see `cookbook/examples/deepmath/RUNBOOK.md`.
+- Want a full worked example: see `../cookbook/training/src/fireworks/training/cookbook/examples/deepmath`.
 
 ## Tests
 
 ```bash
 pytest src/fireworks/training/sdk/tests
-pytest src/fireworks/training/cookbook/tests
 ```

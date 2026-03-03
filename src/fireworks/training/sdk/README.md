@@ -78,4 +78,4 @@ syncer.save_dcp("step-1")
 
 ## Next step
 
-Use this layer directly when building your own algorithm loop, or use `fireworks.training.cookbook` for ready-to-run recipes.
+Use this layer directly when building your own algorithm loop, or use `fireworks.training.cookbook` from the standalone cookbook repo for ready-to-run recipes.
