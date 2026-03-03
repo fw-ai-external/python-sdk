@@ -58,6 +58,7 @@ from fireworks.training.cookbook.utils.rl.pp import compute_pp_recommendation
 from fireworks.training.cookbook.utils.timer import timer, flush_timing
 from fireworks.training.cookbook.utils.rl.dapo import DAPOConfig
 from fireworks.training.cookbook.utils.rl.gspo import GSPOConfig
+from fireworks.training.cookbook.utils.rl.cispo import CISPOConfig
 from fireworks.training.cookbook.utils.rl.train import MinibatchTrainFns, run_rl_loop
 from fireworks.training.cookbook.utils.rl.losses import build_loss_fn, combine_prompt_groups
 from fireworks.training.cookbook.utils.rl.metrics import compute_step_metrics
@@ -107,12 +108,13 @@ class Config:
     router_replay_completion_only: bool = True
 
     policy_loss: str = "grpo"
-    """``"grpo"``, ``"dapo"``, or ``"gspo"``."""
+    """``"grpo"``, ``"dapo"``, ``"gspo"``, or ``"cispo"``."""
 
     tis_enabled: bool = False
     tis: ISConfig = field(default_factory=ISConfig)
     dapo: DAPOConfig = field(default_factory=DAPOConfig)
     gspo: GSPOConfig = field(default_factory=GSPOConfig)
+    cispo: CISPOConfig = field(default_factory=CISPOConfig)
 
     infra: InfraConfig = field(default_factory=InfraConfig)
     deployment: DeployConfig = field(default_factory=DeployConfig)
@@ -310,6 +312,7 @@ def main(
         policy_loss=cfg.policy_loss, kl_beta=cfg.kl_beta,
         tis_enabled=cfg.tis_enabled, tis_config=cfg.tis,
         dapo_config=cfg.dapo, gspo_config=cfg.gspo,
+        cispo_config=cfg.cispo,
     )
 
     sample_kwargs: dict = dict(

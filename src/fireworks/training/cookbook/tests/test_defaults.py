@@ -22,7 +22,7 @@ def test_tis_clip_high():
 
 
 def test_cispo_config_defaults():
-    from fireworks.training.cookbook.recipes.grpo_loop import Config
+    from fireworks.training.cookbook.recipes.rl_loop import Config
 
     cfg = Config()
     assert cfg.cispo.eps_low == 0.2
@@ -30,7 +30,7 @@ def test_cispo_config_defaults():
 
 
 def test_cispo_is_valid_policy_loss():
-    from fireworks.training.cookbook.recipes.grpo_loop import Config
+    from fireworks.training.cookbook.recipes.rl_loop import Config
 
     cfg = Config(policy_loss="cispo")
     assert cfg.policy_loss == "cispo"

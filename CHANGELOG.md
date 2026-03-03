@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.31 (2026-03-03)
+
+Full Changelog: [v1.0.0-alpha.30...v1.0.0-alpha.31](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.30...v1.0.0-alpha.31)
+
+### Bug Fixes
+
+* wire CISPO into policy_loss dispatch and Config ([#44](https://github.com/fw-ai-external/python-sdk/issues/44)) ([062c220](https://github.com/fw-ai-external/python-sdk/commit/062c22024054f1c98aba7e6a7675ffe7ee9d1a2c))
+
+
+### Documentation
+
+* update training READMEs for new RL features and streaming loop ([#43](https://github.com/fw-ai-external/python-sdk/issues/43)) ([678682e](https://github.com/fw-ai-external/python-sdk/commit/678682ea4c9868903c6179ca70cf54545816e978))
+
 ## 1.0.0-alpha.30 (2026-03-02)
 
 Full Changelog: [v1.0.0-alpha.29...v1.0.0-alpha.30](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.29...v1.0.0-alpha.30)
