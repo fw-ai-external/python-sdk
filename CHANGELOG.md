@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.35 (2026-03-03)
+
+Full Changelog: [v1.0.0-alpha.34...v1.0.0-alpha.35](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.34...v1.0.0-alpha.35)
+
+### Bug Fixes
+
+* make training extras publishable on PyPI ([#48](https://github.com/fw-ai-external/python-sdk/issues/48)) ([c1478f9](https://github.com/fw-ai-external/python-sdk/commit/c1478f97437fcee568aece00599ec12f9232fefb))
+
 ## 1.0.0-alpha.34 (2026-03-03)
 
 Full Changelog: [v1.0.0-alpha.33...v1.0.0-alpha.34](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.33...v1.0.0-alpha.34)
