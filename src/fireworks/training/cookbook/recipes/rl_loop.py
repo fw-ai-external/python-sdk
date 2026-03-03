@@ -218,6 +218,11 @@ def main(
     if deploy_mgr is None:
         deploy_mgr = DeploymentManager(api_key=api_key, account_id=account, base_url=base_url)
 
+    # -- Resolve training shapes -----------------------------------------------
+    # Policy shape is resolved first (also populates deploy_cfg).
+    # Ref shape is resolved separately if it differs from the policy shape.
+    # With skip_validations, shapes still provide defaults but user args override.
+
     profile = None
     if cfg.infra.training_shape_id:
         profile = resolve_and_apply_shape(rlor_mgr, cfg.base_model, cfg.infra, cfg.deployment)
@@ -230,11 +235,15 @@ def main(
             prompt_groups_per_step,
         )
 
-    ref_extra = list(cfg.infra.extra_args or [])
-    if "--forward-only" not in ref_extra:
-        ref_extra.append("--forward-only")
-    if "--no-compile" not in ref_extra:
-        ref_extra.append("--no-compile")
+    if cfg.infra.ref_training_shape_id:
+        logger.info("Using separate ref training shape: %s", cfg.infra.ref_training_shape_id)
+        ref_infra = InfraConfig(
+            training_shape_id=cfg.infra.ref_training_shape_id,
+            region=cfg.infra.region,
+        )
+        resolve_and_apply_shape(rlor_mgr, cfg.base_model, ref_infra)
+    else:
+        ref_infra = cfg.infra
 
     import time as _time
     _infra_start = _time.time()
@@ -265,10 +274,10 @@ def main(
         )
         ref_fut = pool.submit(
             create_trainer_job, rlor_mgr,
-            base_model=cfg.base_model, infra=cfg.infra,
+            base_model=cfg.base_model, infra=ref_infra,
             lora_rank=cfg.lora_rank, max_seq_len=cfg.max_seq_len,
             learning_rate=cfg.learning_rate, grad_accum=server_grad_accum_steps,
-            display_name="grpo-reference", extra_args=ref_extra,
+            display_name="grpo-reference", forward_only=True,
         )
         policy_ep = pol_fut.result()
         reference_ep = ref_fut.result()

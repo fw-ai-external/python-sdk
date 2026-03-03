@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import torch
 import tinker
 
-from fireworks.training.cookbook.utils.rl.losses import _normalize_prompt_lens
+from fireworks.training.cookbook.utils.rl.common import _normalize_prompt_lens
 
 
 @dataclass
