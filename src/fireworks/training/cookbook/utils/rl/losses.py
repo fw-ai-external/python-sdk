@@ -66,8 +66,9 @@ def build_loss_fn(
     tis_config: Any = None,
     dapo_config: Any = None,
     gspo_config: Any = None,
+    cispo_config: Any = None,
 ) -> LossFnBuilder:
-    """Create a loss builder that dispatches to grpo/dapo/gspo.
+    """Create a loss builder that dispatches to grpo/dapo/gspo/cispo.
 
     Returns a callable that accepts (advantages, ref_logprobs, prompt_lens,
     inf_logprobs) and returns a tinker loss_fn value.
@@ -75,6 +76,7 @@ def build_loss_fn(
     from fireworks.training.cookbook.utils.rl.dapo import make_dapo_loss_fn
     from fireworks.training.cookbook.utils.rl.grpo import make_grpo_loss_fn
     from fireworks.training.cookbook.utils.rl.gspo import make_gspo_loss_fn
+    from fireworks.training.cookbook.utils.rl.cispo import make_cispo_loss_fn
     from fireworks.training.cookbook.utils.rl.importance_sampling import make_tis_weights_fn
 
     def build(
@@ -97,13 +99,18 @@ def build_loss_fn(
                 advantages, ref_logprobs, inf_logprobs,
                 prompt_lens, gspo_config, tis_weights_fn=tis_wf,
             )
+        if policy_loss == "cispo":
+            return make_cispo_loss_fn(
+                advantages, ref_logprobs, inf_logprobs,
+                prompt_lens, cispo_config, tis_weights_fn=tis_wf,
+            )
         if policy_loss == "grpo":
             return make_grpo_loss_fn(
                 advantages, ref_logprobs,
                 prompt_lens, inf_logprobs=inf_logprobs, kl_beta=kl_beta, tis_weights_fn=tis_wf,
             )
         raise ValueError(
-            f"Unsupported policy_loss '{policy_loss}'. Expected one of: grpo, dapo, gspo."
+            f"Unsupported policy_loss '{policy_loss}'. Expected one of: grpo, dapo, gspo, cispo."
         )
 
     return build
