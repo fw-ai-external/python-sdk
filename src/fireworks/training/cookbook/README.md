@@ -12,18 +12,18 @@ Think of it like a Fireworks-adapted `tinker-cookbook`: same client-side loss pa
 | ORPO | `recipes/orpo_loop.py` | Odds-ratio preference optimization — no reference model needed. Combined SFT + odds-ratio loss. |
 | SFT | `recipes/sft_loop.py` | Single trainer with response-only cross-entropy loss. |
 
-## Streaming RL loop
+## On-policy RL loop
 
-`rl_loop.py` uses an async streaming architecture: sampling coroutines run concurrently, completions accumulate in a greedy-batching buffer, and `forward_backward_custom` fires as soon as enough samples arrive. Rollout, reference forward, and training overlap automatically.
+`rl_loop.py` uses an on-policy streaming architecture: each optimizer step samples exactly `prompt_groups_per_step` prompts (rate-limited by `max_concurrent`), fires `forward_backward_custom` as soon as `min_samples_per_fwd_bwd` samples arrive, then runs `optim_step` + hotload before sampling the next step. Only the current step's prompts are in-flight at any time.
 
-Key scheduling parameters: `prompt_groups_per_step` (groups per optimizer step), `min_samples_per_fwd_bwd` / `max_samples_per_fwd_bwd` (micro-batch bounds), and `max_concurrent` (in-flight sampling cap).
+Key scheduling parameters: `prompt_groups_per_step` (prompts per optimizer step), `min_samples_per_fwd_bwd` / `max_samples_per_fwd_bwd` (micro-batch bounds), and `max_concurrent` (in-flight sampling rate limit).
 
 ## Shared config blocks
 
 All recipes compose these dataclasses from `utils/config.py`:
 
-- `InfraConfig`: region, accelerators, image tag, node count. Supports `training_shape_id` for auto-config from control-plane training shapes.
-- `DeployConfig`: deployment lifecycle, sampling/hotload settings, `tokenizer_model` (required for RL).
+- `InfraConfig`: region, accelerators, image tag, node count. Supports `training_shape_id` for auto-config from control-plane training shapes, and `ref_training_shape_id` for a separate reference trainer shape.
+- `DeployConfig`: deployment lifecycle, sampling/hotload settings, `tokenizer_model` (required for RL), `disable_speculative_decoding` (for hotload compatibility).
 - `HotloadConfig`: hotload cadence, base/delta behavior, timeout.
 - `ResumeConfig`: checkpoint source + optional step offset.
 - `WandBConfig`: optional experiment logging.

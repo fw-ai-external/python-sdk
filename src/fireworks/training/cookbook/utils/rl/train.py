@@ -1,16 +1,9 @@
 """RL training loop orchestration for Fireworks recipes.
 
-Provides ``run_rl_loop`` -- a streaming loop that launches all sampling
-coroutines concurrently, accumulates valid prompt groups, fires ``fwd_bwd``
-when the buffer reaches ``max_prompt_groups_per_fwd_bwd``, and runs
-``optim_step`` after ``prompt_groups_per_step`` prompt groups are collected.
-
-Filtering:
-
-  Pass ``dynamic_filter_fn`` to reject rollout results at the scheduling
-  layer (e.g. filter constant-reward groups).  The sampling coroutine
-  should return ``None`` for hard failures; ``dynamic_filter_fn`` handles
-  soft rejection of valid-but-unwanted results.
+Provides ``run_rl_loop`` -- a streaming on-policy loop that samples
+``prompt_groups_per_step`` prompts per optimizer step, fires ``fwd_bwd``
+as minibatches fill, then runs ``optim_step`` + hotload before sampling
+the next step.  Only the current step's prompts are in-flight at any time.
 """
 
 from __future__ import annotations
@@ -18,6 +11,7 @@ from __future__ import annotations
 import time
 import asyncio
 import logging
+import itertools
 from typing import Any, Callable, Iterable, Coroutine
 from dataclasses import dataclass
 
@@ -130,14 +124,13 @@ async def _stream_loop(
     dynamic_filter_fn: DynamicFilterFn | None,
     metrics_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> int:
-    """Streaming loop with greedy fwd_bwd batching.
+    """On-policy streaming loop with greedy fwd_bwd batching.
 
-    All sampling coros are launched at once (capped by ``max_concurrent``).
-    Prompt groups accumulate in a buffer.  ``fwd_bwd_one`` fires when the buffer
-    reaches ``min_prompt_groups_per_fwd_bwd`` (sending up to
-    ``max_prompt_groups_per_fwd_bwd`` prompt groups per call).  ``optim_step``
-    runs after ``prompt_groups_per_step`` valid prompt groups are collected for
-    the step.
+    Samples ``prompt_groups_per_step`` prompts per optimizer step (on-policy).
+    Within a step, ``fwd_bwd_one`` fires as soon as the minibatch buffer
+    reaches ``min_prompt_groups_per_fwd_bwd``.  After all prompts for the
+    step complete, flushes remaining buffer and runs ``optim_step`` + hotload
+    before launching the next step's prompts.
     """
     queue: asyncio.Queue[PromptGroup | None] = asyncio.Queue()
     sem = asyncio.Semaphore(max_concurrent)
@@ -154,8 +147,6 @@ async def _stream_loop(
                 worker_error = exc
             queue.put_nowait(None)
 
-    tasks = {asyncio.create_task(_worker(c)) for c in coros}
-
     total_wait_time = 0.0
     filter_drops = 0
     sample_fails = 0
@@ -168,8 +159,6 @@ async def _stream_loop(
     fwd_bwd_results: list = []
     fwd_bwd_prompt_group_counts: list[int] = []
     fwd_bwd_call_count = 0
-
-    pbar = tqdm(total=prompt_groups_per_step, desc="sampling", unit="prompt_grp", dynamic_ncols=True)
 
     async def _flush_and_finish_step() -> None:
         """Flush remaining buffer, run optim_step, reset state."""
@@ -240,65 +229,71 @@ async def _stream_loop(
         total_sampled = 0
         step_start_time = time.time()
 
-    for _ in range(len(coros)):
-        t_wait = time.time()
-        item = await queue.get()
-        total_wait_time += time.time() - t_wait
+    coro_iter = iter(coros)
+    while True:
+        step_coros = list(itertools.islice(coro_iter, prompt_groups_per_step))
+        if not step_coros:
+            break
 
-        if worker_error is not None:
-            for t in tasks:
-                if not t.done():
-                    t.cancel()
-            pbar.close()
-            raise RuntimeError(f"Sampling worker failed: {worker_error}") from worker_error
+        for c in step_coros:
+            asyncio.create_task(_worker(c))
 
-        if item is None:
-            sample_fails += 1
+        pbar = tqdm(total=prompt_groups_per_step, desc="sampling", unit="prompt_grp", dynamic_ncols=True)
+
+        for _ in range(len(step_coros)):
+            t_wait = time.time()
+            item = await queue.get()
+            total_wait_time += time.time() - t_wait
+
+            if worker_error is not None:
+                pbar.close()
+                raise RuntimeError(f"Sampling worker failed: {worker_error}") from worker_error
+
+            if item is None:
+                sample_fails += 1
+                total_sampled += 1
+                pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
+                continue
+
             total_sampled += 1
+            all_raw_rewards.extend(item.rewards)
+            if dynamic_filter_fn is not None and not dynamic_filter_fn(item):
+                filter_drops += 1
+                pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
+                continue
+
+            minibatch_prompt_groups.append(item)
+            step_prompt_groups.append(item)
+            pbar.update(1)
             pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
-            continue
 
-        total_sampled += 1
-        all_raw_rewards.extend(item.rewards)
-        if dynamic_filter_fn is not None and not dynamic_filter_fn(item):
-            filter_drops += 1
-            pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
-            continue
+            if len(minibatch_prompt_groups) >= min_prompt_groups_per_fwd_bwd:
+                batch = minibatch_prompt_groups[:max_prompt_groups_per_fwd_bwd]
+                minibatch_prompt_groups = minibatch_prompt_groups[max_prompt_groups_per_fwd_bwd:]
+                n_datums = sum(len(pg.ref_data) for pg in batch)
+                step_num = global_step + 1
 
-        minibatch_prompt_groups.append(item)
-        step_prompt_groups.append(item)
-        pbar.update(1)
-        pbar.set_postfix(sampled=total_sampled, failed=sample_fails, filtered=filter_drops)
+                logger.info("[step %d] ref_forward_batch: %d groups, %d datums...", step_num, len(batch), n_datums)
+                t0 = time.time()
+                await asyncio.to_thread(fns.ref_forward_batch, batch)
+                Timer().add("ref_forward", time.time() - t0)
+                logger.info("[step %d] ref_forward_batch: done (%.1fs)", step_num, time.time() - t0)
 
-        if len(minibatch_prompt_groups) >= min_prompt_groups_per_fwd_bwd:
-            batch = minibatch_prompt_groups[:max_prompt_groups_per_fwd_bwd]
-            minibatch_prompt_groups = minibatch_prompt_groups[max_prompt_groups_per_fwd_bwd:]
-            n_datums = sum(len(pg.ref_data) for pg in batch)
-            step_num = global_step + 1
+                fwd_bwd_prompt_group_counts.append(len(batch))
+                logger.info("[step %d] fwd_bwd %d: %d groups, %d samples...", step_num, fwd_bwd_call_count + 1, len(batch), len(batch) * completions_per_prompt)
+                t0 = time.time()
+                result = await asyncio.to_thread(fns.fwd_bwd_one, batch)
+                Timer().add("fwd_bwd", time.time() - t0)
+                logger.info("[step %d] fwd_bwd %d: done (%.1fs)", step_num, fwd_bwd_call_count + 1, time.time() - t0)
+                fwd_bwd_results.append(result)
+                fwd_bwd_call_count += 1
 
-            logger.info("[step %d] ref_forward_batch: %d groups, %d datums...", step_num, len(batch), n_datums)
-            t0 = time.time()
-            await asyncio.to_thread(fns.ref_forward_batch, batch)
-            Timer().add("ref_forward", time.time() - t0)
-            logger.info("[step %d] ref_forward_batch: done (%.1fs)", step_num, time.time() - t0)
+        pbar.close()
 
-            fwd_bwd_prompt_group_counts.append(len(batch))
-            logger.info("[step %d] fwd_bwd %d: %d groups, %d samples...", step_num, fwd_bwd_call_count + 1, len(batch), len(batch) * completions_per_prompt)
-            t0 = time.time()
-            result = await asyncio.to_thread(fns.fwd_bwd_one, batch)
-            Timer().add("fwd_bwd", time.time() - t0)
-            logger.info("[step %d] fwd_bwd %d: done (%.1fs)", step_num, fwd_bwd_call_count + 1, time.time() - t0)
-            fwd_bwd_results.append(result)
-            fwd_bwd_call_count += 1
-
-        if len(step_prompt_groups) >= prompt_groups_per_step:
-            pbar.close()
+        if step_prompt_groups:
             await _flush_and_finish_step()
-            pbar = tqdm(total=prompt_groups_per_step, desc="sampling", unit="prompt_grp", dynamic_ncols=True)
-
-    pbar.close()
-
-    if step_prompt_groups:
-        await _flush_and_finish_step()
+        else:
+            logger.warning("[step %d] no valid prompt groups after filtering, skipping", global_step + 1)
+            step_start_time = time.time()
 
     return global_step

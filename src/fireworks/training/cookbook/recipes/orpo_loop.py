@@ -88,7 +88,6 @@ class Config:
     wandb: WandBConfig = field(
         default_factory=lambda: WandBConfig(
             project="dsv3-training",
-            entity="myh97",
         )
     )
     resume: ResumeConfig = field(default_factory=ResumeConfig)

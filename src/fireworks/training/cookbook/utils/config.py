@@ -66,6 +66,8 @@ class DeployConfig:
     sample_timeout: int = 600
     """HTTP read timeout in seconds for sampling completions (default 10 min).
     Increase for R3 + long completions where responses can be very large."""
+    disable_speculative_decoding: bool = True
+    """Disable base model's default draft/EAGLE speculation for hotload compatibility."""
 
     def to_deployment_config(
         self,
@@ -85,6 +87,7 @@ class DeployConfig:
             accelerator_type=accel,
             hot_load_bucket_type=self.hot_load_bucket_type,
             skip_shape_validation=skip_validation,
+            disable_speculative_decoding=self.disable_speculative_decoding,
             extra_args=self.deployment_extra_args,
         )
 

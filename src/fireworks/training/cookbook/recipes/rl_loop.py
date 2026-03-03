@@ -507,7 +507,7 @@ def main(
         minibatch_fns=minibatch_fns,
         prompt_groups_per_step=prompt_groups_per_step,
         max_concurrent=cfg.max_concurrent,
-        dynamic_filter_fn=should_accept,
+        dynamic_filter_fn=None,
         global_step=step_offset,
         metrics_callback=_loop_metrics_callback,
         min_prompt_groups_per_fwd_bwd=min_prompt_groups_per_fwd_bwd,
