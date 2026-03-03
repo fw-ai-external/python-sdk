@@ -23,16 +23,9 @@ def resolve_and_apply_shape(
     rlor_mgr: TrainerJobManager,
     base_model: str,
     infra: InfraConfig,
-    deploy_cfg: DeployConfig,
+    deploy_cfg: DeployConfig | None = None,
 ) -> TrainingShapeProfile:
-    """Fetch training shape and apply it to infra/deploy configs.
-
-    Calls ``GET /v1/accounts/{id}/trainingShapes/{shapeId}`` to fetch
-    the shape, then populates unset fields on ``infra`` and ``deploy_cfg``
-    from the shape.  Fields already set by the customer are left as-is.
-
-    Returns the resolved profile for inspection/logging.
-    """
+    """Fetch training shape and populate unset fields on *infra* (and *deploy_cfg* if given)."""
     if not infra.training_shape_id:
         raise ValueError("training_shape_id is required for shape resolution")
     profile = rlor_mgr.resolve_training_profile(
@@ -55,13 +48,14 @@ def resolve_and_apply_shape(
     if profile.node_count and profile.node_count > infra.node_count:
         infra.node_count = profile.node_count
 
-    if not deploy_cfg.deployment_shape and profile.deployment_shape_version:
-        dsv = profile.deployment_shape_version
-        shape_name = re.sub(r"/versions/[^/]+$", "", dsv)
-        deploy_cfg.deployment_shape = shape_name
-    if not deploy_cfg.deployment_id:
-        model_short = base_model.rsplit("/", 1)[-1]
-        deploy_cfg.deployment_id = f"{model_short}-{int(time.time())}"
+    if deploy_cfg is not None:
+        if not deploy_cfg.deployment_shape and profile.deployment_shape_version:
+            dsv = profile.deployment_shape_version
+            shape_name = re.sub(r"/versions/[^/]+$", "", dsv)
+            deploy_cfg.deployment_shape = shape_name
+        if not deploy_cfg.deployment_id:
+            model_short = base_model.rsplit("/", 1)[-1]
+            deploy_cfg.deployment_id = f"{model_short}-{int(time.time())}"
 
     return profile
 
@@ -79,18 +73,19 @@ def create_trainer_job(
     hot_load_deployment_id: str | None = None,
     extra_args: list[str] | None = None,
     job_id: str | None = None,
+    forward_only: bool = False,
 ) -> TrainerServiceEndpoint:
-    """Create a new RLOR trainer job or reuse an existing one.
+    """Create a new RLOR trainer job (or reuse *job_id*).
 
-    If *job_id* is provided, the existing job is reused (resumed if needed).
-    Otherwise a new job is created and waited on until ready.
+    *forward_only* sets ``forwardOnly`` on the API request so the CP
+    resolves FORWARD_ONLY training shapes and appends the runtime flags.
     """
     if job_id:
         return _reuse_or_resume_job(rlor_mgr, job_id)
 
     using_shape = bool(infra.training_shape_id and not infra.skip_validations)
     node_count = infra.node_count if infra.node_count is not None else 1
-    logger.info("Creating trainer job '%s' (nodes=%d, shape=%s)...", display_name, node_count, using_shape)
+    logger.info("Creating trainer job '%s' (nodes=%d, shape=%s, forward_only=%s)...", display_name, node_count, using_shape, forward_only)
     return rlor_mgr.create_and_wait(
         TrainerJobConfig(
             base_model=base_model,
@@ -103,10 +98,11 @@ def create_trainer_job(
             hot_load_deployment_id=hot_load_deployment_id,
             region=infra.region,
             custom_image_tag=infra.custom_image_tag if not using_shape else None,
-            extra_args=extra_args or infra.extra_args,
+            extra_args=(extra_args or infra.extra_args) if not using_shape else None,
             accelerator_type=infra.accelerator_type if not using_shape else None,
             accelerator_count=infra.accelerator_count if not using_shape else None,
             skip_validations=infra.skip_validations,
+            forward_only=forward_only,
         )
     )
 

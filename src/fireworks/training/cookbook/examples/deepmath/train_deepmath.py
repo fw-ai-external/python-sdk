@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
-"""GRPO Training on DeepMath-Probability-Hard with Qwen3-30B-A3B-Instruct.
+"""GRPO training on DeepMath-Probability-Hard with Qwen3-30B-A3B-Instruct.
 
-Uses the cookbook rl_loop recipe with a math-verification reward function.
-Infrastructure is resolved entirely from validated training/deployment shapes:
-  - Training shape: ts-qwen3-30b-a3b-instruct-policy (8xB200, PP=1)
-  - Deployment shape: rft-qwen3-30b-a3b-instruct-r3 (8xB200, EP, FP8)
-  - Region: US_OHIO_1
-
-Run prepare_data.py first to generate the JSONL dataset, then:
-    python train_deepmath.py
+Run prepare_data.py first, then: python train_deepmath.py
 """
 
 from __future__ import annotations
@@ -45,18 +38,18 @@ logger = logging.getLogger(__name__)
 # Fixed configuration
 # ---------------------------------------------------------------------------
 
-FIREWORKS_API_KEY = "fw_3ZkNBrXgLw1EJ4y77kqSMBU5"
-FIREWORKS_ACCOUNT_ID = "pyroworks-dev"
-FIREWORKS_BASE_URL = "https://dev.api.fireworks.ai"
+FIREWORKS_API_KEY = os.environ["FIREWORKS_API_KEY"]
+FIREWORKS_ACCOUNT_ID = os.environ.get("FIREWORKS_ACCOUNT_ID", "")
+FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai")
 
 BASE_MODEL = "accounts/fireworks/models/qwen3-30b-a3b-instruct-2507"
 TOKENIZER_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "deepmath_probability_hard.jsonl")
 
-TRAINING_SHAPE = "ts-qwen3-30b-a3b-instruct-policy"
-DEPLOYMENT_SHAPE = "accounts/pyroworks-dev/deploymentShapes/rft-qwen3-30b-a3b-instruct-r3"
-DEPLOYMENT_ID = "qwen3-30b-instruct-deepmath-prob-hard"
-REGION = "US_OHIO_1"
+TRAINING_SHAPE = "ts-qwen3-30b-a3b-instruct-128k-rft-dev-v1"
+DEPLOYMENT_SHAPE = "accounts/pyroworks/deploymentShapes/rft-dev-qwen3-30b-a3b-throughput-moe-stats-v1"
+DEPLOYMENT_ID = f"deepmath-prob-hard-{int(__import__('time').time()) % 100000}"
+REGION = "US_VIRGINIA_1"
 
 MAX_ROWS = 1804
 EPOCHS = 3
@@ -64,8 +57,8 @@ COMPLETIONS_PER_PROMPT = 8
 LEARNING_RATE = 1e-5
 KL_BETA = 0.001
 TEMPERATURE = 1.0
-MAX_COMPLETION_TOKENS = 12 * 1024
-MAX_SEQ_LEN = 16384
+MAX_COMPLETION_TOKENS = 32 * 1024
+MAX_SEQ_LEN = 32 * 1024
 
 PROMPT_GROUPS_PER_STEP = 16
 MIN_SAMPLES_PER_FWD_BWD = 32
