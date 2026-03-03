@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.34 (2026-03-03)
+
+Full Changelog: [v1.0.0-alpha.33...v1.0.0-alpha.34](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.33...v1.0.0-alpha.34)
+
+### Refactors
+
+* move training cookbook out of the SDK repo ([#47](https://github.com/fw-ai-external/python-sdk/issues/47)) ([ceb5d6c](https://github.com/fw-ai-external/python-sdk/commit/ceb5d6cdff5a9b6e4777f0a58a19b694fd00b968))
+
 ## 1.0.0-alpha.33 (2026-03-03)
 
 Full Changelog: [v1.0.0-alpha.32...v1.0.0-alpha.33](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.32...v1.0.0-alpha.33)
