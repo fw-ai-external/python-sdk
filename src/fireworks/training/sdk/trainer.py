@@ -12,7 +12,7 @@ import re
 import time
 import logging
 from typing import Any
-from dataclasses import dataclass, fields
+from dataclasses import fields, dataclass
 
 import urllib3
 import requests

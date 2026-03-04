@@ -9,8 +9,8 @@ import pytest
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     TrainerJobManager,
-    TrainerServiceEndpoint,
     TrainingShapeProfile,
+    TrainerServiceEndpoint,
 )
 
 
