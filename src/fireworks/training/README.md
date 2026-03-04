@@ -1,11 +1,11 @@
-# Fireworks Training (`fireworks.training`)
+# Fireworks Training SDK (`fireworks.training.sdk`)
 
-`fireworks.training` is the training layer built on top of the Fireworks Python SDK and the Tinker protocol.
-This repo now contains the SDK/orchestration layer:
+Infrastructure and orchestration primitives for training on [Fireworks](https://fireworks.ai):
 
-- `sdk/`: infrastructure + orchestration primitives (trainer jobs, deployments, hotload, sampling).
-
-Runnable recipe loops (GRPO, DAPO, GSPO, CISPO, DPO, ORPO, SFT) now live in the standalone cookbook repo under `../cookbook/training`.
+- **Trainer jobs** -- create, resume, and manage RLOR trainer jobs (`TrainerJobManager`).
+- **Deployments** -- create, poll, hotload, and warm up inference deployments (`DeploymentManager`).
+- **Sampling** -- client-side tokenized completions (`DeploymentSampler`).
+- **Weight sync** -- checkpoint save / hotload pipeline (`WeightSyncer`).
 
 ## Install
 
@@ -14,39 +14,25 @@ pip install -e ".[training]"
 
 export FIREWORKS_API_KEY="..."
 export FIREWORKS_ACCOUNT_ID="..."
-export FIREWORKS_BASE_URL="https://api.fireworks.ai"  # optional
 ```
 
 ## Quick start
 
-After installing the standalone cookbook package/code, you can run recipe loops with:
-
 ```python
-from fireworks.training.cookbook.recipes.rl_loop import Config, main
-from fireworks.training.cookbook.utils import InfraConfig, DeployConfig, HotloadConfig
+from training.recipes.rl_loop import Config, main
+from training.utils import DeployConfig, HotloadConfig
 
 cfg = Config(
     base_model="accounts/fireworks/models/qwen3-8b",
-    max_rows=20,
-    epochs=1,
     policy_loss="grpo",  # or "dapo", "gspo", "cispo"
-    infra=InfraConfig(region="US_OHIO_1"),
-    deployment=DeployConfig(
-        deployment_id="my-grpo-run",
-        create_deployment=True,
-        tokenizer_model="Qwen/Qwen3-8B",
-    ),
+    deployment=DeployConfig(tokenizer_model="Qwen/Qwen3-8B"),
     hotload=HotloadConfig(hot_load_interval=1),
 )
 
 main(cfg)
 ```
 
-## Where to start
-
-- Want a runnable baseline: start with `../cookbook/training/src/fireworks/training/cookbook/README.md`.
-- Want low-level lifecycle control: start with `sdk/README.md`.
-- Want a full worked example: see `../cookbook/training/src/fireworks/training/cookbook/examples/deepmath`.
+For runnable recipes (GRPO, DPO, SFT, etc.), see the [Training Cookbook](https://github.com/fw-ai/cookbook/blob/main/training/README.md).
 
 ## Tests
 

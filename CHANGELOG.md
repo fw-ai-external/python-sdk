@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.36 (2026-03-04)
+
+Full Changelog: [v1.0.0-alpha.35...v1.0.0-alpha.36](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.35...v1.0.0-alpha.36)
+
+### Features
+
+* training shape apply_shape, tinker pin, and README cleanup ([#49](https://github.com/fw-ai-external/python-sdk/issues/49)) ([45ce71c](https://github.com/fw-ai-external/python-sdk/commit/45ce71ceb61f500f4d62522dc066dd2c9a69c503))
+
+
+### Styles
+
+* fix import sorting in trainer and test_trainer ([#50](https://github.com/fw-ai-external/python-sdk/issues/50)) ([7156fbb](https://github.com/fw-ai-external/python-sdk/commit/7156fbb33021044ed7f97ab0436b07b838c6ab51))
+
 ## 1.0.0-alpha.35 (2026-03-03)
 
 Full Changelog: [v1.0.0-alpha.34...v1.0.0-alpha.35](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.34...v1.0.0-alpha.35)
