@@ -8,10 +8,11 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
+import re
 import time
 import logging
 from typing import Any
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import urllib3
 import requests
@@ -61,6 +62,18 @@ class TrainingShapeProfile:
     pipeline_parallelism: int = 1
     """Pipeline parallelism degree from the training shape's sharding scheme."""
 
+    @property
+    def deployment_shape(self) -> str | None:
+        """Deployment shape name derived from ``deployment_shape_version``.
+
+        Strips the ``/versions/...`` suffix, e.g.
+        ``"accounts/fw/deploymentShapes/ds-x/versions/1"`` becomes
+        ``"accounts/fw/deploymentShapes/ds-x"``.
+        """
+        if not self.deployment_shape_version:
+            return None
+        return re.sub(r"/versions/[^/]+$", "", self.deployment_shape_version)
+
 
 @dataclass
 class TrainerJobConfig:
@@ -68,7 +81,9 @@ class TrainerJobConfig:
 
     base_model: str
     lora_rank: int = 0
-    max_context_length: int = 4096
+    max_context_length: int | None = None
+    """Max context length for the trainer.  When using training shapes,
+    ``apply_shape`` sets this from the shape's ``maxSupportedContextLength``."""
     learning_rate: float = 1e-5
     gradient_accumulation_steps: int = 1
     node_count: int = 1
@@ -81,6 +96,56 @@ class TrainerJobConfig:
     accelerator_count: int | None = None
     skip_validations: bool = False
     forward_only: bool = False
+
+    def apply_shape(self, profile: TrainingShapeProfile) -> None:
+        """Populate config fields from a resolved training shape.
+
+        Fields are set to ``None`` so the server derives them from the
+        shape automatically.  When ``skip_validations`` is True, any field
+        the user explicitly set to a non-default value is kept as an
+        override (and a warning is logged).
+        """
+        _SHAPE_FIELD_MAP: list[tuple[str, str, Any]] = [
+            # (config_field, profile_field, sentinel_to_skip)
+            ("accelerator_type", "accelerator_type", "ACCELERATOR_TYPE_UNSPECIFIED"),
+            ("accelerator_count", "accelerator_count", 0),
+            ("custom_image_tag", "trainer_image_tag", ""),
+            ("node_count", "node_count", 0),
+            ("max_context_length", "max_supported_context_length", 0),
+        ]
+
+        defaults = {f.name: f.default for f in fields(self)}
+        overrides: list[str] = []
+
+        for cfg_field, profile_field, sentinel in _SHAPE_FIELD_MAP:
+            shape_val = getattr(profile, profile_field)
+            if shape_val is None or shape_val == sentinel:
+                continue
+
+            current = getattr(self, cfg_field)
+            default = defaults.get(cfg_field)
+            user_set = current is not None and current != default and current != shape_val
+
+            if self.skip_validations and user_set:
+                overrides.append(f"{cfg_field}={current} (shape: {shape_val})")
+            else:
+                setattr(self, cfg_field, None)
+
+        if overrides:
+            logger.warning(
+                "Training shape values overridden (skip_validations=True): %s",
+                "; ".join(overrides),
+            )
+
+        logger.info(
+            "Applied training shape: %s (accel=%s, image=%s, nodes=%s, max_ctx=%s, pp=%d)",
+            profile.training_shape_version,
+            profile.accelerator_type,
+            profile.trainer_image_tag,
+            profile.node_count,
+            profile.max_supported_context_length,
+            profile.pipeline_parallelism,
+        )
 
 
 class TrainerJobManager:
@@ -207,18 +272,21 @@ class TrainerJobManager:
         if query_params:
             url = f"{url}?{'&'.join(query_params)}"
 
+        training_config: dict[str, Any] = {
+            "baseModel": config.base_model,
+            "loraRank": config.lora_rank,
+            "learningRate": config.learning_rate,
+            "gradientAccumulationSteps": config.gradient_accumulation_steps,
+        }
+        if config.max_context_length is not None:
+            training_config["maxContextLength"] = config.max_context_length
+
         payload: dict[str, Any] = {
             "serviceMode": True,
             "keepAlive": False,
             "nodeCount": config.node_count,
             "dataset": "",
-            "trainingConfig": {
-                "baseModel": config.base_model,
-                "loraRank": config.lora_rank,
-                "maxContextLength": config.max_context_length,
-                "learningRate": config.learning_rate,
-                "gradientAccumulationSteps": config.gradient_accumulation_steps,
-            },
+            "trainingConfig": training_config,
         }
         if config.display_name:
             payload["displayName"] = config.display_name
