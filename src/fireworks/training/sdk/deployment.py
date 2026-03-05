@@ -19,8 +19,9 @@ import urllib3
 import requests
 
 from fireworks.training.sdk.errors import (
-    DOCS_HOTLOAD,
-    DOCS_DEPLOYMENTS,
+    DOCS_SDK,
+    CONSOLE_URL,
+    DISCORD_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -216,7 +217,7 @@ class DeploymentManager:
                     f"Deployment creation failed (HTTP {resp.status_code})",
                     error_msg,
                     f"{hint}{extra}",
-                    docs_url=DOCS_DEPLOYMENTS,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -284,9 +285,10 @@ class DeploymentManager:
                 except Exception as e:
                     logger.warning(
                         "Failed to delete deployment %s before recreate: %s. "
-                        "You may need to delete it manually in the Fireworks console.",
+                        "You may need to delete it manually in the Fireworks console: %s",
                         config.deployment_id,
                         e,
+                        CONSOLE_URL,
                     )
             else:
                 return self._parse_deployment_info(config.deployment_id, existing)
@@ -324,7 +326,7 @@ class DeploymentManager:
                         f"Deployment '{deployment_id}' not found",
                         "The deployment does not exist or was deleted.",
                         "Verify the deployment ID is correct, or use --create-deployment to create a new one.",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
                     )
                 )
             state = data.get("state", "UNKNOWN")
@@ -338,10 +340,11 @@ class DeploymentManager:
                     format_sdk_error(
                         f"Deployment '{deployment_id}' entered bad state: {state}",
                         "The deployment failed to start or was deleted externally.",
-                        "1. Check deployment logs in the Fireworks console\n"
+                        f"1. Check deployment logs in the Fireworks console: {CONSOLE_URL}\n"
                         "  2. Try recreating with --create-deployment\n"
                         "  3. Verify your model name and region are valid",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
             if state == "CREATING" and self._probe_inference(model):
@@ -359,8 +362,8 @@ class DeploymentManager:
                 f"Deployment '{deployment_id}' not ready within {timeout_s}s",
                 "The deployment is still provisioning or waiting for GPU resources.",
                 f"Increase timeout with --deployment-timeout-s (current: {timeout_s}s).\n"
-                "  Check deployment status in the Fireworks console.",
-                docs_url=DOCS_DEPLOYMENTS,
+                f"  Check deployment status in the Fireworks console: {CONSOLE_URL}",
+                docs_url=DOCS_SDK,
             )
         )
 
@@ -378,9 +381,11 @@ class DeploymentManager:
             logger.info("Deleted deployment: %s", deployment_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete deployment %s: %s. " "You can delete it manually in the Fireworks console.",
+                "Failed to delete deployment %s: %s. "
+                "You can delete it manually in the Fireworks console: %s",
                 deployment_id,
                 e,
+                CONSOLE_URL,
             )
 
     def scale_to_zero(self, deployment_id: str) -> None:
@@ -407,9 +412,10 @@ class DeploymentManager:
             logger.warning(
                 "Failed to scale deployment %s to zero: %s. "
                 "The deployment may still be consuming GPU resources. "
-                "You can scale it down manually in the Fireworks console.",
+                "You can scale it down manually in the Fireworks console: %s",
                 deployment_id,
                 e,
+                CONSOLE_URL,
             )
 
     # -- Hotload operations ----------------------------------------------------
@@ -469,7 +475,7 @@ class DeploymentManager:
                     "  1. Verify the deployment has hotLoadBucketUrl configured\n"
                     "  2. Ensure the base model matches between trainer and deployment\n"
                     "  3. Check that the snapshot identity exists",
-                    docs_url=DOCS_HOTLOAD,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -522,7 +528,10 @@ class DeploymentManager:
                         format_sdk_error(
                             "Unrecognized hotload status response format",
                             f"Expected 'replicas' list, got keys: {list(status.keys())}",
-                            "This may indicate an API version mismatch. Update the SDK.",
+                            "This may indicate an API version mismatch. "
+                            f"Reach out on Discord for help: {DISCORD_URL}",
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         )
                     )
                 if replicas:
@@ -549,7 +558,8 @@ class DeploymentManager:
                             "1. Check that hotLoadBucketUrl is configured on the deployment\n"
                             "  2. Verify the snapshot was saved successfully by the trainer\n"
                             "  3. Ensure the base model matches between trainer and deployment",
-                            docs_url=DOCS_HOTLOAD,
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         ),
                     )
                     return False
@@ -577,10 +587,10 @@ class DeploymentManager:
             format_sdk_error(
                 f"Hotload did not complete within {timeout_seconds}s",
                 "The deployment is still loading the snapshot or may be unhealthy.",
-                "1. Increase timeout with --hotload-timeout (current: %ds)\n"
-                "  2. Check deployment health in the Fireworks console\n"
-                "  3. Verify the snapshot identity is correct" % timeout_seconds,
-                docs_url=DOCS_HOTLOAD,
+                f"1. Increase timeout with --hotload-timeout (current: {timeout_seconds}s)\n"
+                f"  2. Check deployment health in the Fireworks console: {CONSOLE_URL}\n"
+                "  3. Verify the snapshot identity is correct",
+                docs_url=DOCS_SDK,
             ),
         )
         return False
@@ -661,10 +671,10 @@ class DeploymentManager:
             format_sdk_error(
                 f"Inference deployment not ready after {max_retries} retries",
                 "The deployment is not responding to inference requests.",
-                "1. Check the deployment state in the Fireworks console (should be READY)\n"
+                f"1. Check the deployment state in the Fireworks console: {CONSOLE_URL}\n"
                 "  2. Verify the inference URL and model name are correct\n"
                 "  3. The deployment may be scaling up — try increasing retry count",
-                docs_url=DOCS_DEPLOYMENTS,
+                docs_url=DOCS_SDK,
             ),
         )
         return False
@@ -824,7 +834,7 @@ class DeploymentSampler:
                         f"Completions error (HTTP {resp.status_code})",
                         error_msg,
                         f"{hint}{extra}",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
                     ),
                 )
             resp.raise_for_status()
@@ -967,7 +977,8 @@ class DeploymentSampler:
                         "Ensure the deployment supports raw_output=True.\n"
                         "  This requires a deployment running a compatible model version.\n"
                         "  Check that the deployment base model matches your training model.",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
 
@@ -987,7 +998,8 @@ class DeploymentSampler:
                             "Echo response format mismatch",
                             "echo=True was requested but completion_token_ids do not include the prompt prefix.",
                             "Ensure the deployment supports token echo with raw_output=True.",
-                            docs_url=DOCS_DEPLOYMENTS,
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         )
                     )
 

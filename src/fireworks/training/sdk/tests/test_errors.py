@@ -8,6 +8,7 @@ import pytest
 import requests
 
 from fireworks.training.sdk.errors import (
+    DISCORD_URL,
     parse_api_error,
     format_sdk_error,
     request_with_retries,
@@ -47,6 +48,20 @@ class TestFormatSdkError:
         assert lines[1].strip().startswith("Cause:")
         assert lines[2].strip().startswith("Solution:")
         assert lines[3].strip().startswith("Docs:")
+
+    def test_show_support_includes_discord(self):
+        result = format_sdk_error("Oops", "reason", "Try again", show_support=True)
+        assert f"Support: {DISCORD_URL}" in result
+
+    def test_show_support_false_no_discord(self):
+        result = format_sdk_error("Oops", "reason", "Try again", show_support=False)
+        assert "Support:" not in result
+
+    def test_show_support_with_docs(self):
+        result = format_sdk_error("W", "C", "S", docs_url="D", show_support=True)
+        lines = result.split("\n")
+        assert lines[3].strip().startswith("Docs:")
+        assert lines[4].strip().startswith("Support:")
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +121,11 @@ class TestParseApiError:
 
 
 class TestIsRetryableStatusCode:
-    @pytest.mark.parametrize("code", [408, 409, 429, 500, 502, 503, 504])
+    @pytest.mark.parametrize("code", [408, 429, 500, 502, 503, 504])
     def test_retryable(self, code):
         assert _is_retryable_status_code(code) is True
 
-    @pytest.mark.parametrize("code", [200, 201, 400, 401, 403, 404, 425])
+    @pytest.mark.parametrize("code", [200, 201, 400, 401, 403, 404, 409, 425])
     def test_not_retryable(self, code):
         assert _is_retryable_status_code(code) is False
 

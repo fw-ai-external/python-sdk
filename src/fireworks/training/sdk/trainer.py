@@ -18,7 +18,8 @@ import urllib3
 import requests
 
 from fireworks.training.sdk.errors import (
-    DOCS_RLOR,
+    DOCS_SDK,
+    CONSOLE_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -224,6 +225,7 @@ class TrainerJobManager:
         )
         if not resp.ok:
             error_msg = parse_api_error(resp)
+            show_support = False
             if resp.status_code == 404:
                 solution = (
                     f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
@@ -236,12 +238,14 @@ class TrainerJobManager:
                 )
             else:
                 solution = "Verify the training_shape_id and account have the shape registered."
+                show_support = True
             raise RuntimeError(
                 format_sdk_error(
                     f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
                     error_msg,
                     solution,
-                    docs_url=DOCS_RLOR,
+                    docs_url=DOCS_SDK,
+                    show_support=show_support,
                 )
             )
         data = resp.json()
@@ -328,7 +332,7 @@ class TrainerJobManager:
                     f"RLOR job creation failed (HTTP {resp.status_code})",
                     error_msg,
                     f"{hint}{extra}",
-                    docs_url=DOCS_RLOR,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -357,9 +361,8 @@ class TrainerJobManager:
                 format_sdk_error(
                     f"RLOR job resume failed (HTTP {resp.status_code})",
                     error_msg,
-                    f"{hint}\n  Check job status in the Fireworks console: "
-                    f"https://fireworks.ai/account/rlor-jobs/{job_id}",
-                    docs_url=DOCS_RLOR,
+                    f"{hint}\n  Check job status in the Fireworks console: {CONSOLE_URL}",
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -399,9 +402,10 @@ class TrainerJobManager:
                         f"Trainer job {job_id} failed",
                         msg,
                         "Check the job logs in the Fireworks console for details.\n"
-                        f"  Console: https://fireworks.ai/account/rlor-jobs/{job_id}\n"
+                        f"  Console: {CONSOLE_URL}\n"
                         "  Common causes: invalid model name, insufficient quota, or region unavailable.",
-                        docs_url=DOCS_RLOR,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
 
@@ -447,8 +451,8 @@ class TrainerJobManager:
                 f"Trainer job {job_id} did not become ready within {timeout_s}s",
                 "The job is still provisioning or waiting for GPU resources.",
                 f"Increase timeout with --rlor-timeout-s (current: {timeout_s}s).\n"
-                f"  Check job status: https://fireworks.ai/account/rlor-jobs/{job_id}",
-                docs_url=DOCS_RLOR,
+                f"  Check job status: {CONSOLE_URL}",
+                docs_url=DOCS_SDK,
             )
         )
 
@@ -551,8 +555,9 @@ class TrainerJobManager:
                         "without transitioning to a resumable state.",
                         "1. Check the Fireworks console for job details\n"
                         "  2. Try cancelling the job and creating a new one\n"
-                        f"  Console: https://fireworks.ai/account/rlor-jobs/{job_id}",
-                        docs_url=DOCS_RLOR,
+                        f"  Console: {CONSOLE_URL}",
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
             logger.info(
@@ -569,7 +574,9 @@ class TrainerJobManager:
             logger.info("Deleted trainer job: %s", job_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete trainer job %s: %s. " "You can delete it manually in the Fireworks console.",
+                "Failed to delete trainer job %s: %s. "
+                "You can delete it manually in the Fireworks console: %s",
                 job_id,
                 e,
+                CONSOLE_URL,
             )

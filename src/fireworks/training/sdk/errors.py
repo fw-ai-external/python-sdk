@@ -19,13 +19,12 @@ import requests as _requests
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Documentation URL constants
+# URL constants
 # =============================================================================
 
-DOCS_HOTLOAD = "https://docs.fireworks.ai/fine-tuning/hotload"
-DOCS_API_KEYS = "https://fireworks.ai/account/api-keys"
-DOCS_RLOR = "https://docs.fireworks.ai/fine-tuning/rlor"
-DOCS_DEPLOYMENTS = "https://docs.fireworks.ai/deployments"
+DOCS_SDK = "https://docs.fireworks.ai/api-reference/training-sdk/overview"
+DISCORD_URL = "https://discord.gg/mMqQxvFD9A"
+CONSOLE_URL = "https://app.fireworks.ai/account/home"
 
 
 # =============================================================================
@@ -34,12 +33,12 @@ DOCS_DEPLOYMENTS = "https://docs.fireworks.ai/deployments"
 
 HTTP_STATUS_HINTS: dict[int, str] = {
     400: "Check that all request parameters are valid.",
-    401: "Check your API key. Get one at https://fireworks.ai/account/api-keys",
+    401: f"Check your API key. Manage keys at {CONSOLE_URL}",
     403: "Your account may not have permission for this resource.",
     404: "The resource was not found. Verify the ID/name is correct.",
     409: "Resource conflict. It may already exist or be in a transitional state.",
-    429: "Rate limited. Wait and retry, or contact support.",
-    500: "Internal server error. Try again. If persistent, contact support.",
+    429: f"Rate limited. Wait and retry, or reach out on Discord: {DISCORD_URL}",
+    500: f"Internal server error. Try again. If persistent, reach out on Discord: {DISCORD_URL}",
     503: "Service temporarily unavailable. Retry after a short wait.",
 }
 
@@ -54,6 +53,7 @@ def format_sdk_error(
     cause: str,
     solution: str,
     docs_url: str | None = None,
+    show_support: bool = False,
 ) -> str:
     """Build a structured, actionable error message.
 
@@ -62,13 +62,16 @@ def format_sdk_error(
         ERROR: RLOR job creation failed (HTTP 400)
           Cause: invalid request
           Solution: Check that all request parameters are valid.
-          Docs: https://docs.fireworks.ai/fine-tuning/rlor
+          Docs: https://docs.fireworks.ai/api-reference/training-sdk/overview
+          Support: https://discord.gg/mMqQxvFD9A
 
     Args:
         what: Short summary of what went wrong.
         cause: Why it might have happened.
         solution: How to fix it (may be multi-line).
         docs_url: Optional link to relevant documentation.
+        show_support: If True, append a Discord support link for cases
+            where the solution is ambiguous or requires human help.
     """
     lines = [
         f"ERROR: {what}",
@@ -77,6 +80,8 @@ def format_sdk_error(
     ]
     if docs_url:
         lines.append(f"  Docs: {docs_url}")
+    if show_support:
+        lines.append(f"  Support: {DISCORD_URL}")
     return "\n".join(lines)
 
 
