@@ -650,7 +650,7 @@ ToolChoice: TypeAlias = Union[
 ]
 
 
-class ToolInputSchemaTyped(TypedDict, total=False):
+class ToolInputSchema(TypedDict, total=False, extra_items=object):  # type: ignore[call-arg]
     """[JSON schema](https://json-schema.org/draft/2020-12) for this tool's input.
 
     This defines the shape of the `input` that your tool accepts and that the model will produce.
@@ -661,9 +661,6 @@ class ToolInputSchemaTyped(TypedDict, total=False):
     properties: Optional[Dict[str, object]]
 
     required: Optional[SequenceNotStr[str]]
-
-
-ToolInputSchema: TypeAlias = Union[ToolInputSchemaTyped, Dict[str, object]]
 
 
 class Tool(TypedDict, total=False):
