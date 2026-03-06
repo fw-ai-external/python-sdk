@@ -182,7 +182,9 @@ def request_with_retries(
             if elapsed_time < max_wait_time:
                 time_to_wait = min(2**attempt_count, 30)
                 attempt_count += 1
-                time_to_wait = min(time_to_wait, start_time + max_wait_time - current_time)
+                time_to_wait = min(
+                    time_to_wait, start_time + max_wait_time - current_time
+                )
                 logger.warning(
                     "Request failed (attempt %d, %.1fs elapsed), retrying in %.1fs: %s: %s",
                     attempt_count,
@@ -202,7 +204,9 @@ def request_with_retries(
             if elapsed_time < max_wait_time:
                 time_to_wait = min(2**attempt_count, 30)
                 attempt_count += 1
-                time_to_wait = min(time_to_wait, start_time + max_wait_time - current_time)
+                time_to_wait = min(
+                    time_to_wait, start_time + max_wait_time - current_time
+                )
                 logger.warning(
                     "Request returned HTTP %d (attempt %d, %.1fs elapsed), retrying in %.1fs",
                     resp.status_code,

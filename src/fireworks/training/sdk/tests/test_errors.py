@@ -28,7 +28,9 @@ class TestFormatSdkError:
         assert "Solution: Fix the model name" in result
 
     def test_with_docs_url(self):
-        result = format_sdk_error("Job failed", "bad model", "Fix it", docs_url="https://docs.example.com")
+        result = format_sdk_error(
+            "Job failed", "bad model", "Fix it", docs_url="https://docs.example.com"
+        )
         assert "Docs: https://docs.example.com" in result
 
     def test_without_docs_url(self):

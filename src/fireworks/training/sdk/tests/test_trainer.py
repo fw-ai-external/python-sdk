@@ -57,7 +57,9 @@ class TestCreate:
         assert "skipValidations=true" in url
         assert payload["serviceMode"] is True
         assert payload["nodeCount"] == 2
-        assert payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
+        assert (
+            payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
+        )
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
@@ -75,7 +77,12 @@ class TestCreate:
 
         mgr._create(config)
         payload = mock_req.call_args[1]["json"]
-        assert payload["trainingConfig"]["extraArgs"] == ["--pp", "8", "--ep=4", "--flag"]
+        assert payload["trainingConfig"]["extraArgs"] == [
+            "--pp",
+            "8",
+            "--ep=4",
+            "--flag",
+        ]
 
 
 class TestPollUntilReady:
@@ -86,7 +93,9 @@ class TestPollUntilReady:
             "state": "JOB_STATE_RUNNING",
             "directRouteHandle": "https://trainer.internal:8080",
         }
-        result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
+        result = mgr._poll_until_ready(
+            "job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10
+        )
         assert isinstance(result, TrainerServiceEndpoint)
         assert result.job_id == "job-1"
         assert result.base_url == "https://trainer.internal:8080"
@@ -211,7 +220,9 @@ class TestDeploymentShapeProperty:
         assert profile.deployment_shape is None
 
     def test_no_version_suffix_unchanged(self):
-        profile = _make_profile(deployment_shape_version="accounts/fw/deploymentShapes/ds-x")
+        profile = _make_profile(
+            deployment_shape_version="accounts/fw/deploymentShapes/ds-x"
+        )
         assert profile.deployment_shape == "accounts/fw/deploymentShapes/ds-x"
 
 
@@ -221,66 +232,73 @@ class TestDeploymentShapeProperty:
 
 
 class TestApplyShape:
-    def test_nulls_fields_skip_validations_no_overrides(self):
-        """With skip_validations but no user overrides, fields are still nulled."""
+    def test_shape_values_applied(self):
+        """Shape values populate the config."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
         )
         profile = _make_profile()
         config.apply_shape(profile)
 
-        assert config.accelerator_type is None
-        assert config.accelerator_count is None
-        assert config.custom_image_tag is None
-        assert config.node_count is None
-        assert config.max_context_length is None
+        assert config.accelerator_type == "NVIDIA_H100_80GB"
+        assert config.accelerator_count == 8
+        assert config.custom_image_tag == "0.33.0"
+        assert config.node_count == 2
+        assert config.max_context_length == 8192
 
-    def test_skip_validations_keeps_user_overrides(self, caplog):
-        """With skip_validations, user values win and a warning is logged."""
+    def test_shape_wins_without_skip_validations(self):
+        """Without skip_validations, shape wins over user values."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
             accelerator_type="NVIDIA_A100_80GB",
-            node_count=4,
-        )
-        profile = _make_profile()
-
-        import logging
-        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
-            config.apply_shape(profile)
-
-        assert config.accelerator_type == "NVIDIA_A100_80GB"
-        assert config.node_count == 4
-        assert config.accelerator_count is None
-        assert config.custom_image_tag is None
-
-        assert "overridden" in caplog.text
-        assert "accelerator_type=NVIDIA_A100_80GB" in caplog.text
-        assert "node_count=4" in caplog.text
-
-    def test_no_skip_validations_nulls_fields(self):
-        """Without skip_validations, fields are set to None so the server uses the shape."""
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            skip_validations=False,
-            accelerator_type="NVIDIA_A100_80GB",
+            accelerator_count=4,
             max_context_length=4096,
         )
         profile = _make_profile()
         config.apply_shape(profile)
 
-        assert config.accelerator_type is None
-        assert config.accelerator_count is None
-        assert config.custom_image_tag is None
-        assert config.node_count is None
-        assert config.max_context_length is None
+        assert config.accelerator_type == "NVIDIA_H100_80GB"
+        assert config.accelerator_count == 8
+        assert config.node_count == 2
+        assert config.max_context_length == 8192
+
+    def test_skip_validations_keeps_user_overrides(self):
+        """With skip_validations, user's non-None values override the shape."""
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            skip_validations=True,
+            accelerator_type="NVIDIA_A100_80GB",
+            accelerator_count=4,
+            max_context_length=4096,
+        )
+        profile = _make_profile()
+        config.apply_shape(profile)
+
+        assert config.accelerator_type == "NVIDIA_A100_80GB"
+        assert config.accelerator_count == 4
+        assert config.max_context_length == 4096
+        assert config.custom_image_tag == "0.33.0"
+        # node_count defaults to 1 (not None), so it's kept as a user override
+        assert config.node_count == 1
+
+    def test_skip_validations_fills_none_fields(self):
+        """With skip_validations, shape fills fields the user left as None."""
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            skip_validations=True,
+        )
+        profile = _make_profile()
+        config.apply_shape(profile)
+
+        assert config.accelerator_type == "NVIDIA_H100_80GB"
+        assert config.accelerator_count == 8
+        assert config.custom_image_tag == "0.33.0"
+        assert config.max_context_length == 8192
 
     def test_skips_unspecified_accelerator(self):
         """ACCELERATOR_TYPE_UNSPECIFIED is treated as 'shape does not provide this'."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
             accelerator_type="MY_ACCEL",
         )
         profile = _make_profile(accelerator_type="ACCELERATOR_TYPE_UNSPECIFIED")

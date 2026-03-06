@@ -114,7 +114,9 @@ class DeploymentManager:
         self.inference_url = inference_url or base_url
         self.hotload_api_url = hotload_api_url or base_url
         self.additional_headers = additional_headers
-        self._verify_ssl = verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        self._verify_ssl = (
+            verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        )
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
@@ -145,15 +147,27 @@ class DeploymentManager:
     # -- Deployment CRUD -------------------------------------------------------
 
     def _get_deployment(self, deployment_id: str) -> dict | None:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
-        resp = request_with_retries(requests.get, url, headers=self._headers(), timeout=30, verify=self._verify_ssl)
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
+        resp = request_with_retries(
+            requests.get,
+            url,
+            headers=self._headers(),
+            timeout=30,
+            verify=self._verify_ssl,
+        )
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
         return resp.json()
 
-    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+    def _delete_deployment(
+        self, deployment_id: str, ignore_checks: bool = True, hard: bool = True
+    ) -> None:
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
         params = []
         if ignore_checks:
             params.append("ignoreChecks=true")
@@ -161,7 +175,13 @@ class DeploymentManager:
             params.append("hard=true")
         if params:
             url = f"{url}?{'&'.join(params)}"
-        resp = request_with_retries(requests.delete, url, headers=self._headers(), timeout=60, verify=self._verify_ssl)
+        resp = request_with_retries(
+            requests.delete,
+            url,
+            headers=self._headers(),
+            timeout=60,
+            verify=self._verify_ssl,
+        )
         resp.raise_for_status()
 
     def _create_deployment(self, config: DeploymentConfig) -> dict:
@@ -192,7 +212,12 @@ class DeploymentManager:
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = request_with_retries(
-            requests.post, url, headers=self._headers(), json=body, timeout=60, verify=self._verify_ssl
+            requests.post,
+            url,
+            headers=self._headers(),
+            json=body,
+            timeout=60,
+            verify=self._verify_ssl,
         )
         if resp.status_code == 409:
             logger.info(
@@ -395,7 +420,9 @@ class DeploymentManager:
         remains available for future scale-up, but no GPUs are consumed.
         Useful for cleanup after training completes.
         """
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
         body = {"maxReplicaCount": 0, "minReplicaCount": 0}
         try:
             resp = request_with_retries(
@@ -452,7 +479,12 @@ class DeploymentManager:
             payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
-        logger.info("Hotloading %s snapshot '%s' to deployment '%s'", ckpt_type, snapshot_identity, deployment_id)
+        logger.info(
+            "Hotloading %s snapshot '%s' to deployment '%s'",
+            ckpt_type,
+            snapshot_identity,
+            deployment_id,
+        )
 
         verify = self._should_verify_ssl(self.hotload_api_url)
         resp = request_with_retries(
@@ -498,7 +530,9 @@ class DeploymentManager:
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         verify = self._should_verify_ssl(self.hotload_api_url)
-        resp = request_with_retries(requests.get, url, headers=headers, timeout=timeout, verify=verify)
+        resp = request_with_retries(
+            requests.get, url, headers=headers, timeout=timeout, verify=verify
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -547,7 +581,9 @@ class DeploymentManager:
                 elapsed = int(time.time() - start)
 
                 if readiness and current_identity == expected_identity:
-                    logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
+                    logger.info(
+                        "Hotload complete: %s (took %ds)", expected_identity, elapsed
+                    )
                     return True
                 elif stage == "error":
                     logger.warning(
@@ -621,11 +657,24 @@ class DeploymentManager:
         """Silent single-shot probe: returns True if deployment responds HTTP 200."""
         base = self.inference_url.rstrip("/")
         url = f"{base}/inference/v1/completions"
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
-        payload = {"model": model, "prompt": [1, 2], "max_tokens": 4, "temperature": 0.0}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        payload = {
+            "model": model,
+            "prompt": [1, 2],
+            "max_tokens": 4,
+            "temperature": 0.0,
+        }
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10,
-                                 verify=self._should_verify_ssl(self.inference_url))
+            resp = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=10,
+                verify=self._should_verify_ssl(self.inference_url),
+            )
             return resp.status_code == 200
         except Exception:
             return False
@@ -657,11 +706,24 @@ class DeploymentManager:
         logger.info("Warming up inference deployment (%d retries)...", max_retries)
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.post(completions_url, headers=headers, json=payload, timeout=30, verify=verify)
+                resp = requests.post(
+                    completions_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30,
+                    verify=verify,
+                )
                 if resp.status_code == 200:
-                    logger.info("Inference deployment ready after %d attempt(s)", attempt)
+                    logger.info(
+                        "Inference deployment ready after %d attempt(s)", attempt
+                    )
                     return True
-                logger.info("Warmup attempt %d/%d: HTTP %d", attempt, max_retries, resp.status_code)
+                logger.info(
+                    "Warmup attempt %d/%d: HTTP %d",
+                    attempt,
+                    max_retries,
+                    resp.status_code,
+                )
             except Exception as e:
                 logger.info("Warmup attempt %d/%d: %s", attempt, max_retries, e)
             time.sleep(retry_interval_s)
@@ -942,13 +1004,17 @@ class DeploymentSampler:
         num_completions = n
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
 
         if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
             logger.info(
                 "Prompt pre-filtered: %d prompt tokens >= max_seq_len %d, skipping inference",
-                len(prompt_ids), max_seq_len,
+                len(prompt_ids),
+                max_seq_len,
             )
             return []
 
@@ -982,8 +1048,12 @@ class DeploymentSampler:
                     )
                 )
 
-            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
-            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
+            token_logprobs = (
+                self._extract_logprobs(choice) if user_requested_logprobs else None
+            )
+            routing_matrices = (
+                self._extract_routing_matrices(choice) if routing_requested else None
+            )
 
             # With echo=True the API returns P+C tokens in
             # completion_token_ids and logprobs cover all P+C positions.
@@ -992,7 +1062,9 @@ class DeploymentSampler:
             # P+C-1 training-aligned entries.
             lp_is_echo = False
             if echo_mode:
-                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
+                if len(completion_ids) < len(prompt_ids) or completion_ids[
+                    : len(prompt_ids)
+                ] != list(prompt_ids):
                     raise RuntimeError(
                         format_sdk_error(
                             "Echo response format mismatch",
@@ -1003,7 +1075,7 @@ class DeploymentSampler:
                         )
                     )
 
-                completion_ids = completion_ids[len(prompt_ids):]
+                completion_ids = completion_ids[len(prompt_ids) :]
                 if token_logprobs is not None:
                     token_logprobs = token_logprobs[1:]
                     lp_is_echo = True
@@ -1014,7 +1086,8 @@ class DeploymentSampler:
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
                 logger.debug(
                     "Completion post-filtered: %d tokens > max_seq_len %d",
-                    len(full_tokens), max_seq_len,
+                    len(full_tokens),
+                    max_seq_len,
                 )
                 continue
 
