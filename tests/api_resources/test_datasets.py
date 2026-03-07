@@ -490,7 +490,7 @@ class TestDatasets:
         dataset = client.datasets.upload(
             dataset_id="dataset_id",
             account_id="account_id",
-            file=b"raw file contents",
+            file=b"Example data",
         )
         assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
 
@@ -1067,7 +1067,7 @@ class TestAsyncDatasets:
         dataset = await async_client.datasets.upload(
             dataset_id="dataset_id",
             account_id="account_id",
-            file=b"raw file contents",
+            file=b"Example data",
         )
         assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
 
