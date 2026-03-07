@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-alpha.37 (2026-03-07)
+
+Full Changelog: [v1.0.0-alpha.36...v1.0.0-alpha.37](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.36...v1.0.0-alpha.37)
+
+### Bug Fixes
+
+* **sdk:** apply_shape always autofills from training shape values ([#52](https://github.com/fw-ai-external/python-sdk/issues/52)) ([0d32bb4](https://github.com/fw-ai-external/python-sdk/commit/0d32bb4834a718384ed6038a389dc3691a8b0c83))
+* **sdk:** update error messages with current URLs and Discord support ([#51](https://github.com/fw-ai-external/python-sdk/issues/51)) ([81ed6e1](https://github.com/fw-ai-external/python-sdk/commit/81ed6e183c04f8a3b74926478b7e545557fa7bd4))
+
+
+### Refactors
+
+* **types:** use `extra_items` from PEP 728 ([2a492a9](https://github.com/fw-ai-external/python-sdk/commit/2a492a98e66352c7107c125775ea43cb486db08d))
+
 ## 1.0.0-alpha.36 (2026-03-04)
 
 Full Changelog: [v1.0.0-alpha.35...v1.0.0-alpha.36](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.35...v1.0.0-alpha.36)

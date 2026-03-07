@@ -14,12 +14,15 @@ Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
 """
 
 import fireworks.training.sdk._tinker_r3_patch  # noqa: F401
-from fireworks.training.sdk.client import SaveSamplerResult, FiretitanServiceClient, FiretitanTrainingClient
+from fireworks.training.sdk.client import (
+    SaveSamplerResult,
+    FiretitanServiceClient,
+    FiretitanTrainingClient,
+)
 from fireworks.training.sdk.errors import (
-    DOCS_RLOR,
-    DOCS_HOTLOAD,
-    DOCS_API_KEYS,
-    DOCS_DEPLOYMENTS,
+    DOCS_SDK,
+    CONSOLE_URL,
+    DISCORD_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -65,8 +68,7 @@ __all__ = [
     "parse_api_error",
     "request_with_retries",
     "HTTP_STATUS_HINTS",
-    "DOCS_HOTLOAD",
-    "DOCS_API_KEYS",
-    "DOCS_RLOR",
-    "DOCS_DEPLOYMENTS",
+    "DOCS_SDK",
+    "DISCORD_URL",
+    "CONSOLE_URL",
 ]

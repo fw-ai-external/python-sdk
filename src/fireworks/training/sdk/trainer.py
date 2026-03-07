@@ -12,13 +12,14 @@ import re
 import time
 import logging
 from typing import Any
-from dataclasses import fields, dataclass
+from dataclasses import dataclass
 
 import urllib3
 import requests
 
 from fireworks.training.sdk.errors import (
-    DOCS_RLOR,
+    DOCS_SDK,
+    CONSOLE_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -100,10 +101,10 @@ class TrainerJobConfig:
     def apply_shape(self, profile: TrainingShapeProfile) -> None:
         """Populate config fields from a resolved training shape.
 
-        Fields are set to ``None`` so the server derives them from the
-        shape automatically.  When ``skip_validations`` is True, any field
-        the user explicitly set to a non-default value is kept as an
-        override (and a warning is logged).
+        By default the shape values always win.  When
+        ``skip_validations`` is True, any config field the user already
+        set (non-None) is kept as an override and the shape value is
+        skipped for that field.
         """
         _SHAPE_FIELD_MAP: list[tuple[str, str, Any]] = [
             # (config_field, profile_field, sentinel_to_skip)
@@ -114,28 +115,18 @@ class TrainerJobConfig:
             ("max_context_length", "max_supported_context_length", 0),
         ]
 
-        defaults = {f.name: f.default for f in fields(self)}
-        overrides: list[str] = []
-
         for cfg_field, profile_field, sentinel in _SHAPE_FIELD_MAP:
             shape_val = getattr(profile, profile_field)
             if shape_val is None or shape_val == sentinel:
                 continue
-
             current = getattr(self, cfg_field)
-            default = defaults.get(cfg_field)
-            user_set = current is not None and current != default and current != shape_val
-
-            if self.skip_validations and user_set:
-                overrides.append(f"{cfg_field}={current} (shape: {shape_val})")
-            else:
-                setattr(self, cfg_field, None)
-
-        if overrides:
-            logger.warning(
-                "Training shape values overridden (skip_validations=True): %s",
-                "; ".join(overrides),
-            )
+            if self.skip_validations and current is not None:
+                logger.info(
+                    "Keeping user override %s=%s (shape: %s)",
+                    cfg_field, current, shape_val,
+                )
+                continue
+            setattr(self, cfg_field, shape_val)
 
         logger.info(
             "Applied training shape: %s (accel=%s, image=%s, nodes=%s, max_ctx=%s, pp=%d)",
@@ -184,7 +175,11 @@ class TrainerJobManager:
         self.account_id = account_id
         self.base_url = base_url
         self.additional_headers = additional_headers
-        self._verify_ssl = verify_ssl if verify_ssl is not None else DeploymentManager._should_verify_ssl(base_url)
+        self._verify_ssl = (
+            verify_ssl
+            if verify_ssl is not None
+            else DeploymentManager._should_verify_ssl(base_url)
+        )
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
 
@@ -219,11 +214,15 @@ class TrainerJobManager:
         """
         url = f"{self.base_url}/v1/accounts/{self.account_id}/trainingShapes/{training_shape_id}"
         resp = request_with_retries(
-            requests.get, url, headers=self._headers(),
-            timeout=30, verify=self._verify_ssl,
+            requests.get,
+            url,
+            headers=self._headers(),
+            timeout=30,
+            verify=self._verify_ssl,
         )
         if not resp.ok:
             error_msg = parse_api_error(resp)
+            show_support = False
             if resp.status_code == 404:
                 solution = (
                     f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
@@ -236,12 +235,14 @@ class TrainerJobManager:
                 )
             else:
                 solution = "Verify the training_shape_id and account have the shape registered."
+                show_support = True
             raise RuntimeError(
                 format_sdk_error(
                     f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
                     error_msg,
                     solution,
-                    docs_url=DOCS_RLOR,
+                    docs_url=DOCS_SDK,
+                    show_support=show_support,
                 )
             )
         data = resp.json()
@@ -310,7 +311,12 @@ class TrainerJobManager:
 
         logger.info("Creating RLOR job: POST %s (model=%s)", url, config.base_model)
         resp = request_with_retries(
-            requests.post, url, json=payload, headers=self._headers(), timeout=60, verify=self._verify_ssl
+            requests.post,
+            url,
+            json=payload,
+            headers=self._headers(),
+            timeout=60,
+            verify=self._verify_ssl,
         )
         if not resp.ok:
             error_msg = parse_api_error(resp)
@@ -328,7 +334,7 @@ class TrainerJobManager:
                     f"RLOR job creation failed (HTTP {resp.status_code})",
                     error_msg,
                     f"{hint}{extra}",
-                    docs_url=DOCS_RLOR,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -337,18 +343,36 @@ class TrainerJobManager:
     def get(self, job_id: str) -> dict:
         """Get the current state of an RLOR job. Returns raw API response dict."""
         url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = request_with_retries(requests.get, url, headers=self._headers(), timeout=30, verify=self._verify_ssl)
+        resp = request_with_retries(
+            requests.get,
+            url,
+            headers=self._headers(),
+            timeout=30,
+            verify=self._verify_ssl,
+        )
         resp.raise_for_status()
         return resp.json()
 
     def _delete(self, job_id: str) -> None:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = request_with_retries(requests.delete, url, headers=self._headers(), timeout=30, verify=self._verify_ssl)
+        resp = request_with_retries(
+            requests.delete,
+            url,
+            headers=self._headers(),
+            timeout=30,
+            verify=self._verify_ssl,
+        )
         resp.raise_for_status()
 
     def _resume(self, job_id: str) -> dict:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
-        resp = request_with_retries(requests.post, url, headers=self._headers(), timeout=60, verify=self._verify_ssl)
+        resp = request_with_retries(
+            requests.post,
+            url,
+            headers=self._headers(),
+            timeout=60,
+            verify=self._verify_ssl,
+        )
         if not resp.ok:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
@@ -357,9 +381,8 @@ class TrainerJobManager:
                 format_sdk_error(
                     f"RLOR job resume failed (HTTP {resp.status_code})",
                     error_msg,
-                    f"{hint}\n  Check job status in the Fireworks console: "
-                    f"https://fireworks.ai/account/rlor-jobs/{job_id}",
-                    docs_url=DOCS_RLOR,
+                    f"{hint}\n  Check job status in the Fireworks console: {CONSOLE_URL}",
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -370,7 +393,9 @@ class TrainerJobManager:
     def _check_healthz(self, base_url: str, timeout: float = 5) -> bool:
         """Probe /api/v1/healthz -- returns True only on HTTP 200."""
         try:
-            r = requests.get(f"{base_url}/api/v1/healthz", timeout=timeout, verify=False)
+            r = requests.get(
+                f"{base_url}/api/v1/healthz", timeout=timeout, verify=False
+            )
             return r.status_code == 200
         except Exception:
             return False
@@ -399,15 +424,18 @@ class TrainerJobManager:
                         f"Trainer job {job_id} failed",
                         msg,
                         "Check the job logs in the Fireworks console for details.\n"
-                        f"  Console: https://fireworks.ai/account/rlor-jobs/{job_id}\n"
+                        f"  Console: {CONSOLE_URL}\n"
                         "  Common causes: invalid model name, insufficient quota, or region unavailable.",
-                        docs_url=DOCS_RLOR,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
 
             if endpoint:
                 base_url = endpoint.rstrip("/")
-                if not base_url.startswith("http://") and not base_url.startswith("https://"):
+                if not base_url.startswith("http://") and not base_url.startswith(
+                    "https://"
+                ):
                     raise RuntimeError(
                         f"Trainer endpoint has no URL scheme: '{endpoint}'. "
                         "Expected a full URL from directRouteHandle."
@@ -422,7 +450,9 @@ class TrainerJobManager:
                     job_id,
                     state,
                 )
-                return TrainerServiceEndpoint(job_name=job_name, job_id=job_id, base_url=base_url)
+                return TrainerServiceEndpoint(
+                    job_name=job_name, job_id=job_id, base_url=base_url
+                )
 
             # Log current state
             if endpoint:
@@ -447,8 +477,8 @@ class TrainerJobManager:
                 f"Trainer job {job_id} did not become ready within {timeout_s}s",
                 "The job is still provisioning or waiting for GPU resources.",
                 f"Increase timeout with --rlor-timeout-s (current: {timeout_s}s).\n"
-                f"  Check job status: https://fireworks.ai/account/rlor-jobs/{job_id}",
-                docs_url=DOCS_RLOR,
+                f"  Check job status: {CONSOLE_URL}",
+                docs_url=DOCS_SDK,
             )
         )
 
@@ -518,7 +548,8 @@ class TrainerJobManager:
                 if time.time() - start > max_wait_for_resumable_s:
                     raise
                 logger.warning(
-                    "Failed to query job %s (retrying): %s. " "This is usually transient during pod rescheduling.",
+                    "Failed to query job %s (retrying): %s. "
+                    "This is usually transient during pod rescheduling.",
                     job_id,
                     e,
                 )
@@ -551,8 +582,9 @@ class TrainerJobManager:
                         "without transitioning to a resumable state.",
                         "1. Check the Fireworks console for job details\n"
                         "  2. Try cancelling the job and creating a new one\n"
-                        f"  Console: https://fireworks.ai/account/rlor-jobs/{job_id}",
-                        docs_url=DOCS_RLOR,
+                        f"  Console: {CONSOLE_URL}",
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
             logger.info(
@@ -569,7 +601,9 @@ class TrainerJobManager:
             logger.info("Deleted trainer job: %s", job_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete trainer job %s: %s. " "You can delete it manually in the Fireworks console.",
+                "Failed to delete trainer job %s: %s. "
+                "You can delete it manually in the Fireworks console: %s",
                 job_id,
                 e,
+                CONSOLE_URL,
             )

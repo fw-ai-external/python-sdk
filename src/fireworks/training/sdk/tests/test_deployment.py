@@ -81,6 +81,31 @@ class TestParseDeploymentInfo:
 
 
 # ---------------------------------------------------------------------------
+# _create_deployment
+# ---------------------------------------------------------------------------
+
+
+class TestCreateDeployment:
+    @patch("fireworks.training.sdk.deployment.request_with_retries")
+    def test_includes_extra_values_when_provided(self, mock_req, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {"name": "dep-1", "state": "CREATING"}
+        mock_req.return_value = resp
+
+        cfg = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            extra_values={"priorityClass": "deployment"},
+        )
+        mgr._create_deployment(cfg)
+
+        payload = mock_req.call_args[1]["json"]
+        assert payload["extraValues"] == {"priorityClass": "deployment"}
+
+
+# ---------------------------------------------------------------------------
 # hotload — header construction
 # ---------------------------------------------------------------------------
 

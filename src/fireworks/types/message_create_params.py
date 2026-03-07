@@ -303,8 +303,12 @@ class MessageCreateParams(TypedDict, total=False):
     """
 
 
-class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource(TypedDict, total=False):
-    data: Required[Annotated[Union[str, Base64FileInput], PropertyInfo(format="base64")]]
+class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource(
+    TypedDict, total=False
+):
+    data: Required[
+        Annotated[Union[str, Base64FileInput], PropertyInfo(format="base64")]
+    ]
 
     media_type: Required[Literal["application/pdf"]]
 
@@ -317,7 +321,9 @@ set_pydantic_config(
 )
 
 
-class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicPlainTextSource(TypedDict, total=False):
+class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicPlainTextSource(
+    TypedDict, total=False
+):
     data: Required[str]
 
     media_type: Required[Literal["text/plain"]]
@@ -325,12 +331,16 @@ class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicPlai
     type: Required[Literal["text"]]
 
 
-MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicContentBlockSourceContentContentBlockSourceContent: TypeAlias = Union[
+MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicContentBlockSourceContentContentBlockSourceContent: (
+    TypeAlias
+) = Union[
     RequestTextBlockParam, RequestImageBlockParam
 ]
 
 
-class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicContentBlockSource(TypedDict, total=False):
+class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicContentBlockSource(
+    TypedDict, total=False
+):
     content: Required[
         Union[
             str,
@@ -343,7 +353,9 @@ class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicCont
     type: Required[Literal["content"]]
 
 
-class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicUrlpdfSource(TypedDict, total=False):
+class MessageContentUnionMember1AnthropicRequestDocumentBlockSourceAnthropicUrlpdfSource(
+    TypedDict, total=False
+):
     type: Required[Literal["url"]]
 
     url: Required[str]
@@ -357,7 +369,9 @@ MessageContentUnionMember1AnthropicRequestDocumentBlockSource: TypeAlias = Union
 ]
 
 
-class MessageContentUnionMember1AnthropicRequestDocumentBlockCitations(TypedDict, total=False):
+class MessageContentUnionMember1AnthropicRequestDocumentBlockCitations(
+    TypedDict, total=False
+):
     enabled: bool
 
 
@@ -373,7 +387,9 @@ class MessageContentUnionMember1AnthropicRequestDocumentBlock(TypedDict, total=F
     cache_control: Optional[CacheControlEphemeralParam]
     """Create a cache control breakpoint at this content block."""
 
-    citations: Optional[MessageContentUnionMember1AnthropicRequestDocumentBlockCitations]
+    citations: Optional[
+        MessageContentUnionMember1AnthropicRequestDocumentBlockCitations
+    ]
 
     context: Optional[str]
 
@@ -390,7 +406,9 @@ class MessageContentUnionMember1AnthropicRequestThinkingBlock(TypedDict, total=F
     type: Required[Literal["thinking"]]
 
 
-class MessageContentUnionMember1AnthropicRequestRedactedThinkingBlock(TypedDict, total=False):
+class MessageContentUnionMember1AnthropicRequestRedactedThinkingBlock(
+    TypedDict, total=False
+):
     """A block specifying internal, redacted thinking by the model."""
 
     data: Required[str]
@@ -413,8 +431,12 @@ class MessageContentUnionMember1AnthropicRequestToolUseBlock(TypedDict, total=Fa
     """Create a cache control breakpoint at this content block."""
 
 
-class ContentAnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource(TypedDict, total=False):
-    data: Required[Annotated[Union[str, Base64FileInput], PropertyInfo(format="base64")]]
+class ContentAnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource(
+    TypedDict, total=False
+):
+    data: Required[
+        Annotated[Union[str, Base64FileInput], PropertyInfo(format="base64")]
+    ]
 
     media_type: Required[Literal["application/pdf"]]
 
@@ -422,11 +444,14 @@ class ContentAnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource(TypedDi
 
 
 set_pydantic_config(
-    ContentAnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource, {"arbitrary_types_allowed": True}
+    ContentAnthropicRequestDocumentBlockSourceAnthropicBase64PdfSource,
+    {"arbitrary_types_allowed": True},
 )
 
 
-class ContentAnthropicRequestDocumentBlockSourceAnthropicPlainTextSource(TypedDict, total=False):
+class ContentAnthropicRequestDocumentBlockSourceAnthropicPlainTextSource(
+    TypedDict, total=False
+):
     data: Required[str]
 
     media_type: Required[Literal["text/plain"]]
@@ -434,12 +459,16 @@ class ContentAnthropicRequestDocumentBlockSourceAnthropicPlainTextSource(TypedDi
     type: Required[Literal["text"]]
 
 
-ContentAnthropicRequestDocumentBlockSourceAnthropicContentBlockSourceContentContentBlockSourceContent: TypeAlias = (
-    Union[RequestTextBlockParam, RequestImageBlockParam]
-)
+ContentAnthropicRequestDocumentBlockSourceAnthropicContentBlockSourceContentContentBlockSourceContent: (
+    TypeAlias
+) = Union[
+    RequestTextBlockParam, RequestImageBlockParam
+]
 
 
-class ContentAnthropicRequestDocumentBlockSourceAnthropicContentBlockSource(TypedDict, total=False):
+class ContentAnthropicRequestDocumentBlockSourceAnthropicContentBlockSource(
+    TypedDict, total=False
+):
     content: Required[
         Union[
             str,
@@ -452,7 +481,9 @@ class ContentAnthropicRequestDocumentBlockSourceAnthropicContentBlockSource(Type
     type: Required[Literal["content"]]
 
 
-class ContentAnthropicRequestDocumentBlockSourceAnthropicUrlpdfSource(TypedDict, total=False):
+class ContentAnthropicRequestDocumentBlockSourceAnthropicUrlpdfSource(
+    TypedDict, total=False
+):
     type: Required[Literal["url"]]
 
     url: Required[str]
@@ -485,7 +516,9 @@ class ContentAnthropicRequestDocumentBlock(TypedDict, total=False):
     title: Optional[str]
 
 
-Content: TypeAlias = Union[RequestTextBlockParam, RequestImageBlockParam, ContentAnthropicRequestDocumentBlock]
+Content: TypeAlias = Union[
+    RequestTextBlockParam, RequestImageBlockParam, ContentAnthropicRequestDocumentBlock
+]
 
 
 class MessageContentUnionMember1AnthropicRequestToolResultBlock(TypedDict, total=False):
@@ -650,7 +683,7 @@ ToolChoice: TypeAlias = Union[
 ]
 
 
-class ToolInputSchemaTyped(TypedDict, total=False):
+class ToolInputSchema(TypedDict, total=False, extra_items=object):  # type: ignore[call-arg]
     """[JSON schema](https://json-schema.org/draft/2020-12) for this tool's input.
 
     This defines the shape of the `input` that your tool accepts and that the model will produce.
@@ -661,9 +694,6 @@ class ToolInputSchemaTyped(TypedDict, total=False):
     properties: Optional[Dict[str, object]]
 
     required: Optional[SequenceNotStr[str]]
-
-
-ToolInputSchema: TypeAlias = Union[ToolInputSchemaTyped, Dict[str, object]]
 
 
 class Tool(TypedDict, total=False):

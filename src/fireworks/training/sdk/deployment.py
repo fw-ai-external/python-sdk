@@ -19,8 +19,9 @@ import urllib3
 import requests
 
 from fireworks.training.sdk.errors import (
-    DOCS_HOTLOAD,
-    DOCS_DEPLOYMENTS,
+    DOCS_SDK,
+    CONSOLE_URL,
+    DISCORD_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -63,6 +64,7 @@ class DeploymentConfig:
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
+    extra_values: dict[str, str] | None = None
 
 
 class DeploymentManager:
@@ -113,7 +115,9 @@ class DeploymentManager:
         self.inference_url = inference_url or base_url
         self.hotload_api_url = hotload_api_url or base_url
         self.additional_headers = additional_headers
-        self._verify_ssl = verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        self._verify_ssl = (
+            verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        )
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
@@ -144,15 +148,27 @@ class DeploymentManager:
     # -- Deployment CRUD -------------------------------------------------------
 
     def _get_deployment(self, deployment_id: str) -> dict | None:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
-        resp = request_with_retries(requests.get, url, headers=self._headers(), timeout=30, verify=self._verify_ssl)
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
+        resp = request_with_retries(
+            requests.get,
+            url,
+            headers=self._headers(),
+            timeout=30,
+            verify=self._verify_ssl,
+        )
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
         return resp.json()
 
-    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+    def _delete_deployment(
+        self, deployment_id: str, ignore_checks: bool = True, hard: bool = True
+    ) -> None:
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
         params = []
         if ignore_checks:
             params.append("ignoreChecks=true")
@@ -160,7 +176,13 @@ class DeploymentManager:
             params.append("hard=true")
         if params:
             url = f"{url}?{'&'.join(params)}"
-        resp = request_with_retries(requests.delete, url, headers=self._headers(), timeout=60, verify=self._verify_ssl)
+        resp = request_with_retries(
+            requests.delete,
+            url,
+            headers=self._headers(),
+            timeout=60,
+            verify=self._verify_ssl,
+        )
         resp.raise_for_status()
 
     def _create_deployment(self, config: DeploymentConfig) -> dict:
@@ -188,10 +210,17 @@ class DeploymentManager:
             for arg in config.extra_args:
                 flat.extend(arg.split()) if " " in arg else flat.append(arg)
             body["extraArgs"] = flat
+        if config.extra_values:
+            body["extraValues"] = config.extra_values
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = request_with_retries(
-            requests.post, url, headers=self._headers(), json=body, timeout=60, verify=self._verify_ssl
+            requests.post,
+            url,
+            headers=self._headers(),
+            json=body,
+            timeout=60,
+            verify=self._verify_ssl,
         )
         if resp.status_code == 409:
             logger.info(
@@ -216,7 +245,7 @@ class DeploymentManager:
                     f"Deployment creation failed (HTTP {resp.status_code})",
                     error_msg,
                     f"{hint}{extra}",
-                    docs_url=DOCS_DEPLOYMENTS,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -284,9 +313,10 @@ class DeploymentManager:
                 except Exception as e:
                     logger.warning(
                         "Failed to delete deployment %s before recreate: %s. "
-                        "You may need to delete it manually in the Fireworks console.",
+                        "You may need to delete it manually in the Fireworks console: %s",
                         config.deployment_id,
                         e,
+                        CONSOLE_URL,
                     )
             else:
                 return self._parse_deployment_info(config.deployment_id, existing)
@@ -324,7 +354,7 @@ class DeploymentManager:
                         f"Deployment '{deployment_id}' not found",
                         "The deployment does not exist or was deleted.",
                         "Verify the deployment ID is correct, or use --create-deployment to create a new one.",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
                     )
                 )
             state = data.get("state", "UNKNOWN")
@@ -338,10 +368,11 @@ class DeploymentManager:
                     format_sdk_error(
                         f"Deployment '{deployment_id}' entered bad state: {state}",
                         "The deployment failed to start or was deleted externally.",
-                        "1. Check deployment logs in the Fireworks console\n"
+                        f"1. Check deployment logs in the Fireworks console: {CONSOLE_URL}\n"
                         "  2. Try recreating with --create-deployment\n"
                         "  3. Verify your model name and region are valid",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
             if state == "CREATING" and self._probe_inference(model):
@@ -359,8 +390,8 @@ class DeploymentManager:
                 f"Deployment '{deployment_id}' not ready within {timeout_s}s",
                 "The deployment is still provisioning or waiting for GPU resources.",
                 f"Increase timeout with --deployment-timeout-s (current: {timeout_s}s).\n"
-                "  Check deployment status in the Fireworks console.",
-                docs_url=DOCS_DEPLOYMENTS,
+                f"  Check deployment status in the Fireworks console: {CONSOLE_URL}",
+                docs_url=DOCS_SDK,
             )
         )
 
@@ -378,9 +409,11 @@ class DeploymentManager:
             logger.info("Deleted deployment: %s", deployment_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete deployment %s: %s. " "You can delete it manually in the Fireworks console.",
+                "Failed to delete deployment %s: %s. "
+                "You can delete it manually in the Fireworks console: %s",
                 deployment_id,
                 e,
+                CONSOLE_URL,
             )
 
     def scale_to_zero(self, deployment_id: str) -> None:
@@ -390,7 +423,9 @@ class DeploymentManager:
         remains available for future scale-up, but no GPUs are consumed.
         Useful for cleanup after training completes.
         """
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        )
         body = {"maxReplicaCount": 0, "minReplicaCount": 0}
         try:
             resp = request_with_retries(
@@ -407,9 +442,10 @@ class DeploymentManager:
             logger.warning(
                 "Failed to scale deployment %s to zero: %s. "
                 "The deployment may still be consuming GPU resources. "
-                "You can scale it down manually in the Fireworks console.",
+                "You can scale it down manually in the Fireworks console: %s",
                 deployment_id,
                 e,
+                CONSOLE_URL,
             )
 
     # -- Hotload operations ----------------------------------------------------
@@ -446,7 +482,12 @@ class DeploymentManager:
             payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
-        logger.info("Hotloading %s snapshot '%s' to deployment '%s'", ckpt_type, snapshot_identity, deployment_id)
+        logger.info(
+            "Hotloading %s snapshot '%s' to deployment '%s'",
+            ckpt_type,
+            snapshot_identity,
+            deployment_id,
+        )
 
         verify = self._should_verify_ssl(self.hotload_api_url)
         resp = request_with_retries(
@@ -469,7 +510,7 @@ class DeploymentManager:
                     "  1. Verify the deployment has hotLoadBucketUrl configured\n"
                     "  2. Ensure the base model matches between trainer and deployment\n"
                     "  3. Check that the snapshot identity exists",
-                    docs_url=DOCS_HOTLOAD,
+                    docs_url=DOCS_SDK,
                 ),
             )
         resp.raise_for_status()
@@ -492,7 +533,9 @@ class DeploymentManager:
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         verify = self._should_verify_ssl(self.hotload_api_url)
-        resp = request_with_retries(requests.get, url, headers=headers, timeout=timeout, verify=verify)
+        resp = request_with_retries(
+            requests.get, url, headers=headers, timeout=timeout, verify=verify
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -522,7 +565,10 @@ class DeploymentManager:
                         format_sdk_error(
                             "Unrecognized hotload status response format",
                             f"Expected 'replicas' list, got keys: {list(status.keys())}",
-                            "This may indicate an API version mismatch. Update the SDK.",
+                            "This may indicate an API version mismatch. "
+                            f"Reach out on Discord for help: {DISCORD_URL}",
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         )
                     )
                 if replicas:
@@ -538,7 +584,9 @@ class DeploymentManager:
                 elapsed = int(time.time() - start)
 
                 if readiness and current_identity == expected_identity:
-                    logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
+                    logger.info(
+                        "Hotload complete: %s (took %ds)", expected_identity, elapsed
+                    )
                     return True
                 elif stage == "error":
                     logger.warning(
@@ -549,7 +597,8 @@ class DeploymentManager:
                             "1. Check that hotLoadBucketUrl is configured on the deployment\n"
                             "  2. Verify the snapshot was saved successfully by the trainer\n"
                             "  3. Ensure the base model matches between trainer and deployment",
-                            docs_url=DOCS_HOTLOAD,
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         ),
                     )
                     return False
@@ -577,10 +626,10 @@ class DeploymentManager:
             format_sdk_error(
                 f"Hotload did not complete within {timeout_seconds}s",
                 "The deployment is still loading the snapshot or may be unhealthy.",
-                "1. Increase timeout with --hotload-timeout (current: %ds)\n"
-                "  2. Check deployment health in the Fireworks console\n"
-                "  3. Verify the snapshot identity is correct" % timeout_seconds,
-                docs_url=DOCS_HOTLOAD,
+                f"1. Increase timeout with --hotload-timeout (current: {timeout_seconds}s)\n"
+                f"  2. Check deployment health in the Fireworks console: {CONSOLE_URL}\n"
+                "  3. Verify the snapshot identity is correct",
+                docs_url=DOCS_SDK,
             ),
         )
         return False
@@ -611,11 +660,24 @@ class DeploymentManager:
         """Silent single-shot probe: returns True if deployment responds HTTP 200."""
         base = self.inference_url.rstrip("/")
         url = f"{base}/inference/v1/completions"
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
-        payload = {"model": model, "prompt": [1, 2], "max_tokens": 4, "temperature": 0.0}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        payload = {
+            "model": model,
+            "prompt": [1, 2],
+            "max_tokens": 4,
+            "temperature": 0.0,
+        }
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10,
-                                 verify=self._should_verify_ssl(self.inference_url))
+            resp = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=10,
+                verify=self._should_verify_ssl(self.inference_url),
+            )
             return resp.status_code == 200
         except Exception:
             return False
@@ -647,11 +709,24 @@ class DeploymentManager:
         logger.info("Warming up inference deployment (%d retries)...", max_retries)
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.post(completions_url, headers=headers, json=payload, timeout=30, verify=verify)
+                resp = requests.post(
+                    completions_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30,
+                    verify=verify,
+                )
                 if resp.status_code == 200:
-                    logger.info("Inference deployment ready after %d attempt(s)", attempt)
+                    logger.info(
+                        "Inference deployment ready after %d attempt(s)", attempt
+                    )
                     return True
-                logger.info("Warmup attempt %d/%d: HTTP %d", attempt, max_retries, resp.status_code)
+                logger.info(
+                    "Warmup attempt %d/%d: HTTP %d",
+                    attempt,
+                    max_retries,
+                    resp.status_code,
+                )
             except Exception as e:
                 logger.info("Warmup attempt %d/%d: %s", attempt, max_retries, e)
             time.sleep(retry_interval_s)
@@ -661,10 +736,10 @@ class DeploymentManager:
             format_sdk_error(
                 f"Inference deployment not ready after {max_retries} retries",
                 "The deployment is not responding to inference requests.",
-                "1. Check the deployment state in the Fireworks console (should be READY)\n"
+                f"1. Check the deployment state in the Fireworks console: {CONSOLE_URL}\n"
                 "  2. Verify the inference URL and model name are correct\n"
                 "  3. The deployment may be scaling up — try increasing retry count",
-                docs_url=DOCS_DEPLOYMENTS,
+                docs_url=DOCS_SDK,
             ),
         )
         return False
@@ -824,7 +899,7 @@ class DeploymentSampler:
                         f"Completions error (HTTP {resp.status_code})",
                         error_msg,
                         f"{hint}{extra}",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
                     ),
                 )
             resp.raise_for_status()
@@ -932,13 +1007,17 @@ class DeploymentSampler:
         num_completions = n
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
 
         if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
             logger.info(
                 "Prompt pre-filtered: %d prompt tokens >= max_seq_len %d, skipping inference",
-                len(prompt_ids), max_seq_len,
+                len(prompt_ids),
+                max_seq_len,
             )
             return []
 
@@ -967,12 +1046,17 @@ class DeploymentSampler:
                         "Ensure the deployment supports raw_output=True.\n"
                         "  This requires a deployment running a compatible model version.\n"
                         "  Check that the deployment base model matches your training model.",
-                        docs_url=DOCS_DEPLOYMENTS,
+                        docs_url=DOCS_SDK,
+                        show_support=True,
                     )
                 )
 
-            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
-            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
+            token_logprobs = (
+                self._extract_logprobs(choice) if user_requested_logprobs else None
+            )
+            routing_matrices = (
+                self._extract_routing_matrices(choice) if routing_requested else None
+            )
 
             # With echo=True the API returns P+C tokens in
             # completion_token_ids and logprobs cover all P+C positions.
@@ -981,17 +1065,20 @@ class DeploymentSampler:
             # P+C-1 training-aligned entries.
             lp_is_echo = False
             if echo_mode:
-                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
+                if len(completion_ids) < len(prompt_ids) or completion_ids[
+                    : len(prompt_ids)
+                ] != list(prompt_ids):
                     raise RuntimeError(
                         format_sdk_error(
                             "Echo response format mismatch",
                             "echo=True was requested but completion_token_ids do not include the prompt prefix.",
                             "Ensure the deployment supports token echo with raw_output=True.",
-                            docs_url=DOCS_DEPLOYMENTS,
+                            docs_url=DOCS_SDK,
+                            show_support=True,
                         )
                     )
 
-                completion_ids = completion_ids[len(prompt_ids):]
+                completion_ids = completion_ids[len(prompt_ids) :]
                 if token_logprobs is not None:
                     token_logprobs = token_logprobs[1:]
                     lp_is_echo = True
@@ -1002,7 +1089,8 @@ class DeploymentSampler:
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
                 logger.debug(
                     "Completion post-filtered: %d tokens > max_seq_len %d",
-                    len(full_tokens), max_seq_len,
+                    len(full_tokens),
+                    max_seq_len,
                 )
                 continue
 
