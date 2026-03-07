@@ -64,6 +64,7 @@ class DeploymentConfig:
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
+    extra_values: dict[str, str] | None = None
 
 
 class DeploymentManager:
@@ -209,6 +210,8 @@ class DeploymentManager:
             for arg in config.extra_args:
                 flat.extend(arg.split()) if " " in arg else flat.append(arg)
             body["extraArgs"] = flat
+        if config.extra_values:
+            body["extraValues"] = config.extra_values
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = request_with_retries(
