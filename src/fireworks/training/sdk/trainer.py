@@ -13,6 +13,7 @@ import time
 import logging
 from typing import Any
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 import urllib3
 import requests
@@ -95,6 +96,12 @@ class TrainerJobConfig:
     extra_args: list[str] | None = None
     accelerator_type: str | None = None
     accelerator_count: int | None = None
+    training_shape: str | None = None
+    """Training shape resource reference.
+
+    Sent as the top-level ``trainingShape`` request parameter so the backend can
+    select and apply the validated launch profile.
+    """
     skip_validations: bool = False
     forward_only: bool = False
 
@@ -265,13 +272,15 @@ class TrainerJobManager:
 
     def _create(self, config: TrainerJobConfig) -> dict:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs"
-        query_params: list[str] = []
+        query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
-            query_params.append(f"deploymentId={config.hot_load_deployment_id}")
+            query_params.append(("deploymentId", config.hot_load_deployment_id))
         if config.skip_validations:
-            query_params.append("skipValidations=true")
+            query_params.append(("skipValidations", "true"))
+        if config.training_shape:
+            query_params.append(("trainingShape", config.training_shape))
         if query_params:
-            url = f"{url}?{'&'.join(query_params)}"
+            url = f"{url}?{urlencode(query_params)}"
 
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
