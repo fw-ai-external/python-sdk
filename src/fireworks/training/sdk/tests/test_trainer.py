@@ -57,17 +57,24 @@ class TestCreate:
         assert "skipValidations=true" in url
         assert payload["serviceMode"] is True
         assert payload["nodeCount"] == 2
-        assert (
-            payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
-        )
+        assert payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
     @patch("fireworks.training.sdk.trainer.request_with_retries")
-    def test_training_shape_sent_as_query_param(self, mock_req, mgr):
+    def test_validated_shape_omits_all_infra_fields(self, mock_req, mgr):
+        """Validated-shape path sends only algorithm fields; all shape-derived
+        infra fields are omitted so the backend populates them from the shape."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            training_shape="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
+            training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
+            accelerator_type="NVIDIA_H100_80GB",
+            accelerator_count=8,
+            custom_image_tag="0.33.0",
+            node_count=4,
+            max_context_length=8192,
+            region="US_OHIO_1",
+            extra_args=["--flag"],
         )
         resp = MagicMock()
         resp.ok = True
@@ -80,11 +87,49 @@ class TestCreate:
         url = mock_req.call_args[0][1]
         payload = mock_req.call_args[1]["json"]
         assert "trainingShape=" in url
-        assert (
-            "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1"
-            in url
+        assert "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1" in url
+        tc = payload["trainingConfig"]
+        assert "acceleratorType" not in tc
+        assert "acceleratorCount" not in tc
+        assert "customImageTag" not in tc
+        assert "maxContextLength" not in tc
+        assert "nodeCount" not in payload
+        assert tc["region"] == "US_OHIO_1"
+        assert tc["extraArgs"] == ["--flag"]
+
+    @patch("fireworks.training.sdk.trainer.request_with_retries")
+    def test_skip_validations_sends_all_fields(self, mock_req, mgr):
+        """Skip-validation path sends all fields including shape-derived ones."""
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
+            skip_validations=True,
+            accelerator_type="NVIDIA_H100_80GB",
+            accelerator_count=8,
+            custom_image_tag="0.33.0",
+            node_count=4,
+            max_context_length=8192,
+            region="US_OHIO_1",
         )
-        assert "trainingShape" not in payload["trainingConfig"]
+        resp = MagicMock()
+        resp.ok = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mock_req.return_value = resp
+
+        mgr._create(config)
+
+        url = mock_req.call_args[0][1]
+        payload = mock_req.call_args[1]["json"]
+        assert "trainingShape=" in url
+        assert "skipValidations=true" in url
+        tc = payload["trainingConfig"]
+        assert tc["acceleratorType"] == "NVIDIA_H100_80GB"
+        assert tc["acceleratorCount"] == 8
+        assert tc["customImageTag"] == "0.33.0"
+        assert tc["maxContextLength"] == 8192
+        assert payload["nodeCount"] == 4
+        assert tc["region"] == "US_OHIO_1"
 
     @patch("fireworks.training.sdk.trainer.request_with_retries")
     def test_extra_args_flattened(self, mock_req, mgr):
@@ -111,17 +156,15 @@ class TestCreate:
 class TestPollUntilReady:
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
     @patch.object(TrainerJobManager, "get")
-    def test_running_with_endpoint(self, mock_get, mock_healthz, mgr):
+    def test_running_uses_gateway_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
             "directRouteHandle": "https://trainer.internal:8080",
         }
-        result = mgr._poll_until_ready(
-            "job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10
-        )
+        result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
         assert isinstance(result, TrainerServiceEndpoint)
         assert result.job_id == "job-1"
-        assert result.base_url == "https://trainer.internal:8080"
+        assert result.base_url == "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
 
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):
@@ -181,42 +224,53 @@ class TestReconnectAndWait:
 
 class TestResolveTrainingProfile:
     def test_parses_sharding(self):
-        """resolve_training_profile extracts pipeline_parallelism from API response."""
+        """resolve_training_profile parses the latest shape-version snapshot."""
         mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
         with patch("fireworks.training.sdk.trainer.request_with_retries") as mock_req:
             resp = MagicMock()
             resp.ok = True
             resp.json.return_value = {
-                "name": "shape-v1",
-                "trainerImageTag": "0.33.0",
-                "maxSupportedContextLength": 8192,
-                "nodeCount": 2,
-                "deploymentShapeVersion": "dsv",
-                "deploymentImageTag": "img",
-                "acceleratorType": "NVIDIA_H100_80GB",
-                "acceleratorCount": 8,
-                "baseModelWeightPrecision": "bfloat16",
-                "trainerShardingScheme": {
-                    "tensorParallelism": 1,
-                    "pipelineParallelism": 4,
-                    "contextParallelism": 1,
-                    "expertParallelism": 1,
-                },
+                "trainingShapeVersions": [
+                    {
+                        "name": "accounts/a/trainingShapes/ts-test/versions/ver-123",
+                        "snapshot": {
+                            "name": "accounts/a/trainingShapes/ts-test",
+                            "trainerImageTag": "0.33.0",
+                            "maxSupportedContextLength": 8192,
+                            "nodeCount": 2,
+                            "deploymentShapeVersion": "dsv",
+                            "deploymentImageTag": "img",
+                            "acceleratorType": "NVIDIA_H100_80GB",
+                            "acceleratorCount": 8,
+                            "baseModelWeightPrecision": "bfloat16",
+                            "trainerShardingScheme": {
+                                "tensorParallelism": 1,
+                                "pipelineParallelism": 4,
+                                "contextParallelism": 1,
+                                "expertParallelism": 1,
+                            },
+                        },
+                    },
+                ],
             }
             mock_req.return_value = resp
             profile = mgr.resolve_training_profile("ts-test")
+            called_url = mock_req.call_args[0][1]
+            assert called_url.endswith("/trainingShapes/ts-test/versions?filter=latest_validated%3Dtrue&pageSize=1")
             assert profile.pipeline_parallelism == 4
             assert profile.max_supported_context_length == 8192
+            assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
+            assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
 
 
 # ---------------------------------------------------------------------------
-# TrainingShapeProfile.deployment_shape
+# TrainingShapeProfile.training_shape / deployment_shape
 # ---------------------------------------------------------------------------
 
 
 def _make_profile(**overrides) -> TrainingShapeProfile:
     defaults = dict(
-        training_shape_version="shape-v1",
+        training_shape_version="accounts/fw/trainingShapes/ts-x/versions/1",
         trainer_image_tag="0.33.0",
         max_supported_context_length=8192,
         node_count=2,
@@ -231,6 +285,29 @@ def _make_profile(**overrides) -> TrainingShapeProfile:
     return TrainingShapeProfile(**defaults)
 
 
+class TestTrainingShapeProperty:
+    def test_strips_version_suffix(self):
+        profile = _make_profile(
+            training_shape_version="accounts/fw/trainingShapes/ts-x/versions/1",
+        )
+        assert profile.training_shape == "accounts/fw/trainingShapes/ts-x"
+
+    def test_empty_returns_none(self):
+        profile = _make_profile(training_shape_version="")
+        assert profile.training_shape is None
+
+    def test_no_version_suffix_unchanged(self):
+        profile = _make_profile(
+            training_shape_version="accounts/fw/trainingShapes/ts-x",
+        )
+        assert profile.training_shape == "accounts/fw/trainingShapes/ts-x"
+
+
+# ---------------------------------------------------------------------------
+# TrainingShapeProfile.deployment_shape
+# ---------------------------------------------------------------------------
+
+
 class TestDeploymentShapeProperty:
     def test_strips_version_suffix(self):
         profile = _make_profile(
@@ -243,9 +320,7 @@ class TestDeploymentShapeProperty:
         assert profile.deployment_shape is None
 
     def test_no_version_suffix_unchanged(self):
-        profile = _make_profile(
-            deployment_shape_version="accounts/fw/deploymentShapes/ds-x"
-        )
+        profile = _make_profile(deployment_shape_version="accounts/fw/deploymentShapes/ds-x")
         assert profile.deployment_shape == "accounts/fw/deploymentShapes/ds-x"
 
 
@@ -269,8 +344,8 @@ class TestApplyShape:
         assert config.node_count == 2
         assert config.max_context_length == 8192
 
-    def test_shape_wins_without_skip_validations(self):
-        """Without skip_validations, shape wins over user values."""
+    def test_shape_wins_without_skip_validations_for_copied_fields(self):
+        """Without skip_validations, shape wins for copied launch fields."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             accelerator_type="NVIDIA_A100_80GB",
@@ -286,7 +361,7 @@ class TestApplyShape:
         assert config.max_context_length == 8192
 
     def test_skip_validations_keeps_user_overrides(self):
-        """With skip_validations, user's non-None values override the shape."""
+        """With skip_validations, user values override copied shape fields."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             skip_validations=True,
@@ -301,8 +376,7 @@ class TestApplyShape:
         assert config.accelerator_count == 4
         assert config.max_context_length == 4096
         assert config.custom_image_tag == "0.33.0"
-        # node_count defaults to 1 (not None), so it's kept as a user override
-        assert config.node_count == 1
+        assert config.node_count == 2
 
     def test_skip_validations_fills_none_fields(self):
         """With skip_validations, shape fills fields the user left as None."""
@@ -318,13 +392,15 @@ class TestApplyShape:
         assert config.custom_image_tag == "0.33.0"
         assert config.max_context_length == 8192
 
-    def test_skips_unspecified_accelerator(self):
-        """ACCELERATOR_TYPE_UNSPECIFIED is treated as 'shape does not provide this'."""
+    def test_skip_validations_can_partially_override_accelerators(self):
+        """Skip-validation launches can override part of the accelerator tuple."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
+            skip_validations=True,
             accelerator_type="MY_ACCEL",
         )
-        profile = _make_profile(accelerator_type="ACCELERATOR_TYPE_UNSPECIFIED")
+        profile = _make_profile()
         config.apply_shape(profile)
 
         assert config.accelerator_type == "MY_ACCEL"
+        assert config.accelerator_count == 8

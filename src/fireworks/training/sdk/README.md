@@ -70,6 +70,44 @@ syncer.save_and_hotload("step-1")
 syncer.save_dcp("step-1")
 ```
 
+## Using training shapes
+
+Two launch paths are supported:
+
+### Validated launch (default)
+
+Pass only `training_shape_ref`. The backend populates accelerator, image tag,
+node count, max context length, and sharding from the validated shape.
+
+```python
+profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
+
+config = TrainerJobConfig(
+    base_model="accounts/fireworks/models/qwen3-8b",
+    display_name="my-trainer",
+    training_shape_ref=profile.training_shape_version,
+)
+# Do NOT set accelerator_type, accelerator_count, custom_image_tag,
+# node_count, or max_context_length -- the shape owns these fields.
+```
+
+### Override launch (`skip_validations=True`)
+
+Resolve the profile for defaults, then override specific fields.
+
+```python
+profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
+
+config = TrainerJobConfig(
+    base_model="accounts/fireworks/models/qwen3-8b",
+    display_name="my-trainer",
+    skip_validations=True,
+    accelerator_type="NVIDIA_A100_80GB",  # user override
+)
+config.apply_shape(profile)  # fills remaining fields from shape
+config.training_shape_ref = profile.training_shape_version
+```
+
 ## Error handling and retries
 
 - `errors.py` provides `request_with_retries`, structured error formatting, and status hints.

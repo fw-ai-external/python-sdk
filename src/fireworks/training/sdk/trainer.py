@@ -53,6 +53,11 @@ class TrainingShapeProfile:
     """
 
     training_shape_version: str
+    """Versioned training-shape resource name.
+
+    Example:
+    ``accounts/fw/trainingShapes/ts-x/versions/abc123``.
+    """
     trainer_image_tag: str
     max_supported_context_length: int
     node_count: int
@@ -63,6 +68,18 @@ class TrainingShapeProfile:
     base_model_weight_precision: str
     pipeline_parallelism: int = 1
     """Pipeline parallelism degree from the training shape's sharding scheme."""
+
+    @property
+    def training_shape(self) -> str | None:
+        """Training shape name derived from ``training_shape_version``.
+
+        Strips the ``/versions/...`` suffix, e.g.
+        ``"accounts/fw/trainingShapes/ts-x/versions/1"`` becomes
+        ``"accounts/fw/trainingShapes/ts-x"``.
+        """
+        if not self.training_shape_version:
+            return None
+        return re.sub(r"/versions/[^/]+$", "", self.training_shape_version)
 
     @property
     def deployment_shape(self) -> str | None:
@@ -84,38 +101,70 @@ class TrainerJobConfig:
     base_model: str
     lora_rank: int = 0
     max_context_length: int | None = None
-    """Max context length for the trainer.  When using training shapes,
-    ``apply_shape`` sets this from the shape's ``maxSupportedContextLength``."""
+    """Max context length for the trainer.
+
+    Omitted from the request on validated-shape launches (the backend
+    populates it from the training shape).  On ``skip_validations`` or
+    manual launches it is sent as-is.
+    """
     learning_rate: float = 1e-5
     gradient_accumulation_steps: int = 1
-    node_count: int = 1
+    node_count: int | None = None
+    """Number of trainer nodes.
+
+    Omitted from the request on validated-shape launches (the backend
+    populates it from the training shape).  Defaults to ``1`` when sent.
+    """
     display_name: str | None = None
     hot_load_deployment_id: str | None = None
     region: str | None = None
     custom_image_tag: str | None = None
+    """Trainer container image tag.
+
+    Omitted from the request on validated-shape launches (the backend
+    populates it from the training shape).
+    """
     extra_args: list[str] | None = None
+    """Additional trainer arguments passed through to the backend."""
     accelerator_type: str | None = None
+    """Accelerator type override.
+
+    Omitted from the request on validated-shape launches (the backend
+    populates it from the training shape).  On ``skip_validations``
+    launches, explicit values are sent as user overrides.
+    """
     accelerator_count: int | None = None
-    training_shape: str | None = None
-    """Training shape resource reference.
+    """Accelerator count override.
+
+    Omitted from the request on validated-shape launches (the backend
+    populates it from the training shape).  On ``skip_validations``
+    launches, explicit values are sent as user overrides.
+    """
+    training_shape_ref: str | None = None
+    """Training-shape selector resource reference.
 
     Sent as the top-level ``trainingShape`` request parameter so the backend can
-    select and apply the validated launch profile.
+    select and apply the validated launch profile. Accepts either an
+    unversioned training-shape resource or an exact training-shape version.
     """
     skip_validations: bool = False
     forward_only: bool = False
 
     def apply_shape(self, profile: TrainingShapeProfile) -> None:
-        """Populate config fields from a resolved training shape.
+        """Populate request fields from a resolved training shape.
 
-        By default the shape values always win.  When
-        ``skip_validations`` is True, any config field the user already
-        set (non-None) is kept as an override and the shape value is
-        skipped for that field.
+        This copies the resolved shape-derived launch settings onto the config,
+        including accelerators. For validated launches the SDK still omits
+        accelerator fields from the outgoing request when ``training_shape_ref``
+        is set, so the control plane uses the validated shape directly.
+
+        By default the shape values always win. When ``skip_validations`` is
+        True, any config field the user already set (non-None) is kept as an
+        override and the shape value is skipped for that field.
         """
         _SHAPE_FIELD_MAP: list[tuple[str, str, Any]] = [
             # (config_field, profile_field, sentinel_to_skip)
-            ("accelerator_type", "accelerator_type", "ACCELERATOR_TYPE_UNSPECIFIED"),
+            ("accelerator_type", "accelerator_type", ""),
             ("accelerator_count", "accelerator_count", 0),
             ("custom_image_tag", "trainer_image_tag", ""),
             ("node_count", "node_count", 0),
@@ -130,7 +179,9 @@ class TrainerJobConfig:
             if self.skip_validations and current is not None:
                 logger.info(
                     "Keeping user override %s=%s (shape: %s)",
-                    cfg_field, current, shape_val,
+                    cfg_field,
+                    current,
+                    shape_val,
                 )
                 continue
             setattr(self, cfg_field, shape_val)
@@ -182,11 +233,7 @@ class TrainerJobManager:
         self.account_id = account_id
         self.base_url = base_url
         self.additional_headers = additional_headers
-        self._verify_ssl = (
-            verify_ssl
-            if verify_ssl is not None
-            else DeploymentManager._should_verify_ssl(base_url)
-        )
+        self._verify_ssl = verify_ssl if verify_ssl is not None else DeploymentManager._should_verify_ssl(base_url)
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
 
@@ -206,12 +253,13 @@ class TrainerJobManager:
         training_shape_id: str,
         **_kwargs,
     ) -> TrainingShapeProfile:
-        """Fetch a training shape from the control plane.
+        """Fetch the latest validated version of a training shape.
 
-        Reads the training shape resource and extracts all shape-derived
-        config (region, accelerator, image tag, deployment shape, etc.).
-        Uses the standard ``GET /v1/accounts/{id}/trainingShapes/{shapeId}``
-        endpoint which is accessible to account owners.
+        Reads the latest validated training-shape version and extracts all
+        shape-derived config (region, accelerator, image tag, deployment
+        shape, etc.) from its embedded snapshot. This gives callers a pinned
+        versioned training-shape reference they can pass back when launching
+        validated service-mode jobs.
 
         Args:
             training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``).
@@ -219,7 +267,11 @@ class TrainerJobManager:
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
         """
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/trainingShapes/{training_shape_id}"
+        url = (
+            f"{self.base_url}/v1/accounts/{self.account_id}/trainingShapes/"
+            f"{training_shape_id}/versions?"
+            f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
+        )
         resp = request_with_retries(
             requests.get,
             url,
@@ -253,18 +305,34 @@ class TrainerJobManager:
                 )
             )
         data = resp.json()
-        sharding = data.get("trainerShardingScheme", {}) or {}
+        versions = data.get("trainingShapeVersions", []) or []
+        if not versions:
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to resolve latest validated training shape for '{training_shape_id}'",
+                    "No latest validated training-shape version was returned.",
+                    (
+                        "Validate a training-shape version first, or check that the "
+                        "training_shape_id is correct and visible to your account."
+                    ),
+                    docs_url=DOCS_SDK,
+                    show_support=False,
+                )
+            )
+        version = versions[0]
+        snapshot = version.get("snapshot", {}) or {}
+        sharding = snapshot.get("trainerShardingScheme", {}) or {}
         pp = int(sharding.get("pipelineParallelism", 1) or 1)
         return TrainingShapeProfile(
-            training_shape_version=data.get("name", ""),
-            trainer_image_tag=data.get("trainerImageTag", ""),
-            max_supported_context_length=data.get("maxSupportedContextLength", 0),
-            node_count=data.get("nodeCount", 1),
-            deployment_shape_version=data.get("deploymentShapeVersion", ""),
-            deployment_image_tag=data.get("deploymentImageTag", ""),
-            accelerator_type=data.get("acceleratorType", ""),
-            accelerator_count=data.get("acceleratorCount", 0),
-            base_model_weight_precision=data.get("baseModelWeightPrecision", ""),
+            training_shape_version=version.get("name", ""),
+            trainer_image_tag=snapshot.get("trainerImageTag", ""),
+            max_supported_context_length=snapshot.get("maxSupportedContextLength", 0),
+            node_count=snapshot.get("nodeCount", 1),
+            deployment_shape_version=snapshot.get("deploymentShapeVersion", ""),
+            deployment_image_tag=snapshot.get("deploymentImageTag", ""),
+            accelerator_type=snapshot.get("acceleratorType", ""),
+            accelerator_count=snapshot.get("acceleratorCount", 0),
+            base_model_weight_precision=snapshot.get("baseModelWeightPrecision", ""),
             pipeline_parallelism=pp,
         )
 
@@ -277,10 +345,12 @@ class TrainerJobManager:
             query_params.append(("deploymentId", config.hot_load_deployment_id))
         if config.skip_validations:
             query_params.append(("skipValidations", "true"))
-        if config.training_shape:
-            query_params.append(("trainingShape", config.training_shape))
+        if config.training_shape_ref:
+            query_params.append(("trainingShape", config.training_shape_ref))
         if query_params:
             url = f"{url}?{urlencode(query_params)}"
+
+        is_validated_shape = bool(config.training_shape_ref) and not config.skip_validations
 
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
@@ -288,32 +358,33 @@ class TrainerJobManager:
             "learningRate": config.learning_rate,
             "gradientAccumulationSteps": config.gradient_accumulation_steps,
         }
-        if config.max_context_length is not None:
+        if not is_validated_shape and config.max_context_length is not None:
             training_config["maxContextLength"] = config.max_context_length
 
         payload: dict[str, Any] = {
             "serviceMode": True,
             "keepAlive": False,
-            "nodeCount": config.node_count,
             "dataset": "",
             "trainingConfig": training_config,
         }
+        if not is_validated_shape:
+            payload["nodeCount"] = config.node_count if config.node_count is not None else 1
         if config.display_name:
             payload["displayName"] = config.display_name
         if config.hot_load_deployment_id:
             payload["hotLoadDeploymentId"] = config.hot_load_deployment_id
         if config.region:
             payload["trainingConfig"]["region"] = config.region
-        if config.custom_image_tag:
+        if not is_validated_shape and config.custom_image_tag:
             payload["trainingConfig"]["customImageTag"] = config.custom_image_tag
         if config.extra_args:
             flat = []
             for arg in config.extra_args:
                 flat.extend(arg.split()) if " " in arg else flat.append(arg)
             payload["trainingConfig"]["extraArgs"] = flat
-        if config.accelerator_type:
+        if not is_validated_shape and config.accelerator_type:
             payload["trainingConfig"]["acceleratorType"] = config.accelerator_type
-        if config.accelerator_count:
+        if not is_validated_shape and config.accelerator_count:
             payload["trainingConfig"]["acceleratorCount"] = config.accelerator_count
         if config.forward_only:
             payload["forwardOnly"] = True
@@ -468,9 +539,7 @@ class TrainerJobManager:
                     job_id,
                     state,
                 )
-                return TrainerServiceEndpoint(
-                    job_name=job_name, job_id=job_id, base_url=base_url
-                )
+                return TrainerServiceEndpoint(job_name=job_name, job_id=job_id, base_url=base_url)
 
             if state == "JOB_STATE_RUNNING":
                 logger.info(
@@ -493,8 +562,7 @@ class TrainerJobManager:
             format_sdk_error(
                 f"Trainer job {job_id} did not become ready within {timeout_s}s",
                 "The job is still provisioning or waiting for GPU resources.",
-                f"Increase timeout with --rlor-timeout-s (current: {timeout_s}s).\n"
-                f"  Check job status: {CONSOLE_URL}",
+                f"Increase timeout with --rlor-timeout-s (current: {timeout_s}s).\n  Check job status: {CONSOLE_URL}",
                 docs_url=DOCS_SDK,
             )
         )
@@ -565,8 +633,7 @@ class TrainerJobManager:
                 if time.time() - start > max_wait_for_resumable_s:
                     raise
                 logger.warning(
-                    "Failed to query job %s (retrying): %s. "
-                    "This is usually transient during pod rescheduling.",
+                    "Failed to query job %s (retrying): %s. This is usually transient during pod rescheduling.",
                     job_id,
                     e,
                 )
@@ -618,8 +685,7 @@ class TrainerJobManager:
             logger.info("Deleted trainer job: %s", job_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete trainer job %s: %s. "
-                "You can delete it manually in the Fireworks console: %s",
+                "Failed to delete trainer job %s: %s. You can delete it manually in the Fireworks console: %s",
                 job_id,
                 e,
                 CONSOLE_URL,
