@@ -44,7 +44,7 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
 training = [
-  "tinker==0.13.1 ; python_version >= '3.11'",
+  "tinker==0.15.0 ; python_version >= '3.11'",
   "tinker-cookbook>=0.1.0 ; python_version >= '3.11'",
   "requests",
   "torch>=2.0.0",
