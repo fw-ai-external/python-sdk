@@ -64,6 +64,29 @@ class TestCreate:
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
     @patch("fireworks.training.sdk.trainer.request_with_retries")
+    def test_training_shape_sent_as_query_param(self, mock_req, mgr):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            training_shape="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
+        )
+        resp = MagicMock()
+        resp.ok = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mock_req.return_value = resp
+
+        mgr._create(config)
+
+        url = mock_req.call_args[0][1]
+        payload = mock_req.call_args[1]["json"]
+        assert "trainingShape=" in url
+        assert (
+            "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1"
+            in url
+        )
+        assert "trainingShape" not in payload["trainingConfig"]
+
+    @patch("fireworks.training.sdk.trainer.request_with_retries")
     def test_extra_args_flattened(self, mock_req, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",

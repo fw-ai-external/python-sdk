@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-alpha.38 (2026-03-08)
+
+Full Changelog: [v1.0.0-alpha.37...v1.0.0-alpha.38](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.37...v1.0.0-alpha.38)
+
+### Bug Fixes
+
+* **trainer:** route via API gateway instead of directRouteHandle ([0d4c142](https://github.com/fw-ai-external/python-sdk/commit/0d4c142aaff78f57a9ac36c5b21400d23f98819d))
+
+
+### Chores
+
+* **ci:** skip uploading artifacts on stainless-internal branches ([b0c2def](https://github.com/fw-ai-external/python-sdk/commit/b0c2def77734108ffc64036a6b209cd2e3bbdbef))
+* update placeholder string ([f7a8b73](https://github.com/fw-ai-external/python-sdk/commit/f7a8b734a0aa9eedc48342c7ab605a22fa079b31))
+
 ## 1.0.0-alpha.37 (2026-03-07)
 
 Full Changelog: [v1.0.0-alpha.36...v1.0.0-alpha.37](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.36...v1.0.0-alpha.37)

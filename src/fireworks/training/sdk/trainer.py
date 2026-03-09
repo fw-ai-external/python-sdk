@@ -13,6 +13,7 @@ import time
 import logging
 from typing import Any
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 import urllib3
 import requests
@@ -95,6 +96,12 @@ class TrainerJobConfig:
     extra_args: list[str] | None = None
     accelerator_type: str | None = None
     accelerator_count: int | None = None
+    training_shape: str | None = None
+    """Training shape resource reference.
+
+    Sent as the top-level ``trainingShape`` request parameter so the backend can
+    select and apply the validated launch profile.
+    """
     skip_validations: bool = False
     forward_only: bool = False
 
@@ -265,13 +272,15 @@ class TrainerJobManager:
 
     def _create(self, config: TrainerJobConfig) -> dict:
         url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs"
-        query_params: list[str] = []
+        query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
-            query_params.append(f"deploymentId={config.hot_load_deployment_id}")
+            query_params.append(("deploymentId", config.hot_load_deployment_id))
         if config.skip_validations:
-            query_params.append("skipValidations=true")
+            query_params.append(("skipValidations", "true"))
+        if config.training_shape:
+            query_params.append(("trainingShape", config.training_shape))
         if query_params:
-            url = f"{url}?{'&'.join(query_params)}"
+            url = f"{url}?{urlencode(query_params)}"
 
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
@@ -390,11 +399,29 @@ class TrainerJobManager:
 
     # -- High-level operations -------------------------------------------------
 
+    def _get_trainer_gateway_url(self, job_id: str) -> str:
+        """Build the gateway proxy URL for a trainer job.
+
+        The API gateway routes requests matching
+        ``/training/v1/rlorTrainerJobs/{accountId}/{jobId}/*`` to the
+        trainer pod via DynamoDB route lookup and the ``FIREWORKS-TRAINER``
+        header.  The gateway strips the prefix so the trainer receives
+        the original path (e.g. ``/api/v1/healthz``).
+
+        This replaces the previous ``directRouteHandle`` approach, which
+        resolved to a GCP-specific hostname and did not work for non-GCP
+        clusters (e.g. OCI).
+        """
+        return f"{self.base_url}/training/v1/rlorTrainerJobs/{self.account_id}/{job_id}"
+
     def _check_healthz(self, base_url: str, timeout: float = 5) -> bool:
         """Probe /api/v1/healthz -- returns True only on HTTP 200."""
         try:
             r = requests.get(
-                f"{base_url}/api/v1/healthz", timeout=timeout, verify=False
+                f"{base_url}/api/v1/healthz",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=timeout,
+                verify=False,
             )
             return r.status_code == 200
         except Exception:
@@ -409,12 +436,11 @@ class TrainerJobManager:
     ) -> TrainerServiceEndpoint:
         start = time.time()
         service_ready = False
-        base_url: str = ""
+        base_url = self._get_trainer_gateway_url(job_id)
 
         while time.time() - start < timeout_s:
             job = self.get(job_id)
             state = job.get("state", "")
-            endpoint = job.get("directRouteHandle", "")
             elapsed = int(time.time() - start)
 
             if state == "JOB_STATE_FAILED":
@@ -431,15 +457,7 @@ class TrainerJobManager:
                     )
                 )
 
-            if endpoint:
-                base_url = endpoint.rstrip("/")
-                if not base_url.startswith("http://") and not base_url.startswith(
-                    "https://"
-                ):
-                    raise RuntimeError(
-                        f"Trainer endpoint has no URL scheme: '{endpoint}'. "
-                        "Expected a full URL from directRouteHandle."
-                    )
+            if state == "JOB_STATE_RUNNING":
                 service_ready = self._check_healthz(base_url)
 
             if service_ready:
@@ -454,8 +472,7 @@ class TrainerJobManager:
                     job_name=job_name, job_id=job_id, base_url=base_url
                 )
 
-            # Log current state
-            if endpoint:
+            if state == "JOB_STATE_RUNNING":
                 logger.info(
                     "[%ds] Trainer job %s: state=%s, healthz=waiting",
                     elapsed,
