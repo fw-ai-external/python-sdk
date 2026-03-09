@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.40 (2026-03-09)
+
+Full Changelog: [v1.0.0-alpha.39...v1.0.0-alpha.40](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.39...v1.0.0-alpha.40)
+
+### Chores
+
+* **training-sdk:** bump tinker to 0.15.0 ([#57](https://github.com/fw-ai-external/python-sdk/issues/57)) ([bc8fd1c](https://github.com/fw-ai-external/python-sdk/commit/bc8fd1c53e7092f40109323b0cac219ec8f2b8cf))
+
 ## 1.0.0-alpha.39 (2026-03-09)
 
 Full Changelog: [v1.0.0-alpha.38...v1.0.0-alpha.39](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.38...v1.0.0-alpha.39)
