@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.39 (2026-03-09)
+
+Full Changelog: [v1.0.0-alpha.38...v1.0.0-alpha.39](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.38...v1.0.0-alpha.39)
+
+### Refactors
+
+* **training-sdk:** two-path shape override contract ([#56](https://github.com/fw-ai-external/python-sdk/issues/56)) ([8fed2d8](https://github.com/fw-ai-external/python-sdk/commit/8fed2d81c8843f3aa24135cea0bb9f340309d264))
+
 ## 1.0.0-alpha.38 (2026-03-08)
 
 Full Changelog: [v1.0.0-alpha.37...v1.0.0-alpha.38](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.37...v1.0.0-alpha.38)
