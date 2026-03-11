@@ -121,6 +121,8 @@ class TestCreateTrainingClientDuplicate:
         with pytest.raises(ValueError, match="already exists"):
             svc.create_training_client("model-a", lora_rank=0)
 
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_different_lora_rank_ok(self):
         from fireworks.training.sdk.client import FiretitanServiceClient
 

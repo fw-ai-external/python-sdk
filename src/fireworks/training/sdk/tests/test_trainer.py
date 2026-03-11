@@ -16,12 +16,14 @@ from fireworks.training.sdk.trainer import (
 
 @pytest.fixture
 def mgr():
-    return TrainerJobManager(
+    manager = TrainerJobManager(
         api_key="test-key",
         account_id="test-account",
         base_url="https://api.example.com",
         additional_headers={"X-Custom": "val"},
     )
+    yield manager
+    manager.close()
 
 
 @pytest.fixture
@@ -39,30 +41,27 @@ def basic_config():
 
 
 class TestCreate:
-    @patch("fireworks.training.sdk.trainer.request_with_retries")
-    def test_payload_construction(self, mock_req, mgr, basic_config):
+    def test_payload_construction(self, mgr, basic_config):
         resp = MagicMock()
         resp.ok = True
         resp.status_code = 200
         resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
-        mock_req.return_value = resp
+        mgr._post = MagicMock(return_value=resp)
 
         result = mgr._create(basic_config)
 
-        call_kwargs = mock_req.call_args
-        url = call_kwargs[0][1]
-        payload = call_kwargs[1]["json"]
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
 
-        assert "deploymentId=my-deploy" in url
-        assert "skipValidations=true" in url
+        assert "deploymentId=my-deploy" in path
+        assert "skipValidations=true" in path
         assert payload["serviceMode"] is True
         assert payload["nodeCount"] == 2
         assert payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
-    @patch("fireworks.training.sdk.trainer.request_with_retries")
-    def test_validated_shape_omits_all_infra_fields(self, mock_req, mgr):
+    def test_validated_shape_omits_all_infra_fields(self, mgr):
         """Validated-shape path sends only algorithm fields; all shape-derived
         infra fields are omitted so the backend populates them from the shape."""
         config = TrainerJobConfig(
@@ -80,14 +79,14 @@ class TestCreate:
         resp.ok = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
-        mock_req.return_value = resp
+        mgr._post = MagicMock(return_value=resp)
 
         mgr._create(config)
 
-        url = mock_req.call_args[0][1]
-        payload = mock_req.call_args[1]["json"]
-        assert "trainingShape=" in url
-        assert "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1" in url
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
+        assert "trainingShape=" in path
+        assert "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1" in path
         tc = payload["trainingConfig"]
         assert "acceleratorType" not in tc
         assert "acceleratorCount" not in tc
@@ -97,8 +96,7 @@ class TestCreate:
         assert tc["region"] == "US_OHIO_1"
         assert tc["extraArgs"] == ["--flag"]
 
-    @patch("fireworks.training.sdk.trainer.request_with_retries")
-    def test_skip_validations_sends_all_fields(self, mock_req, mgr):
+    def test_skip_validations_sends_all_fields(self, mgr):
         """Skip-validation path sends all fields including shape-derived ones."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
@@ -115,14 +113,14 @@ class TestCreate:
         resp.ok = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
-        mock_req.return_value = resp
+        mgr._post = MagicMock(return_value=resp)
 
         mgr._create(config)
 
-        url = mock_req.call_args[0][1]
-        payload = mock_req.call_args[1]["json"]
-        assert "trainingShape=" in url
-        assert "skipValidations=true" in url
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
+        assert "trainingShape=" in path
+        assert "skipValidations=true" in path
         tc = payload["trainingConfig"]
         assert tc["acceleratorType"] == "NVIDIA_H100_80GB"
         assert tc["acceleratorCount"] == 8
@@ -131,8 +129,7 @@ class TestCreate:
         assert payload["nodeCount"] == 4
         assert tc["region"] == "US_OHIO_1"
 
-    @patch("fireworks.training.sdk.trainer.request_with_retries")
-    def test_extra_args_flattened(self, mock_req, mgr):
+    def test_extra_args_flattened(self, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             extra_args=["--pp 8", "--ep=4", "--flag"],
@@ -141,10 +138,10 @@ class TestCreate:
         resp.ok = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
-        mock_req.return_value = resp
+        mgr._post = MagicMock(return_value=resp)
 
         mgr._create(config)
-        payload = mock_req.call_args[1]["json"]
+        payload = mgr._post.call_args[1]["json"]
         assert payload["trainingConfig"]["extraArgs"] == [
             "--pp",
             "8",
@@ -179,9 +176,6 @@ class TestPollUntilReady:
     @patch("fireworks.training.sdk.trainer.time.time")
     @patch.object(TrainerJobManager, "get")
     def test_timeout_raises(self, mock_get, mock_time, mock_sleep, mgr):
-        # Use a call counter instead of a fixed list: return 0 for the first
-        # several calls, then jump past the timeout.  This avoids StopIteration
-        # from the logging module's internal time.time() calls consuming values.
         call_count = 0
 
         def fake_time():
@@ -226,41 +220,41 @@ class TestResolveTrainingProfile:
     def test_parses_sharding(self):
         """resolve_training_profile parses the latest shape-version snapshot."""
         mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
-        with patch("fireworks.training.sdk.trainer.request_with_retries") as mock_req:
-            resp = MagicMock()
-            resp.ok = True
-            resp.json.return_value = {
-                "trainingShapeVersions": [
-                    {
-                        "name": "accounts/a/trainingShapes/ts-test/versions/ver-123",
-                        "snapshot": {
-                            "name": "accounts/a/trainingShapes/ts-test",
-                            "trainerImageTag": "0.33.0",
-                            "maxSupportedContextLength": 8192,
-                            "nodeCount": 2,
-                            "deploymentShapeVersion": "dsv",
-                            "deploymentImageTag": "img",
-                            "acceleratorType": "NVIDIA_H100_80GB",
-                            "acceleratorCount": 8,
-                            "baseModelWeightPrecision": "bfloat16",
-                            "trainerShardingScheme": {
-                                "tensorParallelism": 1,
-                                "pipelineParallelism": 4,
-                                "contextParallelism": 1,
-                                "expertParallelism": 1,
-                            },
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {
+            "trainingShapeVersions": [
+                {
+                    "name": "accounts/a/trainingShapes/ts-test/versions/ver-123",
+                    "snapshot": {
+                        "name": "accounts/a/trainingShapes/ts-test",
+                        "trainerImageTag": "0.33.0",
+                        "maxSupportedContextLength": 8192,
+                        "nodeCount": 2,
+                        "deploymentShapeVersion": "dsv",
+                        "deploymentImageTag": "img",
+                        "acceleratorType": "NVIDIA_H100_80GB",
+                        "acceleratorCount": 8,
+                        "baseModelWeightPrecision": "bfloat16",
+                        "trainerShardingScheme": {
+                            "tensorParallelism": 1,
+                            "pipelineParallelism": 4,
+                            "contextParallelism": 1,
+                            "expertParallelism": 1,
                         },
                     },
-                ],
-            }
-            mock_req.return_value = resp
-            profile = mgr.resolve_training_profile("ts-test")
-            called_url = mock_req.call_args[0][1]
-            assert called_url.endswith("/trainingShapes/ts-test/versions?filter=latest_validated%3Dtrue&pageSize=1")
-            assert profile.pipeline_parallelism == 4
-            assert profile.max_supported_context_length == 8192
-            assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
-            assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
+                },
+            ],
+        }
+        mgr._get = MagicMock(return_value=resp)
+        profile = mgr.resolve_training_profile("ts-test")
+        path = mgr._get.call_args[0][0]
+        assert "/trainingShapes/ts-test/versions" in path
+        assert profile.pipeline_parallelism == 4
+        assert profile.max_supported_context_length == 8192
+        assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
+        assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
+        mgr.close()
 
 
 # ---------------------------------------------------------------------------
@@ -404,3 +398,39 @@ class TestApplyShape:
 
         assert config.accelerator_type == "MY_ACCEL"
         assert config.accelerator_count == 8
+
+
+# ---------------------------------------------------------------------------
+# _check_healthz — uses persistent session
+# ---------------------------------------------------------------------------
+
+
+class TestHealthz:
+    def test_uses_persistent_session(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        mgr._session.get = MagicMock(return_value=resp)
+
+        base_url = "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
+        result = mgr._check_healthz(base_url)
+        assert result is True
+        url = mgr._session.get.call_args[0][0]
+        assert "/api/v1/healthz" in url
+
+
+# ---------------------------------------------------------------------------
+# get — REST GET wrapper
+# ---------------------------------------------------------------------------
+
+
+class TestGet:
+    def test_calls_rest_get(self, mgr):
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {"state": "JOB_STATE_RUNNING"}
+        mgr._get = MagicMock(return_value=resp)
+
+        result = mgr.get("job-1")
+        path = mgr._get.call_args[0][0]
+        assert "/rlorTrainerJobs/job-1" in path
+        assert result["state"] == "JOB_STATE_RUNNING"

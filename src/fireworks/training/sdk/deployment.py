@@ -15,9 +15,6 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
 
-import urllib3
-import requests
-
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     CONSOLE_URL,
@@ -27,9 +24,7 @@ from fireworks.training.sdk.errors import (
     format_sdk_error,
     request_with_retries,
 )
-
-# Suppress SSL warnings for dev/self-signed cert environments
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from fireworks.training.sdk._rest_client import _RestClient, _should_verify_ssl
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +62,7 @@ class DeploymentConfig:
     extra_values: dict[str, str] | None = None
 
 
-class DeploymentManager:
+class DeploymentManager(_RestClient):
     """Manages Fireworks deployment lifecycle and hotloading.
 
     Handles deployment creation, readiness polling, hotloading weight snapshots,
@@ -109,55 +104,35 @@ class DeploymentManager:
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
     ):
-        self.api_key = api_key
-        self.account_id = account_id
-        self.base_url = base_url
-        self.inference_url = inference_url or base_url
-        self.hotload_api_url = hotload_api_url or base_url
-        self.additional_headers = additional_headers
-        self._verify_ssl = (
-            verify_ssl if verify_ssl is not None else self._should_verify_ssl(base_url)
+        super().__init__(
+            api_key=api_key,
+            account_id=account_id,
+            base_url=base_url,
+            additional_headers=additional_headers,
+            verify_ssl=verify_ssl,
         )
+        self.inference_url = (inference_url or base_url).rstrip("/")
+        self.hotload_api_url = hotload_api_url or base_url
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
-    @staticmethod
-    def _should_verify_ssl(url: str) -> bool:
-        """Verify SSL for https URLs with real domain names; skip for http or IPs."""
-        import ipaddress
-        from urllib.parse import urlparse
-
-        parsed = urlparse(url)
-        if parsed.scheme != "https":
-            return False
-        try:
-            ipaddress.ip_address(parsed.hostname)
-            return False
-        except (ValueError, TypeError):
-            return True
-
-    def _headers(self) -> dict[str, str]:
-        headers = {
+    def _hotload_headers(self, deployment_id: str, base_model: str) -> dict[str, str]:
+        """Construct headers for hotload API requests."""
+        return {
             "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
             "X-Api-Key": self.api_key,
+            "fireworks-model": base_model,
+            "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
         }
-        if self.additional_headers:
-            headers.update(self.additional_headers)
-        return headers
 
     # -- Deployment CRUD -------------------------------------------------------
 
     def _get_deployment(self, deployment_id: str) -> dict | None:
-        url = (
-            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        path = (
+            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         )
-        resp = request_with_retries(
-            requests.get,
-            url,
-            headers=self._headers(),
-            timeout=30,
-            verify=self._verify_ssl,
-        )
+        resp = self._get(path)
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
@@ -166,8 +141,8 @@ class DeploymentManager:
     def _delete_deployment(
         self, deployment_id: str, ignore_checks: bool = True, hard: bool = True
     ) -> None:
-        url = (
-            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        path = (
+            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         )
         params = []
         if ignore_checks:
@@ -175,22 +150,16 @@ class DeploymentManager:
         if hard:
             params.append("hard=true")
         if params:
-            url = f"{url}?{'&'.join(params)}"
-        resp = request_with_retries(
-            requests.delete,
-            url,
-            headers=self._headers(),
-            timeout=60,
-            verify=self._verify_ssl,
-        )
+            path = f"{path}?{'&'.join(params)}"
+        resp = self._delete(path)
         resp.raise_for_status()
 
     def _create_deployment(self, config: DeploymentConfig) -> dict:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
+        path = f"/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
         if config.skip_shape_validation:
-            url = f"{url}&skipShapeValidation=true"
+            path = f"{path}&skipShapeValidation=true"
         if config.disable_speculative_decoding:
-            url = f"{url}&disableSpeculativeDecoding=true"
+            path = f"{path}&disableSpeculativeDecoding=true"
 
         body: dict[str, Any] = {
             "baseModel": config.base_model,
@@ -214,14 +183,7 @@ class DeploymentManager:
             body["extraValues"] = config.extra_values
 
         logger.info("Creating deployment: %s", config.deployment_id)
-        resp = request_with_retries(
-            requests.post,
-            url,
-            headers=self._headers(),
-            json=body,
-            timeout=60,
-            verify=self._verify_ssl,
-        )
+        resp = self._post(path, json=body)
         if resp.status_code == 409:
             logger.info(
                 "Deployment %s already exists (409 Conflict), fetching existing deployment",
@@ -423,19 +385,12 @@ class DeploymentManager:
         remains available for future scale-up, but no GPUs are consumed.
         Useful for cleanup after training completes.
         """
-        url = (
-            f"{self.base_url}/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        path = (
+            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         )
         body = {"maxReplicaCount": 0, "minReplicaCount": 0}
         try:
-            resp = request_with_retries(
-                requests.patch,
-                url,
-                headers=self._headers(),
-                json=body,
-                timeout=60,
-                verify=self._verify_ssl,
-            )
+            resp = self._patch(path, json=body)
             resp.raise_for_status()
             logger.info("Scaled deployment to zero: %s", deployment_id)
         except Exception as e:
@@ -468,13 +423,7 @@ class DeploymentManager:
                 previous_snapshot_identity, compression_format, checksum_format.
             timeout: Request timeout in seconds.
         """
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Api-Key": self.api_key,
-            "fireworks-model": base_model,
-            "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
-        }
+        headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         payload: dict[str, Any] = {"identity": snapshot_identity}
@@ -489,9 +438,9 @@ class DeploymentManager:
             deployment_id,
         )
 
-        verify = self._should_verify_ssl(self.hotload_api_url)
+        verify = _should_verify_ssl(self.hotload_api_url)
         resp = request_with_retries(
-            requests.post,
+            self._session.post,
             url,
             headers=headers,
             json=payload,
@@ -523,18 +472,12 @@ class DeploymentManager:
         timeout: int = 30,
     ) -> dict[str, Any]:
         """Check current hotload status for a deployment."""
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Api-Key": self.api_key,
-            "fireworks-model": base_model,
-            "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
-        }
+        headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        verify = self._should_verify_ssl(self.hotload_api_url)
+        verify = _should_verify_ssl(self.hotload_api_url)
         resp = request_with_retries(
-            requests.get, url, headers=headers, timeout=timeout, verify=verify
+            self._session.get, url, headers=headers, timeout=timeout, verify=verify
         )
         resp.raise_for_status()
         return resp.json()
@@ -658,8 +601,7 @@ class DeploymentManager:
 
     def _probe_inference(self, model: str) -> bool:
         """Silent single-shot probe: returns True if deployment responds HTTP 200."""
-        base = self.inference_url.rstrip("/")
-        url = f"{base}/inference/v1/completions"
+        url = f"{self.inference_url}/inference/v1/completions"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
@@ -671,12 +613,12 @@ class DeploymentManager:
             "temperature": 0.0,
         }
         try:
-            resp = requests.post(
+            resp = self._session.post(
                 url,
                 headers=headers,
                 json=payload,
                 timeout=10,
-                verify=self._should_verify_ssl(self.inference_url),
+                verify=_should_verify_ssl(self.inference_url),
             )
             return resp.status_code == 200
         except Exception:
@@ -689,9 +631,8 @@ class DeploymentManager:
         retry_interval_s: float = 10.0,
     ) -> bool:
         """Send a token-in test request to the deployment and wait until it responds."""
-        base = self.inference_url.rstrip("/")
-        completions_url = f"{base}/inference/v1/completions"
-        verify = self._should_verify_ssl(self.inference_url)
+        completions_url = f"{self.inference_url}/inference/v1/completions"
+        verify = _should_verify_ssl(self.inference_url)
 
         headers = {
             "Content-Type": "application/json",
@@ -709,7 +650,7 @@ class DeploymentManager:
         logger.info("Warming up inference deployment (%d retries)...", max_retries)
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.post(
+                resp = self._session.post(
                     completions_url,
                     headers=headers,
                     json=payload,
@@ -771,7 +712,7 @@ class SampledCompletion:
     routing_matrices: List[str] | None = None
 
 
-class DeploymentSampler:
+class DeploymentSampler(_RestClient):
     """Wraps Fireworks deployment completions API with client-side tokenization.
 
     Uses a local HuggingFace tokenizer to apply chat templates and tokenize
@@ -808,13 +749,13 @@ class DeploymentSampler:
         api_key: str,
         tokenizer: PreTrainedTokenizerBase,
     ):
+        super().__init__(api_key=api_key, base_url=inference_url)
         self.model = model
-        self.api_key = api_key
         self.tokenizer = tokenizer
 
-        base = inference_url.rstrip("/")
-        self._completions_url = f"{base}/inference/v1/completions"
-        self._verify_ssl = DeploymentManager._should_verify_ssl(inference_url)
+    def _inference_headers(self) -> dict[str, str]:
+        """Headers for inference completions requests."""
+        return self._headers(Authorization=f"Bearer {self.api_key}")
 
     def completions(
         self,
@@ -849,11 +790,6 @@ class DeploymentSampler:
         Raises:
             requests.HTTPError: On non-2xx responses after retries exhausted.
         """
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Api-Key": self.api_key,
-        }
         http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
             "model": self.model,
@@ -864,13 +800,11 @@ class DeploymentSampler:
             **kwargs,
         }
         for hotload_attempt in range(hotload_max_retries + 1):
-            resp = request_with_retries(
-                requests.post,
-                self._completions_url,
-                headers=headers,
+            resp = self._post(
+                "/inference/v1/completions",
+                headers=self._inference_headers(),
                 json=payload,
                 timeout=http_timeout,
-                verify=self._verify_ssl,
                 max_wait_time=60,
             )
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.41 (2026-03-11)
+
+Full Changelog: [v1.0.0-alpha.40...v1.0.0-alpha.41](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.40...v1.0.0-alpha.41)
+
+### Refactors
+
+* **training-sdk:** centralize HTTP transport in _RestClient base class ([#58](https://github.com/fw-ai-external/python-sdk/issues/58)) ([7b4c041](https://github.com/fw-ai-external/python-sdk/commit/7b4c041c8eb70bd616b0b06a0ad8303309ec3ed1))
+
 ## 1.0.0-alpha.40 (2026-03-09)
 
 Full Changelog: [v1.0.0-alpha.39...v1.0.0-alpha.40](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.39...v1.0.0-alpha.40)

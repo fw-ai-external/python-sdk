@@ -93,7 +93,15 @@ class TestMarkFirstSaveDone:
 class TestEnsureDeploymentChecked:
     def test_called_once_sets_flag(self):
         t = _make_tracker()
-        t.deploy_mgr.hotload_check_status.return_value = {"replicas": []}
+        t.deploy_mgr.hotload_check_status.return_value = {
+            "replicas": [
+                {
+                    "current_snapshot_identity": None,
+                    "readiness": False,
+                    "loading_state": {"stage": "pending"},
+                }
+            ]
+        }
         t._ensure_deployment_checked()
         assert t._deployment_checked is True
 
