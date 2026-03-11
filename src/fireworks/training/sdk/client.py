@@ -145,16 +145,14 @@ class FiretitanTrainingClient(TrainingClient):
                 name,
             )
 
-    def list_checkpoints(self) -> tuple[list[str], str | None]:
+    def list_checkpoints(self) -> list[str]:
         """List available DCP checkpoints from the trainer.
 
         This is a firetitan-specific endpoint (not in tinker SDK).
         Uses the trainer's own HTTP connection.
 
         Returns:
-            (checkpoint_names, gcs_checkpoint_dir):
-            - checkpoint_names: sorted list (e.g., ["step-2", "step-4"])
-            - gcs_checkpoint_dir: Always None (kept for backward compatibility)
+            Sorted checkpoint name list (e.g., ``["step-2", "step-4"]``).
         """
 
         async def _list():
@@ -167,14 +165,14 @@ class FiretitanTrainingClient(TrainingClient):
 
         try:
             result = self.holder.run_coroutine_threadsafe(_list()).result()
-            return result.get("checkpoints", []), None
+            return result.get("checkpoints", [])
         except Exception as e:
             logger.warning(
                 "LIST_CHECKPOINTS_ERROR: %s: %s (resume may start from scratch)",
                 type(e).__name__,
                 e,
             )
-            return [], None
+            return []
 
     def resolve_checkpoint_path(
         self,

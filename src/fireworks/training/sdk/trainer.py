@@ -15,21 +15,14 @@ from typing import Any
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
-import urllib3
-import requests
-
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     CONSOLE_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
-    request_with_retries,
 )
-from fireworks.training.sdk.deployment import DeploymentManager
-
-# Suppress SSL warnings for dev/self-signed cert environments
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from fireworks.training.sdk._rest_client import _RestClient
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +190,7 @@ class TrainerJobConfig:
         )
 
 
-class TrainerJobManager:
+class TrainerJobManager(_RestClient):
     """Manages trainer job lifecycle via Fireworks REST API.
 
     The Fireworks API calls these "RLOR trainer jobs", but they are
@@ -229,22 +222,15 @@ class TrainerJobManager:
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
     ):
-        self.api_key = api_key
-        self.account_id = account_id
-        self.base_url = base_url
-        self.additional_headers = additional_headers
-        self._verify_ssl = verify_ssl if verify_ssl is not None else DeploymentManager._should_verify_ssl(base_url)
+        super().__init__(
+            api_key=api_key,
+            account_id=account_id,
+            base_url=base_url,
+            additional_headers=additional_headers,
+            verify_ssl=verify_ssl,
+        )
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
-
-    def _headers(self) -> dict[str, str]:
-        headers = {
-            "Content-Type": "application/json",
-            "X-Api-Key": self.api_key,
-        }
-        if self.additional_headers:
-            headers.update(self.additional_headers)
-        return headers
 
     # -- Training shape resolution ------------------------------------------------
 
@@ -267,18 +253,12 @@ class TrainerJobManager:
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
         """
-        url = (
-            f"{self.base_url}/v1/accounts/{self.account_id}/trainingShapes/"
+        path = (
+            f"/v1/accounts/{self.account_id}/trainingShapes/"
             f"{training_shape_id}/versions?"
             f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
         )
-        resp = request_with_retries(
-            requests.get,
-            url,
-            headers=self._headers(),
-            timeout=30,
-            verify=self._verify_ssl,
-        )
+        resp = self._get(path, timeout=30)
         if not resp.ok:
             error_msg = parse_api_error(resp)
             show_support = False
@@ -339,7 +319,7 @@ class TrainerJobManager:
     # -- Low-level REST calls --------------------------------------------------
 
     def _create(self, config: TrainerJobConfig) -> dict:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs"
+        path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
             query_params.append(("deploymentId", config.hot_load_deployment_id))
@@ -348,7 +328,7 @@ class TrainerJobManager:
         if config.training_shape_ref:
             query_params.append(("trainingShape", config.training_shape_ref))
         if query_params:
-            url = f"{url}?{urlencode(query_params)}"
+            path = f"{path}?{urlencode(query_params)}"
 
         is_validated_shape = bool(config.training_shape_ref) and not config.skip_validations
 
@@ -389,15 +369,8 @@ class TrainerJobManager:
         if config.forward_only:
             payload["forwardOnly"] = True
 
-        logger.info("Creating RLOR job: POST %s (model=%s)", url, config.base_model)
-        resp = request_with_retries(
-            requests.post,
-            url,
-            json=payload,
-            headers=self._headers(),
-            timeout=60,
-            verify=self._verify_ssl,
-        )
+        logger.info("Creating RLOR job: POST %s (model=%s)", f"{self.base_url}{path}", config.base_model)
+        resp = self._post(path, json=payload, timeout=60)
         if not resp.ok:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
@@ -422,37 +395,19 @@ class TrainerJobManager:
 
     def get(self, job_id: str) -> dict:
         """Get the current state of an RLOR job. Returns raw API response dict."""
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = request_with_retries(
-            requests.get,
-            url,
-            headers=self._headers(),
-            timeout=30,
-            verify=self._verify_ssl,
-        )
+        path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
+        resp = self._get(path, timeout=30)
         resp.raise_for_status()
         return resp.json()
 
-    def _delete(self, job_id: str) -> None:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = request_with_retries(
-            requests.delete,
-            url,
-            headers=self._headers(),
-            timeout=30,
-            verify=self._verify_ssl,
-        )
+    def _delete_job(self, job_id: str) -> None:
+        path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
+        resp = self._delete(path, timeout=30)
         resp.raise_for_status()
 
     def _resume(self, job_id: str) -> dict:
-        url = f"{self.base_url}/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
-        resp = request_with_retries(
-            requests.post,
-            url,
-            headers=self._headers(),
-            timeout=60,
-            verify=self._verify_ssl,
-        )
+        path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
+        resp = self._post(path, timeout=60)
         if not resp.ok:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
@@ -488,7 +443,7 @@ class TrainerJobManager:
     def _check_healthz(self, base_url: str, timeout: float = 5) -> bool:
         """Probe /api/v1/healthz -- returns True only on HTTP 200."""
         try:
-            r = requests.get(
+            r = self._session.get(
                 f"{base_url}/api/v1/healthz",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 timeout=timeout,
@@ -681,7 +636,7 @@ class TrainerJobManager:
     def delete(self, job_id: str) -> None:
         """Delete a trainer job."""
         try:
-            self._delete(job_id)
+            self._delete_job(job_id)
             logger.info("Deleted trainer job: %s", job_id)
         except Exception as e:
             logger.warning(

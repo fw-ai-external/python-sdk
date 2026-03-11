@@ -19,15 +19,6 @@ from fireworks.training.sdk.client import (
     FiretitanServiceClient,
     FiretitanTrainingClient,
 )
-from fireworks.training.sdk.errors import (
-    DOCS_SDK,
-    CONSOLE_URL,
-    DISCORD_URL,
-    HTTP_STATUS_HINTS,
-    parse_api_error,
-    format_sdk_error,
-    request_with_retries,
-)
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     TrainerJobManager,
@@ -63,12 +54,4 @@ __all__ = [
     "TrainerJobManager",
     "TrainerServiceEndpoint",
     "TrainingShapeProfile",
-    # Error formatting
-    "format_sdk_error",
-    "parse_api_error",
-    "request_with_retries",
-    "HTTP_STATUS_HINTS",
-    "DOCS_SDK",
-    "DISCORD_URL",
-    "CONSOLE_URL",
 ]

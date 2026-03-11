@@ -11,11 +11,12 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
+from fireworks.training.sdk._rest_client import _should_verify_ssl
 
 
 @pytest.fixture
 def mgr():
-    return DeploymentManager(
+    manager = DeploymentManager(
         api_key="test-key",
         account_id="test-acct",
         base_url="https://api.example.com",
@@ -23,6 +24,8 @@ def mgr():
         hotload_api_url="https://hotload.example.com",
         additional_headers={"X-Secret": "s"},
     )
+    yield manager
+    manager.close()
 
 
 @pytest.fixture
@@ -41,19 +44,19 @@ def deploy_config():
 
 class TestShouldVerifySsl:
     def test_https_domain(self):
-        assert DeploymentManager._should_verify_ssl("https://api.fireworks.ai") is True
+        assert _should_verify_ssl("https://api.fireworks.ai") is True
 
     def test_http_no_verify(self):
-        assert DeploymentManager._should_verify_ssl("http://203.0.113.10:8083") is False
+        assert _should_verify_ssl("http://203.0.113.10:8083") is False
 
     def test_https_ip_no_verify(self):
-        assert DeploymentManager._should_verify_ssl("https://203.0.113.10:8083") is False
+        assert _should_verify_ssl("https://203.0.113.10:8083") is False
 
     def test_https_localhost(self):
-        assert DeploymentManager._should_verify_ssl("https://127.0.0.1:8080") is False
+        assert _should_verify_ssl("https://127.0.0.1:8080") is False
 
     def test_https_real_domain(self):
-        assert DeploymentManager._should_verify_ssl("https://example.com") is True
+        assert _should_verify_ssl("https://example.com") is True
 
 
 # ---------------------------------------------------------------------------
@@ -86,13 +89,12 @@ class TestParseDeploymentInfo:
 
 
 class TestCreateDeployment:
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_includes_extra_values_when_provided(self, mock_req, mgr):
+    def test_includes_extra_values_when_provided(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
         resp.ok = True
         resp.json.return_value = {"name": "dep-1", "state": "CREATING"}
-        mock_req.return_value = resp
+        mgr._post = MagicMock(return_value=resp)
 
         cfg = DeploymentConfig(
             deployment_id="dep-1",
@@ -101,7 +103,7 @@ class TestCreateDeployment:
         )
         mgr._create_deployment(cfg)
 
-        payload = mock_req.call_args[1]["json"]
+        payload = mgr._post.call_args[1]["json"]
         assert payload["extraValues"] == {"priorityClass": "deployment"}
 
 
@@ -264,8 +266,7 @@ def _make_mock_tokenizer(prompt_ids=None):
 
 class TestCompletions:
     @patch("fireworks.training.sdk.deployment.time.sleep")
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_425_retry(self, mock_req, mock_sleep):
+    def test_425_retry(self, mock_sleep):
         resp_425 = MagicMock()
         resp_425.status_code = 425
         resp_425.ok = False
@@ -274,7 +275,6 @@ class TestCompletions:
         resp_ok.status_code = 200
         resp_ok.ok = True
         resp_ok.json.return_value = {"choices": []}
-        mock_req.side_effect = [resp_425, resp_ok]
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -282,19 +282,19 @@ class TestCompletions:
             api_key="key",
             tokenizer=_make_mock_tokenizer(),
         )
+        sampler._post = MagicMock(side_effect=[resp_425, resp_ok])
         result = sampler.completions(
             prompt=[1, 2, 3],
             hotload_retry_interval=0.01,
         )
-        assert mock_req.call_count == 2
+        assert sampler._post.call_count == 2
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_sends_token_ids_as_prompt(self, mock_req):
+    def test_sends_token_ids_as_prompt(self):
         resp_ok = MagicMock()
         resp_ok.status_code = 200
         resp_ok.ok = True
         resp_ok.json.return_value = {"choices": []}
-        mock_req.return_value = resp_ok
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -302,12 +302,15 @@ class TestCompletions:
             api_key="key",
             tokenizer=_make_mock_tokenizer(),
         )
+        sampler._post = MagicMock(return_value=resp_ok)
         sampler.completions(prompt=[10, 20, 30])
 
-        payload = mock_req.call_args[1]["json"]
+        payload = sampler._post.call_args[1]["json"]
         assert payload["prompt"] == [10, 20, 30]
         assert "messages" not in payload
-        assert "/v1/completions" in mock_req.call_args[0][1]
+        path = sampler._post.call_args[0][0]
+        assert "/v1/completions" in path
+        sampler.close()
 
 
 # ---------------------------------------------------------------------------
@@ -316,14 +319,13 @@ class TestCompletions:
 
 
 class TestWarmup:
-    @patch("fireworks.training.sdk.deployment.requests.post")
-    def test_uses_token_prompt(self, mock_post, mgr):
+    def test_uses_token_prompt(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
-        mock_post.return_value = resp
+        mgr._session.post = MagicMock(return_value=resp)
 
         assert mgr.warmup("accounts/test/deployments/dep-1", max_retries=1) is True
-        payload = mock_post.call_args[1]["json"]
+        payload = mgr._session.post.call_args[1]["json"]
         assert isinstance(payload["prompt"], list)
         assert all(isinstance(tok, int) for tok in payload["prompt"])
 
@@ -334,8 +336,7 @@ class TestWarmup:
 
 
 class TestSampleWithTokens:
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_basic_sample(self, mock_req):
+    def test_basic_sample(self):
         prompt_ids = [1, 100, 200]
         completion_ids = [400, 500]
 
@@ -351,7 +352,6 @@ class TestSampleWithTokens:
                 }
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -359,6 +359,7 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer(prompt_ids),
         )
+        sampler._post = MagicMock(return_value=resp)
         results = sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "hi"}],
         )
@@ -370,9 +371,9 @@ class TestSampleWithTokens:
         assert c.prompt_len == len(prompt_ids)
         assert c.completion_len == len(completion_ids)
         assert c.finish_reason == "stop"
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_tokenizer_called_with_messages(self, mock_req):
+    def test_tokenizer_called_with_messages(self):
         tok = _make_mock_tokenizer([1, 2, 3])
 
         resp = MagicMock()
@@ -387,7 +388,6 @@ class TestSampleWithTokens:
                 }
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -395,15 +395,16 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=tok,
         )
+        sampler._post = MagicMock(return_value=resp)
         messages = [{"role": "user", "content": "test"}]
         sampler.sample_with_tokens(messages=messages)
 
         tok.apply_chat_template.assert_called_once_with(
             messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_missing_completion_token_ids_raises(self, mock_req):
+    def test_missing_completion_token_ids_raises(self):
         resp = MagicMock()
         resp.status_code = 200
         resp.ok = True
@@ -416,7 +417,6 @@ class TestSampleWithTokens:
                 }
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -424,11 +424,12 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer([1, 2, 3]),
         )
+        sampler._post = MagicMock(return_value=resp)
         with pytest.raises(RuntimeError, match="missing completion_token_ids"):
             sampler.sample_with_tokens(messages=[{"role": "user", "content": "hi"}])
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_echo_strips_verified_prefix(self, mock_req):
+    def test_echo_strips_verified_prefix(self):
         prompt_ids = [1, 100, 200]
         echoed_completion_ids = [1, 100, 200, 400, 500]
 
@@ -444,7 +445,6 @@ class TestSampleWithTokens:
                 }
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -452,6 +452,7 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer(prompt_ids),
         )
+        sampler._post = MagicMock(return_value=resp)
         results = sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "hi"}],
             echo=True,
@@ -460,9 +461,9 @@ class TestSampleWithTokens:
         c = results[0]
         assert c.full_tokens == prompt_ids + [400, 500]
         assert c.completion_len == 2
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_echo_no_strip_when_prefix_mismatch(self, mock_req):
+    def test_echo_no_strip_when_prefix_mismatch(self):
         """echo=True should fail if completion_token_ids lack prompt prefix."""
         prompt_ids = [1, 100, 200]
         completion_ids = [999, 400, 500, 600, 700]
@@ -479,7 +480,6 @@ class TestSampleWithTokens:
                 }
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -487,14 +487,15 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer(prompt_ids),
         )
+        sampler._post = MagicMock(return_value=resp)
         with pytest.raises(RuntimeError, match="Echo response format mismatch"):
             sampler.sample_with_tokens(
                 messages=[{"role": "user", "content": "hi"}],
                 echo=True,
             )
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_max_seq_len_prompt_prefilter(self, mock_req):
+    def test_max_seq_len_prompt_prefilter(self):
         """Prompt >= max_seq_len returns empty list without calling inference."""
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -502,16 +503,17 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer([1, 100, 200, 300, 400]),
         )
+        sampler._post = MagicMock()
         results = sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "long prompt"}],
             max_seq_len=5,
         )
 
         assert results == []
-        mock_req.assert_not_called()
+        sampler._post.assert_not_called()
+        sampler.close()
 
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_max_seq_len_completion_postfilter(self, mock_req):
+    def test_max_seq_len_completion_postfilter(self):
         """Completions exceeding max_seq_len are dropped; short ones kept."""
         resp = MagicMock()
         resp.status_code = 200
@@ -522,7 +524,6 @@ class TestSampleWithTokens:
                 {"text": "too long", "finish_reason": "length", "raw_output": {"completion_token_ids": [4, 5, 6]}},
             ]
         }
-        mock_req.return_value = resp
 
         sampler = DeploymentSampler(
             inference_url="https://api.example.com",
@@ -530,12 +531,14 @@ class TestSampleWithTokens:
             api_key="key",
             tokenizer=_make_mock_tokenizer([1, 100, 200]),  # 3 prompt tokens
         )
+        sampler._post = MagicMock(return_value=resp)
         results = sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "hi"}], n=2, max_seq_len=5,
         )
 
         assert len(results) == 1
         assert results[0].text == "short"
+        sampler.close()
 
 
 # ---------------------------------------------------------------------------
@@ -549,3 +552,42 @@ class TestDefaultValues:
 
         for method in (DeploymentSampler.completions, DeploymentSampler.sample_with_tokens):
             assert inspect.signature(method).parameters["temperature"].default == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Deployment CRUD — REST method wrappers
+# ---------------------------------------------------------------------------
+
+
+class TestDeploymentCrud:
+    def test_get_deployment_calls_rest_get(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = {"name": "n", "state": "READY"}
+        mgr._get = MagicMock(return_value=resp)
+
+        result = mgr._get_deployment("dep-1")
+        path = mgr._get.call_args[0][0]
+        assert "/deployments/dep-1" in path
+        assert result is not None
+
+    def test_get_deployment_returns_none_on_404(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 404
+        mgr._get = MagicMock(return_value=resp)
+
+        result = mgr._get_deployment("dep-1")
+        assert result is None
+
+    def test_scale_to_zero_calls_rest_patch(self, mgr):
+        resp = MagicMock()
+        resp.ok = True
+        mgr._patch = MagicMock(return_value=resp)
+
+        mgr.scale_to_zero("dep-1")
+        path = mgr._patch.call_args[0][0]
+        assert "/deployments/dep-1" in path
+        body = mgr._patch.call_args[1]["json"]
+        assert body["maxReplicaCount"] == 0
+        assert body["minReplicaCount"] == 0

@@ -171,7 +171,6 @@ class TestRequestWithRetries:
     @patch("fireworks.training.sdk.errors.time.sleep")
     @patch("fireworks.training.sdk.errors.time.time")
     def test_exhaust_max_wait_time(self, mock_time, mock_sleep):
-        # Simulate time progressing past max_wait_time
         mock_time.side_effect = [0, 0, 100, 100]
         bad = self._ok_response(503)
         func = MagicMock(return_value=bad)
