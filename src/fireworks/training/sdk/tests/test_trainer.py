@@ -256,6 +256,23 @@ class TestResolveTrainingProfile:
         assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
         mgr.close()
 
+    def test_respects_fully_qualified_training_shape_name(self):
+        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {
+            "trainingShapeVersions": [
+                {"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}
+            ]
+        }
+        mgr._get = MagicMock(return_value=resp)
+
+        mgr.resolve_training_profile("accounts/fireworks/trainingShapes/ts-test")
+
+        path = mgr._get.call_args[0][0]
+        assert path.startswith("/v1/accounts/fireworks/trainingShapes/ts-test/versions?")
+        mgr.close()
+
 
 # ---------------------------------------------------------------------------
 # TrainingShapeProfile.training_shape / deployment_shape

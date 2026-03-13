@@ -248,14 +248,20 @@ class TrainerJobManager(_RestClient):
         validated service-mode jobs.
 
         Args:
-            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``).
+            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``) or full
+                training shape name (e.g.
+                ``accounts/fw/trainingShapes/ts-qwen3-8b-policy``).
 
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
         """
+        training_shape_name = training_shape_id
+        if not training_shape_name.startswith("accounts/"):
+            training_shape_name = (
+                f"accounts/{self.account_id}/trainingShapes/{training_shape_id}"
+            )
         path = (
-            f"/v1/accounts/{self.account_id}/trainingShapes/"
-            f"{training_shape_id}/versions?"
+            f"/v1/{training_shape_name}/versions?"
             f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
         )
         resp = self._get(path, timeout=30)
@@ -263,10 +269,16 @@ class TrainerJobManager(_RestClient):
             error_msg = parse_api_error(resp)
             show_support = False
             if resp.status_code == 404:
-                solution = (
-                    f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
-                    f"Verify the training_shape_id is correct and the shape exists."
-                )
+                if training_shape_id.startswith("accounts/"):
+                    solution = (
+                        f"Training shape '{training_shape_id}' was not found. "
+                        "Verify the training_shape_id is correct and the shape exists."
+                    )
+                else:
+                    solution = (
+                        f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
+                        "Verify the training_shape_id is correct and the shape exists."
+                    )
             elif resp.status_code == 403:
                 solution = (
                     f"Permission denied for training shape '{training_shape_id}'. "
