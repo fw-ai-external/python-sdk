@@ -22,7 +22,7 @@ from fireworks.training.sdk.errors import (
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
-    request_with_retries,
+    async_request_with_retries,
 )
 from fireworks.training.sdk._rest_client import _RestClient, _should_verify_ssl
 
@@ -118,13 +118,11 @@ class DeploymentManager(_RestClient):
 
     def _hotload_headers(self, deployment_id: str, base_model: str) -> dict[str, str]:
         """Construct headers for hotload API requests."""
-        return {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Api-Key": self.api_key,
-            "fireworks-model": base_model,
-            "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
-        }
+        return self._headers(
+            Authorization=f"Bearer {self.api_key}",
+            **{"fireworks-model": base_model,
+               "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}"},
+        )
 
     # -- Deployment CRUD -------------------------------------------------------
 
@@ -192,7 +190,7 @@ class DeploymentManager(_RestClient):
             existing = self._get_deployment(config.deployment_id)
             if existing:
                 return existing
-        if not resp.ok:
+        if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
             extra = ""
@@ -438,16 +436,10 @@ class DeploymentManager(_RestClient):
             deployment_id,
         )
 
-        verify = _should_verify_ssl(self.hotload_api_url)
-        resp = request_with_retries(
-            self._session.post,
-            url,
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-            verify=verify,
+        resp = self._sync_request(
+            url, method="POST", headers=headers, json=payload, timeout=timeout,
         )
-        if not resp.ok:
+        if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
             logger.warning(
@@ -475,10 +467,7 @@ class DeploymentManager(_RestClient):
         headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        verify = _should_verify_ssl(self.hotload_api_url)
-        resp = request_with_retries(
-            self._session.get, url, headers=headers, timeout=timeout, verify=verify
-        )
+        resp = self._sync_request(url, method="GET", headers=headers, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
 
@@ -602,10 +591,7 @@ class DeploymentManager(_RestClient):
     def _probe_inference(self, model: str) -> bool:
         """Silent single-shot probe: returns True if deployment responds HTTP 200."""
         url = f"{self.inference_url}/inference/v1/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
+        headers = self._headers(Authorization=f"Bearer {self.api_key}")
         payload = {
             "model": model,
             "prompt": [1, 2],
@@ -613,12 +599,8 @@ class DeploymentManager(_RestClient):
             "temperature": 0.0,
         }
         try:
-            resp = self._session.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=10,
-                verify=_should_verify_ssl(self.inference_url),
+            resp = self._sync_request(
+                url, method="POST", headers=headers, json=payload, timeout=10,
             )
             return resp.status_code == 200
         except Exception:
@@ -634,14 +616,9 @@ class DeploymentManager(_RestClient):
         completions_url = f"{self.inference_url}/inference/v1/completions"
         verify = _should_verify_ssl(self.inference_url)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Api-Key": self.api_key,
-        }
+        headers = self._headers(Authorization=f"Bearer {self.api_key}")
         payload = {
             "model": model,
-            # Keep warmup on the same token-in path as training sampling.
             "prompt": [1, 2],
             "max_tokens": 4,
             "temperature": 0.0,
@@ -650,12 +627,9 @@ class DeploymentManager(_RestClient):
         logger.info("Warming up inference deployment (%d retries)...", max_retries)
         for attempt in range(1, max_retries + 1):
             try:
-                resp = self._session.post(
-                    completions_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=30,
-                    verify=verify,
+                resp = self._sync_request(
+                    completions_url, method="POST", headers=headers,
+                    json=payload, timeout=30,
                 )
                 if resp.status_code == 200:
                     logger.info(
@@ -737,7 +711,7 @@ class DeploymentSampler(_RestClient):
             tokenizer=tokenizer,
         )
 
-        completions = sampler.sample_with_tokens(messages=[...], n=4)
+        completions = await sampler.sample_with_tokens(messages=[...], n=4)
         for c in completions:
             print(c.text, len(c.full_tokens), c.finish_reason)
     """
@@ -757,87 +731,63 @@ class DeploymentSampler(_RestClient):
         """Headers for inference completions requests."""
         return self._headers(Authorization=f"Bearer {self.api_key}")
 
-    def completions(
+    async def async_completions(
         self,
         prompt: list[int],
-        n: int = 1,
         max_tokens: int = 1024,
         temperature: float = 1.0,
         hotload_retry_interval: float = 30.0,
         hotload_max_retries: int = 10,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Send a completions request with token IDs to the deployment.
+        """Single n=1 async completions request.
 
-        Automatically retries on HTTP 425 (deployment is hot-loading weights).
-
-        Args:
-            prompt: Prompt as a list of token IDs (client-side tokenized).
-            n: Number of completions to sample.
-                In cookbook GRPO, this maps to ``completions_per_prompt``.
-            max_tokens: Max tokens per completion.
-            temperature: Sampling temperature.
-            hotload_retry_interval: Seconds between retries when deployment
-                is hot-loading (HTTP 425).  Default 30s.
-            hotload_max_retries: Max retries for hot-loading.  Default 10
-                (= ~5 min total wait).
-            **kwargs: Extra fields passed directly to the API payload
-                (e.g., raw_output=True, logprobs=True, reasoning_effort="none").
-
-        Returns:
-            Raw JSON response dict from the completions API.
-
-        Raises:
-            requests.HTTPError: On non-2xx responses after retries exhausted.
+        Retries on transient HTTP errors (502, 503, etc.) and on
+        HTTP 425 (deployment hot-loading).
         """
+        import asyncio
         http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
-            "n": n,
+            "n": 1,
             "max_tokens": max_tokens,
             "temperature": temperature,
             **kwargs,
         }
+        url = f"{self.base_url}/inference/v1/completions"
+        headers = self._inference_headers()
+        client = self._get_async_client()
+        prompt_len = len(prompt)
+
         for hotload_attempt in range(hotload_max_retries + 1):
-            resp = self._post(
-                "/inference/v1/completions",
-                headers=self._inference_headers(),
-                json=payload,
+            t0 = time.time()
+            resp = await async_request_with_retries(
+                client.post, url, headers=headers, json=payload,
                 timeout=http_timeout,
-                max_wait_time=60,
             )
+            elapsed = time.time() - t0
 
             if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
                 logger.info(
                     "Deployment not ready (HTTP %d), retry %d/%d in %ds...",
-                    resp.status_code,
-                    hotload_attempt + 1,
-                    hotload_max_retries,
+                    resp.status_code, hotload_attempt + 1, hotload_max_retries,
                     int(hotload_retry_interval),
                 )
-                time.sleep(hotload_retry_interval)
+                await asyncio.sleep(hotload_retry_interval)
                 continue
 
-            if not resp.ok:
-                error_msg = parse_api_error(resp)
-                hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
-                extra = ""
-                if resp.status_code == 404:
-                    extra = "\n  Verify the model name is correct and the deployment is running."
-                elif resp.status_code == 401:
-                    extra = "\n  Check that your API key is valid and has access to this deployment."
-                logger.warning(
-                    "\n%s",
-                    format_sdk_error(
-                        f"Completions error (HTTP {resp.status_code})",
-                        error_msg,
-                        f"{hint}{extra}",
-                        docs_url=DOCS_SDK,
-                    ),
-                )
             resp.raise_for_status()
-            return resp.json()
+            result = resp.json()
+            total_gen = sum(
+                len((c.get("raw_output") or {}).get("completion_token_ids", []))
+                for c in result.get("choices", [])
+            )
+            logger.debug(
+                "Completions: prompt=%d, generated=%d tokens, %.1fs",
+                prompt_len, total_gen, elapsed,
+            )
+            return result
 
     @staticmethod
     def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
@@ -878,7 +828,7 @@ class DeploymentSampler(_RestClient):
                     return matrices
         return None
 
-    def sample_with_tokens(
+    async def sample_with_tokens(
         self,
         messages: list[dict[str, str]],
         n: int = 1,
@@ -887,83 +837,63 @@ class DeploymentSampler(_RestClient):
         max_seq_len: int | None = None,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
-        """Sample completions and return structured results with token IDs.
+        """Sample n completions by firing n individual n=1 requests concurrently.
 
-        Tokenizes the chat messages client-side using the local tokenizer,
-        sends token IDs to ``/inference/v1/completions``, and returns
-        structured completions with the full token sequence.
-
-        BOS and special tokens are handled by the tokenizer's chat template.
-
-        When ``max_seq_len`` is set, two levels of filtering are applied:
-
-        1. **Prompt pre-filter**: If the tokenized prompt already meets or
-           exceeds ``max_seq_len``, the method returns an empty list
-           immediately — no inference call is made.
-        2. **Completion post-filter**: After sampling, any completion whose
-           full token sequence (prompt + completion) exceeds ``max_seq_len``
-           is silently dropped from the returned list.
-
-        To retrieve per-token inference logprobs (needed for GRPO importance
-        sampling), pass ``logprobs=True``::
-
-            completions = sampler.sample_with_tokens(
-                messages, n=8, logprobs=True, top_logprobs=1,
-            )
-            for c in completions:
-                print(c.inference_logprobs)  # List[float] or None
-
-        Args:
-            messages: Chat messages (role + content).
-            n: Number of completions to sample.
-                In cookbook GRPO, this is usually ``completions_per_prompt``.
-            max_tokens: Max tokens per completion.
-            temperature: Sampling temperature.
-            max_seq_len: If set, filter out sequences that exceed this length.
-                Prompts that already meet or exceed the limit are rejected
-                before calling the inference API.
-            **kwargs: Extra fields passed to the API (e.g., ``logprobs=True``,
-                ``top_logprobs=1``, ``reasoning_effort="none"``).
-
-        Returns:
-            List of :class:`SampledCompletion` with token IDs.  Prompt tokens
-            come from client-side tokenization; completion tokens from the
-            deployment's ``raw_output``.
-
-        Raises:
-            RuntimeError: If the deployment does not return ``raw_output``
-                token IDs.
-            requests.HTTPError: On non-2xx responses.
+        Each completion is an independent async request, avoiding HTTP/2
+        head-of-line blocking that occurs with large batched n>1 responses.
+        Transient failures are retried by ``async_completions``.
         """
+        import asyncio
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
-        num_completions = n
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_dict=False,
+            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
 
         if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
-            logger.info(
-                "Prompt pre-filtered: %d prompt tokens >= max_seq_len %d, skipping inference",
-                len(prompt_ids),
-                max_seq_len,
-            )
             return []
 
-        result = self.completions(
-            prompt=prompt_ids,
-            n=num_completions,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            raw_output=True,
-            **kwargs,
+        async def _one(idx: int) -> List[SampledCompletion]:
+            return await self._do_one_completion(
+                prompt_ids, max_tokens, temperature, max_seq_len,
+                user_requested_logprobs, routing_requested, echo_mode, **kwargs,
+            )
+
+        results = await asyncio.gather(*[_one(i) for i in range(n)])
+        return [c for batch in results for c in batch]
+
+    async def _do_one_completion(
+        self,
+        prompt_ids: list[int],
+        max_tokens: int,
+        temperature: float,
+        max_seq_len: int | None,
+        user_requested_logprobs: bool,
+        routing_requested: bool,
+        echo_mode: bool,
+        **kwargs: Any,
+    ) -> List[SampledCompletion]:
+        result = await self.async_completions(
+            prompt=prompt_ids, max_tokens=max_tokens,
+            temperature=temperature, raw_output=True, **kwargs,
+        )
+        return self._parse_completions_result(
+            result, prompt_ids, max_seq_len,
+            user_requested_logprobs, routing_requested, echo_mode,
         )
 
+    def _parse_completions_result(
+        self,
+        result: dict[str, Any],
+        prompt_ids: list[int],
+        max_seq_len: int | None,
+        user_requested_logprobs: bool,
+        routing_requested: bool,
+        echo_mode: bool,
+    ) -> List[SampledCompletion]:
+        """Parse a completions API response into SampledCompletion objects."""
         completions: List[SampledCompletion] = []
         for choice in result.get("choices", []):
             text = choice.get("text", "")
