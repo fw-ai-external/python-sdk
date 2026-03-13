@@ -248,25 +248,37 @@ class TrainerJobManager(_RestClient):
         validated service-mode jobs.
 
         Args:
-            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``).
+            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``) or full
+                training shape name (e.g.
+                ``accounts/fw/trainingShapes/ts-qwen3-8b-policy``).
 
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
         """
+        training_shape_name = training_shape_id
+        if not training_shape_name.startswith("accounts/"):
+            training_shape_name = (
+                f"accounts/{self.account_id}/trainingShapes/{training_shape_id}"
+            )
         path = (
-            f"/v1/accounts/{self.account_id}/trainingShapes/"
-            f"{training_shape_id}/versions?"
+            f"/v1/{training_shape_name}/versions?"
             f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
         )
         resp = self._get(path, timeout=30)
-        if not resp.ok:
+        if not resp.is_success:
             error_msg = parse_api_error(resp)
             show_support = False
             if resp.status_code == 404:
-                solution = (
-                    f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
-                    f"Verify the training_shape_id is correct and the shape exists."
-                )
+                if training_shape_id.startswith("accounts/"):
+                    solution = (
+                        f"Training shape '{training_shape_id}' was not found. "
+                        "Verify the training_shape_id is correct and the shape exists."
+                    )
+                else:
+                    solution = (
+                        f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
+                        "Verify the training_shape_id is correct and the shape exists."
+                    )
             elif resp.status_code == 403:
                 solution = (
                     f"Permission denied for training shape '{training_shape_id}'. "
@@ -371,7 +383,7 @@ class TrainerJobManager(_RestClient):
 
         logger.info("Creating RLOR job: POST %s (model=%s)", f"{self.base_url}{path}", config.base_model)
         resp = self._post(path, json=payload, timeout=60)
-        if not resp.ok:
+        if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
             extra = ""
@@ -408,7 +420,7 @@ class TrainerJobManager(_RestClient):
     def _resume(self, job_id: str) -> dict:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
         resp = self._post(path, timeout=60)
-        if not resp.ok:
+        if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
             logger.warning(
@@ -443,11 +455,10 @@ class TrainerJobManager(_RestClient):
     def _check_healthz(self, base_url: str, timeout: float = 5) -> bool:
         """Probe /api/v1/healthz -- returns True only on HTTP 200."""
         try:
-            r = self._session.get(
+            r = self._sync_client.get(
                 f"{base_url}/api/v1/healthz",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                headers=self._headers(Authorization=f"Bearer {self.api_key}"),
                 timeout=timeout,
-                verify=False,
             )
             return r.status_code == 200
         except Exception:

@@ -43,7 +43,7 @@ def basic_config():
 class TestCreate:
     def test_payload_construction(self, mgr, basic_config):
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.status_code = 200
         resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
         mgr._post = MagicMock(return_value=resp)
@@ -76,7 +76,7 @@ class TestCreate:
             extra_args=["--flag"],
         )
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
         mgr._post = MagicMock(return_value=resp)
@@ -110,7 +110,7 @@ class TestCreate:
             region="US_OHIO_1",
         )
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
         mgr._post = MagicMock(return_value=resp)
@@ -135,7 +135,7 @@ class TestCreate:
             extra_args=["--pp 8", "--ep=4", "--flag"],
         )
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.status_code = 200
         resp.json.return_value = {"name": "j"}
         mgr._post = MagicMock(return_value=resp)
@@ -221,7 +221,7 @@ class TestResolveTrainingProfile:
         """resolve_training_profile parses the latest shape-version snapshot."""
         mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.json.return_value = {
             "trainingShapeVersions": [
                 {
@@ -254,6 +254,23 @@ class TestResolveTrainingProfile:
         assert profile.max_supported_context_length == 8192
         assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
         assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
+        mgr.close()
+
+    def test_respects_fully_qualified_training_shape_name(self):
+        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        resp = MagicMock()
+        resp.ok = True
+        resp.json.return_value = {
+            "trainingShapeVersions": [
+                {"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}
+            ]
+        }
+        mgr._get = MagicMock(return_value=resp)
+
+        mgr.resolve_training_profile("accounts/fireworks/trainingShapes/ts-test")
+
+        path = mgr._get.call_args[0][0]
+        assert path.startswith("/v1/accounts/fireworks/trainingShapes/ts-test/versions?")
         mgr.close()
 
 
@@ -406,15 +423,15 @@ class TestApplyShape:
 
 
 class TestHealthz:
-    def test_uses_persistent_session(self, mgr):
+    def test_uses_sync_client(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
-        mgr._session.get = MagicMock(return_value=resp)
+        mgr._sync_client.get = MagicMock(return_value=resp)
 
         base_url = "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         result = mgr._check_healthz(base_url)
         assert result is True
-        url = mgr._session.get.call_args[0][0]
+        url = mgr._sync_client.get.call_args[0][0]
         assert "/api/v1/healthz" in url
 
 
@@ -426,7 +443,7 @@ class TestHealthz:
 class TestGet:
     def test_calls_rest_get(self, mgr):
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         resp.json.return_value = {"state": "JOB_STATE_RUNNING"}
         mgr._get = MagicMock(return_value=resp)
 

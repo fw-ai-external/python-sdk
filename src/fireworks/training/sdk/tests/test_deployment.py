@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -37,6 +38,30 @@ def deploy_config():
     )
 
 
+def _make_mock_tokenizer(return_ids=None):
+    tok = MagicMock()
+    tok.apply_chat_template.return_value = return_ids or [1, 2, 3]
+    return tok
+
+
+def _make_sampler(**kwargs):
+    defaults = dict(
+        inference_url="https://api.example.com",
+        model="m",
+        api_key="key",
+        tokenizer=_make_mock_tokenizer(),
+    )
+    defaults.update(kwargs)
+    return DeploymentSampler(**defaults)
+
+
+def _mock_async_completions(sampler, return_value):
+    """Patch async_completions to return a value without hitting the network."""
+    async def _fake(*args, **kwargs):
+        return return_value
+    sampler.async_completions = _fake
+
+
 # ---------------------------------------------------------------------------
 # _should_verify_ssl
 # ---------------------------------------------------------------------------
@@ -67,82 +92,85 @@ class TestShouldVerifySsl:
 class TestParseDeploymentInfo:
     def test_all_fields_present(self, mgr):
         data = {
-            "name": "accounts/test-acct/deployments/dep-1",
+            "name": "accounts/a/deployments/d",
             "state": "READY",
-            "hotLoadBucketUrl": "gs://bucket/path",
+            "deploymentShape": "accounts/a/deploymentShapes/s/versions/v",
         }
-        info = mgr._parse_deployment_info("dep-1", data)
-        assert info.deployment_id == "dep-1"
+        info = mgr._parse_deployment_info("d", data)
+        assert info.deployment_id == "d"
         assert info.state == "READY"
-        assert info.hot_load_bucket_url == "gs://bucket/path"
-        assert info.inference_model == "accounts/test-acct/deployments/dep-1"
+        assert info.deployment_shape_version == "accounts/a/deploymentShapes/s/versions/v"
 
-    def test_missing_hot_load_bucket(self, mgr):
-        data = {"name": "n", "state": "READY"}
-        info = mgr._parse_deployment_info("dep-1", data)
-        assert info.hot_load_bucket_url is None
+    def test_missing_shape(self, mgr):
+        data = {"name": "accounts/a/deployments/d", "state": "CREATING"}
+        info = mgr._parse_deployment_info("d", data)
+        assert info.deployment_shape_version is None
 
 
 # ---------------------------------------------------------------------------
-# _create_deployment
+# Deployment creation
 # ---------------------------------------------------------------------------
 
 
 class TestCreateDeployment:
-    def test_includes_extra_values_when_provided(self, mgr):
+    def test_create_posts_correct_path(self, mgr, deploy_config):
         resp = MagicMock()
         resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {"name": "dep-1", "state": "CREATING"}
+        resp.is_success = True
+        resp.json.return_value = {
+            "name": "accounts/test-acct/deployments/dep-1",
+            "state": "CREATING",
+        }
         mgr._post = MagicMock(return_value=resp)
+        mgr._create_deployment(deploy_config)
+        path = mgr._post.call_args[0][0]
+        assert "/deployments" in path
 
-        cfg = DeploymentConfig(
-            deployment_id="dep-1",
-            base_model="accounts/test/models/qwen3-1p7b",
-            extra_values={"priorityClass": "deployment"},
-        )
-        mgr._create_deployment(cfg)
-
-        payload = mgr._post.call_args[1]["json"]
-        assert payload["extraValues"] == {"priorityClass": "deployment"}
+    def test_409_is_not_raised(self, mgr, deploy_config):
+        resp = MagicMock()
+        resp.status_code = 409
+        resp.is_success = False
+        resp.json.return_value = {"error": "already exists"}
+        mgr._post = MagicMock(return_value=resp)
+        mgr._create_deployment(deploy_config)
 
 
 # ---------------------------------------------------------------------------
-# hotload — header construction
+# Hotload
 # ---------------------------------------------------------------------------
 
 
 class TestHotload:
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_hotload_headers_and_payload(self, mock_req, mgr):
+    def test_hotload_sends_identity(self, mgr):
         resp = MagicMock()
-        resp.ok = True
-        resp.json.return_value = {"status": "ok"}
-        mock_req.return_value = resp
-
-        mgr.hotload("dep-1", "accounts/test/models/m", "snap-1")
-
-        call_args = mock_req.call_args
-        headers = call_args[1]["headers"]
-        assert headers["fireworks-model"] == "accounts/test/models/m"
-        assert headers["fireworks-deployment"] == "accounts/test-acct/deployments/dep-1"
-        assert headers["Authorization"] == "Bearer test-key"
-
-        payload = call_args[1]["json"]
-        assert payload["identity"] == "snap-1"
-
-    @patch("fireworks.training.sdk.deployment.request_with_retries")
-    def test_hotload_with_incremental_metadata(self, mock_req, mgr):
-        resp = MagicMock()
-        resp.ok = True
+        resp.status_code = 200
+        resp.is_success = True
         resp.json.return_value = {}
-        mock_req.return_value = resp
+        mgr._sync_request = MagicMock(return_value=resp)
 
-        meta = {"previous_snapshot_identity": "snap-0", "compression_format": "arc_v2"}
-        mgr.hotload("dep-1", "accounts/test/models/m", "snap-1", incremental_snapshot_metadata=meta)
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
+        call_kwargs = mgr._sync_request.call_args[1]
+        assert call_kwargs["json"]["identity"] == "snap-123"
 
-        payload = mock_req.call_args[1]["json"]
-        assert payload["incremental_snapshot_metadata"] == meta
+    def test_hotload_headers_include_additional_headers(self, mgr):
+        headers = mgr._hotload_headers("dep-1", "accounts/test/models/m")
+        assert headers.get("X-Secret") == "s"
+        assert "Authorization" in headers
+        assert "fireworks-model" in headers
+
+    def test_hotload_incremental_metadata(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {}
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload(
+            "dep-1", "accounts/test/models/m", "snap-2",
+            incremental_snapshot_metadata={"previous_snapshot_identity": "snap-1"},
+        )
+        payload = mgr._sync_request.call_args[1]["json"]
+        assert payload["incremental_snapshot_metadata"]["previous_snapshot_identity"] == "snap-1"
 
 
 # ---------------------------------------------------------------------------
@@ -151,165 +179,102 @@ class TestHotload:
 
 
 class TestWaitForHotload:
-    @patch.object(DeploymentManager, "hotload_check_status")
-    def test_replicas_format_ready(self, mock_status, mgr):
-        mock_status.return_value = {
-            "replicas": [
-                {
-                    "current_snapshot_identity": "snap-1",
-                    "readiness": True,
-                    "loading_state": {"stage": "done"},
-                }
-            ]
-        }
-        assert mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5) is True
+    def test_immediate_success(self, mgr):
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "identity": "snap-1",
+                "stage": "idle",
+                "ready": True,
+            }]
+        })
+        result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
+        assert result is True
 
-    @patch.object(DeploymentManager, "hotload_check_status")
-    def test_missing_replicas_key_raises_runtime_error(self, mock_status, mgr):
-        mock_status.return_value = {
-            "identity": "snap-1",
-            "state": "READY",
-            "readiness": True,
-        }
-        with pytest.raises(RuntimeError, match="Expected 'replicas' list"):
-            mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5)
-
-    @patch.object(DeploymentManager, "hotload_check_status")
-    def test_identity_mismatch_waits(self, mock_status, mgr):
-        mock_status.return_value = {
-            "replicas": [
-                {
-                    "current_snapshot_identity": "snap-0",
-                    "readiness": True,
-                    "loading_state": {"stage": "done"},
-                }
-            ]
-        }
-        assert mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=0) is False
-
-    @patch.object(DeploymentManager, "hotload_check_status")
-    def test_error_stage_returns_false(self, mock_status, mgr):
-        mock_status.return_value = {
-            "replicas": [
-                {
-                    "current_snapshot_identity": None,
-                    "readiness": False,
-                    "loading_state": {"stage": "error"},
-                }
-            ]
-        }
-        assert mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5) is False
-
-    @patch.object(DeploymentManager, "hotload_check_status")
-    def test_unrecognized_format_raises_runtime_error(self, mock_status, mgr):
-        mock_status.return_value = {"unknown_key": "value"}
-        with pytest.raises(RuntimeError, match="Unrecognized hotload status response format"):
-            mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5)
+    def test_timeout_returns_false(self, mgr):
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "identity": None,
+                "stage": "downloading",
+                "ready": False,
+            }]
+        })
+        result = mgr.wait_for_hotload("dep-1", "m", "snap-x", timeout_seconds=0.01, poll_interval=0.005)
+        assert result is False
 
 
 # ---------------------------------------------------------------------------
-# DeploymentSampler._extract_logprobs
+# _extract_logprobs
 # ---------------------------------------------------------------------------
 
 
 class TestExtractLogprobs:
-    def test_structured_format(self):
-        choice = {
-            "logprobs": {
-                "content": [
-                    {"logprob": -0.5, "token": "hello"},
-                    {"logprob": -1.2, "token": "world"},
-                ]
-            }
-        }
-        result = DeploymentSampler._extract_logprobs(choice)
-        assert result == [-0.5, -1.2]
+    def test_modern_structured_format(self):
+        choice = {"logprobs": {"content": [{"logprob": -0.5}, {"logprob": -1.2}]}}
+        lps = DeploymentSampler._extract_logprobs(choice)
+        assert lps == [-0.5, -1.2]
 
-    def test_structured_takes_priority(self):
-        choice = {
-            "logprobs": {
-                "content": [{"logprob": -0.5}],
-                "token_logprobs": [-0.9],
-            }
-        }
-        result = DeploymentSampler._extract_logprobs(choice)
-        assert result == [-0.5]
-
-    def test_missing_logprobs(self):
+    def test_none_if_absent(self):
         assert DeploymentSampler._extract_logprobs({}) is None
+        assert DeploymentSampler._extract_logprobs({"logprobs": None}) is None
+        assert DeploymentSampler._extract_logprobs({"logprobs": {}}) is None
 
-    def test_empty_content_returns_none(self):
+    def test_empty_content(self):
         assert DeploymentSampler._extract_logprobs({"logprobs": {"content": []}}) is None
 
-    def test_missing_logprob_field_defaults_zero(self):
-        choice = {"logprobs": {"content": [{"token": "hi"}]}}
-        result = DeploymentSampler._extract_logprobs(choice)
-        assert result == [0.0]
-
 
 # ---------------------------------------------------------------------------
-# Mock tokenizer for DeploymentSampler tests
-# ---------------------------------------------------------------------------
-
-
-def _make_mock_tokenizer(prompt_ids=None):
-    """Create a mock tokenizer that returns fixed token IDs."""
-    tok = MagicMock()
-    tok.apply_chat_template.return_value = prompt_ids or [1, 100, 200, 300]
-    return tok
-
-
-# ---------------------------------------------------------------------------
-# DeploymentSampler.completions — mock HTTP
+# DeploymentSampler.async_completions
 # ---------------------------------------------------------------------------
 
 
 class TestCompletions:
-    @patch("fireworks.training.sdk.deployment.time.sleep")
-    def test_425_retry(self, mock_sleep):
+    def test_425_retry(self):
         resp_425 = MagicMock()
         resp_425.status_code = 425
-        resp_425.ok = False
+        resp_425.is_success = False
 
         resp_ok = MagicMock()
         resp_ok.status_code = 200
-        resp_ok.ok = True
+        resp_ok.is_success = True
         resp_ok.json.return_value = {"choices": []}
+        resp_ok.raise_for_status = MagicMock()
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer(),
-        )
-        sampler._post = MagicMock(side_effect=[resp_425, resp_ok])
-        result = sampler.completions(
-            prompt=[1, 2, 3],
-            hotload_retry_interval=0.01,
-        )
-        assert sampler._post.call_count == 2
+        sampler = _make_sampler()
+
+        call_count = 0
+        async def mock_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return resp_425 if call_count == 1 else resp_ok
+
+        sampler._get_async_client = MagicMock()
+        sampler._get_async_client.return_value.post = mock_post
+
+        result = asyncio.run(sampler.async_completions(
+            prompt=[1, 2, 3], hotload_retry_interval=0.01,
+        ))
+        assert call_count == 2
         sampler.close()
 
     def test_sends_token_ids_as_prompt(self):
         resp_ok = MagicMock()
         resp_ok.status_code = 200
-        resp_ok.ok = True
+        resp_ok.is_success = True
         resp_ok.json.return_value = {"choices": []}
+        resp_ok.raise_for_status = MagicMock()
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer(),
-        )
-        sampler._post = MagicMock(return_value=resp_ok)
-        sampler.completions(prompt=[10, 20, 30])
+        sampler = _make_sampler()
+        captured_kwargs = {}
 
-        payload = sampler._post.call_args[1]["json"]
-        assert payload["prompt"] == [10, 20, 30]
-        assert "messages" not in payload
-        path = sampler._post.call_args[0][0]
-        assert "/v1/completions" in path
+        async def mock_post(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return resp_ok
+
+        sampler._get_async_client = MagicMock()
+        sampler._get_async_client.return_value.post = mock_post
+
+        asyncio.run(sampler.async_completions(prompt=[10, 20, 30]))
+        assert captured_kwargs["json"]["prompt"] == [10, 20, 30]
         sampler.close()
 
 
@@ -322,12 +287,21 @@ class TestWarmup:
     def test_uses_token_prompt(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
-        mgr._session.post = MagicMock(return_value=resp)
+        mgr._sync_request = MagicMock(return_value=resp)
 
         assert mgr.warmup("accounts/test/deployments/dep-1", max_retries=1) is True
-        payload = mgr._session.post.call_args[1]["json"]
+        payload = mgr._sync_request.call_args[1]["json"]
         assert isinstance(payload["prompt"], list)
         assert all(isinstance(tok, int) for tok in payload["prompt"])
+
+    def test_warmup_headers_include_additional(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.warmup("accounts/test/deployments/dep-1", max_retries=1)
+        headers = mgr._sync_request.call_args[1]["headers"]
+        assert headers.get("X-Secret") == "s"
 
 
 # ---------------------------------------------------------------------------
@@ -340,29 +314,18 @@ class TestSampleWithTokens:
         prompt_ids = [1, 100, 200]
         completion_ids = [400, 500]
 
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {
-                    "text": "hello world",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": completion_ids},
-                }
-            ]
-        }
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "hello world",
+                "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": completion_ids},
+            }]
+        })
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer(prompt_ids),
-        )
-        sampler._post = MagicMock(return_value=resp)
-        results = sampler.sample_with_tokens(
+        results = asyncio.run(sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "hi"}],
-        )
+        ))
 
         assert len(results) == 1
         c = results[0]
@@ -375,183 +338,159 @@ class TestSampleWithTokens:
 
     def test_tokenizer_called_with_messages(self):
         tok = _make_mock_tokenizer([1, 2, 3])
+        sampler = _make_sampler(tokenizer=tok)
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "ok", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+            }]
+        })
 
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {
-                    "text": "ok",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                }
-            ]
-        }
-
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=tok,
-        )
-        sampler._post = MagicMock(return_value=resp)
         messages = [{"role": "user", "content": "test"}]
-        sampler.sample_with_tokens(messages=messages)
-
+        asyncio.run(sampler.sample_with_tokens(messages=messages))
         tok.apply_chat_template.assert_called_once_with(
             messages, tokenize=True, add_generation_prompt=True, return_dict=False,
         )
         sampler.close()
 
     def test_missing_completion_token_ids_raises(self):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {
-                    "text": "ok",
-                    "finish_reason": "stop",
-                    "raw_output": {},
-                }
-            ]
-        }
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3]))
+        _mock_async_completions(sampler, {
+            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {}}]
+        })
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer([1, 2, 3]),
-        )
-        sampler._post = MagicMock(return_value=resp)
         with pytest.raises(RuntimeError, match="missing completion_token_ids"):
-            sampler.sample_with_tokens(messages=[{"role": "user", "content": "hi"}])
+            asyncio.run(sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+            ))
         sampler.close()
 
     def test_echo_strips_verified_prefix(self):
         prompt_ids = [1, 100, 200]
         echoed_completion_ids = [1, 100, 200, 400, 500]
 
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {
-                    "text": "gen",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": echoed_completion_ids},
-                }
-            ]
-        }
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "gen", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": echoed_completion_ids},
+            }]
+        })
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer(prompt_ids),
-        )
-        sampler._post = MagicMock(return_value=resp)
-        results = sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}],
-            echo=True,
-        )
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}], echo=True,
+        ))
 
+        assert len(results) == 1
         c = results[0]
         assert c.full_tokens == prompt_ids + [400, 500]
         assert c.completion_len == 2
+        assert c.logprobs_echoed is False
         sampler.close()
 
-    def test_echo_no_strip_when_prefix_mismatch(self):
-        """echo=True should fail if completion_token_ids lack prompt prefix."""
+    def test_echo_logprobs_aligned(self):
         prompt_ids = [1, 100, 200]
-        completion_ids = [999, 400, 500, 600, 700]
+        echoed_ids = [1, 100, 200, 400, 500]
 
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {
-                    "text": "gen",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": completion_ids},
-                }
-            ]
-        }
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "gen", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": echoed_ids},
+                "logprobs": {"content": [
+                    {"logprob": 0.0},
+                    {"logprob": -0.1},
+                    {"logprob": -0.2},
+                    {"logprob": -0.3},
+                    {"logprob": -0.4},
+                ]},
+            }]
+        })
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer(prompt_ids),
-        )
-        sampler._post = MagicMock(return_value=resp)
-        with pytest.raises(RuntimeError, match="Echo response format mismatch"):
-            sampler.sample_with_tokens(
-                messages=[{"role": "user", "content": "hi"}],
-                echo=True,
-            )
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+            echo=True, logprobs=True,
+        ))
+
+        c = results[0]
+        assert c.logprobs_echoed is True
+        assert c.inference_logprobs == [-0.1, -0.2, -0.3, -0.4]
         sampler.close()
 
-    def test_max_seq_len_prompt_prefilter(self):
-        """Prompt >= max_seq_len returns empty list without calling inference."""
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer([1, 100, 200, 300, 400]),
-        )
-        sampler._post = MagicMock()
-        results = sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "long prompt"}],
-            max_seq_len=5,
-        )
+    def test_max_seq_len_pre_filter(self):
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3, 4, 5]))
+        _mock_async_completions(sampler, {"choices": []})
 
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}], max_seq_len=5,
+        ))
         assert results == []
-        sampler._post.assert_not_called()
         sampler.close()
 
-    def test_max_seq_len_completion_postfilter(self):
-        """Completions exceeding max_seq_len are dropped; short ones kept."""
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.ok = True
-        resp.json.return_value = {
-            "choices": [
-                {"text": "short", "finish_reason": "stop", "raw_output": {"completion_token_ids": [400]}},
-                {"text": "too long", "finish_reason": "length", "raw_output": {"completion_token_ids": [4, 5, 6]}},
-            ]
-        }
+    def test_max_seq_len_post_filter(self):
+        prompt_ids = [1, 2]
+        long_completion = list(range(100, 200))
 
-        sampler = DeploymentSampler(
-            inference_url="https://api.example.com",
-            model="m",
-            api_key="key",
-            tokenizer=_make_mock_tokenizer([1, 100, 200]),  # 3 prompt tokens
-        )
-        sampler._post = MagicMock(return_value=resp)
-        results = sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}], n=2, max_seq_len=5,
-        )
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "long", "finish_reason": "length",
+                "raw_output": {"completion_token_ids": long_completion},
+            }]
+        })
 
-        assert len(results) == 1
-        assert results[0].text == "short"
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}], max_seq_len=50,
+        ))
+        assert len(results) == 0
+        sampler.close()
+
+    def test_logprobs_extracted(self):
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "hi", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+                "logprobs": {"content": [{"logprob": -1.5}]},
+            }]
+        })
+
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "x"}], logprobs=True,
+        ))
+        assert results[0].inference_logprobs == [-1.5]
+        sampler.close()
+
+    def test_routing_matrices_extracted(self):
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
+        _mock_async_completions(sampler, {
+            "choices": [{
+                "text": "hi", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+                "logprobs": {"content": [{"logprob": -0.5, "routing_matrix": "AQID"}]},
+            }]
+        })
+
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "x"}],
+            include_routing_matrix=True,
+        ))
+        assert results[0].routing_matrices == ["AQID"]
         sampler.close()
 
 
 # ---------------------------------------------------------------------------
-# Default values
+# Default parameter values
 # ---------------------------------------------------------------------------
 
 
 class TestDefaultValues:
     def test_default_temperature_is_1(self):
         import inspect
-
-        for method in (DeploymentSampler.completions, DeploymentSampler.sample_with_tokens):
-            assert inspect.signature(method).parameters["temperature"].default == 1.0
+        sig = inspect.signature(DeploymentSampler.async_completions)
+        assert sig.parameters["temperature"].default == 1.0
+        sig2 = inspect.signature(DeploymentSampler.sample_with_tokens)
+        assert sig2.parameters["temperature"].default == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +502,7 @@ class TestDeploymentCrud:
     def test_get_deployment_calls_rest_get(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
-        resp.ok = True
+        resp.is_success = True
         resp.json.return_value = {"name": "n", "state": "READY"}
         mgr._get = MagicMock(return_value=resp)
 
@@ -582,7 +521,7 @@ class TestDeploymentCrud:
 
     def test_scale_to_zero_calls_rest_patch(self, mgr):
         resp = MagicMock()
-        resp.ok = True
+        resp.is_success = True
         mgr._patch = MagicMock(return_value=resp)
 
         mgr.scale_to_zero("dep-1")

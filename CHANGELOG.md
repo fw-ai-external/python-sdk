@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.42 (2026-03-13)
+
+Full Changelog: [v1.0.0-alpha.41...v1.0.0-alpha.42](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.41...v1.0.0-alpha.42)
+
+### Refactors
+
+* **sdk:** async httpx with n=1 completions ([#60](https://github.com/fw-ai-external/python-sdk/issues/60)) ([798f079](https://github.com/fw-ai-external/python-sdk/commit/798f0790bf1a3b1b84523d10c1c9d82b8905f37d))
+
 ## 1.0.0-alpha.41 (2026-03-11)
 
 Full Changelog: [v1.0.0-alpha.40...v1.0.0-alpha.41](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.40...v1.0.0-alpha.41)

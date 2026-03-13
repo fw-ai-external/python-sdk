@@ -1,35 +1,28 @@
-"""Structured error formatting and API error parsing for the Firetitan SDK.
+"""Structured error formatting, API error parsing, and retry utilities.
 
 Provides:
   - format_sdk_error(): build multi-line "what / cause / solution / docs" messages
   - parse_api_error(): extract a human-readable string from an HTTP error response
-  - request_with_retries(): retry HTTP requests with exponential backoff (Tinker pattern)
+  - request_with_retries(): sync retry with exponential backoff
+  - async_request_with_retries(): async retry with exponential backoff
   - HTTP_STATUS_HINTS: status-code -> actionable one-liner
-  - Docs URL constants (centralized for easy updates)
+  - Docs URL constants
 """
 
 from __future__ import annotations
 
 import time
+import asyncio
 import logging
-from typing import Any, Tuple, Callable
+from typing import Any, Tuple, Callable, Awaitable
 
-import requests as _requests
+import httpx
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# URL constants
-# =============================================================================
 
 DOCS_SDK = "https://docs.fireworks.ai/api-reference/training-sdk/overview"
 DISCORD_URL = "https://discord.gg/mMqQxvFD9A"
 CONSOLE_URL = "https://app.fireworks.ai/account/home"
-
-
-# =============================================================================
-# HTTP status code hints
-# =============================================================================
 
 HTTP_STATUS_HINTS: dict[int, str] = {
     400: "Check that all request parameters are valid.",
@@ -43,11 +36,6 @@ HTTP_STATUS_HINTS: dict[int, str] = {
 }
 
 
-# =============================================================================
-# Formatting helpers
-# =============================================================================
-
-
 def format_sdk_error(
     what: str,
     cause: str,
@@ -55,24 +43,6 @@ def format_sdk_error(
     docs_url: str | None = None,
     show_support: bool = False,
 ) -> str:
-    """Build a structured, actionable error message.
-
-    Example output::
-
-        ERROR: RLOR job creation failed (HTTP 400)
-          Cause: invalid request
-          Solution: Check that all request parameters are valid.
-          Docs: https://docs.fireworks.ai/api-reference/training-sdk/overview
-          Support: https://discord.gg/mMqQxvFD9A
-
-    Args:
-        what: Short summary of what went wrong.
-        cause: Why it might have happened.
-        solution: How to fix it (may be multi-line).
-        docs_url: Optional link to relevant documentation.
-        show_support: If True, append a Discord support link for cases
-            where the solution is ambiguous or requires human help.
-    """
     lines = [
         f"ERROR: {what}",
         f"  Cause: {cause}",
@@ -86,20 +56,7 @@ def format_sdk_error(
 
 
 def parse_api_error(resp) -> str:
-    """Extract a human-readable error message from an HTTP response.
-
-    Handles the Fireworks API conventions:
-      - ``{"error": "message string"}``
-      - ``{"error": {"message": "...", "code": ...}}``
-      - Plain text bodies
-
-    Args:
-        resp: A ``requests.Response`` (or any object with ``.json()`` and
-            ``.text`` attributes).
-
-    Returns:
-        A concise error string (at most 200 chars for raw-text fallback).
-    """
+    """Extract a human-readable error message from an httpx or requests Response."""
     try:
         body = resp.json()
         err = body.get("error", body)
@@ -111,26 +68,14 @@ def parse_api_error(resp) -> str:
         return text.strip()[:200]
 
 
-# =============================================================================
-# Retry utility (mirrors Tinker SDK's execute_with_retries pattern)
-# =============================================================================
-
 RETRYABLE_STATUS_CODES: Tuple[int, ...] = (408, 429, 500, 502, 503, 504)
-"""HTTP status codes that should trigger a retry.
 
-Note: 409 (Conflict) is NOT retried -- for create operations it means the
-resource already exists and retrying the same POST is futile.  Callers that
-need idempotent create-or-get behavior should handle 409 explicitly.
+RETRYABLE_EXCEPTIONS: Tuple[type, ...] = (
+    httpx.ConnectError,
+    httpx.TimeoutException,
+)
 
-Note: 425 (Too Early / hot-loading) is intentionally NOT retried here.
-Hot-loads take minutes (not seconds), so the SDK's ~60s exponential backoff
-would just waste time on futile retries.  Instead, 425 is returned immediately
-to the caller so the training script can handle it with its own retry logic
-at an appropriate interval (e.g. 30s between attempts).
-"""
-
-RETRYABLE_EXCEPTIONS: Tuple[type, ...] = (_requests.ConnectionError, _requests.Timeout)
-"""Exception types that should trigger a retry."""
+MAX_WAIT_TIME = 60 * 5
 
 
 def _is_retryable_status_code(status_code: int) -> bool:
@@ -138,83 +83,91 @@ def _is_retryable_status_code(status_code: int) -> bool:
     return status_code in RETRYABLE_STATUS_CODES
 
 
+def _backoff_delay(attempt: int, start_time: float, max_wait_time: float) -> float | None:
+    """Return delay in seconds, or None if budget exhausted."""
+    elapsed = time.time() - start_time
+    if elapsed >= max_wait_time:
+        return None
+    delay = min(2 ** attempt, 30)
+    return min(delay, start_time + max_wait_time - time.time())
+
+
 def request_with_retries(
-    func: Callable[..., _requests.Response],
+    func: Callable[..., Any],
     *args: Any,
-    max_wait_time: float = 60 * 5,
+    max_wait_time: float = MAX_WAIT_TIME,
     **kwargs: Any,
-) -> _requests.Response:
-    """Execute an HTTP request with automatic retries and exponential backoff.
+) -> Any:
+    """Sync HTTP request with exponential backoff retries.
 
-    Mirrors Tinker SDK's ``InternalClientHolder.execute_with_retries()`` pattern:
-    exponential backoff ``min(2**attempt, 30)``, capped by a total wall-time
-    budget, with retryable exception and status code classification.
-
-    On retryable exceptions (``ConnectionError``, ``Timeout``) or retryable
-    status codes (408, 409, 429, 5xx), the request is retried until
-    ``max_wait_time`` is exhausted.
-
-    The response is returned as-is (no ``raise_for_status``) so callers can
-    handle error responses their own way.
-
-    Args:
-        func: A ``requests`` method (e.g. ``requests.get``, ``requests.post``).
-        *args: Positional arguments forwarded to *func*.
-        max_wait_time: Maximum total wall-time in seconds before giving up
-            (default: 300s, same as Tinker's ``MAX_WAIT_TIME``).
-        **kwargs: Keyword arguments forwarded to *func*.
-
-    Returns:
-        The ``requests.Response`` from a successful (or non-retryable) attempt.
-
-    Raises:
-        requests.ConnectionError: If all retries are exhausted on connection errors.
-        requests.Timeout: If all retries are exhausted on timeouts.
+    Works with both ``httpx.Client`` and ``requests.Session`` methods.
+    Retries on connection errors, timeouts, and retryable status codes.
     """
-    start_time = time.time()
-    attempt_count = 0
+    start = time.time()
+    attempt = 0
     while True:
         try:
             resp = func(*args, **kwargs)
-        except RETRYABLE_EXCEPTIONS as e:
-            current_time = time.time()
-            elapsed_time = current_time - start_time
-            if elapsed_time < max_wait_time:
-                time_to_wait = min(2**attempt_count, 30)
-                attempt_count += 1
-                time_to_wait = min(
-                    time_to_wait, start_time + max_wait_time - current_time
-                )
-                logger.warning(
-                    "Request failed (attempt %d, %.1fs elapsed), retrying in %.1fs: %s: %s",
-                    attempt_count,
-                    elapsed_time,
-                    time_to_wait,
-                    type(e).__name__,
-                    e,
-                )
-                time.sleep(time_to_wait)
-                continue
+        except Exception as e:
+            if isinstance(e, RETRYABLE_EXCEPTIONS) or _is_requests_retryable(e):
+                delay = _backoff_delay(attempt, start, max_wait_time)
+                if delay is not None:
+                    attempt += 1
+                    logger.debug("Request failed (attempt %d): %s, retrying in %.1fs", attempt, e, delay)
+                    time.sleep(delay)
+                    continue
             raise
 
-        # Check for retryable status codes
         if _is_retryable_status_code(resp.status_code):
-            current_time = time.time()
-            elapsed_time = current_time - start_time
-            if elapsed_time < max_wait_time:
-                time_to_wait = min(2**attempt_count, 30)
-                attempt_count += 1
-                time_to_wait = min(
-                    time_to_wait, start_time + max_wait_time - current_time
-                )
-                logger.warning(
-                    "Request returned HTTP %d (attempt %d, %.1fs elapsed), retrying in %.1fs",
-                    resp.status_code,
-                    attempt_count,
-                    elapsed_time,
-                    time_to_wait,
-                )
-                time.sleep(time_to_wait)
+            delay = _backoff_delay(attempt, start, max_wait_time)
+            if delay is not None:
+                attempt += 1
+                logger.debug("HTTP %d (attempt %d), retrying in %.1fs", resp.status_code, attempt, delay)
+                time.sleep(delay)
                 continue
 
         return resp
+
+
+async def async_request_with_retries(
+    func: Callable[..., Awaitable[Any]],
+    *args: Any,
+    max_wait_time: float = MAX_WAIT_TIME,
+    **kwargs: Any,
+) -> Any:
+    """Async HTTP request with exponential backoff retries."""
+    start = time.time()
+    attempt = 0
+    while True:
+        try:
+            resp = await func(*args, **kwargs)
+        except RETRYABLE_EXCEPTIONS as e:
+            delay = _backoff_delay(attempt, start, max_wait_time)
+            if delay is not None:
+                attempt += 1
+                logger.debug("Request failed (attempt %d): %s, retrying in %.1fs", attempt, e, delay)
+                await asyncio.sleep(delay)
+                continue
+            raise
+
+        if _is_retryable_status_code(resp.status_code):
+            delay = _backoff_delay(attempt, start, max_wait_time)
+            if delay is not None:
+                attempt += 1
+                logger.debug("HTTP %d (attempt %d), retrying in %.1fs", resp.status_code, attempt, delay)
+                await asyncio.sleep(delay)
+                continue
+
+        return resp
+
+
+def _is_requests_retryable(exc: Exception) -> bool:
+    """Check if a ``requests`` library exception is retryable.
+
+    Allows ``request_with_retries`` to work with both httpx and requests.
+    """
+    try:
+        import requests as _req
+        return isinstance(exc, (_req.ConnectionError, _req.Timeout))
+    except ImportError:
+        return False
