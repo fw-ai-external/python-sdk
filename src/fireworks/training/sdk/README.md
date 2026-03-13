@@ -74,10 +74,11 @@ syncer.save_dcp("step-1")
 
 Two launch paths are supported:
 
-### Validated launch (default)
+### Shape path
 
-Pass only `training_shape_ref`. The backend populates accelerator, image tag,
+Pass `training_shape_ref`. The backend populates accelerator, image tag,
 node count, max context length, and sharding from the validated shape.
+Do not set infra fields -- the SDK validates this.
 
 ```python
 profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
@@ -87,25 +88,22 @@ config = TrainerJobConfig(
     display_name="my-trainer",
     training_shape_ref=profile.training_shape_version,
 )
-# Do NOT set accelerator_type, accelerator_count, custom_image_tag,
-# node_count, or max_context_length -- the shape owns these fields.
 ```
 
-### Override launch (`skip_validations=True`)
+### Manual path
 
-Resolve the profile for defaults, then override specific fields.
+Omit `training_shape_ref` and set all infra fields directly.
+The server skips shape validation on this path.
 
 ```python
-profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
-
 config = TrainerJobConfig(
     base_model="accounts/fireworks/models/qwen3-8b",
     display_name="my-trainer",
-    skip_validations=True,
-    accelerator_type="NVIDIA_A100_80GB",  # user override
+    accelerator_type="NVIDIA_A100_80GB",
+    accelerator_count=8,
+    custom_image_tag="0.33.0",
+    node_count=2,
 )
-config.apply_shape(profile)  # fills remaining fields from shape
-config.training_shape_ref = profile.training_shape_version
 ```
 
 ## Error handling and retries

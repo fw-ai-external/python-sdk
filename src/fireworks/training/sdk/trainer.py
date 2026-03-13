@@ -26,6 +26,8 @@ from fireworks.training.sdk._rest_client import _RestClient
 
 logger = logging.getLogger(__name__)
 
+_SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
+
 
 @dataclass
 class TrainerServiceEndpoint:
@@ -89,105 +91,73 @@ class TrainingShapeProfile:
 
 @dataclass
 class TrainerJobConfig:
-    """Configuration for creating a trainer job."""
+    """Configuration for creating a trainer job.
+
+    Two launch paths:
+
+    * **Shape path** (``training_shape_ref`` set): the backend owns all
+      infra fields (accelerator, image tag, node count).  Setting any of
+      them raises ``ValueError`` from :meth:`validate`.
+    * **Manual path** (``training_shape_ref`` is ``None``): all fields
+      are sent as-is and the server skips shape validation.
+    """
 
     base_model: str
     lora_rank: int = 0
     max_context_length: int | None = None
     """Max context length for the trainer.
 
-    Omitted from the request on validated-shape launches (the backend
-    populates it from the training shape).  On ``skip_validations`` or
-    manual launches it is sent as-is.
+    On the shape path the backend populates this from the training shape.
+    On the manual path it is sent as-is.
     """
     learning_rate: float = 1e-5
     gradient_accumulation_steps: int = 1
     node_count: int | None = None
     """Number of trainer nodes.
 
-    Omitted from the request on validated-shape launches (the backend
-    populates it from the training shape).  Defaults to ``1`` when sent.
+    Shape-owned on the shape path (must not be set).
+    Defaults to ``1`` when sent on the manual path.
     """
     display_name: str | None = None
     hot_load_deployment_id: str | None = None
     region: str | None = None
     custom_image_tag: str | None = None
-    """Trainer container image tag.
-
-    Omitted from the request on validated-shape launches (the backend
-    populates it from the training shape).
-    """
+    """Trainer container image tag.  Shape-owned on the shape path."""
     extra_args: list[str] | None = None
     """Additional trainer arguments passed through to the backend."""
     accelerator_type: str | None = None
-    """Accelerator type override.
-
-    Omitted from the request on validated-shape launches (the backend
-    populates it from the training shape).  On ``skip_validations``
-    launches, explicit values are sent as user overrides.
-    """
+    """Accelerator type.  Shape-owned on the shape path."""
     accelerator_count: int | None = None
-    """Accelerator count override.
-
-    Omitted from the request on validated-shape launches (the backend
-    populates it from the training shape).  On ``skip_validations``
-    launches, explicit values are sent as user overrides.
-    """
+    """Accelerator count.  Shape-owned on the shape path."""
     training_shape_ref: str | None = None
     """Training-shape selector resource reference.
 
     Sent as the top-level ``trainingShape`` request parameter so the backend can
-    select and apply the validated launch profile. Accepts either an
-    unversioned training-shape resource or an exact training-shape version.
+    select and apply the validated launch profile.  When set, the config is on
+    the **shape path** and infra fields must not be set.
     """
-    skip_validations: bool = False
     forward_only: bool = False
 
-    def apply_shape(self, profile: TrainingShapeProfile) -> None:
-        """Populate request fields from a resolved training shape.
+    def validate(self) -> None:
+        """Self-contained pre-flight check.  Call before ``_create()``.
 
-        This copies the resolved shape-derived launch settings onto the config,
-        including accelerators. For validated launches the SDK still omits
-        accelerator fields from the outgoing request when ``training_shape_ref``
-        is set, so the control plane uses the validated shape directly.
-
-        By default the shape values always win. When ``skip_validations`` is
-        True, any config field the user already set (non-None) is kept as an
-        override and the shape value is skipped for that field.
+        * Shape path (``training_shape_ref`` set): rejects infra field overrides.
+        * Manual path: accepts all fields as-is.
         """
-        _SHAPE_FIELD_MAP: list[tuple[str, str, Any]] = [
-            # (config_field, profile_field, sentinel_to_skip)
-            ("accelerator_type", "accelerator_type", ""),
-            ("accelerator_count", "accelerator_count", 0),
-            ("custom_image_tag", "trainer_image_tag", ""),
-            ("node_count", "node_count", 0),
-            ("max_context_length", "max_supported_context_length", 0),
-        ]
-
-        for cfg_field, profile_field, sentinel in _SHAPE_FIELD_MAP:
-            shape_val = getattr(profile, profile_field)
-            if shape_val is None or shape_val == sentinel:
-                continue
-            current = getattr(self, cfg_field)
-            if self.skip_validations and current is not None:
-                logger.info(
-                    "Keeping user override %s=%s (shape: %s)",
-                    cfg_field,
-                    current,
-                    shape_val,
-                )
-                continue
-            setattr(self, cfg_field, shape_val)
-
-        logger.info(
-            "Applied training shape: %s (accel=%s, image=%s, nodes=%s, max_ctx=%s, pp=%d)",
-            profile.training_shape_version,
-            profile.accelerator_type,
-            profile.trainer_image_tag,
-            profile.node_count,
-            profile.max_supported_context_length,
-            profile.pipeline_parallelism,
-        )
+        errors: list[str] = []
+        if not self.base_model:
+            errors.append("base_model is required")
+        if self.training_shape_ref:
+            for field in _SHAPE_OWNED_FIELDS:
+                val = getattr(self, field)
+                if val is not None and val != "" and val != 0:
+                    errors.append(
+                        f"{field} cannot be set when training_shape_ref is provided. "
+                        "Remove it to use the shape's value, or remove "
+                        "training_shape_ref for a manual launch."
+                    )
+        if errors:
+            raise ValueError("\n".join(errors))
 
 
 class TrainerJobManager(_RestClient):
@@ -331,18 +301,22 @@ class TrainerJobManager(_RestClient):
     # -- Low-level REST calls --------------------------------------------------
 
     def _create(self, config: TrainerJobConfig) -> dict:
+        config.validate()
+
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
             query_params.append(("deploymentId", config.hot_load_deployment_id))
-        if config.skip_validations:
-            query_params.append(("skipValidations", "true"))
-        if config.training_shape_ref:
+
+        is_shape_path = bool(config.training_shape_ref)
+
+        if is_shape_path:
             query_params.append(("trainingShape", config.training_shape_ref))
+        else:
+            query_params.append(("skipValidations", "true"))
+
         if query_params:
             path = f"{path}?{urlencode(query_params)}"
-
-        is_validated_shape = bool(config.training_shape_ref) and not config.skip_validations
 
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
@@ -350,8 +324,6 @@ class TrainerJobManager(_RestClient):
             "learningRate": config.learning_rate,
             "gradientAccumulationSteps": config.gradient_accumulation_steps,
         }
-        if not is_validated_shape and config.max_context_length is not None:
-            training_config["maxContextLength"] = config.max_context_length
 
         payload: dict[str, Any] = {
             "serviceMode": True,
@@ -359,25 +331,29 @@ class TrainerJobManager(_RestClient):
             "dataset": "",
             "trainingConfig": training_config,
         }
-        if not is_validated_shape:
+
+        if not is_shape_path:
+            if config.max_context_length is not None:
+                training_config["maxContextLength"] = config.max_context_length
             payload["nodeCount"] = config.node_count if config.node_count is not None else 1
+            if config.custom_image_tag:
+                training_config["customImageTag"] = config.custom_image_tag
+            if config.accelerator_type:
+                training_config["acceleratorType"] = config.accelerator_type
+            if config.accelerator_count:
+                training_config["acceleratorCount"] = config.accelerator_count
+
         if config.display_name:
             payload["displayName"] = config.display_name
         if config.hot_load_deployment_id:
             payload["hotLoadDeploymentId"] = config.hot_load_deployment_id
         if config.region:
-            payload["trainingConfig"]["region"] = config.region
-        if not is_validated_shape and config.custom_image_tag:
-            payload["trainingConfig"]["customImageTag"] = config.custom_image_tag
+            training_config["region"] = config.region
         if config.extra_args:
             flat = []
             for arg in config.extra_args:
                 flat.extend(arg.split()) if " " in arg else flat.append(arg)
-            payload["trainingConfig"]["extraArgs"] = flat
-        if not is_validated_shape and config.accelerator_type:
-            payload["trainingConfig"]["acceleratorType"] = config.accelerator_type
-        if not is_validated_shape and config.accelerator_count:
-            payload["trainingConfig"]["acceleratorCount"] = config.accelerator_count
+            training_config["extraArgs"] = flat
         if config.forward_only:
             payload["forwardOnly"] = True
 
@@ -391,7 +367,6 @@ class TrainerJobManager(_RestClient):
                 extra = (
                     "\n  Verify the request parameters are correct."
                     "\n  If using hotload, ensure the deployment has hotLoadBucketUrl configured."
-                    "\n  Use --skip-validations to bypass server-side validation."
                 )
             logger.warning(
                 "\n%s",
