@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.43 (2026-03-15)
+
+Full Changelog: [v1.0.0-alpha.42...v1.0.0-alpha.43](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.42...v1.0.0-alpha.43)
+
+### Features
+
+* add grad_accumulation_normalization to optim_step ([#64](https://github.com/fw-ai-external/python-sdk/issues/64)) ([1168a59](https://github.com/fw-ai-external/python-sdk/commit/1168a59d89605c929e1faeb2df3506e3b7ffc204))
+
+
+### Refactors
+
+* **sdk:** separate shape path and manual path for trainer job config ([#63](https://github.com/fw-ai-external/python-sdk/issues/63)) ([a37e7fd](https://github.com/fw-ai-external/python-sdk/commit/a37e7fdc78ac524bc20395437074b5409350daab))
+
 ## 1.0.0-alpha.42 (2026-03-13)
 
 Full Changelog: [v1.0.0-alpha.41...v1.0.0-alpha.42](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.41...v1.0.0-alpha.42)

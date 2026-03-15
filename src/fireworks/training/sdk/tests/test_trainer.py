@@ -28,6 +28,7 @@ def mgr():
 
 @pytest.fixture
 def basic_config():
+    """Manual-path config: no training_shape_ref, all infra fields set."""
     return TrainerJobConfig(
         base_model="accounts/test/models/qwen3-1p7b",
         node_count=2,
@@ -35,7 +36,6 @@ def basic_config():
         lora_rank=0,
         max_context_length=4096,
         learning_rate=1e-5,
-        skip_validations=True,
         hot_load_deployment_id="my-deploy",
     )
 
@@ -61,17 +61,11 @@ class TestCreate:
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
-    def test_validated_shape_omits_all_infra_fields(self, mgr):
-        """Validated-shape path sends only algorithm fields; all shape-derived
-        infra fields are omitted so the backend populates them from the shape."""
+    def test_shape_path_omits_infra_fields(self, mgr):
+        """Shape path sends only algorithm fields; infra fields are omitted."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
-            accelerator_type="NVIDIA_H100_80GB",
-            accelerator_count=8,
-            custom_image_tag="0.33.0",
-            node_count=4,
-            max_context_length=8192,
             region="US_OHIO_1",
             extra_args=["--flag"],
         )
@@ -86,7 +80,7 @@ class TestCreate:
         path = mgr._post.call_args[0][0]
         payload = mgr._post.call_args[1]["json"]
         assert "trainingShape=" in path
-        assert "accounts%2Ftest-account%2FtrainingShapes%2Fts-test%2Fversions%2Fshape-v1" in path
+        assert "skipValidations" not in path
         tc = payload["trainingConfig"]
         assert "acceleratorType" not in tc
         assert "acceleratorCount" not in tc
@@ -96,12 +90,10 @@ class TestCreate:
         assert tc["region"] == "US_OHIO_1"
         assert tc["extraArgs"] == ["--flag"]
 
-    def test_skip_validations_sends_all_fields(self, mgr):
-        """Skip-validation path sends all fields including shape-derived ones."""
+    def test_manual_path_sends_all_fields(self, mgr):
+        """Manual path sends all infra fields and skipValidations=true."""
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
-            skip_validations=True,
             accelerator_type="NVIDIA_H100_80GB",
             accelerator_count=8,
             custom_image_tag="0.33.0",
@@ -119,8 +111,8 @@ class TestCreate:
 
         path = mgr._post.call_args[0][0]
         payload = mgr._post.call_args[1]["json"]
-        assert "trainingShape=" in path
         assert "skipValidations=true" in path
+        assert "trainingShape" not in path
         tc = payload["trainingConfig"]
         assert tc["acceleratorType"] == "NVIDIA_H100_80GB"
         assert tc["acceleratorCount"] == 8
@@ -336,85 +328,85 @@ class TestDeploymentShapeProperty:
 
 
 # ---------------------------------------------------------------------------
-# TrainerJobConfig.apply_shape
+# TrainerJobConfig.validate
 # ---------------------------------------------------------------------------
 
 
-class TestApplyShape:
-    def test_shape_values_applied(self):
-        """Shape values populate the config."""
+class TestValidate:
+    def test_shape_path_passes_without_infra(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
         )
-        profile = _make_profile()
-        config.apply_shape(profile)
+        config.validate()
 
-        assert config.accelerator_type == "NVIDIA_H100_80GB"
-        assert config.accelerator_count == 8
-        assert config.custom_image_tag == "0.33.0"
-        assert config.node_count == 2
-        assert config.max_context_length == 8192
-
-    def test_shape_wins_without_skip_validations_for_copied_fields(self):
-        """Without skip_validations, shape wins for copied launch fields."""
+    def test_shape_path_rejects_accelerator_type(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            accelerator_type="NVIDIA_A100_80GB",
-            accelerator_count=4,
-            max_context_length=4096,
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            accelerator_type="NVIDIA_H100_80GB",
         )
-        profile = _make_profile()
-        config.apply_shape(profile)
+        with pytest.raises(ValueError, match="accelerator_type"):
+            config.validate()
 
-        assert config.accelerator_type == "NVIDIA_H100_80GB"
-        assert config.accelerator_count == 8
-        assert config.node_count == 2
-        assert config.max_context_length == 8192
-
-    def test_skip_validations_keeps_user_overrides(self):
-        """With skip_validations, user values override copied shape fields."""
+    def test_shape_path_rejects_accelerator_count(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
-            accelerator_type="NVIDIA_A100_80GB",
-            accelerator_count=4,
-            max_context_length=4096,
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            accelerator_count=8,
         )
-        profile = _make_profile()
-        config.apply_shape(profile)
+        with pytest.raises(ValueError, match="accelerator_count"):
+            config.validate()
 
-        assert config.accelerator_type == "NVIDIA_A100_80GB"
-        assert config.accelerator_count == 4
-        assert config.max_context_length == 4096
-        assert config.custom_image_tag == "0.33.0"
-        assert config.node_count == 2
-
-    def test_skip_validations_fills_none_fields(self):
-        """With skip_validations, shape fills fields the user left as None."""
+    def test_shape_path_rejects_custom_image_tag(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            custom_image_tag="0.33.0",
         )
-        profile = _make_profile()
-        config.apply_shape(profile)
+        with pytest.raises(ValueError, match="custom_image_tag"):
+            config.validate()
 
-        assert config.accelerator_type == "NVIDIA_H100_80GB"
-        assert config.accelerator_count == 8
-        assert config.custom_image_tag == "0.33.0"
-        assert config.max_context_length == 8192
-
-    def test_skip_validations_can_partially_override_accelerators(self):
-        """Skip-validation launches can override part of the accelerator tuple."""
+    def test_shape_path_rejects_node_count(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            skip_validations=True,
-            accelerator_type="MY_ACCEL",
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            node_count=4,
         )
-        profile = _make_profile()
-        config.apply_shape(profile)
+        with pytest.raises(ValueError, match="node_count"):
+            config.validate()
 
-        assert config.accelerator_type == "MY_ACCEL"
-        assert config.accelerator_count == 8
+    def test_shape_path_reports_all_violations(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            accelerator_type="NVIDIA_H100_80GB",
+            custom_image_tag="0.33.0",
+            node_count=4,
+        )
+        with pytest.raises(ValueError, match="accelerator_type") as exc_info:
+            config.validate()
+        assert "custom_image_tag" in str(exc_info.value)
+        assert "node_count" in str(exc_info.value)
+
+    def test_manual_path_passes_with_all_infra(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            accelerator_type="NVIDIA_H100_80GB",
+            accelerator_count=8,
+            custom_image_tag="0.33.0",
+            node_count=4,
+        )
+        config.validate()
+
+    def test_manual_path_passes_minimal(self):
+        config = TrainerJobConfig(base_model="accounts/test/models/m")
+        config.validate()
+
+    def test_rejects_empty_base_model(self):
+        config = TrainerJobConfig(base_model="")
+        with pytest.raises(ValueError, match="base_model"):
+            config.validate()
 
 
 # ---------------------------------------------------------------------------

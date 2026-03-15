@@ -9,8 +9,7 @@ Usage:
         --extra-args "--forward-only --no-compile" \
         --custom-image-tag your-image-tag \
         --region US_OHIO_1 \
-        --node-count 2 \
-        --skip-validations
+        --node-count 2
 """
 
 from __future__ import annotations
@@ -47,7 +46,6 @@ def parse_args():
     )
     p.add_argument("--timeout-s", type=float, default=1200)
     p.add_argument("--poll-interval-s", type=float, default=5.0)
-    p.add_argument("--skip-validations", action="store_true")
     p.add_argument("--lora-rank", type=int, default=0)
     p.add_argument("--max-seq-len", type=int, default=4096)
     p.add_argument("--accelerator-type", type=str, default=None)
@@ -95,7 +93,6 @@ def main():
         display_name=args.display_name,
         hot_load_deployment_id=None,
         region=args.region,
-        skip_validations=args.skip_validations,
         custom_image_tag=args.custom_image_tag,
         extra_args=extra_args_list or None,
         accelerator_type=args.accelerator_type,

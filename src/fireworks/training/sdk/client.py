@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 import uuid
 import logging
+from enum import Enum
 from dataclasses import dataclass
 
 from tinker import types
@@ -24,6 +25,18 @@ from tinker.lib.public_interfaces.service_client import ServiceClient
 from tinker.lib.public_interfaces.training_client import TrainingClient
 
 logger = logging.getLogger(__name__)
+
+
+class GradAccNormalization(str, Enum):
+    """Gradient accumulation normalization modes for ``optim_step``."""
+
+    NUM_LOSS_TOKENS = "num_loss_tokens"
+    """Divide accumulated gradients by total non-zero-grad tokens (per-token mean)."""
+    NUM_SEQUENCES = "num_sequences"
+    """Divide accumulated gradients by total sequences with non-zero grads (per-sequence mean)."""
+    NONE = "none"
+    """No normalization -- gradients used as-is."""
+
 
 # -- Cross-job checkpoint references ------------------------------------------
 
@@ -117,9 +130,12 @@ class FiretitanTrainingClient(TrainingClient):
     :meth:`save_weights_for_sampler_ext`, ensuring GCS paths never collide
     across training sessions that share the same ``deployment_id``.
 
-    All core methods (forward, forward_backward, forward_backward_custom,
-    optim_step, load_state_with_optimizer, get_tokenizer) are
-    inherited unchanged from tinker.TrainingClient.
+    Overrides:
+      - optim_step(): adds ``grad_accumulation_normalization`` parameter
+
+    All other core methods (forward, forward_backward, forward_backward_custom,
+    load_state_with_optimizer, get_tokenizer) are inherited unchanged from
+    tinker.TrainingClient.
     """
 
     def __init__(self, holder, model_seq_id: int, model_id):
@@ -144,6 +160,58 @@ class FiretitanTrainingClient(TrainingClient):
                 kind,
                 name,
             )
+
+    def optim_step(
+        self,
+        adam_params: types.AdamParams,
+        # Default per-token norm so grad accumulation is batch-size invariant.
+        grad_accumulation_normalization: GradAccNormalization | str = GradAccNormalization.NUM_LOSS_TOKENS,
+    ):
+        """Update model parameters using Adam optimizer.
+
+        Extends the base ``optim_step`` with ``grad_accumulation_normalization``
+        to normalize accumulated gradients before clipping and stepping.
+
+        Args:
+            adam_params: Adam optimizer parameters.
+            grad_accumulation_normalization: Normalization mode.
+                Use ``GradAccNormalization.NUM_LOSS_TOKENS`` (default) for
+                per-token mean, ``GradAccNormalization.NUM_SEQUENCES`` for
+                per-sequence mean, or ``GradAccNormalization.NONE`` to disable.
+                String values (``"num_loss_tokens"``, ``"num_sequences"``,
+                ``"none"``) are also accepted.
+        """
+        norm_value = grad_accumulation_normalization.value if isinstance(grad_accumulation_normalization, GradAccNormalization) else str(grad_accumulation_normalization)
+        extra_body = {"grad_accumulation_normalization": norm_value}
+        request_id = self._get_request_id()
+
+        async def _optim_step_async():
+            start = time.time()
+
+            async def _send():
+                request = types.OptimStepRequest(
+                    adam_params=adam_params,
+                    model_id=self._guaranteed_model_id(),
+                    seq_id=request_id + 1,
+                )
+                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                    return await client.training.optim_step(
+                        request=request,
+                        extra_body=extra_body,
+                    )
+
+            async with self._take_turn(request_id):
+                future = await self.holder.execute_with_retries(_send)
+            return await _APIFuture(
+                types.OptimStepResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="OptimStep",
+                queue_state_observer=self._queue_state_logger,
+            )
+
+        return self.holder.run_coroutine_threadsafe(_optim_step_async())
 
     def list_checkpoints(self) -> list[str]:
         """List available DCP checkpoints from the trainer.
