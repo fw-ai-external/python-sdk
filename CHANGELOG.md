@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.0-alpha.45 (2026-03-16)
+
+Full Changelog: [v1.0.0-alpha.44...v1.0.0-alpha.45](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.44...v1.0.0-alpha.45)
+
+### Features
+
+* re-apply GradAccNormalization enum and optim_step override ([#67](https://github.com/fw-ai-external/python-sdk/issues/67)) ([25906a7](https://github.com/fw-ai-external/python-sdk/commit/25906a70e83dcfd8435f3cf3a0bf0904abd2bf9c))
+
+
+### Bug Fixes
+
+* **deps:** bump minimum typing-extensions version ([49d844c](https://github.com/fw-ai-external/python-sdk/commit/49d844c7fbb1436c733cce45b528b5ac7c19b36f))
+* **pydantic:** do not pass `by_alias` unless set ([39e4145](https://github.com/fw-ai-external/python-sdk/commit/39e4145b3ceaeeff945c8805dc3b72392e699e2f))
+
+
+### Chores
+
+* **internal:** tweak CI branches ([fff0521](https://github.com/fw-ai-external/python-sdk/commit/fff0521a0fc9a3cb4f96ac02557a11b0d363e72b))
+
 ## 1.0.0-alpha.44 (2026-03-16)
 
 Full Changelog: [v1.0.0-alpha.43...v1.0.0-alpha.44](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.43...v1.0.0-alpha.44)
