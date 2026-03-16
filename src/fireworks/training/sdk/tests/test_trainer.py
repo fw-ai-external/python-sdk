@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fireworks.training.sdk.trainer import (
+    CreatedTrainerJob,
     TrainerJobConfig,
     TrainerJobManager,
     TrainingShapeProfile,
@@ -41,6 +42,20 @@ def basic_config():
 
 
 class TestCreate:
+    def test_public_create_returns_job_identity(self, mgr, basic_config):
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
+        mgr._post = MagicMock(return_value=resp)
+
+        result = mgr.create(basic_config)
+
+        assert result == CreatedTrainerJob(
+            job_name="accounts/test/rlorTrainerJobs/job-1",
+            job_id="job-1",
+        )
+
     def test_payload_construction(self, mgr, basic_config):
         resp = MagicMock()
         resp.is_success = True
@@ -143,6 +158,25 @@ class TestCreate:
 
 
 class TestPollUntilReady:
+    @patch.object(TrainerJobManager, "_poll_until_ready")
+    def test_wait_for_ready_uses_explicit_job_name(self, mock_poll, mgr):
+        ep = TrainerServiceEndpoint("accounts/test/rlorTrainerJobs/job-1", "job-1", "https://u")
+        mock_poll.return_value = ep
+
+        result = mgr.wait_for_ready(
+            "job-1",
+            job_name="accounts/test/rlorTrainerJobs/job-1",
+            timeout_s=10,
+        )
+
+        assert result is ep
+        mock_poll.assert_called_once_with(
+            "job-1",
+            "accounts/test/rlorTrainerJobs/job-1",
+            5.0,
+            10,
+        )
+
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
     @patch.object(TrainerJobManager, "get")
     def test_running_uses_gateway_endpoint(self, mock_get, mock_healthz, mgr):
@@ -179,6 +213,30 @@ class TestPollUntilReady:
         mock_get.return_value = {"state": "JOB_STATE_CREATING"}
         with pytest.raises(TimeoutError, match="not become ready"):
             mgr._poll_until_ready("job-1", "name", timeout_s=5)
+
+
+class TestCreateAndWait:
+    @patch.object(TrainerJobManager, "wait_for_ready")
+    @patch.object(TrainerJobManager, "create")
+    def test_delegates_to_create_then_wait(self, mock_create, mock_wait_for_ready, mgr, basic_config):
+        created = CreatedTrainerJob(
+            job_name="accounts/test/rlorTrainerJobs/job-1",
+            job_id="job-1",
+        )
+        ep = TrainerServiceEndpoint(created.job_name, created.job_id, "https://u")
+        mock_create.return_value = created
+        mock_wait_for_ready.return_value = ep
+
+        result = mgr.create_and_wait(basic_config, poll_interval_s=7.0, timeout_s=11.0)
+
+        assert result is ep
+        mock_create.assert_called_once_with(basic_config)
+        mock_wait_for_ready.assert_called_once_with(
+            "job-1",
+            job_name="accounts/test/rlorTrainerJobs/job-1",
+            poll_interval_s=7.0,
+            timeout_s=11.0,
+        )
 
 
 class TestReconnectAndWait:

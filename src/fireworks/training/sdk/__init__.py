@@ -21,6 +21,7 @@ from fireworks.training.sdk.client import (
     FiretitanTrainingClient,
 )
 from fireworks.training.sdk.trainer import (
+    CreatedTrainerJob,
     TrainerJobConfig,
     TrainerJobManager,
     TrainingShapeProfile,
@@ -52,6 +53,7 @@ __all__ = [
     "DeploymentManager",
     "DeploymentSampler",
     "SampledCompletion",
+    "CreatedTrainerJob",
     "TrainerJobConfig",
     "TrainerJobManager",
     "TrainerServiceEndpoint",
