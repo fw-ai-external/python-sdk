@@ -51,7 +51,7 @@ class DeploymentConfig:
     deployment_id: str
     base_model: str
     deployment_shape: str | None = None
-    region: str = "US_OHIO_1"
+    region: str | None = None
     min_replica_count: int = 0
     max_replica_count: int = 1
     accelerator_type: str = "NVIDIA_H200_141GB"
@@ -164,8 +164,9 @@ class DeploymentManager(_RestClient):
             "minReplicaCount": config.min_replica_count,
             "maxReplicaCount": config.max_replica_count,
             "enableHotLoad": True,
-            "placement": {"region": config.region},
         }
+        if config.region:
+            body["placement"] = {"region": config.region}
         if config.hot_load_bucket_type:
             body["hotLoadBucketType"] = config.hot_load_bucket_type
         if config.deployment_shape:
