@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fireworks.training.sdk.trainer import (
-    CreatedTrainerJob,
     TrainerJobConfig,
+    CreatedTrainerJob,
     TrainerJobManager,
     TrainingShapeProfile,
     TrainerServiceEndpoint,

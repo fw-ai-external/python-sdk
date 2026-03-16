@@ -21,8 +21,8 @@ from fireworks.training.sdk.client import (
     FiretitanTrainingClient,
 )
 from fireworks.training.sdk.trainer import (
-    CreatedTrainerJob,
     TrainerJobConfig,
+    CreatedTrainerJob,
     TrainerJobManager,
     TrainingShapeProfile,
     TrainerServiceEndpoint,
