@@ -39,6 +39,14 @@ class TrainerServiceEndpoint:
 
 
 @dataclass
+class CreatedTrainerJob:
+    """Info returned immediately after creating a trainer job."""
+
+    job_name: str
+    job_id: str
+
+
+@dataclass
 class TrainingShapeProfile:
     """Resolved training shape profile from the control plane.
 
@@ -515,10 +523,32 @@ class TrainerJobManager(_RestClient):
         timeout_s: float = 15 * 60,
     ) -> TrainerServiceEndpoint:
         """Create a service-mode trainer job and wait for it to be ready."""
+        created = self.create(config)
+        return self.wait_for_ready(
+            created.job_id,
+            job_name=created.job_name,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
+
+    def create(self, config: TrainerJobConfig) -> CreatedTrainerJob:
+        """Create a service-mode trainer job and return its ID immediately."""
         job = self._create(config)
         job_name = job.get("name", "")
         job_id = job_name.split("/")[-1] if "/" in job_name else job_name
         logger.info("Created trainer job: %s", job_id)
+        return CreatedTrainerJob(job_name=job_name, job_id=job_id)
+
+    def wait_for_ready(
+        self,
+        job_id: str,
+        job_name: str | None = None,
+        poll_interval_s: float = 5.0,
+        timeout_s: float = 15 * 60,
+    ) -> TrainerServiceEndpoint:
+        """Wait for a trainer job to reach RUNNING state and pass health checks."""
+        if job_name is None:
+            job_name = f"accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
         return self._poll_until_ready(job_id, job_name, poll_interval_s, timeout_s)
 
     def wait_for_existing(
@@ -528,8 +558,11 @@ class TrainerJobManager(_RestClient):
         timeout_s: float = 15 * 60,
     ) -> TrainerServiceEndpoint:
         """Wait for an already-existing trainer job to reach RUNNING state."""
-        job_name = f"accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        return self._poll_until_ready(job_id, job_name, poll_interval_s, timeout_s)
+        return self.wait_for_ready(
+            job_id,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
 
     def resume_and_wait(
         self,

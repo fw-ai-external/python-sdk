@@ -21,6 +21,7 @@ from fireworks.training.sdk.client import (
 )
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
+    CreatedTrainerJob,
     TrainerJobManager,
     TrainingShapeProfile,
     TrainerServiceEndpoint,
@@ -50,6 +51,7 @@ __all__ = [
     "DeploymentManager",
     "DeploymentSampler",
     "SampledCompletion",
+    "CreatedTrainerJob",
     "TrainerJobConfig",
     "TrainerJobManager",
     "TrainerServiceEndpoint",
