@@ -378,6 +378,11 @@ class FiretitanServiceClient(ServiceClient):
     Tracks ``(base_model, lora_rank)`` pairs to detect accidental
     double-creation on the same trainer.
 
+    Accepts both Fireworks API keys (``fw_...``) and tinker keys
+    (``tml-...``).  When a Fireworks key is provided, it is sent via
+    HTTP headers and a synthetic ``tml-local`` key satisfies tinker's
+    client-side validation.
+
     Usage::
 
         service = FiretitanServiceClient(base_url=trainer_url, api_key=key)
@@ -391,8 +396,14 @@ class FiretitanServiceClient(ServiceClient):
         )
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, api_key: str | None = None, **kwargs):
+        if api_key is not None and not api_key.startswith("tml-"):
+            headers = dict(kwargs.pop("default_headers", None) or {})
+            headers.setdefault("X-API-Key", api_key)
+            headers.setdefault("Authorization", f"Bearer {api_key}")
+            kwargs["default_headers"] = headers
+            api_key = "tml-local"
+        super().__init__(*args, api_key=api_key, **kwargs)
         self._created_training_configs: set[tuple[str, int]] = set()
 
     def create_training_client(
