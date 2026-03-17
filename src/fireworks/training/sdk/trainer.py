@@ -138,11 +138,22 @@ class TrainerJobConfig:
     accelerator_count: int | None = None
     """Accelerator count.  Shape-owned on the shape path."""
     training_shape_ref: str | None = None
-    """Training-shape selector resource reference.
+    """Full resource name of the training shape.
 
-    Sent as the top-level ``trainingShape`` request parameter so the backend can
-    select and apply the validated launch profile.  When set, the config is on
-    the **shape path** and infra fields must not be set.
+    Must be a fully-qualified resource name, e.g.::
+
+        accounts/<account>/trainingShapes/<shape>
+        accounts/<account>/trainingShapes/<shape>/versions/<version>
+
+    Use :meth:`TrainerJobManager.resolve_training_profile` to resolve a
+    short shape ID to a full versioned reference::
+
+        profile = mgr.resolve_training_profile("my-shape")
+        config = TrainerJobConfig(..., training_shape_ref=profile.training_shape_version)
+
+    When set, the config is on the **shape path** and infra fields
+    (accelerator_type, accelerator_count, custom_image_tag, node_count)
+    must not be set.
     """
     forward_only: bool = False
 
@@ -226,18 +237,31 @@ class TrainerJobManager(_RestClient):
         validated service-mode jobs.
 
         Args:
-            training_shape_id: Shape ID (e.g. ``ts-qwen3-8b-policy``) or full
-                training shape name (e.g.
-                ``accounts/fw/trainingShapes/ts-qwen3-8b-policy``).
+            training_shape_id: Full training shape resource name, e.g.
+                ``accounts/fireworks/trainingShapes/ts-qwen3-8b-policy``.
 
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
+
+        Raises:
+            ValueError: If ``training_shape_id`` is not a valid shape resource
+                name (must be ``accounts/<acct>/trainingShapes/<shape>``
+                without a ``/versions/`` suffix).
         """
-        training_shape_name = training_shape_id
-        if not training_shape_name.startswith("accounts/"):
-            training_shape_name = (
-                f"accounts/{self.account_id}/trainingShapes/{training_shape_id}"
+        if not re.match(r"^accounts/[^/]+/trainingShapes/[^/]+$", training_shape_id):
+            hint = "Expected: accounts/<account>/trainingShapes/<shape>\n"
+            if "/versions/" in training_shape_id:
+                hint += "  Do not include /versions/<ver> — this method resolves the latest version for you."
+            else:
+                hint += "  Example: accounts/fireworks/trainingShapes/ts-qwen3-8b-policy"
+            raise ValueError(
+                format_sdk_error(
+                    "Invalid training_shape_id format",
+                    f"'{training_shape_id}' is not a valid training shape resource name.",
+                    hint,
+                )
             )
+        training_shape_name = training_shape_id
         path = (
             f"/v1/{training_shape_name}/versions?"
             f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
@@ -247,16 +271,10 @@ class TrainerJobManager(_RestClient):
             error_msg = parse_api_error(resp)
             show_support = False
             if resp.status_code == 404:
-                if training_shape_id.startswith("accounts/"):
-                    solution = (
-                        f"Training shape '{training_shape_id}' was not found. "
-                        "Verify the training_shape_id is correct and the shape exists."
-                    )
-                else:
-                    solution = (
-                        f"Training shape '{training_shape_id}' was not found under account '{self.account_id}'. "
-                        "Verify the training_shape_id is correct and the shape exists."
-                    )
+                solution = (
+                    f"Training shape '{training_shape_id}' was not found. "
+                    "Verify the training_shape_id is correct and the shape exists."
+                )
             elif resp.status_code == 403:
                 solution = (
                     f"Permission denied for training shape '{training_shape_id}'. "
@@ -308,8 +326,38 @@ class TrainerJobManager(_RestClient):
 
     # -- Low-level REST calls --------------------------------------------------
 
+    _SHAPE_REF_RE = re.compile(
+        r"^accounts/[^/]+/trainingShapes/[^/]+(/versions/[^/]+)?$"
+    )
+
+    @classmethod
+    def _validate_shape_ref(cls, ref: str) -> None:
+        """Validate that training_shape_ref is a full resource name.
+
+        Accepted formats:
+          - accounts/{account}/trainingShapes/{shape}
+          - accounts/{account}/trainingShapes/{shape}/versions/{version}
+
+        Short IDs (e.g. "qwen3-4b-minimum-h200") are rejected — use
+        resolve_training_profile() first to resolve them.
+        """
+        if not cls._SHAPE_REF_RE.match(ref):
+            raise ValueError(
+                format_sdk_error(
+                    "Invalid training_shape_ref format",
+                    f"'{ref}' is not a valid training shape resource name.",
+                    "Expected: accounts/<account>/trainingShapes/<shape>[/versions/<version>]\n"
+                    "  Use resolve_training_profile(<short_id>) to get the full resource name:\n"
+                    "    profile = mgr.resolve_training_profile('my-shape')\n"
+                    "    config = TrainerJobConfig(..., training_shape_ref=profile.training_shape_version)",
+                )
+            )
+
     def _create(self, config: TrainerJobConfig) -> dict:
         config.validate()
+
+        if config.training_shape_ref:
+            self._validate_shape_ref(config.training_shape_ref)
 
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
@@ -664,3 +712,106 @@ class TrainerJobManager(_RestClient):
                 e,
                 CONSOLE_URL,
             )
+
+    def promote_checkpoint(
+        self,
+        job_id: str,
+        checkpoint_id: str,
+        output_model_id: str,
+    ) -> dict:
+        """Promote a trainer checkpoint to a Fireworks model.
+
+        Calls the control-plane ``:promote`` endpoint to turn a sampler
+        checkpoint into a deployable model.
+
+        Args:
+            job_id: RLOR trainer job ID that produced the checkpoint.
+            checkpoint_id: Checkpoint identifier (the ``snapshot_name``
+                from :class:`SaveSamplerResult`).
+            output_model_id: Desired model ID for the promoted model.
+                Must be 1-63 chars, lowercase a-z, 0-9, or hyphen.
+
+        Returns:
+            Model dict from the API response (includes ``state``,
+            ``kind``, ``peftDetails``, etc.).
+        """
+        errors = validate_output_model_id(output_model_id)
+        if errors:
+            raise ValueError("\n\n".join(errors))
+
+        path = (
+            f"/v1/accounts/{self.account_id}"
+            f"/rlorTrainerJobs/{job_id}"
+            f"/checkpoints/{checkpoint_id}:promote"
+        )
+        output_model = f"accounts/{self.account_id}/models/{output_model_id}"
+        logger.info(
+            "Promoting checkpoint '%s' -> model '%s'",
+            checkpoint_id,
+            output_model,
+        )
+
+        resp = self._post(path, json={"output_model": output_model}, timeout=300)
+        if not resp.is_success:
+            error_msg = parse_api_error(resp)
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to promote checkpoint '{checkpoint_id}'",
+                    error_msg,
+                    f"Check that the job {job_id} exists and the checkpoint is valid.\n"
+                    f"  Console: {CONSOLE_URL}",
+                    docs_url=DOCS_SDK,
+                )
+            )
+
+        result = resp.json()
+        model = result.get("model", {})
+        state = model.get("state", "UNKNOWN")
+        kind = model.get("kind", "UNKNOWN")
+        logger.info("Promoted! Model state=%s, kind=%s", state, kind)
+
+        peft = model.get("peftDetails", {})
+        if peft:
+            logger.info(
+                "PEFT: base=%s, r=%s, targets=%s",
+                peft.get("baseModel"),
+                peft.get("r"),
+                peft.get("targetModules"),
+            )
+
+        return model
+
+
+_RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
+
+
+def validate_output_model_id(output_model_id: str | None) -> list[str]:
+    """Validate a model ID for checkpoint promotion.
+
+    Returns a list of error strings (empty if valid).
+    """
+    if output_model_id in (None, ""):
+        return []
+
+    problems: list[str] = []
+    if len(output_model_id) > 63:
+        problems.append("must be at most 63 characters")
+    if output_model_id.startswith("-"):
+        problems.append("must not start with '-'")
+    if output_model_id.endswith("-"):
+        problems.append("must not end with '-'")
+    if not _RESOURCE_ID_RE.fullmatch(output_model_id):
+        problems.append("must contain only lowercase a-z, 0-9, and hyphen (-)")
+
+    if problems:
+        return [
+            format_sdk_error(
+                "Invalid output_model_id",
+                f"'{output_model_id}' is not a valid Fireworks model ID.",
+                "Use 1-63 characters of lowercase a-z, 0-9, or hyphen (-).\n"
+                "  Underscores, spaces, slashes, and uppercase letters are not allowed.\n"
+                "  The ID must not start or end with '-'.\n"
+                "  Example: deepmath-qwen3-8b-dev",
+            )
+        ]
+    return []

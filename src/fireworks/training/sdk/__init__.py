@@ -26,6 +26,7 @@ from fireworks.training.sdk.trainer import (
     TrainerJobManager,
     TrainingShapeProfile,
     TrainerServiceEndpoint,
+    validate_output_model_id,
 )
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,
@@ -58,4 +59,5 @@ __all__ = [
     "TrainerJobManager",
     "TrainerServiceEndpoint",
     "TrainingShapeProfile",
+    "validate_output_model_id",
 ]

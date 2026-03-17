@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.46 (2026-03-17)
+
+Full Changelog: [v1.0.0-alpha.45...v1.0.0-alpha.46](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.45...v1.0.0-alpha.46)
+
+### Features
+
+* **training-sdk:** add promote_checkpoint, strict shape validation, and API key remapping ([#70](https://github.com/fw-ai-external/python-sdk/issues/70)) ([ac86fee](https://github.com/fw-ai-external/python-sdk/commit/ac86fee4fcf93527c1ed173e3bb38a267ac45edf))
+
 ## 1.0.0-alpha.45 (2026-03-16)
 
 Full Changelog: [v1.0.0-alpha.44...v1.0.0-alpha.45](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.44...v1.0.0-alpha.45)

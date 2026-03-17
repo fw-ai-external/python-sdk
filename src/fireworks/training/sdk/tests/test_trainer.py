@@ -297,13 +297,19 @@ class TestResolveTrainingProfile:
             ],
         }
         mgr._get = MagicMock(return_value=resp)
-        profile = mgr.resolve_training_profile("ts-test")
+        profile = mgr.resolve_training_profile("accounts/a/trainingShapes/ts-test")
         path = mgr._get.call_args[0][0]
         assert "/trainingShapes/ts-test/versions" in path
         assert profile.pipeline_parallelism == 4
         assert profile.max_supported_context_length == 8192
         assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
         assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
+        mgr.close()
+
+    def test_rejects_bare_shape_id(self):
+        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        with pytest.raises(ValueError, match="not a valid training shape resource name"):
+            mgr.resolve_training_profile("ts-test")
         mgr.close()
 
     def test_respects_fully_qualified_training_shape_name(self):
