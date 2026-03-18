@@ -20,7 +20,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DOCS_SDK = "https://docs.fireworks.ai/api-reference/training-sdk/overview"
+DOCS_SDK = "https://docs.fireworks.ai/fine-tuning/training-sdk/introduction"
 DISCORD_URL = "https://discord.gg/mMqQxvFD9A"
 CONSOLE_URL = "https://app.fireworks.ai/account/home"
 
