@@ -51,7 +51,6 @@ def parse_args():
     p.add_argument("--accelerator-type", type=str, default=None)
     p.add_argument("--accelerator-count", type=int, default=None)
     p.add_argument("--fireworks-api-key", default=None)
-    p.add_argument("--fireworks-account-id", default=None)
     p.add_argument("--fireworks-base-url", default=None)
     p.add_argument("--additional-headers", type=str, default=None)
     p.add_argument("--output-file", default="trainer_info.json", help="Output JSON file with trainer info")
@@ -62,7 +61,6 @@ def main():
     args = parse_args()
 
     fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
-    fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
     fw_base_url = args.fireworks_base_url or os.environ.get("FIREWORKS_BASE_URL") or "https://api.fireworks.ai"
     fw_additional_headers = None
     if args.additional_headers:
@@ -71,12 +69,11 @@ def main():
         except json.JSONDecodeError:
             logger.warning("Could not parse additional headers")
 
-    if not fw_api_key or not fw_account_id:
-        raise RuntimeError("Set FIREWORKS_API_KEY and FIREWORKS_ACCOUNT_ID")
+    if not fw_api_key:
+        raise RuntimeError("Set FIREWORKS_API_KEY")
 
     rlor_mgr = TrainerJobManager(
         api_key=fw_api_key,
-        account_id=fw_account_id,
         base_url=fw_base_url,
         additional_headers=fw_additional_headers,
     )

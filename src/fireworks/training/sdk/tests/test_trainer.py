@@ -19,10 +19,10 @@ from fireworks.training.sdk.trainer import (
 def mgr():
     manager = TrainerJobManager(
         api_key="test-key",
-        account_id="test-account",
         base_url="https://api.example.com",
         additional_headers={"X-Custom": "val"},
     )
+    manager._account_id = "test-account"
     yield manager
     manager.close()
 
@@ -269,7 +269,8 @@ class TestReconnectAndWait:
 class TestResolveTrainingProfile:
     def test_parses_sharding(self):
         """resolve_training_profile parses the latest shape-version snapshot."""
-        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        mgr = TrainerJobManager(api_key="k", base_url="https://x")
+        mgr._account_id = "a"
         resp = MagicMock()
         resp.is_success = True
         resp.json.return_value = {
@@ -307,13 +308,15 @@ class TestResolveTrainingProfile:
         mgr.close()
 
     def test_rejects_bare_shape_id(self):
-        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        mgr = TrainerJobManager(api_key="k", base_url="https://x")
+        mgr._account_id = "a"
         with pytest.raises(ValueError, match="not a valid training shape resource name"):
             mgr.resolve_training_profile("ts-test")
         mgr.close()
 
     def test_respects_fully_qualified_training_shape_name(self):
-        mgr = TrainerJobManager(api_key="k", account_id="a", base_url="https://x")
+        mgr = TrainerJobManager(api_key="k", base_url="https://x")
+        mgr._account_id = "a"
         resp = MagicMock()
         resp.ok = True
         resp.json.return_value = {

@@ -36,8 +36,8 @@ from fireworks.training.sdk import (
     WeightSyncer,
 )
 
-trainer_mgr = TrainerJobManager(api_key="...", account_id="...", base_url="https://api.fireworks.ai")
-deploy_mgr = DeploymentManager(api_key="...", account_id="...", base_url="https://api.fireworks.ai")
+trainer_mgr = TrainerJobManager(api_key="...", base_url="https://api.fireworks.ai")
+deploy_mgr = DeploymentManager(api_key="...", base_url="https://api.fireworks.ai")
 
 deploy = deploy_mgr.create_or_get(
     DeploymentConfig(
