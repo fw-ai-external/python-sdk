@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.47 (2026-03-18)
+
+Full Changelog: [v1.0.0-alpha.46...v1.0.0-alpha.47](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.46...v1.0.0-alpha.47)
+
+### Features
+
+* **sdk:** auto-resolve account_id from API key ([#71](https://github.com/fw-ai-external/python-sdk/issues/71)) ([1ff1e6c](https://github.com/fw-ai-external/python-sdk/commit/1ff1e6c036a5dc532b9f42a44ea2f6e42e64e66a))
+
+
+### Bug Fixes
+
+* update DOCS_SDK url after training-sdk docs restructure ([#72](https://github.com/fw-ai-external/python-sdk/issues/72)) ([67a198e](https://github.com/fw-ai-external/python-sdk/commit/67a198e6eb64843f08e8b4c8a3f2557ac527c575))
+
 ## 1.0.0-alpha.46 (2026-03-17)
 
 Full Changelog: [v1.0.0-alpha.45...v1.0.0-alpha.46](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.45...v1.0.0-alpha.46)
