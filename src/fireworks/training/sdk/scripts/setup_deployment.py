@@ -41,7 +41,6 @@ def parse_args():
     p.add_argument("--region", default="US_OHIO_1")
     p.add_argument("--timeout-s", type=float, default=1800)
     p.add_argument("--fireworks-api-key", default=None)
-    p.add_argument("--fireworks-account-id", default=None)
     p.add_argument("--fireworks-base-url", default=None)
     p.add_argument("--additional-headers", type=str, default=None)
     p.add_argument("--hotload-api-url", default="https://api.fireworks.ai")
@@ -55,7 +54,6 @@ def main():
     args = parse_args()
 
     fw_api_key = args.fireworks_api_key or os.environ.get("FIREWORKS_API_KEY")
-    fw_account_id = args.fireworks_account_id or os.environ.get("FIREWORKS_ACCOUNT_ID")
     fw_base_url = args.fireworks_base_url or os.environ.get("FIREWORKS_BASE_URL") or "https://api.fireworks.ai"
     fw_additional_headers = None
     if args.additional_headers:
@@ -64,12 +62,11 @@ def main():
         except json.JSONDecodeError:
             logger.warning("Could not parse additional headers")
 
-    if not fw_api_key or not fw_account_id:
-        raise RuntimeError("Set FIREWORKS_API_KEY and FIREWORKS_ACCOUNT_ID")
+    if not fw_api_key:
+        raise RuntimeError("Set FIREWORKS_API_KEY")
 
     deploy_mgr = DeploymentManager(
         api_key=fw_api_key,
-        account_id=fw_account_id,
         base_url=fw_base_url,
         hotload_api_url=args.hotload_api_url,
         additional_headers=fw_additional_headers,

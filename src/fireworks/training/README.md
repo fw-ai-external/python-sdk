@@ -13,7 +13,6 @@ Infrastructure and orchestration primitives for training on [Fireworks](https://
 pip install -e ".[training]"
 
 export FIREWORKS_API_KEY="..."
-export FIREWORKS_ACCOUNT_ID="..."
 ```
 
 ## Quick start

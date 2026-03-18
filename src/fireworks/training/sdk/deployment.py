@@ -70,7 +70,6 @@ class DeploymentManager(_RestClient):
 
     Args:
         api_key: Fireworks API key.
-        account_id: Fireworks account ID.
         base_url: Control-plane URL for deployment CRUD operations.
         inference_url: Gateway URL for inference completions.  Defaults to *base_url*.
         hotload_api_url: Gateway URL for hotload operations.  Defaults to *base_url*.
@@ -80,14 +79,12 @@ class DeploymentManager(_RestClient):
 
         mgr = DeploymentManager(
             api_key="...",
-            account_id="...",
             base_url="https://api.fireworks.ai",
         )
 
         # Example with separate control-plane and gateway endpoints:
         mgr = DeploymentManager(
             api_key="...",
-            account_id="...",
             base_url="http://GATEWAY_IP:8083",
             inference_url="https://api.fireworks.ai",
             hotload_api_url="https://api.fireworks.ai",
@@ -97,16 +94,20 @@ class DeploymentManager(_RestClient):
     def __init__(
         self,
         api_key: str,
-        account_id: str,
         base_url: str = "https://api.fireworks.ai",
         inference_url: str | None = None,
         hotload_api_url: str | None = None,
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
+        **kwargs,
     ):
+        if "account_id" in kwargs:
+            raise ValueError(
+                "account_id is no longer accepted. The account is now automatically "
+                "resolved from your API key. Please remove the account_id argument."
+            )
         super().__init__(
             api_key=api_key,
-            account_id=account_id,
             base_url=base_url,
             additional_headers=additional_headers,
             verify_ssl=verify_ssl,

@@ -66,13 +66,12 @@ class _RestClient:
     def __init__(
         self,
         api_key: str,
-        account_id: str | None = None,
         base_url: str = "https://api.fireworks.ai",
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
     ):
         self.api_key = api_key
-        self.account_id = account_id
+        self._account_id: str | None = None
         self.base_url = base_url.rstrip("/")
         self.additional_headers = additional_headers
         self._verify_ssl_override = verify_ssl
@@ -81,6 +80,40 @@ class _RestClient:
         )
         self._sync_client = _make_sync_client(self._base_verify)
         self._async_client: httpx.AsyncClient | None = None
+
+    @property
+    def account_id(self) -> str:
+        """The Fireworks account ID, auto-resolved from the API key on first access."""
+        if self._account_id is None:
+            self._account_id = self._resolve_account_id()
+        return self._account_id
+
+    def _resolve_account_id(self) -> str:
+        """Resolve account ID by calling GET /v1/accounts with the current API key."""
+        resp = self._get("/v1/accounts?pageSize=2")
+        resp.raise_for_status()
+        data = resp.json()
+        accounts = data.get("accounts", []) or []
+        if not accounts:
+            raise ValueError(
+                "API key is not associated with any Fireworks account. "
+                "Verify your API key is valid at: https://fireworks.ai/account/api-keys"
+            )
+        if len(accounts) > 1:
+            ids = [a.get("name", "").removeprefix("accounts/") for a in accounts]
+            raise ValueError(
+                f"API key has access to multiple accounts: {ids}. "
+                "This is not supported for firetitan training."
+            )
+        name = accounts[0].get("name", "")
+        account_id = name.removeprefix("accounts/")
+        if not account_id:
+            raise ValueError(
+                "Could not parse account ID from API response. "
+                f"Got account name: '{name}'"
+            )
+        logger.info("Auto-resolved account ID: %s", account_id)
+        return account_id
 
     def _verify_for_url(self, url: str) -> bool:
         if self._verify_ssl_override is not None:

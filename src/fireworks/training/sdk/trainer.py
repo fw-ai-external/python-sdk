@@ -188,10 +188,7 @@ class TrainerJobManager(_RestClient):
 
     Example::
 
-        manager = TrainerJobManager(
-            api_key="...",
-            account_id="...",
-        )
+        manager = TrainerJobManager(api_key="...")
 
         # Create and wait for a new job
         endpoint = manager.create_and_wait(config)
@@ -206,14 +203,18 @@ class TrainerJobManager(_RestClient):
     def __init__(
         self,
         api_key: str,
-        account_id: str,
         base_url: str = "https://api.fireworks.ai",
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
+        **kwargs,
     ):
+        if "account_id" in kwargs:
+            raise ValueError(
+                "account_id is no longer accepted. The account is now automatically "
+                "resolved from your API key. Please remove the account_id argument."
+            )
         super().__init__(
             api_key=api_key,
-            account_id=account_id,
             base_url=base_url,
             additional_headers=additional_headers,
             verify_ssl=verify_ssl,

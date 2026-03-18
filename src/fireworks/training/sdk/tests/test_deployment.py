@@ -19,12 +19,12 @@ from fireworks.training.sdk._rest_client import _should_verify_ssl
 def mgr():
     manager = DeploymentManager(
         api_key="test-key",
-        account_id="test-acct",
         base_url="https://api.example.com",
         inference_url="https://inference.example.com",
         hotload_api_url="https://hotload.example.com",
         additional_headers={"X-Secret": "s"},
     )
+    manager._account_id = "test-acct"
     yield manager
     manager.close()
 
