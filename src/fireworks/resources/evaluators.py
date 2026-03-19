@@ -17,7 +17,7 @@ from ..types import (
     evaluator_get_source_code_endpoint_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -126,9 +126,8 @@ class EvaluatorsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/evaluatorsV2"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluatorsV2",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluatorsV2", account_id=account_id),
             body=maybe_transform(
                 {
                     "evaluator": evaluator,
@@ -189,9 +188,10 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             body=maybe_transform(
                 {
                     "commit_hash": commit_hash,
@@ -253,9 +253,8 @@ class EvaluatorsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/evaluators"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluators", account_id=account_id),
             page=SyncCursorEvaluators[EvaluatorListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -307,9 +306,10 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -361,9 +361,10 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -411,9 +412,12 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -463,9 +467,12 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -515,9 +522,12 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             body=maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -566,9 +576,12 @@ class EvaluatorsResource(SyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             body=maybe_transform(body, evaluator_validate_upload_params.EvaluatorValidateUploadParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -663,9 +676,8 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/evaluatorsV2"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluatorsV2",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluatorsV2", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "evaluator": evaluator,
@@ -726,9 +738,10 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             body=await async_maybe_transform(
                 {
                     "commit_hash": commit_hash,
@@ -790,9 +803,8 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/evaluators"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluators", account_id=account_id),
             page=AsyncCursorEvaluators[EvaluatorListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -844,9 +856,10 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -898,9 +911,10 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}", account_id=account_id, evaluator_id=evaluator_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -948,9 +962,12 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getBuildLogEndpoint",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -1000,9 +1017,12 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getSourceCodeSignedUrl",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -1052,9 +1072,12 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:getUploadEndpoint",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             body=await async_maybe_transform(
                 {
                     "filename_to_size": filename_to_size,
@@ -1103,9 +1126,12 @@ class AsyncEvaluatorsResource(AsyncAPIResource):
         if not evaluator_id:
             raise ValueError(f"Expected a non-empty value for `evaluator_id` but received {evaluator_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluators/{evaluator_id}:validateUpload",
+                account_id=account_id,
+                evaluator_id=evaluator_id,
+            ),
             body=await async_maybe_transform(body, evaluator_validate_upload_params.EvaluatorValidateUploadParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout

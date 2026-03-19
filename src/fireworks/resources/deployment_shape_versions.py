@@ -6,7 +6,7 @@ import httpx
 
 from ..types import deployment_shape_version_get_params, deployment_shape_version_list_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -100,9 +100,12 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
                 f"Expected a non-empty value for `deployment_shape_id` but received {deployment_shape_id!r}"
             )
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions",
+                account_id=account_id,
+                deployment_shape_id=deployment_shape_id,
+            ),
             page=SyncCursorDeploymentShapeVersions[DeploymentShapeVersion],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -163,9 +166,13 @@ class DeploymentShapeVersionsResource(SyncAPIResource):
         if not version_id:
             raise ValueError(f"Expected a non-empty value for `version_id` but received {version_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}",
+                account_id=account_id,
+                deployment_shape_id=deployment_shape_id,
+                version_id=version_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -257,9 +264,12 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `deployment_shape_id` but received {deployment_shape_id!r}"
             )
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions",
+                account_id=account_id,
+                deployment_shape_id=deployment_shape_id,
+            ),
             page=AsyncCursorDeploymentShapeVersions[DeploymentShapeVersion],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -320,9 +330,13 @@ class AsyncDeploymentShapeVersionsResource(AsyncAPIResource):
         if not version_id:
             raise ValueError(f"Expected a non-empty value for `version_id` but received {version_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deploymentShapes/{deployment_shape_id}/versions/{version_id}",
+                account_id=account_id,
+                deployment_shape_id=deployment_shape_id,
+                version_id=version_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

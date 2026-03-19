@@ -6,7 +6,7 @@ import httpx
 
 from ..types import lora_get_params, lora_list_params, lora_load_params, lora_update_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -90,9 +90,12 @@ class LoraResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             body=maybe_transform(
                 {
                     "default": default,
@@ -162,9 +165,8 @@ class LoraResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deployedModels"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployedModels", account_id=account_id),
             page=SyncCursorLora[DeployedModel],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -221,9 +223,12 @@ class LoraResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -283,9 +288,8 @@ class LoraResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/deployedModels"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployedModels", account_id=account_id),
             body=maybe_transform(
                 {
                     "default": default,
@@ -339,9 +343,12 @@ class LoraResource(SyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -417,9 +424,12 @@ class AsyncLoraResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             body=await async_maybe_transform(
                 {
                     "default": default,
@@ -489,9 +499,8 @@ class AsyncLoraResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deployedModels"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployedModels", account_id=account_id),
             page=AsyncCursorLora[DeployedModel],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -548,9 +557,12 @@ class AsyncLoraResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -610,9 +622,8 @@ class AsyncLoraResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/deployedModels"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployedModels", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "default": default,
@@ -668,9 +679,12 @@ class AsyncLoraResource(AsyncAPIResource):
         if not deployed_model_id:
             raise ValueError(f"Expected a non-empty value for `deployed_model_id` but received {deployed_model_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/deployedModels/{deployed_model_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployedModels/{deployed_model_id}",
+                account_id=account_id,
+                deployed_model_id=deployed_model_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),

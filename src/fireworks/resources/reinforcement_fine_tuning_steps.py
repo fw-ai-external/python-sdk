@@ -12,7 +12,7 @@ from ..types import (
     reinforcement_fine_tuning_step_execute_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -137,9 +137,8 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/rlorTrainerJobs", account_id=account_id),
             body=maybe_transform(
                 {
                     "aws_s3_config": aws_s3_config,
@@ -226,9 +225,8 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/rlorTrainerJobs", account_id=account_id),
             page=SyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -282,9 +280,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return self._delete(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -330,9 +331,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -383,9 +387,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return self._get(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -433,9 +440,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             body=maybe_transform(
                 body, reinforcement_fine_tuning_step_resume_params.ReinforcementFineTuningStepResumeParams
             ),
@@ -552,9 +562,8 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/rlorTrainerJobs", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "aws_s3_config": aws_s3_config,
@@ -643,9 +652,8 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/rlorTrainerJobs", account_id=account_id),
             page=AsyncCursorReinforcementFineTuningSteps[ReinforcementFineTuningStep],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -699,9 +707,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return await self._delete(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -747,9 +758,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return await self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -800,9 +814,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return await self._get(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -850,9 +867,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
             )
         return await self._post(
-            f"/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:resume",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
             body=await async_maybe_transform(
                 body, reinforcement_fine_tuning_step_resume_params.ReinforcementFineTuningStepResumeParams
             ),

@@ -6,7 +6,7 @@ import httpx
 
 from ..types import user_get_params, user_list_params, user_create_params, user_update_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -85,9 +85,8 @@ class UsersResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users", account_id=account_id),
             body=maybe_transform(
                 {
                     "role": role,
@@ -149,9 +148,8 @@ class UsersResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/users/{user_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users/{user_id}", account_id=account_id, user_id=user_id),
             body=maybe_transform(
                 {
                     "role": role,
@@ -218,9 +216,8 @@ class UsersResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/users"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users", account_id=account_id),
             page=SyncCursorUsers[User],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -277,9 +274,8 @@ class UsersResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users/{user_id}", account_id=account_id, user_id=user_id),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -354,9 +350,8 @@ class AsyncUsersResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "role": role,
@@ -418,9 +413,8 @@ class AsyncUsersResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/users/{user_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users/{user_id}", account_id=account_id, user_id=user_id),
             body=await async_maybe_transform(
                 {
                     "role": role,
@@ -487,9 +481,8 @@ class AsyncUsersResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/users"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users", account_id=account_id),
             page=AsyncCursorUsers[User],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -546,9 +539,8 @@ class AsyncUsersResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/users/{user_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/users/{user_id}", account_id=account_id, user_id=user_id),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,

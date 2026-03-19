@@ -18,7 +18,7 @@ from ..types import (
     deployment_undelete_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -256,9 +256,8 @@ class DeploymentsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/deployments"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployments", account_id=account_id),
             body=maybe_transform(
                 {
                     "base_model": base_model,
@@ -498,9 +497,12 @@ class DeploymentsResource(SyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=maybe_transform(
                 {
                     "base_model": base_model,
@@ -604,9 +606,8 @@ class DeploymentsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deployments"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployments", account_id=account_id),
             page=SyncCursorDeployments[Deployment],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -666,9 +667,12 @@ class DeploymentsResource(SyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -721,9 +725,12 @@ class DeploymentsResource(SyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -768,9 +775,12 @@ class DeploymentsResource(SyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return self._patch(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}:scale"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=maybe_transform({"replica_count": replica_count}, deployment_scale_params.DeploymentScaleParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -810,9 +820,12 @@ class DeploymentsResource(SyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}:undelete"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:undelete",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}:undelete",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=maybe_transform(body, deployment_undelete_params.DeploymentUndeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -1040,9 +1053,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/deployments"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployments", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "base_model": base_model,
@@ -1282,9 +1294,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=await async_maybe_transform(
                 {
                     "base_model": base_model,
@@ -1388,9 +1403,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/deployments"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/deployments", account_id=account_id),
             page=AsyncCursorDeployments[Deployment],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -1450,9 +1464,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -1505,9 +1522,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -1552,9 +1572,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return await self._patch(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}:scale"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}:scale",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=await async_maybe_transform(
                 {"replica_count": replica_count}, deployment_scale_params.DeploymentScaleParams
             ),
@@ -1596,9 +1619,12 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         if not deployment_id:
             raise ValueError(f"Expected a non-empty value for `deployment_id` but received {deployment_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/deployments/{deployment_id}:undelete"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/deployments/{deployment_id}:undelete",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/deployments/{deployment_id}:undelete",
+                account_id=account_id,
+                deployment_id=deployment_id,
+            ),
             body=await async_maybe_transform(body, deployment_undelete_params.DeploymentUndeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
