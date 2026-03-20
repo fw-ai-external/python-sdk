@@ -53,6 +53,9 @@ training = [
   "tiktoken",
   "numpy",
   "wandb",
+  "fsspec",
+  "gcsfs",
+  "s3fs",
 ]
 
 [tool.rye]

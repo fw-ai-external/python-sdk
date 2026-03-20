@@ -17,6 +17,7 @@ import logging
 from enum import Enum
 from dataclasses import dataclass
 
+from fireworks.training.sdk.path import is_cloud_path
 from tinker import types
 from tinker.lib.api_future_impl import _APIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
@@ -51,7 +52,7 @@ def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -
         raise ValueError("source_job_id cannot be empty")
     if not normalized_checkpoint_name:
         raise ValueError("checkpoint_name cannot be empty")
-    if normalized_checkpoint_name.startswith("gs://") or normalized_checkpoint_name.startswith("/"):
+    if is_cloud_path(normalized_checkpoint_name) or normalized_checkpoint_name.startswith("/"):
         raise ValueError("checkpoint_name must be a logical checkpoint name, not a full path")
     return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
 
@@ -275,8 +276,7 @@ class FiretitanTrainingClient(TrainingClient):
             Loadable checkpoint reference suitable for
             ``load_state_with_optimizer()``.
         """
-        # Already a full path -- nothing to resolve
-        if checkpoint_name.startswith("gs://") or checkpoint_name.startswith("/"):
+        if is_cloud_path(checkpoint_name) or checkpoint_name.startswith("/"):
             return checkpoint_name
 
         if source_job_id:

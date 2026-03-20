@@ -37,6 +37,12 @@ from fireworks.training.sdk.deployment import (
     DeploymentSampler,
     SampledCompletion,
 )
+from fireworks.training.sdk.path import (
+    cloud_join,
+    is_cloud_path,
+    open_path,
+    require_fsspec,
+)
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 
 __all__ = [
@@ -60,4 +66,9 @@ __all__ = [
     "TrainerServiceEndpoint",
     "TrainingShapeProfile",
     "validate_output_model_id",
+    # Path utilities (cloud-aware I/O)
+    "cloud_join",
+    "is_cloud_path",
+    "open_path",
+    "require_fsspec",
 ]
