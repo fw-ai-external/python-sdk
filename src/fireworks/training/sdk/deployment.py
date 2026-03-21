@@ -8,6 +8,7 @@ tokenization (token-in, token-out).
 from __future__ import annotations
 
 import time
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, List
 from dataclasses import dataclass
@@ -121,28 +122,24 @@ class DeploymentManager(_RestClient):
         """Construct headers for hotload API requests."""
         return self._headers(
             Authorization=f"Bearer {self.api_key}",
-            **{"fireworks-model": base_model,
-               "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}"},
+            **{
+                "fireworks-model": base_model,
+                "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
+            },
         )
 
     # -- Deployment CRUD -------------------------------------------------------
 
     def _get_deployment(self, deployment_id: str) -> dict | None:
-        path = (
-            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
-        )
+        path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         resp = self._get(path)
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
         return resp.json()
 
-    def _delete_deployment(
-        self, deployment_id: str, ignore_checks: bool = True, hard: bool = True
-    ) -> None:
-        path = (
-            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
-        )
+    def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
+        path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         params = []
         if ignore_checks:
             params.append("ignoreChecks=true")
@@ -371,8 +368,7 @@ class DeploymentManager(_RestClient):
             logger.info("Deleted deployment: %s", deployment_id)
         except Exception as e:
             logger.warning(
-                "Failed to delete deployment %s: %s. "
-                "You can delete it manually in the Fireworks console: %s",
+                "Failed to delete deployment %s: %s. You can delete it manually in the Fireworks console: %s",
                 deployment_id,
                 e,
                 CONSOLE_URL,
@@ -385,9 +381,7 @@ class DeploymentManager(_RestClient):
         remains available for future scale-up, but no GPUs are consumed.
         Useful for cleanup after training completes.
         """
-        path = (
-            f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
-        )
+        path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         body = {"maxReplicaCount": 0, "minReplicaCount": 0}
         try:
             resp = self._patch(path, json=body)
@@ -439,7 +433,11 @@ class DeploymentManager(_RestClient):
         )
 
         resp = self._sync_request(
-            url, method="POST", headers=headers, json=payload, timeout=timeout,
+            url,
+            method="POST",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
         )
         if not resp.is_success:
             error_msg = parse_api_error(resp)
@@ -499,8 +497,7 @@ class DeploymentManager(_RestClient):
                         format_sdk_error(
                             "Unrecognized hotload status response format",
                             f"Expected 'replicas' list, got keys: {list(status.keys())}",
-                            "This may indicate an API version mismatch. "
-                            f"Reach out on Discord for help: {DISCORD_URL}",
+                            f"This may indicate an API version mismatch. Reach out on Discord for help: {DISCORD_URL}",
                             docs_url=DOCS_SDK,
                             show_support=True,
                         )
@@ -518,9 +515,7 @@ class DeploymentManager(_RestClient):
                 elapsed = int(time.time() - start)
 
                 if readiness and current_identity == expected_identity:
-                    logger.info(
-                        "Hotload complete: %s (took %ds)", expected_identity, elapsed
-                    )
+                    logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
                     logger.warning(
@@ -602,7 +597,11 @@ class DeploymentManager(_RestClient):
         }
         try:
             resp = self._sync_request(
-                url, method="POST", headers=headers, json=payload, timeout=10,
+                url,
+                method="POST",
+                headers=headers,
+                json=payload,
+                timeout=10,
             )
             return resp.status_code == 200
         except Exception:
@@ -630,13 +629,14 @@ class DeploymentManager(_RestClient):
         for attempt in range(1, max_retries + 1):
             try:
                 resp = self._sync_request(
-                    completions_url, method="POST", headers=headers,
-                    json=payload, timeout=30,
+                    completions_url,
+                    method="POST",
+                    headers=headers,
+                    json=payload,
+                    timeout=30,
                 )
                 if resp.status_code == 200:
-                    logger.info(
-                        "Inference deployment ready after %d attempt(s)", attempt
-                    )
+                    logger.info("Inference deployment ready after %d attempt(s)", attempt)
                     return True
                 logger.info(
                     "Warmup attempt %d/%d: HTTP %d",
@@ -724,10 +724,14 @@ class DeploymentSampler(_RestClient):
         model: str,
         api_key: str,
         tokenizer: PreTrainedTokenizerBase,
+        max_concurrency: int | None = None,
     ):
         super().__init__(api_key=api_key, base_url=inference_url)
         self.model = model
         self.tokenizer = tokenizer
+        self._concurrency_semaphore: asyncio.Semaphore | None = (
+            asyncio.Semaphore(max_concurrency) if max_concurrency else None
+        )
 
     def _inference_headers(self) -> dict[str, str]:
         """Headers for inference completions requests."""
@@ -748,6 +752,7 @@ class DeploymentSampler(_RestClient):
         HTTP 425 (deployment hot-loading).
         """
         import asyncio
+
         http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
             "model": self.model,
@@ -765,7 +770,10 @@ class DeploymentSampler(_RestClient):
         for hotload_attempt in range(hotload_max_retries + 1):
             t0 = time.time()
             resp = await async_request_with_retries(
-                client.post, url, headers=headers, json=payload,
+                client.post,
+                url,
+                headers=headers,
+                json=payload,
                 timeout=http_timeout,
             )
             elapsed = time.time() - t0
@@ -773,7 +781,9 @@ class DeploymentSampler(_RestClient):
             if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
                 logger.info(
                     "Deployment not ready (HTTP %d), retry %d/%d in %ds...",
-                    resp.status_code, hotload_attempt + 1, hotload_max_retries,
+                    resp.status_code,
+                    hotload_attempt + 1,
+                    hotload_max_retries,
                     int(hotload_retry_interval),
                 )
                 await asyncio.sleep(hotload_retry_interval)
@@ -782,12 +792,13 @@ class DeploymentSampler(_RestClient):
             resp.raise_for_status()
             result = resp.json()
             total_gen = sum(
-                len((c.get("raw_output") or {}).get("completion_token_ids", []))
-                for c in result.get("choices", [])
+                len((c.get("raw_output") or {}).get("completion_token_ids", [])) for c in result.get("choices", [])
             )
             logger.debug(
                 "Completions: prompt=%d, generated=%d tokens, %.1fs",
-                prompt_len, total_gen, elapsed,
+                prompt_len,
+                total_gen,
+                elapsed,
             )
             return result
 
@@ -846,12 +857,16 @@ class DeploymentSampler(_RestClient):
         Transient failures are retried by ``async_completions``.
         """
         import asyncio
+
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
 
         prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
 
         if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
@@ -859,8 +874,14 @@ class DeploymentSampler(_RestClient):
 
         async def _one(idx: int) -> List[SampledCompletion]:
             return await self._do_one_completion(
-                prompt_ids, max_tokens, temperature, max_seq_len,
-                user_requested_logprobs, routing_requested, echo_mode, **kwargs,
+                prompt_ids,
+                max_tokens,
+                temperature,
+                max_seq_len,
+                user_requested_logprobs,
+                routing_requested,
+                echo_mode,
+                **kwargs,
             )
 
         results = await asyncio.gather(*[_one(i) for i in range(n)])
@@ -877,13 +898,26 @@ class DeploymentSampler(_RestClient):
         echo_mode: bool,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
-        result = await self.async_completions(
-            prompt=prompt_ids, max_tokens=max_tokens,
-            temperature=temperature, raw_output=True, **kwargs,
-        )
+        if self._concurrency_semaphore is not None:
+            await self._concurrency_semaphore.acquire()
+        try:
+            result = await self.async_completions(
+                prompt=prompt_ids,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                raw_output=True,
+                **kwargs,
+            )
+        finally:
+            if self._concurrency_semaphore is not None:
+                self._concurrency_semaphore.release()
         return self._parse_completions_result(
-            result, prompt_ids, max_seq_len,
-            user_requested_logprobs, routing_requested, echo_mode,
+            result,
+            prompt_ids,
+            max_seq_len,
+            user_requested_logprobs,
+            routing_requested,
+            echo_mode,
         )
 
     def _parse_completions_result(
@@ -907,8 +941,7 @@ class DeploymentSampler(_RestClient):
                 raise RuntimeError(
                     format_sdk_error(
                         "Deployment did not return raw_output token IDs",
-                        f"The API response is missing completion_token_ids. "
-                        f"Got choice keys: {list(choice.keys())}",
+                        f"The API response is missing completion_token_ids. Got choice keys: {list(choice.keys())}",
                         "Ensure the deployment supports raw_output=True.\n"
                         "  This requires a deployment running a compatible model version.\n"
                         "  Check that the deployment base model matches your training model.",
@@ -917,12 +950,8 @@ class DeploymentSampler(_RestClient):
                     )
                 )
 
-            token_logprobs = (
-                self._extract_logprobs(choice) if user_requested_logprobs else None
-            )
-            routing_matrices = (
-                self._extract_routing_matrices(choice) if routing_requested else None
-            )
+            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
+            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
 
             # With echo=True the API returns P+C tokens in
             # completion_token_ids and logprobs cover all P+C positions.
@@ -931,9 +960,7 @@ class DeploymentSampler(_RestClient):
             # P+C-1 training-aligned entries.
             lp_is_echo = False
             if echo_mode:
-                if len(completion_ids) < len(prompt_ids) or completion_ids[
-                    : len(prompt_ids)
-                ] != list(prompt_ids):
+                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
                     raise RuntimeError(
                         format_sdk_error(
                             "Echo response format mismatch",
