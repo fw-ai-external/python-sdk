@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-alpha.48 (2026-03-21)
+
+Full Changelog: [v1.0.0-alpha.47...v1.0.0-alpha.48](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.47...v1.0.0-alpha.48)
+
+### Features
+
+* **sdk:** add max_concurrency to DeploymentSampler ([#76](https://github.com/fw-ai-external/python-sdk/issues/76)) ([16ae7a9](https://github.com/fw-ai-external/python-sdk/commit/16ae7a9839bfb878ac806adf3deb488aa3500d30))
+
+
+### Bug Fixes
+
+* sanitize endpoint path params ([dc696ac](https://github.com/fw-ai-external/python-sdk/commit/dc696ac6039ec141340a3857ce627246f3d48dcc))
+
 ## 1.0.0-alpha.47 (2026-03-18)
 
 Full Changelog: [v1.0.0-alpha.46...v1.0.0-alpha.47](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.46...v1.0.0-alpha.47)

@@ -6,7 +6,7 @@ import httpx
 
 from ..types import APIKey, api_key_list_params, api_key_create_params, api_key_delete_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -77,9 +77,10 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys", account_id=account_id, user_id=user_id
+            ),
             body=maybe_transform({"api_key": api_key}, api_key_create_params.APIKeyCreateParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -134,9 +135,10 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys", account_id=account_id, user_id=user_id
+            ),
             page=SyncCursorAPIKeys[APIKey],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -191,9 +193,10 @@ class APIKeysResource(SyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete", account_id=account_id, user_id=user_id
+            ),
             body=maybe_transform({"key_id": key_id}, api_key_delete_params.APIKeyDeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -256,9 +259,10 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys", account_id=account_id, user_id=user_id
+            ),
             body=await async_maybe_transform({"api_key": api_key}, api_key_create_params.APIKeyCreateParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -313,9 +317,10 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys", account_id=account_id, user_id=user_id
+            ),
             page=AsyncCursorAPIKeys[APIKey],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -370,9 +375,10 @@ class AsyncAPIKeysResource(AsyncAPIResource):
         if not user_id:
             raise ValueError(f"Expected a non-empty value for `user_id` but received {user_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/users/{user_id}/apiKeys:delete", account_id=account_id, user_id=user_id
+            ),
             body=await async_maybe_transform({"key_id": key_id}, api_key_delete_params.APIKeyDeleteParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout

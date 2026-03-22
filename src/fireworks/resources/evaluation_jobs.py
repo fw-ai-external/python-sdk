@@ -6,7 +6,7 @@ import httpx
 
 from ..types import evaluation_job_get_params, evaluation_job_list_params, evaluation_job_create_params
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -78,9 +78,8 @@ class EvaluationJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/evaluationJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluationJobs", account_id=account_id),
             body=maybe_transform(
                 {
                     "evaluation_job": evaluation_job,
@@ -131,9 +130,8 @@ class EvaluationJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/evaluationJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluationJobs", account_id=account_id),
             page=SyncCursorEvaluationJobs[EvaluationJobListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -185,9 +183,12 @@ class EvaluationJobsResource(SyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -230,9 +231,12 @@ class EvaluationJobsResource(SyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -274,9 +278,12 @@ class EvaluationJobsResource(SyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -337,9 +344,8 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/evaluationJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluationJobs", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "evaluation_job": evaluation_job,
@@ -390,9 +396,8 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/evaluationJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/evaluationJobs", account_id=account_id),
             page=AsyncCursorEvaluationJobs[EvaluationJobListResponse],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -444,9 +449,12 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -489,9 +497,12 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -535,9 +546,12 @@ class AsyncEvaluationJobsResource(AsyncAPIResource):
         if not evaluation_job_id:
             raise ValueError(f"Expected a non-empty value for `evaluation_job_id` but received {evaluation_job_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/evaluationJobs/{evaluation_job_id}:getExecutionLogEndpoint",
+                account_id=account_id,
+                evaluation_job_id=evaluation_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),

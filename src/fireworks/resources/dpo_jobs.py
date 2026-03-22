@@ -6,7 +6,7 @@ import httpx
 
 from ..types import dpo_job_get_params, dpo_job_list_params, dpo_job_create_params, dpo_job_resume_params
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -95,9 +95,8 @@ class DpoJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/dpoJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/dpoJobs", account_id=account_id),
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -170,9 +169,8 @@ class DpoJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/dpoJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/dpoJobs", account_id=account_id),
             page=SyncCursorDpoJobs[DpoJob],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -222,9 +220,10 @@ class DpoJobsResource(SyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return self._delete(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -265,9 +264,10 @@ class DpoJobsResource(SyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -307,9 +307,12 @@ class DpoJobsResource(SyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return self._get(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint",
+                account_id=account_id,
+                dpo_job_id=dpo_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -348,9 +351,10 @@ class DpoJobsResource(SyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             body=maybe_transform(body, dpo_job_resume_params.DpoJobResumeParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -428,9 +432,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/dpoJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/dpoJobs", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -503,9 +506,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/dpoJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/dpoJobs", account_id=account_id),
             page=AsyncCursorDpoJobs[DpoJob],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -555,9 +557,10 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return await self._delete(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -598,9 +601,10 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -640,9 +644,12 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return await self._get(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:getMetricsFileEndpoint",
+                account_id=account_id,
+                dpo_job_id=dpo_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -681,9 +688,10 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         if not dpo_job_id:
             raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:resume", account_id=account_id, dpo_job_id=dpo_job_id
+            ),
             body=await async_maybe_transform(body, dpo_job_resume_params.DpoJobResumeParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout

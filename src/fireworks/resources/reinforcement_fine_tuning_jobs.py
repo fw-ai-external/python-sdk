@@ -12,7 +12,7 @@ from ..types import (
     reinforcement_fine_tuning_job_resume_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
-from .._utils import maybe_transform, async_maybe_transform
+from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
 from .._resource import SyncAPIResource, AsyncAPIResource
 from .._response import (
@@ -131,9 +131,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/reinforcementFineTuningJobs", account_id=account_id),
             body=maybe_transform(
                 {
                     "dataset": dataset,
@@ -221,9 +220,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/reinforcementFineTuningJobs", account_id=account_id),
             page=SyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -277,9 +275,12 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._delete(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -320,9 +321,12 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             body=maybe_transform(
                 body, reinforcement_fine_tuning_job_cancel_params.ReinforcementFineTuningJobCancelParams
             ),
@@ -369,9 +373,12 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -419,9 +426,12 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             body=maybe_transform(
                 body, reinforcement_fine_tuning_job_resume_params.ReinforcementFineTuningJobResumeParams
             ),
@@ -532,9 +542,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return await self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/reinforcementFineTuningJobs", account_id=account_id),
             body=await async_maybe_transform(
                 {
                     "dataset": dataset,
@@ -622,9 +631,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         if not account_id:
             raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
         return self._get_api_list(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template("/v1/accounts/{account_id}/reinforcementFineTuningJobs", account_id=account_id),
             page=AsyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
             options=make_request_options(
                 extra_headers=extra_headers,
@@ -678,9 +686,12 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._delete(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -721,9 +732,12 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:cancel",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             body=await async_maybe_transform(
                 body, reinforcement_fine_tuning_job_cancel_params.ReinforcementFineTuningJobCancelParams
             ),
@@ -770,9 +784,12 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._get(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             options=make_request_options(
                 extra_headers=extra_headers,
                 extra_query=extra_query,
@@ -820,9 +837,12 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                 f"Expected a non-empty value for `reinforcement_fine_tuning_job_id` but received {reinforcement_fine_tuning_job_id!r}"
             )
         return await self._post(
-            f"/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume"
-            if self._client._base_url_overridden
-            else f"https://api.fireworks.ai/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/reinforcementFineTuningJobs/{reinforcement_fine_tuning_job_id}:resume",
+                account_id=account_id,
+                reinforcement_fine_tuning_job_id=reinforcement_fine_tuning_job_id,
+            ),
             body=await async_maybe_transform(
                 body, reinforcement_fine_tuning_job_resume_params.ReinforcementFineTuningJobResumeParams
             ),
