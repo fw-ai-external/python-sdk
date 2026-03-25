@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-alpha.49 (2026-03-25)
+
+Full Changelog: [v1.0.0-alpha.48...v1.0.0-alpha.49](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.48...v1.0.0-alpha.49)
+
+### Features
+
+* streaming-only inference with adaptive concurrency ([#78](https://github.com/fw-ai-external/python-sdk/issues/78)) ([2440a26](https://github.com/fw-ai-external/python-sdk/commit/2440a26704e396c1d33cdb54db3fa1b695d2c049))
+
+
+### Chores
+
+* **ci:** skip lint on metadata-only changes ([d08e381](https://github.com/fw-ai-external/python-sdk/commit/d08e381759b76a9423ba812fe08f9163ff9903ed))
+* **internal:** update gitignore ([2a9b72d](https://github.com/fw-ai-external/python-sdk/commit/2a9b72d81d2cc9554eb88cb57a8ae5e8ae0a49da))
+
 ## 1.0.0-alpha.48 (2026-03-21)
 
 Full Changelog: [v1.0.0-alpha.47...v1.0.0-alpha.48](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.47...v1.0.0-alpha.48)
