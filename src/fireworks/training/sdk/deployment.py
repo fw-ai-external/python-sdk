@@ -29,6 +29,88 @@ from fireworks.training.sdk._rest_client import _RestClient, _should_verify_ssl
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# SSE decoder for streaming completions
+# =============================================================================
+
+
+class _SSEEvent:
+    """A single Server-Sent Event."""
+
+    __slots__ = ("data", "event")
+
+    def __init__(self, data: str = "", event: str | None = None):
+        self.data = data
+        self.event = event
+
+
+class _SSEDecoder:
+    """Minimal async SSE decoder for ``httpx.Response.aiter_bytes``.
+
+    Implements the subset of the `SSE spec`_ used by the Fireworks
+    completions endpoint:
+
+    * ``data:`` fields (single- and multi-line)
+    * ``event:`` fields
+    * Comment lines (``:…``) are skipped
+    * ``[DONE]`` sentinel terminates the stream
+
+    .. _SSE spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
+    """
+
+    def __init__(self) -> None:
+        self._event: str | None = None
+        self._data: list[str] = []
+
+    @staticmethod
+    async def _aiter_chunks(stream: Any) -> Any:
+        """Reassemble raw bytes into SSE chunks (delimited by blank lines)."""
+        buf = b""
+        async for raw in stream.aiter_bytes():
+            for line in raw.splitlines(keepends=True):
+                buf += line
+                if buf.endswith((b"\r\r", b"\n\n", b"\r\n\r\n")):
+                    yield buf
+                    buf = b""
+        if buf:
+            yield buf
+
+    async def aiter_events(self, response: Any) -> Any:
+        """Yield :class:`_SSEEvent` objects from an ``httpx.Response``."""
+        async for chunk in self._aiter_chunks(response):
+            for raw_line in chunk.splitlines():
+                line = raw_line.decode("utf-8")
+                event = self._decode_line(line)
+                if event is not None:
+                    yield event
+
+    def _decode_line(self, line: str) -> _SSEEvent | None:
+        # Blank line → dispatch accumulated event.
+        if not line:
+            if not self._data and self._event is None:
+                return None
+            event = _SSEEvent(data="\n".join(self._data), event=self._event)
+            self._data = []
+            self._event = None
+            return event
+
+        # Comment line.
+        if line.startswith(":"):
+            return None
+
+        field, _, value = line.partition(":")
+        if value.startswith(" "):
+            value = value[1:]
+
+        if field == "data":
+            self._data.append(value)
+        elif field == "event":
+            self._event = value
+
+        return None
+
+
 DEFAULT_DELTA_COMPRESSION = "arc_v2"
 DEFAULT_CHECKSUM_FORMAT = "alder32"
 
@@ -47,7 +129,17 @@ class DeploymentInfo:
 
 @dataclass
 class DeploymentConfig:
-    """Configuration for creating/managing a Fireworks deployment."""
+    """Configuration for creating/managing a Fireworks deployment.
+
+    Two creation paths:
+
+    * **Shape path** (``deployment_shape`` set): accelerator type, count,
+      precision, and world size are derived from the shape.  Do not set
+      ``accelerator_type`` -- the server rejects it.
+    * **Manual path** (``deployment_shape`` is ``None``): ``accelerator_type``
+      is required (server rejects ``UNSPECIFIED``).  Defaults to
+      ``NVIDIA_H200_141GB``.
+    """
 
     deployment_id: str
     base_model: str
@@ -56,6 +148,8 @@ class DeploymentConfig:
     min_replica_count: int = 0
     max_replica_count: int = 1
     accelerator_type: str = "NVIDIA_H200_141GB"
+    """Required for manual-path deployments (server has no default).
+    Ignored when ``deployment_shape`` is set."""
     hot_load_bucket_type: str | None = "FW_HOSTED"
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
@@ -169,7 +263,7 @@ class DeploymentManager(_RestClient):
             body["hotLoadBucketType"] = config.hot_load_bucket_type
         if config.deployment_shape:
             body["deploymentShape"] = config.deployment_shape
-        if config.accelerator_type:
+        else:
             body["acceleratorType"] = config.accelerator_type
         if config.extra_args:
             flat = []
@@ -668,6 +762,58 @@ class DeploymentManager(_RestClient):
 
 
 @dataclass
+class ServerMetrics:
+    """Server-side metrics extracted from response headers.
+
+    Available on dedicated deployments.  Fields are ``None`` when the
+    header is absent (e.g. serverless deployments).
+    """
+
+    num_concurrent_requests: int | None = None
+    prefill_queue_duration: float | None = None
+    generation_queue_duration: float | None = None
+    server_ttft: float | None = None
+    cached_prompt_tokens: int | None = None
+    prompt_tokens: int | None = None
+    server_processing_time: float | None = None
+    client_ttft: float | None = None
+    """Client-measured time-to-first-token (seconds).  Only set for streaming."""
+
+    @staticmethod
+    def from_headers(headers: dict[str, str], client_ttft: float | None = None) -> "ServerMetrics":
+        """Parse server metrics from HTTP response headers."""
+
+        def _float(key: str) -> float | None:
+            v = headers.get(key)
+            if v is None:
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+
+        def _int(key: str) -> int | None:
+            v = headers.get(key)
+            if v is None:
+                return None
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return None
+
+        return ServerMetrics(
+            num_concurrent_requests=_int("num-concurrent-requests"),
+            prefill_queue_duration=_float("prefill-queue-duration"),
+            generation_queue_duration=_float("generation-queue-duration"),
+            server_ttft=_float("server-time-to-first-token"),
+            cached_prompt_tokens=_int("cached-prompt-tokens"),
+            prompt_tokens=_int("prompt-tokens"),
+            server_processing_time=_float("server-processing-time"),
+            client_ttft=client_ttft,
+        )
+
+
+@dataclass
 class SampledCompletion:
     """A single sampled completion with tokenized representation.
 
@@ -724,34 +870,60 @@ class DeploymentSampler(_RestClient):
         model: str,
         api_key: str,
         tokenizer: PreTrainedTokenizerBase,
-        max_concurrency: int | None = None,
+        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        max_concurrency: int | None = None,  # TODO: remove after deprecation period
     ):
         super().__init__(api_key=api_key, base_url=inference_url)
         self.model = model
         self.tokenizer = tokenizer
-        self._concurrency_semaphore: asyncio.Semaphore | None = (
-            asyncio.Semaphore(max_concurrency) if max_concurrency else None
-        )
+        self._recent_metrics: list[ServerMetrics] = []
+
+        if max_concurrency is not None:
+            import warnings
+            warnings.warn(
+                "max_concurrency is deprecated and will be removed in a future release. "
+                "Use concurrency_controller=FixedConcurrencyController(max_concurrency) "
+                "or AdaptiveConcurrencyController() instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if concurrency_controller is None:
+                concurrency_controller = FixedConcurrencyController(max_concurrency)
+
+        self._concurrency_controller = concurrency_controller
 
     def _inference_headers(self) -> dict[str, str]:
         """Headers for inference completions requests."""
         return self._headers(Authorization=f"Bearer {self.api_key}")
 
-    async def async_completions(
+    _HOTLOAD_RETRY_INTERVAL_S = 5.0
+    _HOTLOAD_MAX_RETRIES = 10
+
+    async def async_completions_stream(
         self,
         prompt: list[int],
         max_tokens: int = 1024,
         temperature: float = 1.0,
-        hotload_retry_interval: float = 30.0,
-        hotload_max_retries: int = 10,
+        hotload_retry_interval: float = _HOTLOAD_RETRY_INTERVAL_S,
+        hotload_max_retries: int = _HOTLOAD_MAX_RETRIES,
         **kwargs: Any,
-    ) -> dict[str, Any]:
-        """Single n=1 async completions request.
+    ) -> tuple[dict[str, Any], ServerMetrics]:
+        """Streaming n=1 async completions request.
 
-        Retries on transient HTTP errors (502, 503, etc.) and on
-        HTTP 425 (deployment hot-loading).
+        Opens an SSE stream, accumulates chunks into the same response
+        format that ``async_completions`` returns, and extracts
+        ``ServerMetrics`` from both:
+
+        * **HTTP response headers** -- available immediately (partial:
+          ``prompt-tokens``, ``cached-prompt-tokens``, ``server-time-to-first-token``).
+        * **``perf_metrics`` in the final SSE chunk** -- available after
+          completion (full timing: ``prefill-queue-duration``,
+          ``generation-queue-duration``, ``num-concurrent-requests``, etc.).
+
+        The request automatically sets ``perf_metrics_in_response=True``
+        so the server includes complete metrics in the last chunk.
         """
-        import asyncio
+        import json as _json
 
         http_timeout = kwargs.pop("http_timeout", 600)
         payload: dict[str, Any] = {
@@ -760,6 +932,8 @@ class DeploymentSampler(_RestClient):
             "n": 1,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "stream": True,
+            "perf_metrics_in_response": True,
             **kwargs,
         }
         url = f"{self.base_url}/inference/v1/completions"
@@ -776,7 +950,6 @@ class DeploymentSampler(_RestClient):
                 json=payload,
                 timeout=http_timeout,
             )
-            elapsed = time.time() - t0
 
             if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
                 logger.info(
@@ -790,17 +963,83 @@ class DeploymentSampler(_RestClient):
                 continue
 
             resp.raise_for_status()
-            result = resp.json()
-            total_gen = sum(
-                len((c.get("raw_output") or {}).get("completion_token_ids", [])) for c in result.get("choices", [])
-            )
+
+            accumulated_text = ""
+            accumulated_logprobs: list[dict] = []
+            finish_reason = None
+            usage_info = None
+            raw_output = None
+            perf_metrics_dict: dict[str, str] | None = None
+            first_token_time: float | None = None
+
+            decoder = _SSEDecoder()
+            async for sse in decoder.aiter_events(resp):
+                if sse.data.startswith("[DONE]"):
+                    break
+
+                try:
+                    chunk = _json.loads(sse.data)
+                except (ValueError, TypeError):
+                    continue
+
+                for choice in chunk.get("choices", []):
+                    text_delta = choice.get("text", "")
+                    if text_delta:
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                        accumulated_text += text_delta
+
+                    lp = choice.get("logprobs")
+                    if lp and isinstance(lp, dict):
+                        content = lp.get("content")
+                        if isinstance(content, list):
+                            accumulated_logprobs.extend(content)
+
+                    fr = choice.get("finish_reason")
+                    if fr:
+                        finish_reason = fr
+
+                    ro = choice.get("raw_output")
+                    if ro:
+                        raw_output = ro
+
+                if "usage" in chunk:
+                    usage_info = chunk["usage"]
+
+                # perf_metrics is patched into the final chunk by the server
+                # (with is_completed=True, so it has full timing data).
+                if "perf_metrics" in chunk:
+                    perf_metrics_dict = chunk["perf_metrics"]
+
+            client_ttft = (first_token_time - t0) if first_token_time else None
+
+            # Build ServerMetrics: prefer perf_metrics from final chunk
+            # (has complete timing), fall back to HTTP headers (partial).
+            metrics_source = perf_metrics_dict or dict(resp.headers)
+            server_metrics = ServerMetrics.from_headers(metrics_source, client_ttft=client_ttft)
+
+            assembled_choice: dict[str, Any] = {
+                "text": accumulated_text,
+                "finish_reason": finish_reason or "stop",
+            }
+            if accumulated_logprobs:
+                assembled_choice["logprobs"] = {"content": accumulated_logprobs}
+            if raw_output:
+                assembled_choice["raw_output"] = raw_output
+            result: dict[str, Any] = {"choices": [assembled_choice]}
+            if usage_info:
+                result["usage"] = usage_info
+
+            elapsed = time.time() - t0
             logger.debug(
-                "Completions: prompt=%d, generated=%d tokens, %.1fs",
+                "Stream completions: prompt=%d, text_len=%d, %.1fs",
                 prompt_len,
-                total_gen,
+                len(accumulated_text),
                 elapsed,
             )
-            return result
+            return result, server_metrics
+
+        raise RuntimeError("Exhausted hotload retries in streaming mode")
 
     @staticmethod
     def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
@@ -850,11 +1089,11 @@ class DeploymentSampler(_RestClient):
         max_seq_len: int | None = None,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
-        """Sample n completions by firing n individual n=1 requests concurrently.
+        """Sample n completions via streaming, firing n individual requests concurrently.
 
-        Each completion is an independent async request, avoiding HTTP/2
-        head-of-line blocking that occurs with large batched n>1 responses.
-        Transient failures are retried by ``async_completions``.
+        Each completion is an independent async streaming request.
+        Server metrics from response headers are fed into the
+        ``AdaptiveConcurrencyController`` (if one was provided).
         """
         import asyncio
 
@@ -887,6 +1126,24 @@ class DeploymentSampler(_RestClient):
         results = await asyncio.gather(*[_one(i) for i in range(n)])
         return [c for batch in results for c in batch]
 
+    async def _acquire_concurrency(self) -> None:
+        """Acquire a concurrency slot from the controller."""
+        if self._concurrency_controller is not None:
+            await self._concurrency_controller.acquire()
+
+    def _release_concurrency(self, server_metrics: ServerMetrics | None = None) -> None:
+        """Release a concurrency slot, feeding metrics to the controller."""
+        if server_metrics is not None:
+            self._recent_metrics.append(server_metrics)
+        if self._concurrency_controller is not None:
+            self._concurrency_controller.release(server_metrics)
+
+    def drain_metrics(self) -> list[ServerMetrics]:
+        """Return and clear all collected ServerMetrics since last drain."""
+        out = list(self._recent_metrics)
+        self._recent_metrics.clear()
+        return out
+
     async def _do_one_completion(
         self,
         prompt_ids: list[int],
@@ -898,10 +1155,10 @@ class DeploymentSampler(_RestClient):
         echo_mode: bool,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
-        if self._concurrency_semaphore is not None:
-            await self._concurrency_semaphore.acquire()
+        await self._acquire_concurrency()
+        server_metrics: ServerMetrics | None = None
         try:
-            result = await self.async_completions(
+            result, server_metrics = await self.async_completions_stream(
                 prompt=prompt_ids,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -909,8 +1166,7 @@ class DeploymentSampler(_RestClient):
                 **kwargs,
             )
         finally:
-            if self._concurrency_semaphore is not None:
-                self._concurrency_semaphore.release()
+            self._release_concurrency(server_metrics)
         return self._parse_completions_result(
             result,
             prompt_ids,
@@ -1001,3 +1257,197 @@ class DeploymentSampler(_RestClient):
             )
 
         return completions
+
+
+# =============================================================================
+# FixedConcurrencyController — static semaphore
+# =============================================================================
+
+
+class FixedConcurrencyController:
+    """Fixed concurrency controller backed by an asyncio.Semaphore.
+
+    Same interface as ``AdaptiveConcurrencyController`` so ``DeploymentSampler``
+    can use either interchangeably.
+    """
+
+    def __init__(self, max_concurrency: int):
+        self._max_concurrency = max_concurrency
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+
+    @property
+    def window_size(self) -> int:
+        return self._max_concurrency
+
+    async def acquire(self) -> None:
+        await self._semaphore.acquire()
+
+    def release(self, metrics: "ServerMetrics | None" = None) -> None:
+        self._semaphore.release()
+
+    def step_completed(self) -> dict[str, float]:
+        return {"window": float(self._max_concurrency)}
+
+
+# =============================================================================
+# AdaptiveConcurrencyController — AIMD-based dynamic concurrency
+# =============================================================================
+
+
+class AdaptiveConcurrencyController:
+    """AIMD concurrency controller with proportional increase.
+
+    Uses ``prefill_queue_duration`` from server response headers as the
+    congestion signal.  When the prefill queue is above the target, the
+    window shrinks (multiplicative decrease).  When below, the window
+    grows proportionally to the headroom (further below target = faster
+    growth), capped at ``_MAX_INCREASE_FACTOR``.
+
+    Compatible with ``DeploymentSampler`` -- pass as ``concurrency_controller``.
+    """
+
+    # -- Internal constants (not user-configurable) --
+    _MAX_INCREASE_FACTOR = 4.0   # Cap proportional increase at 4x base rate.
+    _MIN_PQ_FLOOR = 0.001        # Avoid division by zero in headroom calc.
+    _DEFAULT_INITIAL_WINDOW = 16
+    _DEFAULT_MIN_WINDOW = 1
+    _DEFAULT_MAX_WINDOW = 256
+    _DEFAULT_PQ_TARGET = 0.5     # Prefill queue target in seconds.
+    _DEFAULT_ADDITIVE_INCREASE = 1.0
+    _DEFAULT_MULTIPLICATIVE_DECREASE = 0.5
+    _DEFAULT_EMA_ALPHA = 0.3
+
+    def __init__(
+        self,
+        initial_window: int = _DEFAULT_INITIAL_WINDOW,
+        min_window: int = _DEFAULT_MIN_WINDOW,
+        max_window: int = _DEFAULT_MAX_WINDOW,
+        prefill_queue_target: float = _DEFAULT_PQ_TARGET,
+        additive_increase: float = _DEFAULT_ADDITIVE_INCREASE,
+        multiplicative_decrease: float = _DEFAULT_MULTIPLICATIVE_DECREASE,
+        ema_alpha: float = _DEFAULT_EMA_ALPHA,
+    ):
+        self._window: float = float(initial_window)
+        self._min_window = min_window
+        self._max_window = max_window
+        self._prefill_queue_target = prefill_queue_target
+        self._additive_increase = additive_increase
+        self._multiplicative_decrease = multiplicative_decrease
+        self._ema_alpha = ema_alpha
+
+        self._ema_prefill_queue: float | None = None
+        self._semaphore = asyncio.Semaphore(initial_window)
+
+        self._completed_requests: int = 0
+        self._last_logged_window: int = initial_window
+
+        # Batch-level metrics: collected per-request, aggregated at step boundary.
+        self._step_prefill_queues: list[float] = []
+        self._step_metrics_count: int = 0
+        self._step_cache_hits: int = 0
+        self._step_cache_total: int = 0
+
+    @property
+    def window_size(self) -> int:
+        return max(self._min_window, min(self._max_window, int(self._window)))
+
+    @property
+    def ema_prefill_queue(self) -> float | None:
+        return self._ema_prefill_queue
+
+    async def acquire(self) -> None:
+        await self._semaphore.acquire()
+
+    def release(self, metrics: ServerMetrics | None = None) -> None:
+        """Release a slot and collect metrics.  Window is NOT adjusted here.
+
+        Call :meth:`step_completed` between RL steps to trigger the AIMD
+        adjustment based on the average prefill queue across the step.
+        """
+        self._semaphore.release()
+        self._completed_requests += 1
+        if metrics is None:
+            return
+        if metrics.prefill_queue_duration is not None:
+            self._step_prefill_queues.append(metrics.prefill_queue_duration)
+        self._step_metrics_count += 1
+        if metrics.cached_prompt_tokens is not None:
+            self._step_cache_hits += metrics.cached_prompt_tokens
+        if metrics.prompt_tokens is not None:
+            self._step_cache_total += metrics.prompt_tokens
+
+    def step_completed(self) -> dict[str, float]:
+        """Called between RL steps.  Adjusts window based on the step's
+        average prefill queue duration and returns a summary dict for logging.
+
+        Returns:
+            Dict with step-level metrics (``avg_pq``, ``window``, ``cache_hit_rate``, etc.).
+        """
+        summary: dict[str, float] = {
+            "window": float(self.window_size),
+            "requests": float(self._step_metrics_count),
+        }
+
+        # Compute step-level average prefill queue.
+        if self._step_prefill_queues:
+            avg_pq = sum(self._step_prefill_queues) / len(self._step_prefill_queues)
+            summary["avg_pq"] = avg_pq
+            self._update_window(avg_pq)
+            summary["window_after"] = float(self.window_size)
+
+        if self._step_cache_total > 0:
+            summary["cache_hit_rate"] = self._step_cache_hits / self._step_cache_total
+
+        if self._ema_prefill_queue is not None:
+            summary["ema_pq"] = self._ema_prefill_queue
+
+        logger.info(
+            "AdaptiveConcurrency step: window=%d, reqs=%d, avg_pq=%.3fs, ema_pq=%s, cache=%.1f%%",
+            self.window_size,
+            self._step_metrics_count,
+            summary.get("avg_pq", 0.0),
+            f"{self._ema_prefill_queue:.3f}" if self._ema_prefill_queue is not None else "N/A",
+            summary.get("cache_hit_rate", 0.0) * 100,
+        )
+
+        # Reset per-step accumulators.
+        self._step_prefill_queues.clear()
+        self._step_metrics_count = 0
+        self._step_cache_hits = 0
+        self._step_cache_total = 0
+
+        return summary
+
+    def _update_window(self, avg_prefill_queue: float) -> None:
+        """AIMD adjustment based on step-averaged prefill queue."""
+        if self._ema_prefill_queue is None:
+            self._ema_prefill_queue = avg_prefill_queue
+        else:
+            a = self._ema_alpha
+            self._ema_prefill_queue = a * avg_prefill_queue + (1 - a) * self._ema_prefill_queue
+
+        old_int_window = self.window_size
+
+        if self._ema_prefill_queue > self._prefill_queue_target:
+            self._window *= self._multiplicative_decrease
+        else:
+            # Proportional increase: grow faster when far below target.
+            headroom = self._prefill_queue_target / max(self._ema_prefill_queue, self._MIN_PQ_FLOOR)
+            increase = self._additive_increase * min(headroom, self._MAX_INCREASE_FACTOR)
+            self._window += increase
+
+        self._window = max(float(self._min_window), min(float(self._max_window), self._window))
+        new_int_window = self.window_size
+
+        if new_int_window != old_int_window:
+            self._resize_semaphore(old_int_window, new_int_window)
+
+    def _resize_semaphore(self, old_size: int, new_size: int) -> None:
+        delta = new_size - old_size
+        if delta > 0:
+            for _ in range(delta):
+                self._semaphore.release()
+        elif delta < 0:
+            for _ in range(-delta):
+                if self._semaphore._value > 0:
+                    self._semaphore._value -= 1

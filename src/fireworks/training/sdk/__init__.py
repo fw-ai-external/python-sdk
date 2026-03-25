@@ -31,11 +31,14 @@ from fireworks.training.sdk.trainer import (
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,
     DEFAULT_DELTA_COMPRESSION,
+    ServerMetrics,
     DeploymentInfo,
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
     SampledCompletion,
+    FixedConcurrencyController,
+    AdaptiveConcurrencyController,
 )
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 
@@ -53,7 +56,10 @@ __all__ = [
     "DeploymentInfo",
     "DeploymentManager",
     "DeploymentSampler",
+    "AdaptiveConcurrencyController",
+    "FixedConcurrencyController",
     "SampledCompletion",
+    "ServerMetrics",
     "CreatedTrainerJob",
     "TrainerJobConfig",
     "TrainerJobManager",

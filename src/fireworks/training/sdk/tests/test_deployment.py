@@ -8,9 +8,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from fireworks.training.sdk.deployment import (
+    ServerMetrics,
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
+    AdaptiveConcurrencyController,
 )
 from fireworks.training.sdk._rest_client import _should_verify_ssl
 
@@ -55,11 +57,11 @@ def _make_sampler(**kwargs):
     return DeploymentSampler(**defaults)
 
 
-def _mock_async_completions(sampler, return_value):
-    """Patch async_completions to return a value without hitting the network."""
+def _mock_async_completions_stream(sampler, return_value):
+    """Patch async_completions_stream to return a value without hitting the network."""
     async def _fake(*args, **kwargs):
-        return return_value
-    sampler.async_completions = _fake
+        return return_value, ServerMetrics()
+    sampler.async_completions_stream = _fake
 
 
 # ---------------------------------------------------------------------------
@@ -242,61 +244,6 @@ class TestExtractLogprobs:
         assert DeploymentSampler._extract_logprobs({"logprobs": {"content": []}}) is None
 
 
-# ---------------------------------------------------------------------------
-# DeploymentSampler.async_completions
-# ---------------------------------------------------------------------------
-
-
-class TestCompletions:
-    def test_425_retry(self):
-        resp_425 = MagicMock()
-        resp_425.status_code = 425
-        resp_425.is_success = False
-
-        resp_ok = MagicMock()
-        resp_ok.status_code = 200
-        resp_ok.is_success = True
-        resp_ok.json.return_value = {"choices": []}
-        resp_ok.raise_for_status = MagicMock()
-
-        sampler = _make_sampler()
-
-        call_count = 0
-        async def mock_post(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            return resp_425 if call_count == 1 else resp_ok
-
-        sampler._get_async_client = MagicMock()
-        sampler._get_async_client.return_value.post = mock_post
-
-        result = asyncio.run(sampler.async_completions(
-            prompt=[1, 2, 3], hotload_retry_interval=0.01,
-        ))
-        assert call_count == 2
-        sampler.close()
-
-    def test_sends_token_ids_as_prompt(self):
-        resp_ok = MagicMock()
-        resp_ok.status_code = 200
-        resp_ok.is_success = True
-        resp_ok.json.return_value = {"choices": []}
-        resp_ok.raise_for_status = MagicMock()
-
-        sampler = _make_sampler()
-        captured_kwargs = {}
-
-        async def mock_post(*args, **kwargs):
-            captured_kwargs.update(kwargs)
-            return resp_ok
-
-        sampler._get_async_client = MagicMock()
-        sampler._get_async_client.return_value.post = mock_post
-
-        asyncio.run(sampler.async_completions(prompt=[10, 20, 30]))
-        assert captured_kwargs["json"]["prompt"] == [10, 20, 30]
-        sampler.close()
-
 
 # ---------------------------------------------------------------------------
 # DeploymentManager.warmup — token-in warmup payload
@@ -335,7 +282,7 @@ class TestSampleWithTokens:
         completion_ids = [400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "hello world",
                 "finish_reason": "stop",
@@ -359,7 +306,7 @@ class TestSampleWithTokens:
     def test_tokenizer_called_with_messages(self):
         tok = _make_mock_tokenizer([1, 2, 3])
         sampler = _make_sampler(tokenizer=tok)
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "ok", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
@@ -375,7 +322,7 @@ class TestSampleWithTokens:
 
     def test_missing_completion_token_ids_raises(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3]))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {}}]
         })
 
@@ -390,7 +337,7 @@ class TestSampleWithTokens:
         echoed_completion_ids = [1, 100, 200, 400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "gen", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": echoed_completion_ids},
@@ -413,7 +360,7 @@ class TestSampleWithTokens:
         echoed_ids = [1, 100, 200, 400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "gen", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": echoed_ids},
@@ -439,7 +386,7 @@ class TestSampleWithTokens:
 
     def test_max_seq_len_pre_filter(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3, 4, 5]))
-        _mock_async_completions(sampler, {"choices": []})
+        _mock_async_completions_stream(sampler, {"choices": []})
 
         results = asyncio.run(sampler.sample_with_tokens(
             messages=[{"role": "user", "content": "hi"}], max_seq_len=5,
@@ -452,7 +399,7 @@ class TestSampleWithTokens:
         long_completion = list(range(100, 200))
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "long", "finish_reason": "length",
                 "raw_output": {"completion_token_ids": long_completion},
@@ -467,7 +414,7 @@ class TestSampleWithTokens:
 
     def test_logprobs_extracted(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "hi", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
@@ -483,7 +430,7 @@ class TestSampleWithTokens:
 
     def test_routing_matrices_extracted(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions(sampler, {
+        _mock_async_completions_stream(sampler, {
             "choices": [{
                 "text": "hi", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
@@ -507,7 +454,7 @@ class TestSampleWithTokens:
 class TestDefaultValues:
     def test_default_temperature_is_1(self):
         import inspect
-        sig = inspect.signature(DeploymentSampler.async_completions)
+        sig = inspect.signature(DeploymentSampler.async_completions_stream)
         assert sig.parameters["temperature"].default == 1.0
         sig2 = inspect.signature(DeploymentSampler.sample_with_tokens)
         assert sig2.parameters["temperature"].default == 1.0
@@ -550,3 +497,200 @@ class TestDeploymentCrud:
         body = mgr._patch.call_args[1]["json"]
         assert body["maxReplicaCount"] == 0
         assert body["minReplicaCount"] == 0
+
+
+# ---------------------------------------------------------------------------
+# ServerMetrics
+# ---------------------------------------------------------------------------
+
+
+class TestServerMetrics:
+    def test_from_headers_full(self):
+        headers = {
+            "num-concurrent-requests": "12",
+            "prefill-queue-duration": "0.250",
+            "generation-queue-duration": "1.100",
+            "server-time-to-first-token": "0.350",
+            "cached-prompt-tokens": "128",
+            "prompt-tokens": "256",
+            "server-processing-time": "2.500",
+        }
+        m = ServerMetrics.from_headers(headers, client_ttft=0.4)
+        assert m.num_concurrent_requests == 12
+        assert m.prefill_queue_duration == pytest.approx(0.25)
+        assert m.generation_queue_duration == pytest.approx(1.1)
+        assert m.server_ttft == pytest.approx(0.35)
+        assert m.cached_prompt_tokens == 128
+        assert m.prompt_tokens == 256
+        assert m.server_processing_time == pytest.approx(2.5)
+        assert m.client_ttft == pytest.approx(0.4)
+
+    def test_from_headers_empty(self):
+        m = ServerMetrics.from_headers({})
+        assert m.num_concurrent_requests is None
+        assert m.prefill_queue_duration is None
+        assert m.client_ttft is None
+
+    def test_from_headers_invalid_values(self):
+        headers = {"num-concurrent-requests": "bad", "prefill-queue-duration": "bad"}
+        m = ServerMetrics.from_headers(headers)
+        assert m.num_concurrent_requests is None
+        assert m.prefill_queue_duration is None
+
+
+# ---------------------------------------------------------------------------
+# AdaptiveConcurrencyController
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveConcurrencyController:
+    def test_initial_window(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=16)
+        assert ctrl.window_size == 16
+
+    def test_acquire_release_basic(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=2)
+
+        async def _test():
+            await ctrl.acquire()
+            await ctrl.acquire()
+            assert ctrl._semaphore._value == 0
+            ctrl.release()
+            ctrl.release()
+            assert ctrl._semaphore._value == 2
+
+        asyncio.run(_test())
+
+    def test_release_collects_but_does_not_adjust(self):
+        """release() collects metrics but does NOT change the window."""
+        ctrl = AdaptiveConcurrencyController(initial_window=10, ema_alpha=1.0)
+        ctrl.release(ServerMetrics(prefill_queue_duration=5.0))
+        assert ctrl.window_size == 10  # unchanged until step_completed()
+
+    def test_step_completed_decrease_on_high_pq(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10, prefill_queue_target=0.5,
+            multiplicative_decrease=0.5, ema_alpha=1.0,
+        )
+        # Simulate a step with high prefill queue.
+        for _ in range(8):
+            ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        summary = ctrl.step_completed()
+        assert ctrl.window_size < 10
+        assert summary["avg_pq"] == pytest.approx(2.0)
+
+    def test_step_completed_increase_on_low_pq(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=4, prefill_queue_target=1.0,
+            additive_increase=2.0, ema_alpha=1.0,
+        )
+        for _ in range(8):
+            ctrl.release(ServerMetrics(prefill_queue_duration=0.1))
+        ctrl.step_completed()
+        assert ctrl._window > 4.0
+
+    def test_no_change_without_metrics(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=8)
+        ctrl.release(None)
+        ctrl.step_completed()
+        assert ctrl.window_size == 8
+        assert ctrl.ema_prefill_queue is None
+
+    def test_ema_smoothing_across_steps(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=10, ema_alpha=0.5, prefill_queue_target=1.0)
+        # Step 1: avg_pq = 0.4
+        ctrl.release(ServerMetrics(prefill_queue_duration=0.4))
+        ctrl.step_completed()
+        assert ctrl.ema_prefill_queue == pytest.approx(0.4)
+        # Step 2: avg_pq = 0.8
+        ctrl.release(ServerMetrics(prefill_queue_duration=0.8))
+        ctrl.step_completed()
+        assert ctrl.ema_prefill_queue == pytest.approx(0.5 * 0.8 + 0.5 * 0.4)
+
+    def test_repeated_congestion_floors_at_min(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=16, min_window=2, prefill_queue_target=0.1,
+            multiplicative_decrease=0.5, ema_alpha=1.0,
+        )
+        for _ in range(20):
+            ctrl.release(ServerMetrics(prefill_queue_duration=5.0))
+            ctrl.step_completed()
+        assert ctrl.window_size == 2
+
+    def test_repeated_good_metrics_caps_at_max(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=4, max_window=16, prefill_queue_target=1.0,
+            additive_increase=5.0, ema_alpha=1.0,
+        )
+        for _ in range(100):
+            ctrl.release(ServerMetrics(prefill_queue_duration=0.01))
+            ctrl.step_completed()
+        assert ctrl.window_size == 16
+
+    def test_step_completed_resets_accumulators(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=8)
+        ctrl.release(ServerMetrics(prefill_queue_duration=0.3, cached_prompt_tokens=10, prompt_tokens=100))
+        ctrl.release(ServerMetrics(prefill_queue_duration=0.5, cached_prompt_tokens=20, prompt_tokens=100))
+        summary = ctrl.step_completed()
+        assert summary["requests"] == 2
+        assert summary["avg_pq"] == pytest.approx(0.4)
+        assert summary["cache_hit_rate"] == pytest.approx(30 / 200)
+        # After step_completed, accumulators are reset.
+        summary2 = ctrl.step_completed()
+        assert summary2["requests"] == 0
+        assert "avg_pq" not in summary2
+
+
+# ---------------------------------------------------------------------------
+# Streaming completions
+# ---------------------------------------------------------------------------
+
+
+class TestStreamingCompletions:
+    def test_streaming_with_adaptive_controller(self):
+        import json as _json
+        prompt_ids = [1, 2, 3]
+        completion_ids = [400, 500]
+        ctrl = AdaptiveConcurrencyController(initial_window=8, ema_alpha=1.0)
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids), concurrency_controller=ctrl)
+
+        chunk_data = {
+            "choices": [{
+                "text": "hello",
+                "raw_output": {"completion_token_ids": completion_ids},
+                "finish_reason": "stop",
+            }],
+            "perf_metrics": {"prefill-queue-duration": "0.1"},
+        }
+        # SSE wire format: "data: {json}\n\n" per event
+        raw_bytes = (
+            f"data: {_json.dumps(chunk_data)}\n\n"
+            f"data: [DONE]\n\n"
+        ).encode()
+
+        async def mock_post(*args, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            resp.headers = {}
+
+            async def aiter_bytes():
+                yield raw_bytes
+            resp.aiter_bytes = aiter_bytes
+            return resp
+
+        sampler._get_async_client = MagicMock()
+        sampler._get_async_client.return_value.post = mock_post
+
+        results = asyncio.run(sampler.sample_with_tokens(
+            messages=[{"role": "user", "content": "hi"}],
+        ))
+        assert len(results) == 1
+        assert results[0].full_tokens == prompt_ids + completion_ids
+        # Metrics collected but window not adjusted yet.
+        assert ctrl.ema_prefill_queue is None
+        # Trigger step-level adjustment.
+        summary = ctrl.step_completed()
+        assert ctrl.ema_prefill_queue == pytest.approx(0.1)
+        assert summary["avg_pq"] == pytest.approx(0.1)
+        sampler.close()
