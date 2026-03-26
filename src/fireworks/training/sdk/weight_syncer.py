@@ -74,6 +74,8 @@ class WeightSyncer:
     """If True, send a warmup request after each successful hotload."""
     warmup_max_retries: int = 10
     """Max retries for post-hotload warmup (default 10 x 10s = ~100s)."""
+    reset_prompt_cache: bool = True
+    """If True, reset the prompt cache on the deployment after hotloading."""
 
     # Internal state — tracks the delta chain
     base_saved: bool = field(default=False, init=False)
@@ -276,6 +278,7 @@ class WeightSyncer:
                 base_model=self.base_model,
                 snapshot_identity=snapshot_name,
                 incremental_snapshot_metadata=incremental,
+                reset_prompt_cache=self.reset_prompt_cache,
                 timeout_seconds=self.hotload_timeout,
             )
             self.last_timing["hotload_time_s"] = time.time() - t0
@@ -328,6 +331,7 @@ class WeightSyncer:
                     base_model=self.base_model,
                     snapshot_identity=snapshot_name,
                     incremental_snapshot_metadata=incremental,
+                    reset_prompt_cache=self.reset_prompt_cache,
                     timeout_seconds=self.hotload_timeout,
                 )
                 self.last_timing["hotload_time_s"] = time.time() - t1

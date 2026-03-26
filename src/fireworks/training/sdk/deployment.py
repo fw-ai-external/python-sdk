@@ -499,6 +499,7 @@ class DeploymentManager(_RestClient):
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
+        reset_prompt_cache: bool = True,
         timeout: int = 60,
     ) -> dict[str, Any]:
         """Load a weight snapshot onto a deployment via the gateway.
@@ -509,12 +510,13 @@ class DeploymentManager(_RestClient):
             snapshot_identity: Snapshot identity to load.
             incremental_snapshot_metadata: For delta loads — must include
                 previous_snapshot_identity, compression_format, checksum_format.
+            reset_prompt_cache: Whether to reset the prompt cache after loading.
             timeout: Request timeout in seconds.
         """
         headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        payload: dict[str, Any] = {"identity": snapshot_identity}
+        payload: dict[str, Any] = {"identity": snapshot_identity, "reset_prompt_cache": reset_prompt_cache}
         if incremental_snapshot_metadata:
             payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
 
@@ -663,6 +665,7 @@ class DeploymentManager(_RestClient):
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
+        reset_prompt_cache: bool = True,
         timeout_seconds: int = 400,
     ) -> bool:
         """Hotload a snapshot and wait for it to complete. Returns True on success."""
@@ -671,6 +674,7 @@ class DeploymentManager(_RestClient):
             base_model=base_model,
             snapshot_identity=snapshot_identity,
             incremental_snapshot_metadata=incremental_snapshot_metadata,
+            reset_prompt_cache=reset_prompt_cache,
         )
         return self.wait_for_hotload(
             deployment_id=deployment_id,
