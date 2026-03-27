@@ -13,7 +13,6 @@ import time
 import logging
 from typing import Any
 from dataclasses import dataclass
-from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
