@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.51 (2026-03-27)
+
+Full Changelog: [v1.0.0-alpha.50...v1.0.0-alpha.51](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.50...v1.0.0-alpha.51)
+
+### Bug Fixes
+
+* restore missing urlencode import in trainer.py ([#93](https://github.com/fw-ai-external/python-sdk/issues/93)) ([a5b08ba](https://github.com/fw-ai-external/python-sdk/commit/a5b08ba352256218f7cf4c70c83564d7e12639b0))
+
 ## 1.0.0-alpha.50 (2026-03-27)
 
 Full Changelog: [v1.0.0-alpha.49...v1.0.0-alpha.50](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.49...v1.0.0-alpha.50)
