@@ -13,7 +13,7 @@ Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
   - cookbook.algorithms.dpo:  DPOTrainer, DPOConfig
 """
 
-import fireworks.training.sdk._tinker_r3_patch  # noqa: F401
+import fireworks.training.sdk.patches  # noqa: F401
 from fireworks.training.sdk.client import (
     SaveSamplerResult,
     GradAccNormalization,
