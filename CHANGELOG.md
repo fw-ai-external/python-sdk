@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-alpha.50 (2026-03-27)
+
+Full Changelog: [v1.0.0-alpha.49...v1.0.0-alpha.50](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.49...v1.0.0-alpha.50)
+
+### Features
+
+* **internal:** implement indices array format for query and form serialization ([0024842](https://github.com/fw-ai-external/python-sdk/commit/00248427c59550e1b5c52e19ab8bdf4589ba57af))
+* use account-level checkpoint promotion endpoint ([#88](https://github.com/fw-ai-external/python-sdk/issues/88)) ([7de5386](https://github.com/fw-ai-external/python-sdk/commit/7de538610f2bb0e8b0b2636e7d6d849868b363f2))
+
+
+### Bug Fixes
+
+* add Pydantic discriminator patch to eliminate ModelInput serialization warnings ([#86](https://github.com/fw-ai-external/python-sdk/issues/86)) ([1ffbf79](https://github.com/fw-ai-external/python-sdk/commit/1ffbf79c36fbbea34505672ef7a514c8a05a2b98))
+
 ## 1.0.0-alpha.49 (2026-03-25)
 
 Full Changelog: [v1.0.0-alpha.48...v1.0.0-alpha.49](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.48...v1.0.0-alpha.49)
