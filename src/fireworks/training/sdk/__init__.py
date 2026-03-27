@@ -5,7 +5,8 @@ Training (tinker protocol):
   - FiretitanTrainingClient: adds checkpoint_type and list_checkpoints
 
 Orchestration (Fireworks platform):
-  - TrainerJobManager: trainer job lifecycle (algorithm-agnostic)
+  - FireworksClient: trainer-free operations (promotion, shape resolution)
+  - TrainerJobManager: trainer job lifecycle (extends FireworksClient)
   - DeploymentManager: deployment creation, hotloading, warmup
 
 Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
@@ -24,9 +25,7 @@ from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
     TrainerJobManager,
-    TrainingShapeProfile,
     TrainerServiceEndpoint,
-    validate_output_model_id,
 )
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,
@@ -41,6 +40,11 @@ from fireworks.training.sdk.deployment import (
     AdaptiveConcurrencyController,
 )
 from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.sdk.fireworks_client import (
+    FireworksClient,
+    TrainingShapeProfile,
+    validate_output_model_id,
+)
 
 __all__ = [
     # Training (tinker protocol)
@@ -49,7 +53,16 @@ __all__ = [
     "GradAccNormalization",
     "SaveSamplerResult",
     "WeightSyncer",
-    # Orchestration (Fireworks platform)
+    # Orchestration (Fireworks platform) — trainer-free
+    "FireworksClient",
+    "TrainingShapeProfile",
+    "validate_output_model_id",
+    # Orchestration (Fireworks platform) — trainer lifecycle
+    "CreatedTrainerJob",
+    "TrainerJobConfig",
+    "TrainerJobManager",
+    "TrainerServiceEndpoint",
+    # Orchestration (Fireworks platform) — deployment
     "DEFAULT_CHECKSUM_FORMAT",
     "DEFAULT_DELTA_COMPRESSION",
     "DeploymentConfig",
@@ -60,10 +73,4 @@ __all__ = [
     "FixedConcurrencyController",
     "SampledCompletion",
     "ServerMetrics",
-    "CreatedTrainerJob",
-    "TrainerJobConfig",
-    "TrainerJobManager",
-    "TrainerServiceEndpoint",
-    "TrainingShapeProfile",
-    "validate_output_model_id",
 ]
