@@ -13,7 +13,6 @@ import time
 import logging
 from typing import Any
 from dataclasses import dataclass
-from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
@@ -22,7 +21,7 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
 )
-from fireworks.training.sdk._rest_client import _RestClient
+from fireworks.training.sdk.fireworks_client import FireworksClient
 
 logger = logging.getLogger(__name__)
 
@@ -44,57 +43,6 @@ class CreatedTrainerJob:
 
     job_name: str
     job_id: str
-
-
-@dataclass
-class TrainingShapeProfile:
-    """Resolved training shape profile from the control plane.
-
-    Contains all shape-derived config: region, accelerator, image tag,
-    sharding, deployment shape, etc.  Returned by
-    :meth:`TrainerJobManager.resolve_training_profile`.
-    """
-
-    training_shape_version: str
-    """Versioned training-shape resource name.
-
-    Example:
-    ``accounts/fw/trainingShapes/ts-x/versions/abc123``.
-    """
-    trainer_image_tag: str
-    max_supported_context_length: int
-    node_count: int
-    deployment_shape_version: str
-    deployment_image_tag: str
-    accelerator_type: str
-    accelerator_count: int
-    base_model_weight_precision: str
-    pipeline_parallelism: int = 1
-    """Pipeline parallelism degree from the training shape's sharding scheme."""
-
-    @property
-    def training_shape(self) -> str | None:
-        """Training shape name derived from ``training_shape_version``.
-
-        Strips the ``/versions/...`` suffix, e.g.
-        ``"accounts/fw/trainingShapes/ts-x/versions/1"`` becomes
-        ``"accounts/fw/trainingShapes/ts-x"``.
-        """
-        if not self.training_shape_version:
-            return None
-        return re.sub(r"/versions/[^/]+$", "", self.training_shape_version)
-
-    @property
-    def deployment_shape(self) -> str | None:
-        """Deployment shape name derived from ``deployment_shape_version``.
-
-        Strips the ``/versions/...`` suffix, e.g.
-        ``"accounts/fw/deploymentShapes/ds-x/versions/1"`` becomes
-        ``"accounts/fw/deploymentShapes/ds-x"``.
-        """
-        if not self.deployment_shape_version:
-            return None
-        return re.sub(r"/versions/[^/]+$", "", self.deployment_shape_version)
 
 
 @dataclass
@@ -179,7 +127,7 @@ class TrainerJobConfig:
             raise ValueError("\n".join(errors))
 
 
-class TrainerJobManager(_RestClient):
+class TrainerJobManager(FireworksClient):
     """Manages trainer job lifecycle via Fireworks REST API.
 
     The Fireworks API calls these "RLOR trainer jobs", but they are
@@ -221,109 +169,6 @@ class TrainerJobManager(_RestClient):
         )
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
-
-    # -- Training shape resolution ------------------------------------------------
-
-    def resolve_training_profile(
-        self,
-        training_shape_id: str,
-        **_kwargs,
-    ) -> TrainingShapeProfile:
-        """Fetch the latest validated version of a training shape.
-
-        Reads the latest validated training-shape version and extracts all
-        shape-derived config (region, accelerator, image tag, deployment
-        shape, etc.) from its embedded snapshot. This gives callers a pinned
-        versioned training-shape reference they can pass back when launching
-        validated service-mode jobs.
-
-        Args:
-            training_shape_id: Full training shape resource name, e.g.
-                ``accounts/fireworks/trainingShapes/ts-qwen3-8b-policy``.
-
-        Returns:
-            :class:`TrainingShapeProfile` with all shape-derived fields.
-
-        Raises:
-            ValueError: If ``training_shape_id`` is not a valid shape resource
-                name (must be ``accounts/<acct>/trainingShapes/<shape>``
-                without a ``/versions/`` suffix).
-        """
-        if not re.match(r"^accounts/[^/]+/trainingShapes/[^/]+$", training_shape_id):
-            hint = "Expected: accounts/<account>/trainingShapes/<shape>\n"
-            if "/versions/" in training_shape_id:
-                hint += "  Do not include /versions/<ver> — this method resolves the latest version for you."
-            else:
-                hint += "  Example: accounts/fireworks/trainingShapes/ts-qwen3-8b-policy"
-            raise ValueError(
-                format_sdk_error(
-                    "Invalid training_shape_id format",
-                    f"'{training_shape_id}' is not a valid training shape resource name.",
-                    hint,
-                )
-            )
-        training_shape_name = training_shape_id
-        path = (
-            f"/v1/{training_shape_name}/versions?"
-            f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
-        )
-        resp = self._get(path, timeout=30)
-        if not resp.is_success:
-            error_msg = parse_api_error(resp)
-            show_support = False
-            if resp.status_code == 404:
-                solution = (
-                    f"Training shape '{training_shape_id}' was not found. "
-                    "Verify the training_shape_id is correct and the shape exists."
-                )
-            elif resp.status_code == 403:
-                solution = (
-                    f"Permission denied for training shape '{training_shape_id}'. "
-                    f"Ensure your account owns or has access to this shape."
-                )
-            else:
-                solution = "Verify the training_shape_id and account have the shape registered."
-                show_support = True
-            raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
-                    error_msg,
-                    solution,
-                    docs_url=DOCS_SDK,
-                    show_support=show_support,
-                )
-            )
-        data = resp.json()
-        versions = data.get("trainingShapeVersions", []) or []
-        if not versions:
-            raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to resolve latest validated training shape for '{training_shape_id}'",
-                    "No latest validated training-shape version was returned.",
-                    (
-                        "Validate a training-shape version first, or check that the "
-                        "training_shape_id is correct and visible to your account."
-                    ),
-                    docs_url=DOCS_SDK,
-                    show_support=False,
-                )
-            )
-        version = versions[0]
-        snapshot = version.get("snapshot", {}) or {}
-        sharding = snapshot.get("trainerShardingScheme", {}) or {}
-        pp = int(sharding.get("pipelineParallelism", 1) or 1)
-        return TrainingShapeProfile(
-            training_shape_version=version.get("name", ""),
-            trainer_image_tag=snapshot.get("trainerImageTag", ""),
-            max_supported_context_length=snapshot.get("maxSupportedContextLength", 0),
-            node_count=snapshot.get("nodeCount", 1),
-            deployment_shape_version=snapshot.get("deploymentShapeVersion", ""),
-            deployment_image_tag=snapshot.get("deploymentImageTag", ""),
-            accelerator_type=snapshot.get("acceleratorType", ""),
-            accelerator_count=snapshot.get("acceleratorCount", 0),
-            base_model_weight_precision=snapshot.get("baseModelWeightPrecision", ""),
-            pipeline_parallelism=pp,
-        )
 
     # -- Low-level REST calls --------------------------------------------------
 
@@ -714,105 +559,4 @@ class TrainerJobManager(_RestClient):
                 CONSOLE_URL,
             )
 
-    def promote_checkpoint(
-        self,
-        job_id: str,
-        checkpoint_id: str,
-        output_model_id: str,
-    ) -> dict:
-        """Promote a trainer checkpoint to a Fireworks model.
-
-        Calls the control-plane ``:promote`` endpoint to turn a sampler
-        checkpoint into a deployable model.
-
-        Args:
-            job_id: RLOR trainer job ID that produced the checkpoint.
-            checkpoint_id: Checkpoint identifier (the ``snapshot_name``
-                from :class:`SaveSamplerResult`).
-            output_model_id: Desired model ID for the promoted model.
-                Must be 1-63 chars, lowercase a-z, 0-9, or hyphen.
-
-        Returns:
-            Model dict from the API response (includes ``state``,
-            ``kind``, ``peftDetails``, etc.).
-        """
-        errors = validate_output_model_id(output_model_id)
-        if errors:
-            raise ValueError("\n\n".join(errors))
-
-        path = (
-            f"/v1/accounts/{self.account_id}"
-            f"/rlorTrainerJobs/{job_id}"
-            f"/checkpoints/{checkpoint_id}:promote"
-        )
-        output_model = f"accounts/{self.account_id}/models/{output_model_id}"
-        logger.info(
-            "Promoting checkpoint '%s' -> model '%s'",
-            checkpoint_id,
-            output_model,
-        )
-
-        resp = self._post(path, json={"output_model": output_model}, timeout=300)
-        if not resp.is_success:
-            error_msg = parse_api_error(resp)
-            raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to promote checkpoint '{checkpoint_id}'",
-                    error_msg,
-                    f"Check that the job {job_id} exists and the checkpoint is valid.\n"
-                    f"  Console: {CONSOLE_URL}",
-                    docs_url=DOCS_SDK,
-                )
-            )
-
-        result = resp.json()
-        model = result.get("model", {})
-        state = model.get("state", "UNKNOWN")
-        kind = model.get("kind", "UNKNOWN")
-        logger.info("Promoted! Model state=%s, kind=%s", state, kind)
-
-        peft = model.get("peftDetails", {})
-        if peft:
-            logger.info(
-                "PEFT: base=%s, r=%s, targets=%s",
-                peft.get("baseModel"),
-                peft.get("r"),
-                peft.get("targetModules"),
-            )
-
-        return model
-
-
-_RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
-
-
-def validate_output_model_id(output_model_id: str | None) -> list[str]:
-    """Validate a model ID for checkpoint promotion.
-
-    Returns a list of error strings (empty if valid).
-    """
-    if output_model_id in (None, ""):
-        return []
-
-    problems: list[str] = []
-    if len(output_model_id) > 63:
-        problems.append("must be at most 63 characters")
-    if output_model_id.startswith("-"):
-        problems.append("must not start with '-'")
-    if output_model_id.endswith("-"):
-        problems.append("must not end with '-'")
-    if not _RESOURCE_ID_RE.fullmatch(output_model_id):
-        problems.append("must contain only lowercase a-z, 0-9, and hyphen (-)")
-
-    if problems:
-        return [
-            format_sdk_error(
-                "Invalid output_model_id",
-                f"'{output_model_id}' is not a valid Fireworks model ID.",
-                "Use 1-63 characters of lowercase a-z, 0-9, or hyphen (-).\n"
-                "  Underscores, spaces, slashes, and uppercase letters are not allowed.\n"
-                "  The ID must not start or end with '-'.\n"
-                "  Example: deepmath-qwen3-8b-dev",
-            )
-        ]
-    return []
+    # promote_checkpoint and resolve_training_profile are inherited from FireworksClient.
