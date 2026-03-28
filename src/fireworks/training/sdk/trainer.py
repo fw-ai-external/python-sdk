@@ -260,7 +260,7 @@ class TrainerJobManager(FireworksClient):
         if config.forward_only:
             payload["forwardOnly"] = True
 
-        logger.info("Creating RLOR job: POST %s (model=%s)", f"{self.base_url}{path}", config.base_model)
+        logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
         resp = self._post(path, json=payload, timeout=60)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
