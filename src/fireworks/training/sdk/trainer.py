@@ -8,20 +8,19 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
-import logging
 import re
 import time
-from dataclasses import dataclass
-
+import logging
 from typing import Any
+from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (
-    CONSOLE_URL,
     DOCS_SDK,
+    CONSOLE_URL,
     HTTP_STATUS_HINTS,
-    format_sdk_error,
     parse_api_error,
+    format_sdk_error,
 )
 from fireworks.training.sdk.fireworks_client import FireworksClient
 
