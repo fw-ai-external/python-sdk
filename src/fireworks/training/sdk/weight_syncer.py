@@ -172,8 +172,9 @@ class WeightSyncer:
                         int(time.time() - start),
                     )
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Hotload status not ready yet: %s", e)
+  
             elapsed = int(time.time() - start)
             logger.info("Waiting for hotload manager to initialize (%ds)...", elapsed)
             time.sleep(poll_interval_s)
