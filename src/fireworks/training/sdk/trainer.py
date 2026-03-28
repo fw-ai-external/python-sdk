@@ -8,18 +8,20 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
-import logging
-from typing import Any
 from dataclasses import dataclass
 
+from typing import Any
+from urllib.parse import urlencode
+
 from fireworks.training.sdk.errors import (
-    DOCS_SDK,
     CONSOLE_URL,
+    DOCS_SDK,
     HTTP_STATUS_HINTS,
-    parse_api_error,
     format_sdk_error,
+    parse_api_error,
 )
 from fireworks.training.sdk.fireworks_client import FireworksClient
 
@@ -259,7 +261,7 @@ class TrainerJobManager(FireworksClient):
         if config.forward_only:
             payload["forwardOnly"] = True
 
-        logger.info("Creating RLOR job: POST %s (model=%s)", f"{self.base_url}{path}", config.base_model)
+        logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
         resp = self._post(path, json=payload, timeout=60)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
