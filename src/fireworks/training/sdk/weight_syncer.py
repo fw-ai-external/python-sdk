@@ -29,7 +29,7 @@ Usage::
     # Split save/hotload (for resume ordering: save -> warmup -> hotload)
     snapshot = syncer.save_only("resume-step-0", checkpoint_type="base")
     deploy_mgr.warmup(model)
-    syncer.hotload(snapshot)
+    syncer.hotload(snapshot, checkpoint_type="base")
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ class WeightSyncer:
                     return
             except Exception as e:
                 logger.debug("Hotload status not ready yet: %s", e)
-  
+
             elapsed = int(time.time() - start)
             logger.info("Waiting for hotload manager to initialize (%ds)...", elapsed)
             time.sleep(poll_interval_s)
@@ -257,11 +257,44 @@ class WeightSyncer:
             logger.warning("Save error for '%s': %s.", name, e)
             return None
 
-    def hotload(self, snapshot_name: str) -> bool:
+    def _do_hotload(self, snapshot_name: str, checkpoint_type: str) -> None:
+        """Core hotload logic shared by :meth:`hotload` and :meth:`save_and_hotload`.
+
+        Raises on failure so callers can decide how to handle errors.
+        """
+        self._ensure_deployment_checked()
+        incremental = self._build_incremental_metadata(checkpoint_type)
+        t0 = time.time()
+        ok = self.deploy_mgr.hotload_and_wait(
+            deployment_id=self.deployment_id,
+            base_model=self.base_model,
+            snapshot_identity=snapshot_name,
+            incremental_snapshot_metadata=incremental,
+            reset_prompt_cache=self.reset_prompt_cache,
+            timeout_seconds=self.hotload_timeout,
+        )
+        self.last_timing["hotload_time_s"] = time.time() - t0
+        if not ok:
+            raise RuntimeError(
+                f"Hotload failed for '{snapshot_name}': deployment did not accept snapshot. "
+                f"Check deployment hotLoadBucketUrl and base model match."
+            )
+        self.base_identity = snapshot_name
+        logger.info("Hotload complete: %s", snapshot_name)
+        t1 = time.time()
+        self._warmup_after_hotload()
+        self.last_timing["warmup_time_s"] = time.time() - t1
+
+    def hotload(self, snapshot_name: str, checkpoint_type: str) -> bool:
         """Hotload a previously saved snapshot to the deployment.
 
         Use after :meth:`save_only` when save and hotload need to be
         separated (e.g., with a deployment warmup in between).
+
+        Args:
+            snapshot_name: Snapshot identity returned by :meth:`save_only`.
+            checkpoint_type: Checkpoint type ("base" or "delta").  Must match
+                the type used in the corresponding :meth:`save_only` call.
 
         Returns:
             True on success, False on failure.
@@ -269,29 +302,9 @@ class WeightSyncer:
         self.last_timing = {}
         if not self._hotload_enabled:
             return False
-        self._ensure_deployment_checked()
         try:
-            ckpt_type = "delta" if self.base_identity and self.base_identity != snapshot_name else "base"
-            incremental = self._build_incremental_metadata(ckpt_type)
-            t0 = time.time()
-            ok = self.deploy_mgr.hotload_and_wait(
-                deployment_id=self.deployment_id,
-                base_model=self.base_model,
-                snapshot_identity=snapshot_name,
-                incremental_snapshot_metadata=incremental,
-                reset_prompt_cache=self.reset_prompt_cache,
-                timeout_seconds=self.hotload_timeout,
-            )
-            self.last_timing["hotload_time_s"] = time.time() - t0
-            if ok:
-                self.base_identity = snapshot_name
-                logger.info("Hotload complete: %s", snapshot_name)
-                t1 = time.time()
-                self._warmup_after_hotload()
-                self.last_timing["warmup_time_s"] = time.time() - t1
-            else:
-                logger.warning("Hotload failed for snapshot '%s'.", snapshot_name)
-            return ok
+            self._do_hotload(snapshot_name, checkpoint_type)
+            return True
         except Exception as e:
             logger.warning("Hotload error for '%s': %s.", snapshot_name, e)
             return False
@@ -324,29 +337,8 @@ class WeightSyncer:
             self._mark_first_save_done()
 
             if self._hotload_enabled:
-                self._ensure_deployment_checked()
-                incremental = self._build_incremental_metadata(ckpt_type)
-                t1 = time.time()
-                ok = self.deploy_mgr.hotload_and_wait(
-                    deployment_id=self.deployment_id,
-                    base_model=self.base_model,
-                    snapshot_identity=snapshot_name,
-                    incremental_snapshot_metadata=incremental,
-                    reset_prompt_cache=self.reset_prompt_cache,
-                    timeout_seconds=self.hotload_timeout,
-                )
-                self.last_timing["hotload_time_s"] = time.time() - t1
-                if ok:
-                    self.base_identity = snapshot_name
-                    logger.info("Hotload complete: %s", snapshot_name)
-                    t2 = time.time()
-                    self._warmup_after_hotload()
-                    self.last_timing["warmup_time_s"] = time.time() - t2
-                else:
-                    raise RuntimeError(
-                        f"Hotload failed for '{name}': deployment did not accept snapshot. "
-                        f"Check deployment hotLoadBucketUrl and base model match."
-                    )
+                self._do_hotload(snapshot_name, ckpt_type)
+
             self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name
         except Exception as e:
