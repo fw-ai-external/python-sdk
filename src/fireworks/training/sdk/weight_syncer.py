@@ -174,7 +174,7 @@ class WeightSyncer:
                     return
             except Exception as e:
                 logger.debug("Hotload status not ready yet: %s", e)
-  
+
             elapsed = int(time.time() - start)
             logger.info("Waiting for hotload manager to initialize (%ds)...", elapsed)
             time.sleep(poll_interval_s)
@@ -333,7 +333,7 @@ class WeightSyncer:
             self._mark_first_save_done()
 
             if self._hotload_enabled:
-                self._do_hotload(snapshot_name)
+                self._do_hotload(snapshot_name, ckpt_type)
 
             self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name
