@@ -29,7 +29,7 @@ Usage::
     # Split save/hotload (for resume ordering: save -> warmup -> hotload)
     snapshot = syncer.save_only("resume-step-0", checkpoint_type="base")
     deploy_mgr.warmup(model)
-    syncer.hotload(snapshot)
+    syncer.hotload(snapshot, checkpoint_type="base")
 """
 
 from __future__ import annotations
@@ -285,11 +285,16 @@ class WeightSyncer:
         self._warmup_after_hotload()
         self.last_timing["warmup_time_s"] = time.time() - t1
 
-    def hotload(self, snapshot_name: str, checkpoint_type: str | None = None) -> bool:
+    def hotload(self, snapshot_name: str, checkpoint_type: str) -> bool:
         """Hotload a previously saved snapshot to the deployment.
 
         Use after :meth:`save_only` when save and hotload need to be
         separated (e.g., with a deployment warmup in between).
+
+        Args:
+            snapshot_name: Snapshot identity returned by :meth:`save_only`.
+            checkpoint_type: Checkpoint type ("base" or "delta").  Must match
+                the type used in the corresponding :meth:`save_only` call.
 
         Returns:
             True on success, False on failure.
@@ -297,9 +302,8 @@ class WeightSyncer:
         self.last_timing = {}
         if not self._hotload_enabled:
             return False
-        ckpt_type = checkpoint_type or self._next_checkpoint_type()
         try:
-            self._do_hotload(snapshot_name, ckpt_type)
+            self._do_hotload(snapshot_name, checkpoint_type)
             return True
         except Exception as e:
             logger.warning("Hotload error for '%s': %s.", snapshot_name, e)
