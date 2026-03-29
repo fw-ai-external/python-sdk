@@ -257,14 +257,13 @@ class WeightSyncer:
             logger.warning("Save error for '%s': %s.", name, e)
             return None
 
-    def _do_hotload(self, snapshot_name: str) -> None:
+    def _do_hotload(self, snapshot_name: str, checkpoint_type: str) -> None:
         """Core hotload logic shared by :meth:`hotload` and :meth:`save_and_hotload`.
 
         Raises on failure so callers can decide how to handle errors.
         """
         self._ensure_deployment_checked()
-        ckpt_type = "delta" if self.base_identity and self.base_identity != snapshot_name else "base"
-        incremental = self._build_incremental_metadata(ckpt_type)
+        incremental = self._build_incremental_metadata(checkpoint_type)
         t0 = time.time()
         ok = self.deploy_mgr.hotload_and_wait(
             deployment_id=self.deployment_id,
@@ -286,7 +285,7 @@ class WeightSyncer:
         self._warmup_after_hotload()
         self.last_timing["warmup_time_s"] = time.time() - t1
 
-    def hotload(self, snapshot_name: str) -> bool:
+    def hotload(self, snapshot_name: str, checkpoint_type: str | None = None) -> bool:
         """Hotload a previously saved snapshot to the deployment.
 
         Use after :meth:`save_only` when save and hotload need to be
@@ -298,8 +297,9 @@ class WeightSyncer:
         self.last_timing = {}
         if not self._hotload_enabled:
             return False
+        ckpt_type = checkpoint_type or self._next_checkpoint_type()
         try:
-            self._do_hotload(snapshot_name)
+            self._do_hotload(snapshot_name, ckpt_type)
             return True
         except Exception as e:
             logger.warning("Hotload error for '%s': %s.", snapshot_name, e)
