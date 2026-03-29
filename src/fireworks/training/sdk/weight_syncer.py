@@ -36,10 +36,14 @@ from __future__ import annotations
 
 import time
 import logging
+from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
 
 from fireworks.training.sdk.client import FiretitanTrainingClient
 from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
+
+if TYPE_CHECKING:
+    from fireworks.training.sdk.deployment import DeploymentManager, DeploymentSampler
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +66,7 @@ class WeightSyncer:
     """
 
     policy_client: FiretitanTrainingClient
-    deploy_mgr: object | None = None  # DeploymentManager, but avoid circular import
+    deploy_mgr: DeploymentManager | None = None
     deployment_id: str | None = None
     base_model: str = ""
     hotload_timeout: int = 600
@@ -99,10 +103,10 @@ class WeightSyncer:
         """
         if not self.warmup_after_hotload or not self.deploy_mgr:
             return
-        model = f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
+
         try:
             self.deploy_mgr.warmup(
-                model,
+                self._get_model(),
                 max_retries=self.warmup_max_retries,
                 retry_interval_s=10.0,
             )
@@ -370,3 +374,18 @@ class WeightSyncer:
                 e,
             )
             return False
+
+    def _get_model(self) -> str:
+        """Helper to construct the model name for deployment."""
+        if not self.deploy_mgr or not self.deployment_id:
+            raise ValueError("Deployment manager and deployment ID must be set for hotload operations.")
+        return f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
+
+    def get_deployment_sampler(self) -> DeploymentSampler:
+        """Get the deployment's current sampler"""
+        from fireworks.training.sdk.deployment import DeploymentSampler
+        return DeploymentSampler(
+            inference_url=self.deploy_mgr.inference_url,
+            model=self._get_model(),
+            api_key=self.deploy_mgr.api_key,
+        )

@@ -873,7 +873,7 @@ class DeploymentSampler(_RestClient):
         inference_url: str,
         model: str,
         api_key: str,
-        tokenizer: PreTrainedTokenizerBase,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
         max_concurrency: int | None = None,  # TODO: remove after deprecation period
     ):
@@ -1099,8 +1099,8 @@ class DeploymentSampler(_RestClient):
         Server metrics from response headers are fed into the
         ``AdaptiveConcurrencyController`` (if one was provided).
         """
-        import asyncio
-
+        if self.tokenizer is None:
+            raise ValueError("Tokenizer is required for sample_with_tokens")
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
