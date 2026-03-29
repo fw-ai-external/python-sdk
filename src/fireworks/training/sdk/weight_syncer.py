@@ -29,7 +29,7 @@ Usage::
     # Split save/hotload (for resume ordering: save -> warmup -> hotload)
     snapshot = syncer.save_only("resume-step-0", checkpoint_type="base")
     deploy_mgr.warmup(model)
-    syncer.hotload(snapshot)
+    syncer.hotload(snapshot, checkpoint_type="base")
 """
 
 from __future__ import annotations
@@ -80,8 +80,6 @@ class WeightSyncer:
     # Internal state — tracks the delta chain
     base_saved: bool = field(default=False, init=False)
     base_identity: str | None = field(default=None, init=False)
-    _last_save_checkpoint_type: str | None = field(default=None, init=False)
-    """Checkpoint type used by the most recent :meth:`save_only` call."""
     _deployment_checked: bool = field(default=False, init=False)
     last_timing: dict = field(default_factory=dict, init=False)
     """Timing breakdown from the most recent operation (seconds).
@@ -253,7 +251,6 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
-            self._last_save_checkpoint_type = ckpt_type
             self._mark_first_save_done()
             return snapshot_name
         except Exception as e:
@@ -288,7 +285,7 @@ class WeightSyncer:
         self._warmup_after_hotload()
         self.last_timing["warmup_time_s"] = time.time() - t1
 
-    def hotload(self, snapshot_name: str, checkpoint_type: str | None = None) -> bool:
+    def hotload(self, snapshot_name: str, checkpoint_type: str) -> bool:
         """Hotload a previously saved snapshot to the deployment.
 
         Use after :meth:`save_only` when save and hotload need to be
@@ -296,27 +293,17 @@ class WeightSyncer:
 
         Args:
             snapshot_name: Snapshot identity returned by :meth:`save_only`.
-            checkpoint_type: Checkpoint type ("base" or "delta").  If None,
-                uses the type from the preceding :meth:`save_only` call.
+            checkpoint_type: Checkpoint type ("base" or "delta").  Must match
+                the type used in the corresponding :meth:`save_only` call.
 
         Returns:
             True on success, False on failure.
-
-        Raises:
-            ValueError: If *checkpoint_type* is None and no prior
-                :meth:`save_only` call recorded a type.
         """
         self.last_timing = {}
         if not self._hotload_enabled:
             return False
-        ckpt_type = checkpoint_type or self._last_save_checkpoint_type
-        if ckpt_type is None:
-            raise ValueError(
-                "checkpoint_type is required: no prior save_only() call to infer from. "
-                "Pass checkpoint_type='base' or 'delta' explicitly."
-            )
         try:
-            self._do_hotload(snapshot_name, ckpt_type)
+            self._do_hotload(snapshot_name, checkpoint_type)
             return True
         except Exception as e:
             logger.warning("Hotload error for '%s': %s.", snapshot_name, e)
