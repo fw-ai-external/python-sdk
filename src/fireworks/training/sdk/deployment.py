@@ -151,6 +151,10 @@ class DeploymentConfig:
     """Required for manual-path deployments (server has no default).
     Ignored when ``deployment_shape`` is set."""
     hot_load_bucket_type: str | None = "FW_HOSTED"
+    hot_load_trainer_job: str | None = None
+    """Trainer job whose hot_load_bucket_url this deployment should use.
+    Format: accounts/{account}/rlorTrainerJobs/{job}.
+    When set, the deployment shares the trainer's checkpoint bucket."""
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
@@ -261,6 +265,8 @@ class DeploymentManager(_RestClient):
             body["placement"] = {"region": config.region}
         if config.hot_load_bucket_type:
             body["hotLoadBucketType"] = config.hot_load_bucket_type
+        if config.hot_load_trainer_job:
+            body["hotLoadTrainerJob"] = config.hot_load_trainer_job
         if config.deployment_shape:
             body["deploymentShape"] = config.deployment_shape
         else:
