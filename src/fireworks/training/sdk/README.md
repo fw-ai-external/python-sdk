@@ -11,7 +11,7 @@ It provides trainer/deployment lifecycle APIs, hotload orchestration, and thin T
 | `DeploymentManager` + `DeploymentConfig` | Create/get/delete deployments, hotload snapshots, wait for readiness, warmup. |
 | `DeploymentSampler` | Token-in/token-out completions wrapper with client-side tokenizer and routing matrix extraction. |
 | `FiretitanServiceClient` + `FiretitanTrainingClient` | Tinker-compatible training clients with Fireworks-specific extensions (sampler weights, cross-job resume). |
-| `WeightSyncer` | Save sampler checkpoints and sync them to deployments via delta chain management. |
+| `WeightSyncer` | Save sampler checkpoints and sync them to inference deployments via delta chain management. |
 
 ## Tinker compatibility and extensions
 
@@ -67,7 +67,6 @@ syncer = WeightSyncer(
     base_model="accounts/fireworks/models/qwen3-8b",
 )
 syncer.save_and_hotload("step-1")
-syncer.save_dcp("step-1")
 ```
 
 ## Using training shapes

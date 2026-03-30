@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-alpha.52 (2026-03-30)
+
+Full Changelog: [v1.0.0-alpha.51...v1.0.0-alpha.52](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.51...v1.0.0-alpha.52)
+
+### Features
+
+* add hot_load_trainer_job to DeploymentConfig ([#89](https://github.com/fw-ai-external/python-sdk/issues/89)) ([51d75a3](https://github.com/fw-ai-external/python-sdk/commit/51d75a35c944a1324ba7ec15baef6d827f040ce0))
+* use account-level checkpoint promotion endpoint ([#88](https://github.com/fw-ai-external/python-sdk/issues/88)) ([cd9efe9](https://github.com/fw-ai-external/python-sdk/commit/cd9efe90cbc3a262fe8f897e106028a18c0f5ea4))
+* use account-level checkpoint promotion endpoint ([#88](https://github.com/fw-ai-external/python-sdk/issues/88)) ([f19ae68](https://github.com/fw-ai-external/python-sdk/commit/f19ae68e478d05d1960027efbfa9a26e9e7a3c3c))
+
+
+### Bug Fixes
+
+* WeightSyncer.save_dcp passes invalid timeout kwarg to save_state ([#100](https://github.com/fw-ai-external/python-sdk/issues/100)) ([5a1a386](https://github.com/fw-ai-external/python-sdk/commit/5a1a386f82070aaa6ad1e22922260ef55c27b5e6))
+
 ## 1.0.0-alpha.51 (2026-03-27)
 
 Full Changelog: [v1.0.0-alpha.50...v1.0.0-alpha.51](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.50...v1.0.0-alpha.51)
