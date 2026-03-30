@@ -7,9 +7,6 @@ repeated across training scripts.  Manages:
   - Incremental hotload metadata (compression_format, checksum_format)
   - Error handling with graceful fallback
 
-DCP (resume checkpoints) and sampler/hotload (inference deployment sync) are
-fully decoupled — the syncer provides independent methods for each:
-
 Usage::
 
     syncer = WeightSyncer(
@@ -23,13 +20,14 @@ Usage::
     # Sync weights: save sampler weights + push to deployment
     syncer.save_and_hotload("step-1")
 
-    # DCP: save optimizer state for resume (independent of weight sync)
-    syncer.save_dcp("step-1")
-
     # Split save/hotload (for resume ordering: save -> warmup -> hotload)
     snapshot = syncer.save_only("resume-step-0", checkpoint_type="base")
     deploy_mgr.warmup(model)
-    syncer.hotload(snapshot, checkpoint_type="base")
+    syncer.hotload(snapshot)
+
+DCP (resume checkpoints) are NOT managed here — use
+``FiretitanTrainingClient.save_state(name)`` directly (or the cookbook's
+``save_checkpoint()`` wrapper for checkpoints.jsonl logging).
 """
 
 from __future__ import annotations
@@ -43,7 +41,7 @@ from fireworks.training.sdk.client import FiretitanTrainingClient
 from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
 
 if TYPE_CHECKING:
-    from fireworks.training.sdk.deployment import DeploymentManager, DeploymentSampler
+    from fireworks.training.sdk.deployment import DeploymentManager
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +54,7 @@ class WeightSyncer:
     ``base_saved`` / ``base_identity`` state manually.
 
     Args:
-        policy_client: The training client (for save_weights_for_sampler_ext / save_state).
+        policy_client: The training client (for save_weights_for_sampler_ext).
         deploy_mgr: The deployment manager (for hotload_and_wait).  May be None
             if hotloading is not configured.
         deployment_id: Target deployment for hotload.  None = no hotloading.
@@ -71,8 +69,6 @@ class WeightSyncer:
     base_model: str = ""
     hotload_timeout: int = 600
     first_checkpoint_type: str = "base"
-    dcp_timeout: int = 2700
-    """Timeout in seconds for DCP save_state (default 45 min)."""
     compression_format: str = "arc_v2"
     warmup_after_hotload: bool = True
     """If True, send a warmup request after each successful hotload."""
@@ -354,38 +350,3 @@ class WeightSyncer:
             )
             raise
 
-    def save_dcp(self, name: str) -> bool:
-        """Save DCP checkpoint only (for resume).  No sampler, no hotload.
-
-        Returns True on success, False on failure.
-        """
-        self.last_timing = {}
-        try:
-            logger.info("Saving DCP checkpoint: %s", name)
-            t0 = time.time()
-            self.policy_client.save_state(name, timeout=self.dcp_timeout)
-            self.last_timing["dcp_save_time_s"] = time.time() - t0
-            return True
-        except Exception as e:
-            logger.warning(
-                "Failed to save DCP checkpoint '%s': %s. "
-                "Training continues but you may not be able to resume from this step.",
-                name,
-                e,
-            )
-            return False
-
-    def _get_model(self) -> str:
-        """Helper to construct the model name for deployment."""
-        if not self.deploy_mgr or not self.deployment_id:
-            raise ValueError("Deployment manager and deployment ID must be set for hotload operations.")
-        return f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
-
-    def get_deployment_sampler(self) -> DeploymentSampler:
-        """Get the deployment's current sampler"""
-        from fireworks.training.sdk.deployment import DeploymentSampler
-        return DeploymentSampler(
-            inference_url=self.deploy_mgr.inference_url,
-            model=self._get_model(),
-            api_key=self.deploy_mgr.api_key,
-        )
