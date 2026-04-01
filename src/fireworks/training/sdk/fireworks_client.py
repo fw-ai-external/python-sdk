@@ -90,12 +90,18 @@ class TrainingShapeProfile:
 
     @property
     def deployment_shape(self) -> str | None:
-        """The parent deployment shape name (without /versions/...)."""
-        v = self.deployment_shape_version
-        if not v:
-            return None
-        idx = v.find("/versions/")
-        return v[:idx] if idx != -1 else v
+        """Pinned deployment shape version from the training shape.
+
+        Returns the full versioned resource name (e.g.
+        ``accounts/fw/deploymentShapes/ds-x/versions/1``).
+        The deployment creation API accepts versioned paths and pins
+        to the exact version, avoiding accidental drift to a newer
+        validated version.
+
+        NOTE: always pass versioned paths (with ``/versions/``) to
+        ``DeploymentConfig.deployment_shape`` to ensure version pinning.
+        """
+        return self.deployment_shape_version or None
 
 
 class FireworksClient(_RestClient):

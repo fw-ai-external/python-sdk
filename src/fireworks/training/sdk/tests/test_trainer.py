@@ -10,9 +10,9 @@ from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
     TrainerJobManager,
-    TrainingShapeProfile,
     TrainerServiceEndpoint,
 )
+from fireworks.training.sdk.fireworks_client import TrainingShapeProfile
 
 
 @pytest.fixture
@@ -379,11 +379,11 @@ class TestTrainingShapeProperty:
 
 
 class TestDeploymentShapeProperty:
-    def test_strips_version_suffix(self):
+    def test_returns_versioned_path(self):
         profile = _make_profile(
             deployment_shape_version="accounts/fw/deploymentShapes/ds-x/versions/1",
         )
-        assert profile.deployment_shape == "accounts/fw/deploymentShapes/ds-x"
+        assert profile.deployment_shape == "accounts/fw/deploymentShapes/ds-x/versions/1"
 
     def test_empty_returns_none(self):
         profile = _make_profile(deployment_shape_version="")
