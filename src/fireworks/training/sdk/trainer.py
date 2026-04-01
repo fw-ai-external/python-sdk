@@ -342,6 +342,10 @@ class TrainerJobManager(FireworksClient):
         except Exception:
             return False
 
+    # Minimum interval (seconds) between identical-state polling log lines.
+    # State *changes* are always logged immediately.
+    _POLL_LOG_THROTTLE_S: float = 30.0
+
     def _poll_until_ready(
         self,
         job_id: str,
@@ -352,6 +356,8 @@ class TrainerJobManager(FireworksClient):
         start = time.time()
         service_ready = False
         base_url = self._get_trainer_gateway_url(job_id)
+        last_state = ""
+        last_log_time = 0.0
 
         while time.time() - start < timeout_s:
             job = self.get(job_id)
@@ -385,20 +391,28 @@ class TrainerJobManager(FireworksClient):
                 )
                 return TrainerServiceEndpoint(job_name=job_name, job_id=job_id, base_url=base_url)
 
-            if state == "JOB_STATE_RUNNING":
-                logger.info(
-                    "[%ds] Trainer job %s: state=%s, healthz=waiting",
-                    elapsed,
-                    job_id,
-                    state,
-                )
-            else:
-                logger.info(
-                    "[%ds] Trainer job %s: state=%s",
-                    elapsed,
-                    job_id,
-                    state,
-                )
+            # Log on state change or every _POLL_LOG_THROTTLE_S seconds to
+            # avoid flooding the console with 60+ identical lines (FIR2-1201).
+            now = time.time()
+            state_changed = state != last_state
+            throttle_elapsed = (now - last_log_time) >= self._POLL_LOG_THROTTLE_S
+            if state_changed or throttle_elapsed:
+                if state == "JOB_STATE_RUNNING":
+                    logger.info(
+                        "[%ds] Trainer job %s: state=%s, healthz=waiting",
+                        elapsed,
+                        job_id,
+                        state,
+                    )
+                else:
+                    logger.info(
+                        "[%ds] Trainer job %s: state=%s",
+                        elapsed,
+                        job_id,
+                        state,
+                    )
+                last_state = state
+                last_log_time = now
 
             time.sleep(poll_interval_s)
 
