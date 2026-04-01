@@ -1,12 +1,15 @@
-"""Firetitan Tinker SDK — Thin extensions for full-param training.
+"""Firetitan Tinker SDK — thin extensions for full-param training.
 
-Three additions to the tinker SDK:
+This layer extends the upstream tinker client with:
   1. FiretitanServiceClient.create_training_client() — supports lora_config=None
-  2. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
-  3. FiretitanTrainingClient.list_checkpoints() — firetitan-specific DCP checkpoint listing
+  2. FiretitanTrainingClient.optim_step() — adds grad_accumulation_normalization
+  3. FiretitanTrainingClient.forward_backward() — backfills response_tokens for cross_entropy
+  4. FiretitanTrainingClient.save_state() — supports blocking waits with timeout handling
+  5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
+  6. FiretitanTrainingClient.list_checkpoints() — firetitan-specific DCP checkpoint listing
 
-Everything else (forward, forward_backward, forward_backward_custom, optim_step,
-save_state, load_state, get_tokenizer, etc.) is inherited unchanged from tinker.
+Most other methods (forward, forward_backward_custom, load_state,
+get_tokenizer, etc.) are inherited from tinker.
 """
 
 from __future__ import annotations
@@ -15,16 +18,36 @@ import time
 import uuid
 import logging
 from enum import Enum
+from typing import TypeVar, Callable
 from dataclasses import dataclass
 
 from tinker import types
 from tinker.lib.api_future_impl import _APIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
+from tinker.lib.public_interfaces.api_future import APIFuture
 from tinker.lib.public_interfaces.service_client import ServiceClient
 from tinker.lib.public_interfaces.training_client import TrainingClient
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
+
+
+class _MappedAPIFuture(APIFuture[T]):
+    """Apply a post-processing transform to another API future."""
+
+    def __init__(self, inner: APIFuture[T], transform: Callable[[T], T]):
+        self._inner = inner
+        self._transform = transform
+
+    def result(self, timeout: float | None = None) -> T:
+        return self._transform(self._inner.result(timeout))
+
+    async def result_async(self, timeout: float | None = None) -> T:
+        return self._transform(await self._inner.result_async(timeout))
+
+    def __await__(self):
+        return self.result_async().__await__()
 
 
 class GradAccNormalization(str, Enum):
@@ -94,6 +117,40 @@ def qualify_snapshot_name(session_id: str, name: str) -> str:
     return f"{name}-{session_id}"
 
 
+def _count_response_tokens(data: list[types.Datum]) -> float:
+    """Count response tokens in a cross-entropy batch.
+
+    Prefer non-zero ``weights`` when present, since those mark exactly which
+    shifted target positions contribute to the loss. Fall back to the length of
+    ``target_tokens`` if no weights were supplied.
+    """
+    total = 0.0
+    for datum in data:
+        loss_fn_inputs = datum.loss_fn_inputs
+        weights = loss_fn_inputs.get("weights")
+        if weights is not None:
+            total += float(sum(1 for value in weights.data if value != 0))
+            continue
+
+        target_tokens = loss_fn_inputs.get("target_tokens")
+        if target_tokens is not None:
+            total += float(len(target_tokens.data))
+
+    return total
+
+
+def _add_cross_entropy_response_tokens(
+    output: types.ForwardBackwardOutput,
+    *,
+    data: list[types.Datum],
+) -> types.ForwardBackwardOutput:
+    if "response_tokens" in output.metrics:
+        return output
+
+    output.metrics["response_tokens"] = _count_response_tokens(data)
+    return output
+
+
 # -- SaveSamplerResult ---------------------------------------------------------
 
 
@@ -132,9 +189,11 @@ class FiretitanTrainingClient(TrainingClient):
 
     Overrides:
       - optim_step(): adds ``grad_accumulation_normalization`` parameter
+      - forward_backward(): backfills ``response_tokens`` for ``cross_entropy``
+      - save_state(): supports blocking waits with timeout handling
 
-    All other core methods (forward, forward_backward, forward_backward_custom,
-    load_state_with_optimizer, get_tokenizer) are inherited unchanged from
+    Most other core methods (forward, forward_backward_custom,
+    load_state_with_optimizer, get_tokenizer) are inherited from
     tinker.TrainingClient.
     """
 
@@ -219,6 +278,21 @@ class FiretitanTrainingClient(TrainingClient):
             )
 
         return self.holder.run_coroutine_threadsafe(_optim_step_async())
+
+    def forward_backward(
+        self,
+        data: list[types.Datum],
+        loss_fn: types.LossFnType,
+        loss_fn_config: dict[str, float] | None = None,
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        future = super().forward_backward(data, loss_fn, loss_fn_config)
+        if loss_fn != "cross_entropy":
+            return future
+
+        return _MappedAPIFuture(
+            future,
+            lambda output: _add_cross_entropy_response_tokens(output, data=data),
+        )
 
     def list_checkpoints(self) -> list[str]:
         """List available DCP checkpoints from the trainer.
@@ -357,16 +431,29 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         name: str,
         ttl_seconds: int | None = None,
+        *,
+        timeout: float | None = None,
     ):
         """Save model weights to persistent storage (DCP checkpoint).
 
         Overrides the base ``save_state`` to add checkpoint-name reuse
-        detection. Warns if ``name`` was already used for a DCP checkpoint
-        in this session, then delegates to the parent implementation.
+        detection and a compatibility ``timeout`` keyword used by older
+        cookbook helpers.
+
+        Warns if ``name`` was already used for a DCP checkpoint in this
+        session, then delegates to the parent implementation.
+
+        When ``timeout`` is provided, this method blocks on the returned
+        future before returning it. This preserves the original return type
+        while supporting call sites that expect ``save_state(name, timeout=...)``
+        to wait for completion.
         """
         self._warn_if_name_reused(name, self._saved_state_names, "DCP")
         self._saved_state_names.add(name)
-        return super().save_state(name, ttl_seconds=ttl_seconds)
+        future = super().save_state(name, ttl_seconds=ttl_seconds)
+        if timeout is not None:
+            future.result(timeout=timeout)
+        return future
 
 
 # -- FiretitanServiceClient ----------------------------------------------------

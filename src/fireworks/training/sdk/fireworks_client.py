@@ -51,7 +51,7 @@ class TrainingShapeProfile:
     """Resolved training shape profile from the control plane.
 
     Contains all shape-derived config: region, accelerator, image tag,
-    sharding, deployment shape, etc.  Returned by
+    sharding, deployment shape, trainer mode, etc.  Returned by
     :meth:`FireworksClient.resolve_training_profile`.
     """
 
@@ -67,6 +67,7 @@ class TrainingShapeProfile:
         accelerator_count: int,
         base_model_weight_precision: str,
         pipeline_parallelism: int,
+        trainer_mode: str = "",
     ):
         self.training_shape_version = training_shape_version
         self.trainer_image_tag = trainer_image_tag
@@ -78,6 +79,7 @@ class TrainingShapeProfile:
         self.accelerator_count = accelerator_count
         self.base_model_weight_precision = base_model_weight_precision
         self.pipeline_parallelism = pipeline_parallelism
+        self.trainer_mode = trainer_mode
 
     @property
     def training_shape(self) -> str | None:
@@ -102,6 +104,11 @@ class TrainingShapeProfile:
         ``DeploymentConfig.deployment_shape`` to ensure version pinning.
         """
         return self.deployment_shape_version or None
+
+    @property
+    def supports_lora(self) -> bool:
+        """Whether the validated training shape is LoRA-capable."""
+        return self.trainer_mode == "LORA_TRAINER"
 
 
 class FireworksClient(_RestClient):
@@ -173,7 +180,12 @@ class FireworksClient(_RestClient):
         if not resp.is_success:
             error_msg = parse_api_error(resp)
             show_support = False
-            if resp.status_code == 404:
+            if resp.status_code == 401:
+                solution = (
+                    "The API key was rejected for training APIs. Ensure you are using a "
+                    "training-scoped Fireworks API key; inference-only keys return 401 here."
+                )
+            elif resp.status_code == 404:
                 solution = (
                     f"Training shape '{training_shape_id}' was not found. "
                     "Verify the training_shape_id is correct and the shape exists."
@@ -225,6 +237,7 @@ class FireworksClient(_RestClient):
             accelerator_count=snapshot.get("acceleratorCount", 0),
             base_model_weight_precision=snapshot.get("baseModelWeightPrecision", ""),
             pipeline_parallelism=pp,
+            trainer_mode=snapshot.get("trainerMode", ""),
         )
 
     # -- Checkpoint promotion ----------------------------------------------------

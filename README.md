@@ -15,15 +15,23 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 ## Installation
 
 ```sh
-# install from PyPI
-pip install '--pre fireworks-ai'
+# install the current alpha from PyPI without globally enabling prerelease deps
+pip install 'fireworks-ai>=1.0.0a0'
 ```
 
 For using our Tinker-compatible API for training (GRPO/DPO), install the optional extras:
 
 ```sh
-pip install '--pre fireworks-ai[training]'
+pip install 'fireworks-ai[training]>=1.0.0a0'
 ```
+
+Training SDK calls require a training-scoped Fireworks API key. Inference-only
+keys can still work for completions, but they return HTTP 401 on trainer and
+training-shape endpoints.
+
+The training extra installs a companion `tinker-cookbook` version alongside the
+pinned `tinker` runtime. Avoid upgrading `tinker-cookbook` independently from
+the SDK release unless you are intentionally testing a newer pairing.
 
 > **Note:** The training SDK source lives entirely in
 > [`src/fireworks/training/`](src/fireworks/training/). All other code in this
