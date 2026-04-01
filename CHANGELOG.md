@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.53 (2026-04-01)
+
+Full Changelog: [v1.0.0-alpha.52...v1.0.0-alpha.53](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.52...v1.0.0-alpha.53)
+
+### Bug Fixes
+
+* deployment_shape property returns versioned path ([#102](https://github.com/fw-ai-external/python-sdk/issues/102)) ([74c2c61](https://github.com/fw-ai-external/python-sdk/commit/74c2c61c9b28ec9a03cf5abebfec14f0a1e22baa))
+
 ## 1.0.0-alpha.52 (2026-03-30)
 
 Full Changelog: [v1.0.0-alpha.51...v1.0.0-alpha.52](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.51...v1.0.0-alpha.52)

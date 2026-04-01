@@ -635,9 +635,10 @@ class DeploymentManager(_RestClient):
                     return False
                 else:
                     logger.info(
-                        "Hotload: stage=%s, identity=%s, ready=%s (%ds)",
+                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s (%ds)",
                         stage,
                         current_identity,
+                        expected_identity,
                         readiness,
                         elapsed,
                     )
