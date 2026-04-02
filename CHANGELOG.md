@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.54 (2026-04-01)
+
+Full Changelog: [v1.0.0-alpha.53...v1.0.0-alpha.54](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.53...v1.0.0-alpha.54)
+
+### Bug Fixes
+
+* **training-sdk:** close dogfooding gaps for local loops ([#103](https://github.com/fw-ai-external/python-sdk/issues/103)) ([0907345](https://github.com/fw-ai-external/python-sdk/commit/0907345ba8e2389a2fd02fe81cb521de677c119c))
+
 ## 1.0.0-alpha.53 (2026-04-01)
 
 Full Changelog: [v1.0.0-alpha.52...v1.0.0-alpha.53](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.52...v1.0.0-alpha.53)
