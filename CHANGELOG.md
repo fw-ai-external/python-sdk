@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.55 (2026-04-02)
+
+Full Changelog: [v1.0.0-alpha.54...v1.0.0-alpha.55](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.54...v1.0.0-alpha.55)
+
+### Features
+
+* support versioned paths in resolve_training_profile ([#107](https://github.com/fw-ai-external/python-sdk/issues/107)) ([ae77373](https://github.com/fw-ai-external/python-sdk/commit/ae773738d4719f0aa92b3206df3d0d4939e20b98))
+
 ## 1.0.0-alpha.54 (2026-04-01)
 
 Full Changelog: [v1.0.0-alpha.53...v1.0.0-alpha.54](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.53...v1.0.0-alpha.54)
