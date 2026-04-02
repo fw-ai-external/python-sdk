@@ -214,6 +214,27 @@ class TestPollUntilReady:
         with pytest.raises(TimeoutError, match="not become ready"):
             mgr._poll_until_ready("job-1", "name", timeout_s=5)
 
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
+    @patch.object(TrainerJobManager, "get")
+    def test_deduplicates_identical_poll_logs(self, mock_get, mock_healthz, mock_sleep, mgr, caplog):
+        mock_get.side_effect = [
+            {"state": "JOB_STATE_CREATING", "status": {"message": "Waiting for capacity"}},
+            {"state": "JOB_STATE_CREATING", "status": {"message": "Waiting for capacity"}},
+            {"state": "JOB_STATE_RUNNING"},
+        ]
+
+        with caplog.at_level("INFO"):
+            mgr._poll_until_ready("job-1", "name", timeout_s=10)
+
+        creating_logs = [
+            record.message
+            for record in caplog.records
+            if "JOB_STATE_CREATING" in record.message
+        ]
+        assert len(creating_logs) == 1
+        assert "Waiting for capacity" in creating_logs[0]
+
 
 class TestCreateAndWait:
     @patch.object(TrainerJobManager, "wait_for_ready")
@@ -287,6 +308,7 @@ class TestResolveTrainingProfile:
                         "acceleratorType": "NVIDIA_H100_80GB",
                         "acceleratorCount": 8,
                         "baseModelWeightPrecision": "bfloat16",
+                        "trainerMode": "LORA_TRAINER",
                         "trainerShardingScheme": {
                             "tensorParallelism": 1,
                             "pipelineParallelism": 4,
@@ -305,6 +327,8 @@ class TestResolveTrainingProfile:
         assert profile.max_supported_context_length == 8192
         assert profile.training_shape_version == ("accounts/a/trainingShapes/ts-test/versions/ver-123")
         assert profile.training_shape == "accounts/a/trainingShapes/ts-test"
+        assert profile.trainer_mode == "LORA_TRAINER"
+        assert profile.supports_lora is True
         mgr.close()
 
     def test_rejects_bare_shape_id(self):
@@ -332,6 +356,20 @@ class TestResolveTrainingProfile:
         assert path.startswith("/v1/accounts/fireworks/trainingShapes/ts-test/versions?")
         mgr.close()
 
+    def test_401_reports_training_scoped_key_requirement(self):
+        mgr = TrainerJobManager(api_key="k", base_url="https://x")
+        mgr._account_id = "a"
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 401
+        resp.json.return_value = {"error": {"message": "unauthorized"}}
+        mgr._get = MagicMock(return_value=resp)
+
+        with pytest.raises(RuntimeError, match="training-scoped Fireworks API key"):
+            mgr.resolve_training_profile("accounts/a/trainingShapes/ts-test")
+
+        mgr.close()
+
 
 # ---------------------------------------------------------------------------
 # TrainingShapeProfile.training_shape / deployment_shape
@@ -350,6 +388,7 @@ def _make_profile(**overrides) -> TrainingShapeProfile:
         accelerator_count=8,
         base_model_weight_precision="bfloat16",
         pipeline_parallelism=1,
+        trainer_mode="POLICY_TRAINER",
     )
     defaults.update(overrides)
     return TrainingShapeProfile(**defaults)
@@ -392,6 +431,16 @@ class TestDeploymentShapeProperty:
     def test_no_version_suffix_unchanged(self):
         profile = _make_profile(deployment_shape_version="accounts/fw/deploymentShapes/ds-x")
         assert profile.deployment_shape == "accounts/fw/deploymentShapes/ds-x"
+
+
+class TestSupportsLoraProperty:
+    def test_true_for_lora_trainer_mode(self):
+        profile = _make_profile(trainer_mode="LORA_TRAINER")
+        assert profile.supports_lora is True
+
+    def test_false_for_non_lora_trainer_mode(self):
+        profile = _make_profile(trainer_mode="POLICY_TRAINER")
+        assert profile.supports_lora is False
 
 
 # ---------------------------------------------------------------------------

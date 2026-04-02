@@ -27,6 +27,27 @@ from fireworks.training.sdk.fireworks_client import FireworksClient
 logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
+_POLL_LOG_HEARTBEAT_S = 60.0
+
+
+def _extract_job_status_message(job: dict[str, Any]) -> str:
+    """Extract the best human-readable status detail from a trainer job payload."""
+    for key in ("statusMessage", "message"):
+        value = job.get(key)
+        if value:
+            return str(value)
+
+    status = job.get("status")
+    if isinstance(status, dict):
+        for key in ("message", "statusMessage", "detail", "details"):
+            value = status.get(key)
+            if value:
+                return str(value)
+        return ""
+
+    if status:
+        return str(status)
+    return ""
 
 
 @dataclass
@@ -352,14 +373,17 @@ class TrainerJobManager(FireworksClient):
         start = time.time()
         service_ready = False
         base_url = self._get_trainer_gateway_url(job_id)
+        last_log_signature: tuple[str, str, bool] | None = None
+        last_log_elapsed_s = -_POLL_LOG_HEARTBEAT_S
 
         while time.time() - start < timeout_s:
             job = self.get(job_id)
             state = job.get("state", "")
+            status_message = _extract_job_status_message(job)
             elapsed = int(time.time() - start)
 
             if state == "JOB_STATE_FAILED":
-                msg = job.get("status", {}).get("message", "unknown")
+                msg = status_message or "unknown"
                 raise RuntimeError(
                     format_sdk_error(
                         f"Trainer job {job_id} failed",
@@ -385,20 +409,45 @@ class TrainerJobManager(FireworksClient):
                 )
                 return TrainerServiceEndpoint(job_name=job_name, job_id=job_id, base_url=base_url)
 
-            if state == "JOB_STATE_RUNNING":
-                logger.info(
-                    "[%ds] Trainer job %s: state=%s, healthz=waiting",
-                    elapsed,
-                    job_id,
-                    state,
-                )
-            else:
-                logger.info(
-                    "[%ds] Trainer job %s: state=%s",
-                    elapsed,
-                    job_id,
-                    state,
-                )
+            log_signature = (state, status_message, service_ready)
+            should_log = (
+                log_signature != last_log_signature
+                or elapsed - last_log_elapsed_s >= _POLL_LOG_HEARTBEAT_S
+            )
+            if should_log:
+                if state == "JOB_STATE_RUNNING":
+                    if status_message:
+                        logger.info(
+                            "[%ds] Trainer job %s: state=%s, detail=%s, healthz=waiting",
+                            elapsed,
+                            job_id,
+                            state,
+                            status_message,
+                        )
+                    else:
+                        logger.info(
+                            "[%ds] Trainer job %s: state=%s, healthz=waiting",
+                            elapsed,
+                            job_id,
+                            state,
+                        )
+                elif status_message:
+                    logger.info(
+                        "[%ds] Trainer job %s: state=%s, detail=%s",
+                        elapsed,
+                        job_id,
+                        state,
+                        status_message,
+                    )
+                else:
+                    logger.info(
+                        "[%ds] Trainer job %s: state=%s",
+                        elapsed,
+                        job_id,
+                        state,
+                    )
+                last_log_signature = log_signature
+                last_log_elapsed_s = elapsed
 
             time.sleep(poll_interval_s)
 
