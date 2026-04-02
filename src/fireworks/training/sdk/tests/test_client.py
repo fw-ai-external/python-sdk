@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from tinker import types
 
 from fireworks.training.sdk.client import (
     FiretitanTrainingClient,
@@ -104,6 +105,110 @@ class TestResolveCheckpointPath:
         client = self._make_client()
         result = client.resolve_checkpoint_path("step-2", source_job_id="old-job")
         assert result == "cross_job://old-job/step-2"
+
+
+# ---------------------------------------------------------------------------
+# FiretitanTrainingClient.save_state — timeout compatibility
+# ---------------------------------------------------------------------------
+
+
+class TestSaveState:
+    def _make_client(self):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client._saved_sampler_names = set()
+        client._saved_state_names = set()
+        client.session_id = "test1234"
+        return client
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_timeout_waits_for_future(self, mock_save_state):
+        client = self._make_client()
+        future = MagicMock()
+        mock_save_state.return_value = future
+
+        result = client.save_state("step-1", timeout=30)
+
+        assert result is future
+        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None)
+        future.result.assert_called_once_with(timeout=30)
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_without_timeout_returns_future_immediately(self, mock_save_state):
+        client = self._make_client()
+        future = MagicMock()
+        mock_save_state.return_value = future
+
+        result = client.save_state("step-1")
+
+        assert result is future
+        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None)
+        future.result.assert_not_called()
+
+
+class TestForwardBackward:
+    def _make_client(self):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client._saved_sampler_names = set()
+        client._saved_state_names = set()
+        client.session_id = "test1234"
+        return client
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_cross_entropy_adds_response_tokens_from_weights(self, mock_forward_backward):
+        client = self._make_client()
+        future = MagicMock()
+        future.result.return_value = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 3.0},
+        )
+        mock_forward_backward.return_value = future
+        datum = MagicMock()
+        datum.loss_fn_inputs = {
+            "weights": types.TensorData(data=[0.0, 1.0, 1.0, 0.0], dtype="float32", shape=[4]),
+            "target_tokens": types.TensorData(data=[10, 11, 12, 13], dtype="int64", shape=[4]),
+        }
+
+        result = client.forward_backward([datum], "cross_entropy").result()
+
+        assert result.metrics["response_tokens"] == 2.0
+        mock_forward_backward.assert_called_once_with([datum], "cross_entropy", None)
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_cross_entropy_falls_back_to_target_token_length(self, mock_forward_backward):
+        client = self._make_client()
+        future = MagicMock()
+        future.result.return_value = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 1.0},
+        )
+        mock_forward_backward.return_value = future
+        datum = MagicMock()
+        datum.loss_fn_inputs = {
+            "target_tokens": types.TensorData(data=[10, 11, 12], dtype="int64", shape=[3]),
+        }
+
+        result = client.forward_backward([datum], "cross_entropy").result()
+
+        assert result.metrics["response_tokens"] == 3.0
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_existing_response_tokens_metric_is_preserved(self, mock_forward_backward):
+        client = self._make_client()
+        future = MagicMock()
+        future.result.return_value = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 1.0, "response_tokens": 7.0},
+        )
+        mock_forward_backward.return_value = future
+        datum = MagicMock()
+        datum.loss_fn_inputs = {}
+
+        result = client.forward_backward([datum], "cross_entropy").result()
+
+        assert result.metrics["response_tokens"] == 7.0
 
 
 # ---------------------------------------------------------------------------

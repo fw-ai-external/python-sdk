@@ -69,6 +69,10 @@ syncer = WeightSyncer(
 syncer.save_and_hotload("step-1")
 ```
 
+Training APIs require a training-scoped Fireworks API key. The SDK resolves the
+account automatically from that key, so you should not pass `account_id` to
+`TrainerJobManager`, `DeploymentManager`, or `FireworksClient`.
+
 ## Using training shapes
 
 Two launch paths are supported:
@@ -87,6 +91,9 @@ config = TrainerJobConfig(
     display_name="my-trainer",
     training_shape_ref=profile.training_shape_version,
 )
+
+if profile.supports_lora:
+    print(f"{profile.training_shape} supports LoRA launches")
 ```
 
 ### Manual path
@@ -105,6 +112,33 @@ config = TrainerJobConfig(
 )
 ```
 
+## SFT datum example
+
+Use `ModelInput.from_ints(...)` for token sequences, then convert the full input
+sequence plus weights tensor into a right-shifted training `Datum`:
+
+```python
+import torch
+from tinker.types.model_input import ModelInput
+from tinker_cookbook.supervised.common import datum_from_model_input_weights
+
+tokens = [151644, 8948, 198, 151645]
+weights = torch.tensor([0.0, 0.0, 1.0, 1.0], dtype=torch.float32)
+
+datum = datum_from_model_input_weights(
+    model_input=ModelInput.from_ints(tokens),
+    weights=weights,
+)
+```
+
+For `forward_backward(..., "cross_entropy")`, the Fireworks training SDK adds
+`response_tokens` automatically so you can compute a mean loss directly:
+
+```python
+result = policy.forward_backward([datum], "cross_entropy").result()
+mean_nll = result.metrics["loss:sum"] / max(result.metrics["response_tokens"], 1.0)
+```
+
 ## Error handling and retries
 
 - `errors.py` provides `request_with_retries`, structured error formatting, and status hints.
@@ -113,4 +147,5 @@ config = TrainerJobConfig(
 
 ## Next step
 
-Use this layer directly when building your own algorithm loop, or use `fireworks.training.cookbook` from the standalone cookbook repo for ready-to-run recipes.
+Use this layer directly when building your own algorithm loop, or use the
+standalone cookbook repo for ready-to-run training recipes.

@@ -26,9 +26,12 @@ CONSOLE_URL = "https://app.fireworks.ai/account/home"
 
 HTTP_STATUS_HINTS: dict[int, str] = {
     400: "Check that all request parameters are valid.",
-    401: f"Check your API key. Manage keys at {CONSOLE_URL}",
-    403: "Your account may not have permission for this resource.",
-    404: "The resource was not found. Verify the ID/name is correct.",
+    401: (
+        "Check your API key. Training APIs require a training-scoped Fireworks key; "
+        f"inference-only keys return 401. Manage keys at {CONSOLE_URL}"
+    ),
+    403: "Your key is valid, but it may not have permission for this account or resource.",
+    404: "The resource was not found. Verify the ID/name is correct and belongs to the resolved account.",
     409: "Resource conflict. It may already exist or be in a transitional state.",
     429: f"Rate limited. Wait and retry, or reach out on Discord: {DISCORD_URL}",
     500: f"Internal server error. Try again. If persistent, reach out on Discord: {DISCORD_URL}",

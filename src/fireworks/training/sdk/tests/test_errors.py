@@ -9,6 +9,7 @@ import requests
 
 from fireworks.training.sdk.errors import (
     DISCORD_URL,
+    HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
     request_with_retries,
@@ -64,6 +65,18 @@ class TestFormatSdkError:
         lines = result.split("\n")
         assert lines[3].strip().startswith("Docs:")
         assert lines[4].strip().startswith("Support:")
+
+
+class TestHttpStatusHints:
+    def test_401_mentions_training_scoped_keys(self):
+        hint = HTTP_STATUS_HINTS[401]
+        assert "training-scoped" in hint
+        assert "inference-only" in hint
+
+    def test_403_mentions_valid_key_but_wrong_resource_scope(self):
+        hint = HTTP_STATUS_HINTS[403]
+        assert "key is valid" in hint
+        assert "resource" in hint
 
 
 # ---------------------------------------------------------------------------
