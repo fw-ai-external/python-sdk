@@ -146,36 +146,42 @@ class FireworksClient(_RestClient):
         training_shape_id: str,
         **_kwargs,
     ) -> TrainingShapeProfile:
-        """Fetch the latest validated version of a training shape.
+        """Fetch a training shape version and return its profile.
 
-        Reads the latest validated training-shape version and extracts all
-        shape-derived config (region, accelerator, image tag, deployment
-        shape, etc.) from its embedded snapshot.
+        Accepts either a bare shape path (resolves latest validated version)
+        or a versioned path (fetches that exact version).
 
         Args:
-            training_shape_id: Full training shape resource name, e.g.
-                ``accounts/fireworks/trainingShapes/ts-qwen3-8b-policy``.
+            training_shape_id: Full training shape resource name:
+                - ``accounts/fireworks/trainingShapes/ts-qwen3-8b-policy``
+                  (resolves latest validated)
+                - ``accounts/fireworks/trainingShapes/ts-qwen3-8b-policy/versions/abc``
+                  (fetches exact version)
 
         Returns:
             :class:`TrainingShapeProfile` with all shape-derived fields.
         """
-        if not re.match(r"^accounts/[^/]+/trainingShapes/[^/]+$", training_shape_id):
-            hint = "Expected: accounts/<account>/trainingShapes/<shape>\n"
-            if "/versions/" in training_shape_id:
-                hint += "  Do not include /versions/<ver> — this method resolves the latest version for you."
-            else:
-                hint += "  Example: accounts/fireworks/trainingShapes/ts-qwen3-8b-policy"
+        is_versioned = "/versions/" in training_shape_id
+        if not re.match(
+            r"^accounts/[^/]+/trainingShapes/[^/]+(/versions/[^/]+)?$",
+            training_shape_id,
+        ):
             raise ValueError(
                 format_sdk_error(
                     "Invalid training_shape_id format",
                     f"'{training_shape_id}' is not a valid training shape resource name.",
-                    hint,
+                    "Expected: accounts/<account>/trainingShapes/<shape>[/versions/<ver>]\n"
+                    "  Example: accounts/fireworks/trainingShapes/ts-qwen3-8b-policy",
                 )
             )
-        path = (
-            f"/v1/{training_shape_id}/versions?"
-            f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
-        )
+
+        if is_versioned:
+            path = f"/v1/{training_shape_id}"
+        else:
+            path = (
+                f"/v1/{training_shape_id}/versions?"
+                f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
+            )
         resp = self._get(path, timeout=30)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
@@ -207,22 +213,27 @@ class FireworksClient(_RestClient):
                     show_support=show_support,
                 )
             )
-        data = resp.json()
-        versions = data.get("trainingShapeVersions", []) or []
-        if not versions:
-            raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to resolve latest validated training shape for '{training_shape_id}'",
-                    "No latest validated training-shape version was returned.",
-                    (
-                        "Validate a training-shape version first, or check that the "
-                        "training_shape_id is correct and visible to your account."
-                    ),
-                    docs_url=DOCS_SDK,
-                    show_support=False,
+
+        if is_versioned:
+            version = resp.json()
+        else:
+            data = resp.json()
+            versions = data.get("trainingShapeVersions", []) or []
+            if not versions:
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to resolve latest validated training shape for '{training_shape_id}'",
+                        "No latest validated training-shape version was returned.",
+                        (
+                            "Validate a training-shape version first, or check that the "
+                            "training_shape_id is correct and visible to your account."
+                        ),
+                        docs_url=DOCS_SDK,
+                        show_support=False,
+                    )
                 )
-            )
-        version = versions[0]
+            version = versions[0]
+
         snapshot = version.get("snapshot", {}) or {}
         sharding = snapshot.get("trainerShardingScheme", {}) or {}
         pp = int(sharding.get("pipelineParallelism", 1) or 1)
