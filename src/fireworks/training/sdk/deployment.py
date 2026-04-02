@@ -213,6 +213,7 @@ class DeploymentManager(_RestClient):
         )
         self.inference_url = (inference_url or base_url).rstrip("/")
         self.hotload_api_url = hotload_api_url or base_url
+        self._hotload_reset_prompt_cache_supported: bool | None = None
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
@@ -499,6 +500,21 @@ class DeploymentManager(_RestClient):
 
     # -- Hotload operations ----------------------------------------------------
 
+    @staticmethod
+    def _reset_prompt_cache_unsupported(resp: Any) -> bool:
+        """Return True when the gateway rejects the deprecated field."""
+        if getattr(resp, "status_code", None) != 400:
+            return False
+        parts = [parse_api_error(resp)]
+        text = getattr(resp, "text", None)
+        if text:
+            parts.append(text)
+        message = " ".join(parts).lower()
+        return (
+            "reset_prompt_cache" in message
+            and "extra inputs are not permitted" in message
+        )
+
     def hotload(
         self,
         deployment_id: str,
@@ -522,10 +538,6 @@ class DeploymentManager(_RestClient):
         headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        payload: dict[str, Any] = {"identity": snapshot_identity, "reset_prompt_cache": reset_prompt_cache}
-        if incremental_snapshot_metadata:
-            payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
-
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
         logger.info(
             "Hotloading %s snapshot '%s' to deployment '%s'",
@@ -534,13 +546,41 @@ class DeploymentManager(_RestClient):
             deployment_id,
         )
 
+        include_reset_prompt_cache = self._hotload_reset_prompt_cache_supported is not False
+
+        def _payload(include_reset: bool) -> dict[str, Any]:
+            payload: dict[str, Any] = {"identity": snapshot_identity}
+            if include_reset:
+                payload["reset_prompt_cache"] = reset_prompt_cache
+            if incremental_snapshot_metadata:
+                payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
+            return payload
+
         resp = self._sync_request(
             url,
             method="POST",
             headers=headers,
-            json=payload,
+            json=_payload(include_reset_prompt_cache),
             timeout=timeout,
         )
+        if (
+            not resp.is_success
+            and include_reset_prompt_cache
+            and self._reset_prompt_cache_unsupported(resp)
+        ):
+            logger.info(
+                "Hotload API rejected reset_prompt_cache; retrying without it"
+            )
+            self._hotload_reset_prompt_cache_supported = False
+            resp = self._sync_request(
+                url,
+                method="POST",
+                headers=headers,
+                json=_payload(False),
+                timeout=timeout,
+            )
+        elif resp.is_success and include_reset_prompt_cache:
+            self._hotload_reset_prompt_cache_supported = True
         if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
