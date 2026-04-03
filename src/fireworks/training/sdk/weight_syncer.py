@@ -89,6 +89,14 @@ class WeightSyncer:
     def _hotload_enabled(self) -> bool:
         return self.deployment_id is not None and self.deploy_mgr is not None
 
+    def _get_model(self) -> str:
+        """Return the deployment model string used by completions warmup."""
+        if not self._hotload_enabled:
+            raise RuntimeError(
+                "Inference warmup requires both deploy_mgr and deployment_id."
+            )
+        return f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
+
     def _warmup_after_hotload(self) -> None:
         """Send a lightweight warmup request after hotload completes.
 
@@ -349,4 +357,3 @@ class WeightSyncer:
                 e,
             )
             raise
-
