@@ -76,6 +76,13 @@ class WeightSyncer:
     """Max retries for post-hotload warmup (default 10 x 10s = ~100s)."""
     reset_prompt_cache: bool = True
     """If True, reset the prompt cache on the deployment after hotloading."""
+    lora_rank: int = 0
+    """When > 0, force all checkpoints to ``base`` type (no delta chain).
+
+    LoRA adapter exports are standalone PEFT artifacts — the trainer does
+    not XOR-compress them, so sending ``incremental_snapshot_metadata``
+    causes the serving container to crash during decompression.
+    """
 
     # Internal state — tracks the delta chain
     base_saved: bool = field(default=False, init=False)
@@ -218,11 +225,18 @@ class WeightSyncer:
             self.base_identity = None
 
     def _next_checkpoint_type(self) -> str:
-        """Return 'delta' if a base has been saved, else first_checkpoint_type."""
+        """Return 'delta' if a base has been saved, else first_checkpoint_type.
+
+        Always returns ``"base"`` when ``lora_rank > 0``.
+        """
+        if self.lora_rank > 0:
+            return "base"
         return "delta" if self.base_saved else self.first_checkpoint_type
 
     def _build_incremental_metadata(self, ckpt_type: str) -> dict | None:
         """Build incremental hotload metadata for delta checkpoints."""
+        if self.lora_rank > 0:
+            return None
         if ckpt_type == "delta" and self.base_identity:
             return {
                 "previous_snapshot_identity": self.base_identity,
