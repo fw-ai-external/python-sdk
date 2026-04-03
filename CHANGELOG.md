@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.58 (2026-04-03)
+
+Full Changelog: [v1.0.0-alpha.57...v1.0.0-alpha.58](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.57...v1.0.0-alpha.58)
+
+### Bug Fixes
+
+* **training-sdk:** disable delta hotload for LoRA adapters ([#114](https://github.com/fw-ai-external/python-sdk/issues/114)) ([4cfd1e7](https://github.com/fw-ai-external/python-sdk/commit/4cfd1e7b3865802299c52f36c902731672633a4b))
+
 ## 1.0.0-alpha.57 (2026-04-03)
 
 Full Changelog: [v1.0.0-alpha.56...v1.0.0-alpha.57](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.56...v1.0.0-alpha.57)
