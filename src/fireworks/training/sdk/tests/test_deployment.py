@@ -163,6 +163,15 @@ class TestCreateDeployment:
 
 
 class TestHotload:
+    @staticmethod
+    def _response(status_code: int, payload: dict | None = None, text: str = ""):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.is_success = 200 <= status_code < 300
+        resp.json.return_value = payload or {}
+        resp.text = text
+        return resp
+
     def test_hotload_sends_identity(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
@@ -193,6 +202,27 @@ class TestHotload:
         )
         payload = mgr._sync_request.call_args[1]["json"]
         assert payload["incremental_snapshot_metadata"]["previous_snapshot_identity"] == "snap-1"
+
+    def test_hotload_retries_without_reset_prompt_cache_when_rejected(self, mgr):
+        unsupported = self._response(
+            400,
+            {"error": {"message": "Extra inputs are not permitted, field: 'reset_prompt_cache', value: True"}},
+            text="Extra inputs are not permitted, field: 'reset_prompt_cache', value: True",
+        )
+        success = self._response(200, {})
+        mgr._sync_request = MagicMock(side_effect=[unsupported, success, success])
+
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-456")
+
+        first_payload = mgr._sync_request.call_args_list[0].kwargs["json"]
+        retry_payload = mgr._sync_request.call_args_list[1].kwargs["json"]
+        second_call_payload = mgr._sync_request.call_args_list[2].kwargs["json"]
+
+        assert first_payload["reset_prompt_cache"] is True
+        assert "reset_prompt_cache" not in retry_payload
+        assert "reset_prompt_cache" not in second_call_payload
+        assert mgr._hotload_reset_prompt_cache_supported is False
 
 
 # ---------------------------------------------------------------------------
