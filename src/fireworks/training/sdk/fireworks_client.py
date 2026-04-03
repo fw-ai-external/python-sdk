@@ -258,17 +258,14 @@ class FireworksClient(_RestClient):
         job_id: str,
         checkpoint_id: str,
         output_model_id: str,
+        base_model: str,
+        *,
+        hot_load_deployment_id: str | None = None,
     ) -> dict:
         """Promote a trainer checkpoint to a Fireworks model.
 
         Calls the account-level ``:promote`` endpoint to turn a sampler
-        checkpoint into a deployable model.  The trainer job ID is used
-        only to resolve the GCS bucket where the checkpoint files reside —
-        no running trainer is needed.
-
-        The base model for metadata inheritance is automatically resolved
-        from the trainer job's training config (same as the original
-        promotion endpoint).
+        checkpoint into a deployable model.
 
         Args:
             job_id: RLOR trainer job ID that produced the checkpoint.
@@ -276,6 +273,11 @@ class FireworksClient(_RestClient):
                 from :class:`SaveSamplerResult`).
             output_model_id: Desired model ID for the promoted model.
                 Must be 1-63 chars, lowercase a-z, 0-9, or hyphen.
+            base_model: Base model resource name for metadata inheritance
+                (e.g. ``accounts/fireworks/models/qwen3-8b``).
+            hot_load_deployment_id: Deployment ID for legacy jobs whose
+                checkpoints are associated with a deployment. Omit for
+                newer jobs.
 
         Returns:
             Model dict from the API response (includes ``state``,
@@ -300,7 +302,12 @@ class FireworksClient(_RestClient):
         body: dict = {
             "output_model": output_model,
             "trainer_job_id": trainer_job,
+            "base_model": base_model,
         }
+        if hot_load_deployment_id is not None:
+            body["hot_load_deployment_id"] = (
+                f"accounts/{self.account_id}/deployments/{hot_load_deployment_id}"
+            )
 
         resp = self._post(path, json=body, timeout=300)
         if not resp.is_success:
@@ -309,7 +316,7 @@ class FireworksClient(_RestClient):
                 format_sdk_error(
                     f"Failed to promote checkpoint '{checkpoint_id}'",
                     error_msg,
-                    f"Check that the job {job_id} exists and the checkpoint is valid.\n"
+                    f"Check that the checkpoint is valid and base_model is correct.\n"
                     f"  Console: {CONSOLE_URL}",
                     docs_url=DOCS_SDK,
                 )

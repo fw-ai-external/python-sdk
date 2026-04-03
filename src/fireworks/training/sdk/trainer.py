@@ -98,6 +98,12 @@ class TrainerJobConfig:
     """
     display_name: str | None = None
     hot_load_deployment_id: str | None = None
+    """**Deprecated.** Use ``DeploymentConfig.hot_load_trainer_job`` instead.
+
+    Previously linked the trainer to a pre-existing deployment for weight
+    sync.  The recommended pattern is to create the trainer first and pass
+    ``hot_load_trainer_job=endpoint.job_name`` when creating the deployment.
+    """
     region: str | None = None
     custom_image_tag: str | None = None
     """Trainer container image tag.  Shape-owned on the shape path."""
@@ -232,6 +238,13 @@ class TrainerJobManager(FireworksClient):
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
+            logger.warning(
+                "hot_load_deployment_id is deprecated and will be removed in a "
+                "future release. Create the trainer first, then pass "
+                "hot_load_trainer_job=endpoint.job_name to DeploymentConfig "
+                "when creating the deployment. See %s",
+                "https://docs.fireworks.ai/fine-tuning/training-sdk/reference/deployment-manager",
+            )
             query_params.append(("deploymentId", config.hot_load_deployment_id))
 
         is_shape_path = bool(config.training_shape_ref)
