@@ -128,6 +128,33 @@ class TestEnsureDeploymentChecked:
 
 
 # ---------------------------------------------------------------------------
+# Warmup model resolution
+# ---------------------------------------------------------------------------
+
+
+class TestWarmupModel:
+    def test_get_model_uses_deployment_resource_name(self):
+        t = _make_tracker(deployment_id="dep-123")
+        assert t._get_model() == "accounts/test-acct/deployments/dep-123"
+
+    def test_save_and_hotload_warms_up_deployment_model(self):
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="p1", snapshot_name="step-0-base-sess"
+        )
+
+        t.save_and_hotload("step-0-base")
+
+        deploy.warmup.assert_called_once_with(
+            "accounts/test-acct/deployments/dep-1",
+            max_retries=t.warmup_max_retries,
+            retry_interval_s=10.0,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Delta chain progression: base -> delta -> delta
 # ---------------------------------------------------------------------------
 
