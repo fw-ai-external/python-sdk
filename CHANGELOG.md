@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.56 (2026-04-03)
+
+Full Changelog: [v1.0.0-alpha.55...v1.0.0-alpha.56](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.55...v1.0.0-alpha.56)
+
+### Features
+
+* add skip_validations to TrainerJobConfig ([#111](https://github.com/fw-ai-external/python-sdk/issues/111)) ([c0498a5](https://github.com/fw-ai-external/python-sdk/commit/c0498a52faa25547e10f33f4aefb7894024bd580))
+
 ## 1.0.0-alpha.55 (2026-04-02)
 
 Full Changelog: [v1.0.0-alpha.54...v1.0.0-alpha.55](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.54...v1.0.0-alpha.55)
