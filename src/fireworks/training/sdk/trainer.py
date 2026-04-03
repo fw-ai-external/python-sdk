@@ -126,6 +126,8 @@ class TrainerJobConfig:
     must not be set.
     """
     forward_only: bool = False
+    skip_validations: bool = False
+    """Skip server-side shape validation. Requires superuser API key."""
 
     def validate(self) -> None:
         """Self-contained pre-flight check.  Call before ``_create()``.
@@ -236,6 +238,8 @@ class TrainerJobManager(FireworksClient):
 
         if is_shape_path:
             query_params.append(("trainingShape", config.training_shape_ref))
+            if config.skip_validations:
+                query_params.append(("skipValidations", "true"))
         else:
             query_params.append(("skipValidations", "true"))
 
