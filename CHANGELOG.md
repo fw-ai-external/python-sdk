@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.59 (2026-04-03)
+
+Full Changelog: [v1.0.0-alpha.58...v1.0.0-alpha.59](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.58...v1.0.0-alpha.59)
+
+### Features
+
+* deprecate hot_load_deployment_id with runtime warning ([#105](https://github.com/fw-ai-external/python-sdk/issues/105)) ([e430226](https://github.com/fw-ai-external/python-sdk/commit/e43022693adc701640240488006e4fd4c8f5adbe))
+
 ## 1.0.0-alpha.58 (2026-04-03)
 
 Full Changelog: [v1.0.0-alpha.57...v1.0.0-alpha.58](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.57...v1.0.0-alpha.58)
