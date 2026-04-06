@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.60 (2026-04-06)
+
+Full Changelog: [v1.0.0-alpha.59...v1.0.0-alpha.60](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.59...v1.0.0-alpha.60)
+
+### Features
+
+* **training-sdk:** add create_base_training_client for LoRA self-reference ([f3fef7c](https://github.com/fw-ai-external/python-sdk/commit/f3fef7c068ee181d587e383c09f2dc00cb926c79))
+
 ## 1.0.0-alpha.59 (2026-04-03)
 
 Full Changelog: [v1.0.0-alpha.58...v1.0.0-alpha.59](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.58...v1.0.0-alpha.59)
