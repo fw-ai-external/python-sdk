@@ -560,3 +560,65 @@ class FiretitanServiceClient(ServiceClient):
             model_seq_id=model_seq_id,
             model_id=model_id,
         )
+
+    def create_base_training_client(
+        self,
+        base_model: str,
+        user_metadata: dict[str, str] | None = None,
+    ) -> FiretitanTrainingClient:
+        """Create a base-only FiretitanTrainingClient (frozen, no LoRA adapter).
+
+        The returned client runs forward passes through the frozen base model
+        weights with all LoRA adapters disabled.  This is useful as a KL
+        divergence reference model when training with LoRA — no separate
+        FORWARD_ONLY trainer job is needed.
+
+        Args:
+            base_model: Model name (e.g. ``"accounts/fireworks/models/qwen3-8b"``).
+            user_metadata: Optional run metadata.
+
+        Returns:
+            A :class:`FiretitanTrainingClient` whose ``forward()`` calls
+            run on the base weights only.  Do **not** call ``forward_backward``
+            or ``optim_step`` on this client — it exists solely for
+            reference log-prob computation.
+        """
+        session_id = self.holder.get_session_id()
+        model_seq_id = self.holder.get_training_client_id()
+
+        # Subclass CreateModelRequest to add `base_only` without modifying the
+        # upstream tinker SDK.  The firetitan server already accepts this field;
+        # pydantic serialises it correctly via model_dump().
+        class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
+            base_only: bool = True
+
+        async def _create():
+            start = time.time()
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                future = await client.models.create(
+                    request=_BaseOnlyCreateModelRequest(
+                        session_id=session_id,
+                        model_seq_id=model_seq_id,
+                        base_model=base_model,
+                        base_only=True,
+                        user_metadata=user_metadata,
+                    ),
+                )
+            resp = await _APIFuture(
+                types.CreateModelResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="CreateModel",
+                queue_state_observer=QueueStateLogger(base_model, "Base model creation"),
+            ).result_async()
+            return resp.model_id
+
+        model_id = self.holder.run_coroutine_threadsafe(_create()).result()
+        logger.info("Created base-only model %s (reference)", model_id)
+
+        return FiretitanTrainingClient(
+            holder=self.holder,
+            model_seq_id=model_seq_id,
+            model_id=model_id,
+        )
