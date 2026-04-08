@@ -135,20 +135,9 @@ class TrainerJobConfig:
     skip_validations: bool = False
     """Skip server-side shape validation. Requires superuser API key."""
     purpose: str | None = None
-    """**Managed-service use only.** Do not set this in user code.
-
-    Scheduling purpose hint passed by the Fireworks control plane when
-    launching trainers on dedicated infrastructure (e.g. ``"PURPOSE_PILOT"``).
-    Ignored when set by end users.
-    """
+    """Internal. Populated automatically by the Fireworks platform when needed."""
     managed_by: str | None = None
-    """**Managed-service use only.** Do not set this in user code.
-
-    When the Fireworks control plane launches this trainer as part of a
-    managed training job, it sets this to the parent job ID so that billing
-    is handled centrally and not double-counted on this trainer.
-    Has no effect when set outside of the managed service.
-    """
+    """Internal. Populated automatically by the Fireworks platform when needed."""
 
     def validate(self) -> None:
         """Self-contained pre-flight check.  Call before ``_create()``.
