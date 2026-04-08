@@ -134,6 +134,10 @@ class TrainerJobConfig:
     forward_only: bool = False
     skip_validations: bool = False
     """Skip server-side shape validation. Requires superuser API key."""
+    purpose: str | None = None
+    """Internal. Populated automatically by the Fireworks platform when needed."""
+    managed_by: str | None = None
+    """Internal. Populated automatically by the Fireworks platform when needed."""
 
     def validate(self) -> None:
         """Self-contained pre-flight check.  Call before ``_create()``.
@@ -297,6 +301,10 @@ class TrainerJobManager(FireworksClient):
             training_config["extraArgs"] = flat
         if config.forward_only:
             payload["forwardOnly"] = True
+        if config.purpose:
+            payload["purpose"] = config.purpose
+        if config.managed_by:
+            payload["managedBy"] = config.managed_by
 
         logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
         resp = self._post(path, json=payload, timeout=60)
