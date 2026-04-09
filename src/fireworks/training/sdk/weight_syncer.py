@@ -161,6 +161,23 @@ class WeightSyncer:
             logger.warning("Could not check deployment state: %s", e)
             return None
 
+    def reset_delta_chain(self) -> None:
+        """Reset the delta-chain bookkeeping so the next save is treated as ``base``.
+
+        Call this after re-attaching the deployment to a new trainer job.
+        The new trainer's bucket has no prior snapshots, so any subsequent
+        ``delta`` checkpoint would be applied against a snapshot the deployment
+        never loaded — which the serving container would reject (or worse,
+        silently produce wrong outputs).
+        """
+        logger.info(
+            "Resetting WeightSyncer delta chain (was: base_saved=%s, base_identity=%s)",
+            self.base_saved,
+            self.base_identity,
+        )
+        self.base_saved = False
+        self.base_identity = None
+
     def wait_for_hotload_ready(self, timeout_s: int = 300, poll_interval_s: int = 5) -> None:
         """Block until the deployment's hot load manager is initialized.
 

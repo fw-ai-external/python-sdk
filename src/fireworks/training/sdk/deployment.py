@@ -498,6 +498,34 @@ class DeploymentManager(_RestClient):
                 CONSOLE_URL,
             )
 
+    def update(
+        self,
+        deployment_id: str,
+        body: dict[str, Any],
+        update_mask: str | list[str],
+    ) -> DeploymentInfo:
+        """Partially update a deployment via PATCH.
+
+        Args:
+            deployment_id: ID of the deployment to update.
+            body: JSON body with the fields to update (camelCase keys).
+            update_mask: Field paths (snake_case) to update — either a
+                comma-separated string or a list of strings. Required:
+                only the listed fields are modified; other fields are
+                left untouched. (Omitting the mask would cause the server
+                to replace all mutable fields with whatever ``body``
+                contained, silently zeroing out anything not specified.)
+
+        Returns:
+            The updated deployment as a :class:`DeploymentInfo`.
+        """
+        if isinstance(update_mask, list):
+            update_mask = ",".join(update_mask)
+        path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
+        resp = self._patch(path, json=body, params={"updateMask": update_mask})
+        resp.raise_for_status()
+        return self._parse_deployment_info(deployment_id, resp.json())
+
     # -- Hotload operations ----------------------------------------------------
 
     @staticmethod
@@ -660,19 +688,35 @@ class DeploymentManager(_RestClient):
                     logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
-                    logger.warning(
-                        "\n%s",
-                        format_sdk_error(
-                            f"Hotload failed for snapshot '{expected_identity}'",
-                            "The deployment reported an error loading the weight snapshot.",
-                            "1. Check that hotLoadBucketUrl is configured on the deployment\n"
-                            "  2. Verify the snapshot was saved successfully by the trainer\n"
-                            "  3. Ensure the base model matches between trainer and deployment",
-                            docs_url=DOCS_SDK,
-                            show_support=True,
-                        ),
+                    # Only treat the error as fatal if it's for the snapshot
+                    # we just requested. A stale error from a previous
+                    # snapshot (e.g., after re-attaching to a new trainer)
+                    # should be ignored — the new hotload request may not
+                    # have been processed yet.
+                    error_target = replica.get("loading_state", {}).get(
+                        "target_snapshot_identity"
                     )
-                    return False
+                    if error_target == expected_identity:
+                        logger.warning(
+                            "\n%s",
+                            format_sdk_error(
+                                f"Hotload failed for snapshot '{expected_identity}'",
+                                "The deployment reported an error loading the weight snapshot.",
+                                "1. Check that hotLoadBucketUrl is configured on the deployment\n"
+                                "  2. Verify the snapshot was saved successfully by the trainer\n"
+                                "  3. Ensure the base model matches between trainer and deployment",
+                                docs_url=DOCS_SDK,
+                                show_support=True,
+                            ),
+                        )
+                        return False
+                    logger.info(
+                        "Hotload: stage=error (stale, target=%s != expected=%s), "
+                        "waiting for server to process new request (%ds)",
+                        error_target,
+                        expected_identity,
+                        elapsed,
+                    )
                 else:
                     logger.info(
                         "Hotload: stage=%s, current=%s, loading=%s, ready=%s (%ds)",
