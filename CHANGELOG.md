@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0-alpha.61 (2026-04-09)
+
+Full Changelog: [v1.0.0-alpha.60...v1.0.0-alpha.61](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.60...v1.0.0-alpha.61)
+
+### Features
+
+* **sdk:** deployment update, delta-chain reset, and stale-error handling for re-attach ([#116](https://github.com/fw-ai-external/python-sdk/issues/116)) ([6d662aa](https://github.com/fw-ai-external/python-sdk/commit/6d662aa5163580768393750787250953e0648e25))
+* **training:** add purpose and managed_by fields to TrainerJobConfig ([8b7790c](https://github.com/fw-ai-external/python-sdk/commit/8b7790c9a9113937029227c1b45bb815a63801c4))
+
+
+### Bug Fixes
+
+* **client:** preserve hardcoded query params when merging with user params ([fc43cb4](https://github.com/fw-ai-external/python-sdk/commit/fc43cb4211d85ff04f245cb2a9998587b949c953))
+
+
+### Documentation
+
+* **training:** clarify purpose and managed_by are managed-service internal fields ([4e06d9e](https://github.com/fw-ai-external/python-sdk/commit/4e06d9e5a28a3d3975bb02b24f3db94a46cf5f50))
+* **training:** make purpose and managed_by docstrings deliberately terse ([defb83d](https://github.com/fw-ai-external/python-sdk/commit/defb83d5c54953a88882b70d37706c4a2749473f))
+
 ## 1.0.0-alpha.60 (2026-04-06)
 
 Full Changelog: [v1.0.0-alpha.59...v1.0.0-alpha.60](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.59...v1.0.0-alpha.60)
