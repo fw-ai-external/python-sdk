@@ -196,3 +196,47 @@ class TestDeltaChainProgression:
         _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
         meta = kwargs.get("incremental_snapshot_metadata")
         assert meta["previous_snapshot_identity"] == "step-1-sess"
+
+
+class TestResetDeltaChain:
+    """Tests the contract: after reset, the next save must be a base checkpoint
+    (no incremental metadata), regardless of prior chain state."""
+
+    def test_reset_after_chain_then_save_uses_base(self):
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+
+        # Build up some chain state by performing a real save through the
+        # public API (not by mutating internals).
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="p1", snapshot_name="t1-base-sess"
+        )
+        t.save_and_hotload("t1-base")
+
+        # Re-attach happens here — caller resets the chain.
+        t.reset_delta_chain()
+
+        # Next save against the new trainer must be a base checkpoint (no
+        # incremental metadata).
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="p2", snapshot_name="t2-base-sess"
+        )
+        t.save_and_hotload("t2-base")
+        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
+        assert kwargs.get("incremental_snapshot_metadata") is None
+
+    def test_reset_when_already_clean_then_save_uses_base(self):
+        """Reset on a fresh tracker is a no-op; subsequent save still produces base."""
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+
+        t.reset_delta_chain()  # idempotent on fresh state
+
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="p1", snapshot_name="fresh-base-sess"
+        )
+        t.save_and_hotload("fresh-base")
+        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
+        assert kwargs.get("incremental_snapshot_metadata") is None
