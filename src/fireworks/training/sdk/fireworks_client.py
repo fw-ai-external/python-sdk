@@ -338,3 +338,101 @@ class FireworksClient(_RestClient):
             )
 
         return model
+
+    # -- Checkpoint listing -----------------------------------------------------
+
+    def list_checkpoints(
+        self,
+        job_id: str,
+        *,
+        page_size: int = 200,
+    ) -> list[dict]:
+        """List checkpoints the server knows about for a trainer job.
+
+        Calls the control-plane ``ListRlorTrainerJobCheckpoints`` endpoint,
+        which reads the job's bucket URL from the database and scans GCS.
+        The trainer job may be in **any** state — running, completed,
+        failed, cancelled, or already deleted — as long as the DB record
+        still exists and the GCS blobs haven't been garbage-collected.
+
+        The distinction vs :meth:`FiretitanTrainingClient.list_checkpoints`:
+        that call hits the **live trainer pod** and returns DCP checkpoint
+        names only. This method hits the **control plane** and returns
+        both sampler and DCP checkpoints with promotability metadata, even
+        after the trainer is gone.
+
+        Args:
+            job_id: RLOR trainer job ID (the short ID, not the full
+                ``accounts/<a>/rlorTrainerJobs/<id>`` resource name).
+            page_size: Maximum rows per HTTP request. The method
+                auto-paginates through ``nextPageToken`` and returns the
+                full list.
+
+        Returns:
+            List of checkpoint dicts. Each dict is the raw JSON entry
+            from the API and contains at least:
+
+            - ``name``:  full resource name
+              (``accounts/<a>/rlorTrainerJobs/<job>/checkpoints/<ckpt>``)
+            - ``createTime`` / ``updateTime``: RFC3339 timestamps
+            - ``checkpointType``: server enum string (e.g.
+              ``"CHECKPOINT_TYPE_INFERENCE_BASE"``,
+              ``"CHECKPOINT_TYPE_INFERENCE_LORA"``,
+              ``"CHECKPOINT_TYPE_TRAINING_LORA"``,
+              ``"CHECKPOINT_TYPE_INFERENCE_ARC_V2"``). Treat as opaque
+              and filter on ``promotable``.
+            - ``promotable``: bool — authoritative. ``True`` iff
+              :meth:`promote_checkpoint` will accept this row.
+
+            Sort order follows the server, which returns **oldest
+            ``createTime`` first**. Callers who want newest-first
+            (typical for picking a checkpoint to promote) should
+            re-sort client-side.
+        """
+        base_path = (
+            f"/v1/accounts/{self.account_id}"
+            f"/rlorTrainerJobs/{job_id}/checkpoints"
+        )
+
+        rows: list[dict] = []
+        page_token: str | None = None
+        while True:
+            query: dict[str, str] = {"pageSize": str(page_size)}
+            if page_token:
+                query["pageToken"] = page_token
+            path = f"{base_path}?{urlencode(query)}"
+            resp = self._get(path, timeout=30)
+            if not resp.is_success:
+                error_msg = parse_api_error(resp)
+                if resp.status_code == 404:
+                    solution = (
+                        f"Trainer job '{job_id}' was not found in this account. "
+                        "Verify the job ID and that your API key resolves to the "
+                        "account that owns it."
+                    )
+                elif resp.status_code == 403:
+                    solution = (
+                        "Your API key does not have access to this trainer job."
+                    )
+                else:
+                    solution = None
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to list checkpoints for trainer job '{job_id}' "
+                        f"(HTTP {resp.status_code})",
+                        error_msg,
+                        solution or "Retry; if it persists, contact Fireworks support.",
+                        docs_url=DOCS_SDK,
+                        show_support=solution is None,
+                    )
+                )
+
+            body = resp.json() or {}
+            page = body.get("checkpoints") or body.get("rlorTrainerJobCheckpoints") or []
+            rows.extend(page)
+
+            page_token = body.get("nextPageToken") or body.get("next_page_token")
+            if not page_token:
+                break
+
+        return rows

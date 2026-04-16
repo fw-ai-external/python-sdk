@@ -371,6 +371,121 @@ class TestResolveTrainingProfile:
         mgr.close()
 
 
+class TestListCheckpoints:
+    def _mgr(self):
+        mgr = TrainerJobManager(api_key="k", base_url="https://x")
+        mgr._account_id = "a"
+        return mgr
+
+    def _resp(self, body, status=200):
+        resp = MagicMock()
+        resp.is_success = 200 <= status < 300
+        resp.status_code = status
+        resp.json.return_value = body
+        return resp
+
+    def test_single_page(self):
+        mgr = self._mgr()
+        mgr._get = MagicMock(
+            return_value=self._resp(
+                {
+                    "checkpoints": [
+                        {
+                            "name": "accounts/a/rlorTrainerJobs/j/checkpoints/step-1",
+                            "createTime": "2026-04-16T10:00:00Z",
+                            "checkpointType": "INFERENCE_BASE",
+                            "promotable": True,
+                        },
+                    ],
+                },
+            )
+        )
+
+        rows = mgr.list_checkpoints("j")
+
+        assert len(rows) == 1
+        assert rows[0]["checkpointType"] == "INFERENCE_BASE"
+        assert rows[0]["promotable"] is True
+        path = mgr._get.call_args[0][0]
+        assert path.startswith("/v1/accounts/a/rlorTrainerJobs/j/checkpoints?")
+        assert "pageSize=200" in path
+        assert "pageToken" not in path
+        mgr.close()
+
+    def test_auto_paginates(self):
+        mgr = self._mgr()
+        responses = [
+            self._resp(
+                {
+                    "checkpoints": [{"name": "c/1", "promotable": True}],
+                    "nextPageToken": "tok-2",
+                },
+            ),
+            self._resp(
+                {
+                    "checkpoints": [{"name": "c/2", "promotable": False}],
+                    "nextPageToken": "",
+                },
+            ),
+        ]
+        mgr._get = MagicMock(side_effect=responses)
+
+        rows = mgr.list_checkpoints("j", page_size=1)
+
+        assert [r["name"] for r in rows] == ["c/1", "c/2"]
+        assert mgr._get.call_count == 2
+        second_path = mgr._get.call_args_list[1][0][0]
+        assert "pageToken=tok-2" in second_path
+        assert "pageSize=1" in second_path
+        mgr.close()
+
+    def test_handles_empty_response(self):
+        mgr = self._mgr()
+        mgr._get = MagicMock(return_value=self._resp({}))
+
+        rows = mgr.list_checkpoints("j")
+
+        assert rows == []
+        mgr.close()
+
+    def test_404_surfaces_job_not_found(self):
+        mgr = self._mgr()
+        mgr._get = MagicMock(
+            return_value=self._resp(
+                {"message": "RlorTrainerJob ... not found", "code": 5},
+                status=404,
+            )
+        )
+
+        with pytest.raises(RuntimeError, match="was not found in this account"):
+            mgr.list_checkpoints("bogus")
+        mgr.close()
+
+    def test_403_surfaces_permission_denied(self):
+        mgr = self._mgr()
+        mgr._get = MagicMock(
+            return_value=self._resp({"message": "", "code": 7}, status=403)
+        )
+
+        with pytest.raises(RuntimeError, match="does not have access"):
+            mgr.list_checkpoints("j")
+        mgr.close()
+
+    def test_alternate_response_key(self):
+        """Some gateway versions return `rlorTrainerJobCheckpoints` instead of `checkpoints`."""
+        mgr = self._mgr()
+        mgr._get = MagicMock(
+            return_value=self._resp(
+                {"rlorTrainerJobCheckpoints": [{"name": "c/1", "promotable": True}]},
+            )
+        )
+
+        rows = mgr.list_checkpoints("j")
+
+        assert [r["name"] for r in rows] == ["c/1"]
+        mgr.close()
+
+
 # ---------------------------------------------------------------------------
 # TrainingShapeProfile.training_shape / deployment_shape
 # ---------------------------------------------------------------------------
