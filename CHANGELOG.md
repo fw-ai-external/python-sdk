@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-alpha.62 (2026-04-16)
+
+Full Changelog: [v1.0.0-alpha.61...v1.0.0-alpha.62](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.61...v1.0.0-alpha.62)
+
+### Bug Fixes
+
+* ensure file data are only sent as 1 parameter ([c7fde6c](https://github.com/fw-ai-external/python-sdk/commit/c7fde6c6eb52390b5389effc08e3644cc23de561))
+
 ## 1.0.0-alpha.61 (2026-04-09)
 
 Full Changelog: [v1.0.0-alpha.60...v1.0.0-alpha.61](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.60...v1.0.0-alpha.61)
