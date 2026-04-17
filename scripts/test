@@ -4,12 +4,22 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-
-
 export DEFER_PYDANTIC_BUILD=false
 
-echo "==> Running tests"
+echo "==> Running unit tests"
 rye run pytest "$@"
 
 echo "==> Running Pydantic v1 tests"
 rye run nox -s test-pydantic-v1 -- "$@"
+
+# Run mock server tests if Prism is available
+if [ "${RUN_MOCK_SERVER_TESTS}" = "true" ]; then
+  echo "==> Running mock server tests"
+  rye run pytest tests/api_resources/ -v --timeout=30 "$@"
+fi
+
+# Run e2e tests if API key is available
+if [ -n "${FIREWORKS_API_KEY}" ]; then
+  echo "==> Running e2e tests"
+  rye run pytest tests/functional/ -m e2e --timeout=60 -v "$@"
+fi

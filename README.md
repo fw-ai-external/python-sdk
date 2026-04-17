@@ -15,14 +15,14 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 ## Installation
 
 ```sh
-# install the current alpha from PyPI without globally enabling prerelease deps
-pip install 'fireworks-ai>=1.0.0a0'
+# install from PyPI
+pip install fireworks-ai
 ```
 
 For using our Tinker-compatible API for training (GRPO/DPO), install the optional extras:
 
 ```sh
-pip install 'fireworks-ai[training]>=1.0.0a0'
+pip install 'fireworks-ai[training]'
 ```
 
 Training SDK calls require a training-scoped Fireworks API key. Inference-only

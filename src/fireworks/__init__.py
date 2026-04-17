@@ -88,6 +88,11 @@ if not _t.TYPE_CHECKING:
 
 _setup_logging()
 
+# Backwards-compat: add acreate() aliases for downstream packages (langchain, instructor)
+from .lib._legacy_compat import _patch_acreate_aliases as _patch_acreate_aliases
+
+_patch_acreate_aliases()
+
 # Update the __module__ attribute for exported symbols so that
 # error messages point to this module instead of the module
 # it was originally defined in, e.g.
