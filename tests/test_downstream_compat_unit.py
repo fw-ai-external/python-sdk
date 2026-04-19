@@ -197,12 +197,8 @@ class TestLangchainFireworksPatterns:
 
         asyncio.run(_run())
 
-    def test_async_acreate_streaming(self) -> None:
-        """langchain _astream(): async for chunk in self.async_client.acreate(stream=True, ...)
-
-        langchain iterates directly over acreate(stream=True) without an
-        intermediate await — the acreate coroutine returns an async iterator.
-        """
+    def test_async_acreate_streaming_with_await(self) -> None:
+        """`stream = await acreate(stream=True)` then iterate — supported pattern."""
 
         async def _run() -> None:
             http_client = httpx.AsyncClient(transport=_make_streaming_mock_transport())
@@ -215,6 +211,31 @@ class TestLangchainFireworksPatterns:
                 stream=True,
             )
             async for chunk in stream:
+                chunk_dict = chunk.model_dump()
+                assert "choices" in chunk_dict
+                chunks_received.append(chunk_dict)
+
+            assert len(chunks_received) >= 1
+
+        asyncio.run(_run())
+
+    def test_async_acreate_streaming_no_await(self) -> None:
+        """langchain _astream(): `async for chunk in async_client.acreate(stream=True, ...)`.
+
+        Iterates the call result directly — no intermediate `await`. This is
+        the exact pattern in langchain_fireworks/chat_models.py:588.
+        """
+
+        async def _run() -> None:
+            http_client = httpx.AsyncClient(transport=_make_streaming_mock_transport())
+            async_client = AsyncFireworks(api_key="test-key", http_client=http_client).chat.completions
+
+            chunks_received = []
+            async for chunk in async_client.acreate(
+                messages=[{"role": "user", "content": "Hi"}],
+                model="test-model",
+                stream=True,
+            ):
                 chunk_dict = chunk.model_dump()
                 assert "choices" in chunk_dict
                 chunks_received.append(chunk_dict)

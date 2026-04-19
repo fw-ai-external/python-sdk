@@ -12,7 +12,26 @@ This module is loaded at import time via ``fireworks/__init__.py``.
 from __future__ import annotations
 
 import warnings
-from typing import Any
+from typing import Any, Coroutine
+
+
+class _AsyncCreateProxy:
+    # Both awaitable and directly async-iterable so we support:
+    #   resp = await client.acreate(...)
+    #   async for chunk in client.acreate(stream=True, ...)   # langchain pattern
+    def __init__(self, coro: Coroutine[Any, Any, Any]) -> None:
+        self._coro = coro
+
+    def __await__(self) -> Any:
+        return self._coro.__await__()
+
+    def __aiter__(self) -> Any:
+        return self._aiter()
+
+    async def _aiter(self) -> Any:
+        result = await self._coro
+        async for item in result:
+            yield item
 
 
 def _patch_acreate_aliases() -> None:  # pyright: ignore[reportUnusedFunction]
@@ -30,13 +49,13 @@ def _patch_acreate_aliases() -> None:  # pyright: ignore[reportUnusedFunction]
 
         original_create = cls.create
 
-        async def _acreate(self: Any, *args: Any, _orig: Any = original_create, **kwargs: Any) -> Any:
+        def _acreate(self: Any, *args: Any, _orig: Any = original_create, **kwargs: Any) -> _AsyncCreateProxy:
             warnings.warn(
                 "acreate() is deprecated, use create() instead. "
                 "The async client's create() is already a coroutine.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            return await _orig(self, *args, **kwargs)
+            return _AsyncCreateProxy(_orig(self, *args, **kwargs))
 
         cls.acreate = _acreate  # type: ignore[attr-defined, union-attr]
