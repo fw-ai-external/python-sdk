@@ -39,6 +39,11 @@ class DeployedModel(BaseModel):
     """If true, the deployed model will be publicly reachable."""
 
     serverless: Optional[bool] = None
+    """
+    This field is not applicable when deploying a LoRA addon and should be omitted
+    or set to false. LoRA models require a dedicated deployment. True if the
+    underlying deployment is managed by Fireworks.
+    """
 
     state: Optional[Literal["STATE_UNSPECIFIED", "UNDEPLOYING", "DEPLOYING", "DEPLOYED", "UPDATING"]] = None
     """The state of the deployed model."""
