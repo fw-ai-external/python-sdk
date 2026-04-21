@@ -98,6 +98,13 @@ class CompletionsResource(SyncAPIResource):
         """
         Create a completion for the provided prompt and parameters.
 
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
+
         Args:
           model: The name of the model to use.
 
@@ -521,6 +528,13 @@ class CompletionsResource(SyncAPIResource):
         """
         Create a completion for the provided prompt and parameters.
 
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
+
         Args:
           model: The name of the model to use.
 
@@ -943,6 +957,13 @@ class CompletionsResource(SyncAPIResource):
     ) -> CompletionCreateResponse | Stream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -1494,6 +1515,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
         """
         Create a completion for the provided prompt and parameters.
 
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
+
         Args:
           model: The name of the model to use.
 
@@ -1917,6 +1945,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
         """
         Create a completion for the provided prompt and parameters.
 
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
+
         Args:
           model: The name of the model to use.
 
@@ -2339,6 +2374,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
     ) -> CompletionCreateResponse | AsyncStream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
