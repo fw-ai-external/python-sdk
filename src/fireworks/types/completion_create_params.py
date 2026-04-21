@@ -13,6 +13,7 @@ __all__ = [
     "PredictionPredictedOutput",
     "PredictionPredictedOutputContentUnionMember1",
     "PredictionPredictedOutputContentUnionMember1ImageURL",
+    "PredictionPredictedOutputContentUnionMember1VideoURL",
     "ResponseFormat",
     "Thinking",
     "ThinkingThinkingConfigEnabled",
@@ -230,6 +231,7 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     - `prefill-queue-duration`: Time spent in prefill queue
     - `prefill-duration`: Time spent in prefill
     - `generation-queue-duration`: Time spent in generation queue
+    - `generation-duration`: Time spent in generation
     """
 
     prediction: Optional[Prediction]
@@ -263,6 +265,14 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     prompt_cache_isolation_key: Optional[str]
     """Isolation key for prompt caching to separate cache entries."""
 
+    prompt_cache_key: Optional[str]
+    """A key used for prompt caching session affinity.
+
+    Requests with the same prompt_cache_key are routed to the same backend to
+    maximize KV cache hit rates. This is the preferred field for session affinity
+    (takes priority over the 'user' field).
+    """
+
     raw_output: Optional[bool]
     """Return raw output from the model."""
 
@@ -294,9 +304,11 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
       omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
       `'high'`. `'none'` and boolean values are rejected.
-    - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-      on. Use `'none'` or `false` to disable; effort levels and integers have no
-      additional effect.
+    - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+      chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+      `'none'` or `false` to disable.
+    - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+      or `false` to disable; effort levels and integers have no additional effect.
     - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
       reasoning on. Use `'none'` or `false` to disable; effort levels and integers
       have no additional effect.
@@ -331,6 +343,7 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
     | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+    | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
     For other models, refer to the model provider's documentation.
 
@@ -375,6 +388,13 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     seed: Optional[int]
     """Random seed for deterministic sampling."""
+
+    service_tier: Literal["auto", "default", "flex", "priority"]
+    """The service tier to use for the request.
+
+    Specifies the processing type used for serving the request. Only "priority" is
+    supported, while all other values will be treated as "default" tier.
+    """
 
     speculation: Union[str, Iterable[int], None]
     """Speculative decoding prompt or token IDs to speed up generation."""
@@ -476,12 +496,26 @@ class PredictionPredictedOutputContentUnionMember1ImageURL(TypedDict, total=Fals
     detail: Optional[str]
 
 
+class PredictionPredictedOutputContentUnionMember1VideoURL(TypedDict, total=False):
+    url: Required[str]
+
+    detail: Optional[str]
+
+    max_frames: Optional[int]
+
+    sample_fps: Optional[float]
+
+    spatial_limit: Optional[int]
+
+
 class PredictionPredictedOutputContentUnionMember1(TypedDict, total=False):
     type: Required[str]
 
     image_url: Optional[PredictionPredictedOutputContentUnionMember1ImageURL]
 
     text: Optional[str]
+
+    video_url: Optional[PredictionPredictedOutputContentUnionMember1VideoURL]
 
 
 class PredictionPredictedOutput(TypedDict, total=False):
