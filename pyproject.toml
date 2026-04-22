@@ -46,7 +46,7 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 # Lightweight: only what the training SDK actually imports at runtime.
 # Use this for CI, deployment, and programmatic training job management.
 training-sdk = [
-  "tinker>=0.15.0 ; python_version >= '3.11'",
+  "tinker==0.16.1 ; python_version >= '3.11'",
   "requests",
 ]
 # Full: includes heavy ML deps needed by training cookbook recipes.
