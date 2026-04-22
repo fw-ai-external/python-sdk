@@ -1,0 +1,43 @@
+name: Post-Publish Smoke Test
+
+on:
+  workflow_run:
+    workflows: ["Publish PyPI"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Wait for PyPI propagation and install
+        run: |
+          for i in $(seq 1 10); do
+            if pip install fireworks-ai 2>/dev/null; then
+              echo "Package available"
+              exit 0
+            fi
+            echo "Attempt $i: not available yet, waiting 30s..."
+            sleep 30
+          done
+          echo "Package not available after 5 minutes"
+          exit 1
+
+      - name: Verify import and version
+        run: python -c "import fireworks; print(f'fireworks-ai {fireworks.__version__} installed successfully')"
+
+      - name: Verify training extras
+        if: matrix.python-version != '3.9'
+        run: |
+          pip install "fireworks-ai[training]"
+          python -c "from fireworks.training import sdk; print('Training SDK OK')"

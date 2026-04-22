@@ -5,7 +5,7 @@ from typing import List, Union, Optional
 from ..._models import BaseModel
 from .chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
-__all__ = ["ChatMessage", "ContentUnionMember1", "ContentUnionMember1ImageURL"]
+__all__ = ["ChatMessage", "ContentUnionMember1", "ContentUnionMember1ImageURL", "ContentUnionMember1VideoURL"]
 
 
 class ContentUnionMember1ImageURL(BaseModel):
@@ -14,12 +14,26 @@ class ContentUnionMember1ImageURL(BaseModel):
     detail: Optional[str] = None
 
 
+class ContentUnionMember1VideoURL(BaseModel):
+    url: str
+
+    detail: Optional[str] = None
+
+    max_frames: Optional[int] = None
+
+    sample_fps: Optional[float] = None
+
+    spatial_limit: Optional[int] = None
+
+
 class ContentUnionMember1(BaseModel):
     type: str
 
     image_url: Optional[ContentUnionMember1ImageURL] = None
 
     text: Optional[str] = None
+
+    video_url: Optional[ContentUnionMember1VideoURL] = None
 
 
 class ChatMessage(BaseModel):

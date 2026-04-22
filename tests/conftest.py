@@ -41,6 +41,15 @@ def pytest_collection_modifyitems(items: list[pytest.Function]) -> None:
     for async_test in pytest_asyncio_tests:
         async_test.add_marker(session_scope_marker, append=False)
 
+    # If the Prism mock server is available, remove skip markers for mock server tests.
+    if os.environ.get("RUN_MOCK_SERVER_TESTS", "").lower() in ("true", "1"):
+        for item in items:
+            item.own_markers[:] = [
+                marker
+                for marker in item.own_markers
+                if not (marker.name == "skip" and marker.kwargs.get("reason") == "Mock server tests are disabled")
+            ]
+
     # We skip tests that use both the aiohttp client and respx_mock as respx_mock
     # doesn't support custom transports.
     for item in items:

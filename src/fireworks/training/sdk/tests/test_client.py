@@ -243,3 +243,45 @@ class TestCreateTrainingClientDuplicate:
             svc.create_training_client("model-a", lora_rank=32)
         except ValueError:
             pytest.fail("Should not raise for different lora_rank")
+
+
+# ---------------------------------------------------------------------------
+# FiretitanTrainingClient.load_adapter
+# ---------------------------------------------------------------------------
+
+
+class TestLoadAdapter:
+    def _make_client(self):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client._saved_sampler_names = set()
+        client._saved_state_names = set()
+        client.session_id = "test1234"
+        client.holder = MagicMock()
+        return client
+
+    def test_empty_path_raises_valueerror(self):
+        client = self._make_client()
+        with pytest.raises(ValueError, match="adapter_path must be a non-empty string"):
+            client.load_adapter("")
+
+    def test_whitespace_only_path_raises_valueerror(self):
+        client = self._make_client()
+        with pytest.raises(ValueError, match="adapter_path must be a non-empty string"):
+            client.load_adapter("   ")
+
+    def test_non_empty_path_schedules_coroutine(self):
+        """Valid path should dispatch to holder.run_coroutine_threadsafe with an
+        async coroutine that will POST to /api/v1/load_adapter when awaited.
+
+        We don't actually run the coroutine (would require a full async stack);
+        we just verify the dispatch happened and the coroutine was constructed.
+        """
+        client = self._make_client()
+        with patch.object(client, "_get_request_id", return_value=42):
+            client.load_adapter("gs://bucket/adapter-dir")
+
+        client.holder.run_coroutine_threadsafe.assert_called_once()
+        coro_arg = client.holder.run_coroutine_threadsafe.call_args.args[0]
+        assert hasattr(coro_arg, "__await__")
+        # Close to avoid RuntimeWarning about un-awaited coroutine
+        coro_arg.close()

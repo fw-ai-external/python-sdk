@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.0-alpha.63 (2026-04-22)
+
+Full Changelog: [v1.0.0-alpha.62...v1.0.0-alpha.63](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.62...v1.0.0-alpha.63)
+
+### Features
+
+* downstream compat shims, CI gates, and test coverage ([#62](https://github.com/fw-ai-external/python-sdk/issues/62)) ([2f59a2f](https://github.com/fw-ai-external/python-sdk/commit/2f59a2f7252441ada6df0d01d3f8cdd2676f21c5))
+
+
+### Bug Fixes
+
+* **compat:** make acreate(stream=True) iterable without await ([#123](https://github.com/fw-ai-external/python-sdk/issues/123)) ([a8e3121](https://github.com/fw-ai-external/python-sdk/commit/a8e3121e1698df8cba10953c4d3027c996738e48))
+
+
+### Performance Improvements
+
+* **client:** optimize file structure copying in multipart requests ([da87cc2](https://github.com/fw-ai-external/python-sdk/commit/da87cc2c11620b55f04ad6d3b6bde4e5d2655a92))
+
+
+### Documentation
+
+* **rollouts:** add BYOT RL rollout guides ([4b9fe46](https://github.com/fw-ai-external/python-sdk/commit/4b9fe4699c808a4d2e379cbc9569b8538a0edeef))
+
 ## 1.0.0-alpha.62 (2026-04-16)
 
 Full Changelog: [v1.0.0-alpha.61...v1.0.0-alpha.62](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.61...v1.0.0-alpha.62)

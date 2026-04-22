@@ -7,6 +7,7 @@ This layer extends the upstream tinker client with:
   4. FiretitanTrainingClient.save_state() — supports blocking waits with timeout handling
   5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
   6. FiretitanTrainingClient.list_checkpoints() — firetitan-specific DCP checkpoint listing
+  7. FiretitanTrainingClient.load_adapter() — HF PEFT adapter warm-start (weights-only)
 
 Most other methods (forward, forward_backward_custom, load_state,
 get_tokenizer, etc.) are inherited from tinker.
@@ -18,16 +19,27 @@ import time
 import uuid
 import logging
 from enum import Enum
-from typing import TypeVar, Callable
+from typing import Literal, TypeVar, Callable, Optional
 from dataclasses import dataclass
 
 from tinker import types
+from pydantic import BaseModel
 from tinker.lib.api_future_impl import _APIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
 from tinker.lib.public_interfaces.api_future import APIFuture
 from tinker.lib.public_interfaces.service_client import ServiceClient
 from tinker.lib.public_interfaces.training_client import TrainingClient
+
+
+class LoadAdapterResponse(BaseModel):
+    """Response from /api/v1/load_adapter after the op completes."""
+
+    model_id: str
+    adapter_path: Optional[str] = None
+    type: Literal["load_adapter"] = "load_adapter"
+
+    model_config = {"protected_namespaces": ()}
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -454,6 +466,43 @@ class FiretitanTrainingClient(TrainingClient):
         if timeout is not None:
             future.result(timeout=timeout)
         return future
+
+    def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
+        """Load HF PEFT adapter weights into a LoRA training session (weights-only)."""
+        adapter_path = (adapter_path or "").strip()
+        if not adapter_path:
+            raise ValueError("adapter_path must be a non-empty string")
+
+        request_id = self._get_request_id()
+
+        async def _load_adapter_async():
+            start = time.time()
+            body = {
+                "adapter_path": adapter_path,
+                "model_id": self._guaranteed_model_id(),
+                "seq_id": request_id + 1,
+            }
+
+            async def _send():
+                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                    return await client.post(
+                        "/api/v1/load_adapter",
+                        body=body,
+                        cast_to=types.UntypedAPIFuture,
+                    )
+
+            async with self._take_turn(request_id):
+                future = await self.holder.execute_with_retries(_send)
+            return await _APIFuture(
+                LoadAdapterResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="LoadAdapter",
+                queue_state_observer=self._queue_state_logger,
+            )
+
+        return self.holder.run_coroutine_threadsafe(_load_adapter_async())
 
 
 # -- FiretitanServiceClient ----------------------------------------------------

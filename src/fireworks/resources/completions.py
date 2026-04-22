@@ -71,6 +71,7 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -78,6 +79,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
@@ -97,6 +99,13 @@ class CompletionsResource(SyncAPIResource):
     ) -> CompletionCreateResponse:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -262,6 +271,7 @@ class CompletionsResource(SyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -286,6 +296,11 @@ class CompletionsResource(SyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -315,9 +330,11 @@ class CompletionsResource(SyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -349,6 +366,7 @@ class CompletionsResource(SyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -385,6 +403,10 @@ class CompletionsResource(SyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -495,6 +517,7 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -502,6 +525,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
@@ -520,6 +544,13 @@ class CompletionsResource(SyncAPIResource):
     ) -> Stream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -691,6 +722,7 @@ class CompletionsResource(SyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -715,6 +747,11 @@ class CompletionsResource(SyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -744,9 +781,11 @@ class CompletionsResource(SyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -778,6 +817,7 @@ class CompletionsResource(SyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -814,6 +854,10 @@ class CompletionsResource(SyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -918,6 +962,7 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -925,6 +970,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
@@ -943,6 +989,13 @@ class CompletionsResource(SyncAPIResource):
     ) -> CompletionCreateResponse | Stream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -1114,6 +1167,7 @@ class CompletionsResource(SyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -1138,6 +1192,11 @@ class CompletionsResource(SyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -1167,9 +1226,11 @@ class CompletionsResource(SyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -1201,6 +1262,7 @@ class CompletionsResource(SyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -1237,6 +1299,10 @@ class CompletionsResource(SyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -1340,6 +1406,7 @@ class CompletionsResource(SyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -1347,6 +1414,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
@@ -1391,6 +1459,7 @@ class CompletionsResource(SyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
+                    "prompt_cache_key": prompt_cache_key,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
                     "reasoning_history": reasoning_history,
@@ -1398,6 +1467,7 @@ class CompletionsResource(SyncAPIResource):
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
                     "seed": seed,
+                    "service_tier": service_tier,
                     "speculation": speculation,
                     "stop": stop,
                     "stream": stream,
@@ -1467,6 +1537,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -1474,6 +1545,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
@@ -1493,6 +1565,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
     ) -> CompletionCreateResponse:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -1658,6 +1737,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -1682,6 +1762,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -1711,9 +1796,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -1745,6 +1832,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -1781,6 +1869,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -1891,6 +1983,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -1898,6 +1991,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
@@ -1916,6 +2010,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
     ) -> AsyncStream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -2087,6 +2188,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -2111,6 +2213,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -2140,9 +2247,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -2174,6 +2283,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -2210,6 +2320,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -2314,6 +2428,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -2321,6 +2436,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
@@ -2339,6 +2455,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
     ) -> CompletionCreateResponse | AsyncStream[CompletionChunk]:
         """
         Create a completion for the provided prompt and parameters.
+
+        For RL / agent rollouts, Fireworks inference exposes additional rollout-specific
+        features:
+        [`x-session-affinity` and `x-multi-turn-session-id`](https://docs.fireworks.ai/guides/rollout-inference#session-affinity)
+        for multi-turn trajectories, and
+        [MoE Router Replay (R3)](https://docs.fireworks.ai/guides/rollout-inference#moe-router-replay)
+        for MoE expert tracing during rollouts.
 
         Args:
           model: The name of the model to use.
@@ -2510,6 +2633,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `prefill-queue-duration`: Time spent in prefill queue
               - `prefill-duration`: Time spent in prefill
               - `generation-queue-duration`: Time spent in generation queue
+              - `generation-duration`: Time spent in generation
 
           prediction: OpenAI-compatible predicted output for speculative decoding. Can be a
               PredictedOutput object or a simple string. Automatically transformed to
@@ -2534,6 +2658,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               Required range: `-2 <= x <= 2`
 
           prompt_cache_isolation_key: Isolation key for prompt caching to separate cache entries.
+
+          prompt_cache_key: A key used for prompt caching session affinity. Requests with the same
+              prompt_cache_key are routed to the same backend to maximize KV cache hit rates.
+              This is the preferred field for session affinity (takes priority over the 'user'
+              field).
 
           raw_output: Return raw output from the model.
 
@@ -2563,9 +2692,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
-              - **DeepSeek V3.1, DeepSeek V3.2**: Binary on/off reasoning. Default reasoning
-                on. Use `'none'` or `false` to disable; effort levels and integers have no
-                additional effect.
+              - **DeepSeek V3.1**: Binary on/off reasoning. Default reasoning off (matches
+                chat template). Use `true`, `'low'`, `'medium'`, or `'high'` to enable;
+                `'none'` or `false` to disable.
+              - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
+                or `false` to disable; effort levels and integers have no additional effect.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -2597,6 +2728,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
 
               For other models, refer to the model provider's documentation.
 
@@ -2633,6 +2765,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
+
+          service_tier: The service tier to use for the request. Specifies the processing type used for
+              serving the request. Only "priority" is supported, while all other values will
+              be treated as "default" tier.
 
           speculation: Speculative decoding prompt or token IDs to speed up generation.
 
@@ -2736,6 +2872,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prediction: Optional[completion_create_params.Prediction] | Omit = omit,
         presence_penalty: Optional[float] | Omit = omit,
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
+        prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
         reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
@@ -2743,6 +2880,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         seed: Optional[int] | Omit = omit,
+        service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
@@ -2787,6 +2925,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "prediction": prediction,
                     "presence_penalty": presence_penalty,
                     "prompt_cache_isolation_key": prompt_cache_isolation_key,
+                    "prompt_cache_key": prompt_cache_key,
                     "raw_output": raw_output,
                     "reasoning_effort": reasoning_effort,
                     "reasoning_history": reasoning_history,
@@ -2794,6 +2933,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
                     "seed": seed,
+                    "service_tier": service_tier,
                     "speculation": speculation,
                     "stop": stop,
                     "stream": stream,

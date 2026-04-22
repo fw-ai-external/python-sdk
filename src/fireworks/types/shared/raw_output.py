@@ -42,3 +42,6 @@ class RawOutput(BaseModel):
 
     images: Optional[List[str]] = None
     """Images in the prompt"""
+
+    videos: Optional[List[str]] = None
+    """Videos in the prompt"""

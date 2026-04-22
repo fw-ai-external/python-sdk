@@ -7,7 +7,7 @@ from typing_extensions import Required, TypedDict
 
 from .chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
-__all__ = ["ChatMessage", "ContentUnionMember1", "ContentUnionMember1ImageURL"]
+__all__ = ["ChatMessage", "ContentUnionMember1", "ContentUnionMember1ImageURL", "ContentUnionMember1VideoURL"]
 
 
 class ContentUnionMember1ImageURL(TypedDict, total=False):
@@ -16,12 +16,26 @@ class ContentUnionMember1ImageURL(TypedDict, total=False):
     detail: Optional[str]
 
 
+class ContentUnionMember1VideoURL(TypedDict, total=False):
+    url: Required[str]
+
+    detail: Optional[str]
+
+    max_frames: Optional[int]
+
+    sample_fps: Optional[float]
+
+    spatial_limit: Optional[int]
+
+
 class ContentUnionMember1(TypedDict, total=False):
     type: Required[str]
 
     image_url: Optional[ContentUnionMember1ImageURL]
 
     text: Optional[str]
+
+    video_url: Optional[ContentUnionMember1VideoURL]
 
 
 class ChatMessage(TypedDict, total=False):
