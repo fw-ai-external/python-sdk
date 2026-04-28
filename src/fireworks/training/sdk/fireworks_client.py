@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import logging
+import warnings
 from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (
@@ -24,6 +25,20 @@ from fireworks.training.sdk._rest_client import _RestClient
 logger = logging.getLogger(__name__)
 
 _RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
+
+# 4-segment checkpoint resource name preferred by promote_checkpoint:
+# accounts/<a>/rlorTrainerJobs/<j>/checkpoints/<c>.
+_CHECKPOINT_NAME_RE = re.compile(
+    r"^accounts/([^/]+)/rlorTrainerJobs/([^/]+)/checkpoints/([^/]+)$"
+)
+
+
+def _parse_checkpoint_name(name: str) -> tuple[str, str, str] | None:
+    """Parse the 4-segment checkpoint name into (account, job, checkpoint)."""
+    m = _CHECKPOINT_NAME_RE.match(name)
+    if not m:
+        return None
+    return m.group(1), m.group(2), m.group(3)
 
 
 def validate_output_model_id(output_model_id: str | None) -> list[str]:
@@ -255,44 +270,123 @@ class FireworksClient(_RestClient):
 
     def promote_checkpoint(
         self,
-        job_id: str,
-        checkpoint_id: str,
-        output_model_id: str,
-        base_model: str,
+        job_id: str | None = None,
+        checkpoint_id: str | None = None,
+        output_model_id: str | None = None,
+        base_model: str | None = None,
         *,
+        name: str | None = None,
         hot_load_deployment_id: str | None = None,
     ) -> dict:
         """Promote a trainer checkpoint to a Fireworks model.
 
         Calls the account-level ``:promote`` endpoint to turn a sampler
-        checkpoint into a deployable model.
+        checkpoint into a deployable model. Two equivalent calling forms:
+
+        Preferred (4-segment ``name=`` from ``list_checkpoints`` output)::
+
+            entry = client.list_checkpoints(job_id)[0]
+            client.promote_checkpoint(
+                name=entry["name"],         # accounts/<a>/rlorTrainerJobs/<j>/checkpoints/<c>
+                output_model_id="my-model",
+                base_model="accounts/fireworks/models/qwen3-8b",
+            )
+
+        Legacy (2-segment id + ``job_id`` positional)::
+
+            client.promote_checkpoint(
+                job_id, checkpoint_id, output_model_id, base_model,
+            )
+
+        Both forms are accepted by the gateway; the new ``name=`` form
+        is preferred because it eliminates the manual disassembly of the
+        4-segment resource name returned by ``list_checkpoints``.
+
+        Public docs: see ``/fine-tuning/training-api/saving-and-loading``
+        on docs.fireworks.ai for the full promote API contract.
 
         Args:
-            job_id: RLOR trainer job ID that produced the checkpoint.
+            job_id: RLOR trainer job ID. Required when ``name`` is not set.
             checkpoint_id: Checkpoint identifier (the ``snapshot_name``
-                from :class:`SaveSamplerResult`).
+                from :class:`SaveSamplerResult`). Required when ``name``
+                is not set.
             output_model_id: Desired model ID for the promoted model.
                 Must be 1-63 chars, lowercase a-z, 0-9, or hyphen.
             base_model: Base model resource name for metadata inheritance
                 (e.g. ``accounts/fireworks/models/qwen3-8b``).
+            name: Full 4-segment checkpoint resource name
+                ``accounts/<a>/rlorTrainerJobs/<j>/checkpoints/<c>`` —
+                pass directly from ``list_checkpoints`` output.
             hot_load_deployment_id: Deployment ID for legacy jobs whose
                 checkpoints are associated with a deployment. Omit for
-                newer jobs.
+                newer jobs (the gateway resolves the bucket URL from the
+                trainer's stored metadata).
 
         Returns:
             Model dict from the API response (includes ``state``,
             ``kind``, ``peftDetails``, etc.).
         """
+        if name is not None:
+            if checkpoint_id is not None:
+                raise ValueError("pass either name= or checkpoint_id, not both")
+            parsed = _parse_checkpoint_name(name)
+            if parsed is None:
+                raise ValueError(
+                    f"Invalid checkpoint name {name!r}. Expected 4 segments: "
+                    "accounts/<account>/rlorTrainerJobs/<job>/checkpoints/<id>."
+                )
+            parsed_account, parsed_job_id, parsed_checkpoint_id = parsed
+            if job_id is not None and job_id != parsed_job_id:
+                raise ValueError(
+                    f"job_id={job_id!r} conflicts with name's trainer job "
+                    f"{parsed_job_id!r}."
+                )
+            account_id = parsed_account
+            job_id = parsed_job_id
+            checkpoint_id = parsed_checkpoint_id
+        else:
+            if not job_id or not checkpoint_id:
+                raise ValueError(
+                    "Either name= (4-segment resource path) or both job_id "
+                    "and checkpoint_id are required."
+                )
+            warnings.warn(
+                "promote_checkpoint(job_id, checkpoint_id, ...) positional form "
+                "is deprecated. Pass the 4-segment resource name instead: "
+                "promote_checkpoint(name=entry['name'], output_model_id=..., "
+                "base_model=...). The 'name' field comes straight from "
+                "list_checkpoints output. See the public docs at "
+                "/fine-tuning/training-api/saving-and-loading.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            account_id = self.account_id
+
+        if not output_model_id or not base_model:
+            raise ValueError("output_model_id and base_model are required")
+        if hot_load_deployment_id is not None:
+            warnings.warn(
+                "promote_checkpoint(hot_load_deployment_id=...) is deprecated. "
+                "The gateway resolves the bucket URL from the trainer's stored "
+                "metadata for any run on cookbook >= 0.3.0 (both PER_TRAINER "
+                "and PER_DEPLOYMENT bucket scopes). Omit this argument unless "
+                "you are promoting a checkpoint from a deployment that predates "
+                "the stored-bucket-URL migration. See the public docs at "
+                "/fine-tuning/training-api/saving-and-loading.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         errors = validate_output_model_id(output_model_id)
         if errors:
             raise ValueError("\n\n".join(errors))
 
         path = (
-            f"/v1/accounts/{self.account_id}"
+            f"/v1/accounts/{account_id}"
             f"/checkpoints/{checkpoint_id}:promote"
         )
-        output_model = f"accounts/{self.account_id}/models/{output_model_id}"
-        trainer_job = f"accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
+        output_model = f"accounts/{account_id}/models/{output_model_id}"
+        trainer_job = f"accounts/{account_id}/rlorTrainerJobs/{job_id}"
         logger.info(
             "Promoting checkpoint '%s' -> model '%s'",
             checkpoint_id,
@@ -306,7 +400,7 @@ class FireworksClient(_RestClient):
         }
         if hot_load_deployment_id is not None:
             body["hot_load_deployment_id"] = (
-                f"accounts/{self.account_id}/deployments/{hot_load_deployment_id}"
+                f"accounts/{account_id}/deployments/{hot_load_deployment_id}"
             )
 
         resp = self._post(path, json=body, timeout=300)
