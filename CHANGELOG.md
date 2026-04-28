@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0-alpha.64 (2026-04-28)
+
+Full Changelog: [v1.0.1-alpha.63...v1.1.0-alpha.64](https://github.com/fw-ai-external/python-sdk/compare/v1.0.1-alpha.63...v1.1.0-alpha.64)
+
+### Features
+
+* **promote:** accept 4-segment name= kwarg ([#126](https://github.com/fw-ai-external/python-sdk/issues/126)) ([7ecd22f](https://github.com/fw-ai-external/python-sdk/commit/7ecd22f7053a7e877630c80bcbb184248c0adac8))
+* support setting headers via env ([59ba573](https://github.com/fw-ai-external/python-sdk/commit/59ba573474c2caf0c95617581a6a34ff6dc37ac4))
+
+
+### Bug Fixes
+
+* use correct field name format for multipart file arrays ([8aa4a63](https://github.com/fw-ai-external/python-sdk/commit/8aa4a638756d88fce2c1f3becd583cf1b02af343))
+
+
+### Chores
+
+* **internal:** more robust bootstrap script ([b535ded](https://github.com/fw-ai-external/python-sdk/commit/b535ded71a4e937ccb3462b0a49ce09df7ab42d3))
+
 ## 1.0.1-alpha.63 (2026-04-22)
 
 Full Changelog: [v1.0.0-alpha.63...v1.0.1-alpha.63](https://github.com/fw-ai-external/python-sdk/compare/v1.0.0-alpha.63...v1.0.1-alpha.63)
