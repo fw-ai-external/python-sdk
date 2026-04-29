@@ -671,3 +671,11 @@ class FiretitanServiceClient(ServiceClient):
             model_seq_id=model_seq_id,
             model_id=model_id,
         )
+
+    def create_sampling_client(
+        self,
+        model_path=None,
+        base_model=None,
+        retry_config=None,
+    ):
+        raise NotImplementedError("FiretitanServiceClient.create_sampling_client() is not supported")
