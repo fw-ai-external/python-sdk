@@ -388,3 +388,12 @@ class WeightSyncer:
                 e,
             )
             raise
+
+    def get_deployment_sampler(self):
+        """Get the deployment's current sampler"""
+        from fireworks.training.sdk.deployment import DeploymentSampler
+        return DeploymentSampler(
+            inference_url=self.deploy_mgr.inference_url,
+            model=self._get_model(),
+            api_key=self.deploy_mgr.api_key,
+        )
