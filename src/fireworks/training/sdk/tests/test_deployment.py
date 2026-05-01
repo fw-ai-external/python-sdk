@@ -13,6 +13,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     AdaptiveConcurrencyController,
+    _SSETruncationError,
 )
 from fireworks.training.sdk._rest_client import _should_verify_ssl
 
@@ -488,6 +489,161 @@ class TestDefaultValues:
         assert sig.parameters["temperature"].default == 1.0
         sig2 = inspect.signature(DeploymentSampler.sample_with_tokens)
         assert sig2.parameters["temperature"].default == 1.0
+        sig3 = inspect.signature(DeploymentSampler.sample_with_prompt_tokens)
+        assert sig3.parameters["temperature"].default == 1.0
+
+
+# ---------------------------------------------------------------------------
+# DeploymentSampler.sample_with_prompt_tokens — pre-tokenized prompt entry point
+# ---------------------------------------------------------------------------
+
+
+class TestSampleWithPromptTokens:
+    def test_basic_sample(self):
+        prompt_ids = [10, 20, 30]
+        completion_ids = [40, 50]
+
+        sampler = _make_sampler(tokenizer=None)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "out",
+                "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": completion_ids},
+            }]
+        })
+
+        results = asyncio.run(sampler.sample_with_prompt_tokens(prompt_ids))
+
+        assert len(results) == 1
+        c = results[0]
+        assert c.full_tokens[: len(prompt_ids)] == prompt_ids
+        assert c.full_tokens[len(prompt_ids) :] == completion_ids
+        assert c.prompt_len == len(prompt_ids)
+        assert c.finish_reason == "stop"
+        sampler.close()
+
+    def test_does_not_call_apply_chat_template(self):
+        tok = MagicMock()
+        sampler = _make_sampler(tokenizer=tok)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "out", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+            }]
+        })
+
+        asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        tok.apply_chat_template.assert_not_called()
+        sampler.close()
+
+    def test_stop_str_shape_preserved(self):
+        sampler = _make_sampler(tokenizer=None)
+        captured: dict[str, object] = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured["stop"] = kwargs.get("stop")
+            return {
+                "choices": [{
+                    "text": "out", "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [99]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+
+        stop_strs = ["</answer>", "<|end|>"]
+        asyncio.run(sampler.sample_with_prompt_tokens([1, 2], stop=stop_strs))
+        assert captured["stop"] == stop_strs
+        assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
+        sampler.close()
+
+    def test_stop_int_shape_preserved(self):
+        sampler = _make_sampler(tokenizer=None)
+        captured: dict[str, object] = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured["stop"] = kwargs.get("stop")
+            return {
+                "choices": [{
+                    "text": "out", "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [99]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+
+        stop_ids = [13, 42]
+        asyncio.run(sampler.sample_with_prompt_tokens([1, 2], stop=stop_ids))
+        assert captured["stop"] == stop_ids
+        assert all(isinstance(s, int) for s in captured["stop"])  # type: ignore[arg-type]
+        sampler.close()
+
+    def test_max_seq_len_pre_filter(self):
+        sampler = _make_sampler(tokenizer=None)
+        _mock_async_completions_stream(sampler, {"choices": []})
+
+        results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3, 4, 5], max_seq_len=5))
+        assert results == []
+        sampler.close()
+
+    def test_logprobs_extracted(self):
+        sampler = _make_sampler(tokenizer=None)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "x", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+                "logprobs": {"content": [{"logprob": -0.7}]},
+            }]
+        })
+
+        results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2], logprobs=True))
+        assert results[0].inference_logprobs == [-0.7]
+        sampler.close()
+
+    def test_n_concurrent_calls(self):
+        sampler = _make_sampler(tokenizer=None)
+        call_count = {"n": 0}
+
+        async def _fake_stream(*args, **kwargs):
+            call_count["n"] += 1
+            return {
+                "choices": [{
+                    "text": "x", "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [99]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+
+        results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2], n=4))
+        assert call_count["n"] == 4
+        assert len(results) == 4
+        sampler.close()
+
+
+# ---------------------------------------------------------------------------
+# Regression: legacy sample_with_tokens(messages=...) still calls apply_chat_template
+# ---------------------------------------------------------------------------
+
+
+class TestSampleWithTokensLegacyRegression:
+    def test_legacy_path_still_renders_via_chat_template(self):
+        tok = _make_mock_tokenizer([7, 8, 9])
+        sampler = _make_sampler(tokenizer=tok)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "ok", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [11]},
+            }]
+        })
+
+        messages = [{"role": "user", "content": "hi"}]
+        asyncio.run(sampler.sample_with_tokens(messages=messages))
+        tok.apply_chat_template.assert_called_once_with(
+            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+        )
+        sampler.close()
 
 
 # ---------------------------------------------------------------------------
@@ -723,4 +879,81 @@ class TestStreamingCompletions:
         summary = ctrl.step_completed()
         assert ctrl.ema_prefill_queue == pytest.approx(0.1)
         assert summary["avg_pq"] == pytest.approx(0.1)
+        sampler.close()
+
+
+class TestSseTruncationRetry:
+    """Contract: only :class:`_SSETruncationError` triggers retry; other
+    ``RuntimeError`` subclasses propagate unchanged."""
+
+    def test_truncation_then_success_recovers(self, monkeypatch):
+        """First attempt raises _SSETruncationError, second attempt succeeds."""
+        import random as _random
+
+        # Pin jitter to a deterministic minimum sleep.
+        monkeypatch.setattr(_random, "random", lambda: 0.0)
+        # Drop the first-attempt sleep to keep the test fast.
+        async def _no_sleep(_s):
+            return None
+        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+        sampler = _make_sampler(tokenizer=None)
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise _SSETruncationError("truncated")
+            return {
+                "choices": [{
+                    "text": "ok", "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [7]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake
+        results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert attempts["n"] == 2
+        assert len(results) == 1
+        assert results[0].finish_reason == "stop"
+        sampler.close()
+
+    def test_non_truncation_runtime_error_propagates(self):
+        """A generic RuntimeError must NOT trigger retry — it propagates immediately."""
+        sampler = _make_sampler(tokenizer=None)
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            raise RuntimeError("Exhausted hotload retries in streaming mode")
+
+        sampler.async_completions_stream = _fake
+        with pytest.raises(RuntimeError, match="hotload"):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert attempts["n"] == 1, "non-truncation RuntimeError must not be retried"
+        sampler.close()
+
+    def test_truncation_exhausts_after_max_attempts(self, monkeypatch):
+        """After _RETRY_MAX_ATTEMPTS truncations, the error surfaces."""
+        import random as _random
+
+        monkeypatch.setattr(_random, "random", lambda: 0.0)
+        async def _no_sleep(_s):
+            return None
+        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+        sampler = _make_sampler(tokenizer=None)
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            raise _SSETruncationError("truncated")
+
+        sampler.async_completions_stream = _fake
+        with pytest.raises(_SSETruncationError):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
         sampler.close()
