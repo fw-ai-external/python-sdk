@@ -8,10 +8,13 @@ tokenization (token-in, token-out).
 from __future__ import annotations
 
 import time
+import random
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, List
 from dataclasses import dataclass
+
+import httpx
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
@@ -28,6 +31,18 @@ from fireworks.training.sdk.errors import (
 from fireworks.training.sdk._rest_client import _RestClient, _should_verify_ssl
 
 logger = logging.getLogger(__name__)
+
+
+class _SSETruncationError(RuntimeError):
+    """Server closed the SSE completion stream mid-generation.
+
+    Raised by :meth:`DeploymentSampler.async_completions_stream` when the
+    response stream ends without ``[DONE]``, ``finish_reason``, or
+    ``raw_output``. The per-completion retry loop in
+    :meth:`DeploymentSampler._do_one_completion` recognises this exact
+    type and retries it; other ``RuntimeError`` subclasses propagate
+    unchanged.
+    """
 
 
 # =============================================================================
@@ -1067,9 +1082,16 @@ class DeploymentSampler(_RestClient):
             perf_metrics_dict: dict[str, str] | None = None
             first_token_time: float | None = None
 
+            # Track whether the stream ended cleanly. A well-formed completion
+            # must close with [DONE] and/or set finish_reason. A clean TCP close
+            # without either signals server-side mid-stream truncation.
+            has_seen_done = False
+            has_seen_finish_reason = False
+
             decoder = _SSEDecoder()
             async for sse in decoder.aiter_events(resp):
                 if sse.data.startswith("[DONE]"):
+                    has_seen_done = True
                     break
 
                 try:
@@ -1093,6 +1115,7 @@ class DeploymentSampler(_RestClient):
                     fr = choice.get("finish_reason")
                     if fr:
                         finish_reason = fr
+                        has_seen_finish_reason = True
 
                     ro = choice.get("raw_output")
                     if ro:
@@ -1105,6 +1128,15 @@ class DeploymentSampler(_RestClient):
                 # (with is_completed=True, so it has full timing data).
                 if "perf_metrics" in chunk:
                     perf_metrics_dict = chunk["perf_metrics"]
+
+            if not raw_output and not has_seen_done and not has_seen_finish_reason:
+                raise _SSETruncationError(
+                    "Transient server-side error: the inference deployment "
+                    "closed the SSE stream mid-generation without sending "
+                    "[DONE], finish_reason, or raw_output. The SDK is "
+                    "retrying. If this persists across all retry attempts, "
+                    "contact the Fireworks team."
+                )
 
             client_ttft = (first_token_time - t0) if first_token_time else None
 
@@ -1221,6 +1253,55 @@ class DeploymentSampler(_RestClient):
         results = await asyncio.gather(*[_one(i) for i in range(n)])
         return [c for batch in results for c in batch]
 
+    async def sample_with_prompt_tokens(
+        self,
+        prompt_token_ids: list[int],
+        n: int = 1,
+        max_tokens: int = 1024,
+        temperature: float = 1.0,
+        max_seq_len: int | None = None,
+        stop: list[str] | list[int] | None = None,
+        **kwargs: Any,
+    ) -> List[SampledCompletion]:
+        """Sample n completions from a pre-tokenized prompt.
+
+        Unlike :meth:`sample_with_tokens`, this primitive accepts ``prompt_token_ids``
+        directly and never invokes ``tokenizer.apply_chat_template(...)``. It is the
+        sampler entry point for renderer-backed RL rollouts where the prompt has
+        already been built from a token-native renderer.
+
+        Concurrency control, ``raw_output`` echo semantics, ``max_seq_len`` filtering,
+        and logprob extraction are inherited from :meth:`_do_one_completion` and
+        :meth:`_parse_completions_result`.
+
+        ``stop`` preserves its caller-provided shape: ``list[str]`` is forwarded as
+        string stop sequences and ``list[int]`` as integer stop token IDs. No
+        coercion happens here.
+        """
+        if max_seq_len is not None and len(prompt_token_ids) >= max_seq_len:
+            return []
+
+        user_requested_logprobs = kwargs.get("logprobs", False)
+        routing_requested = kwargs.get("include_routing_matrix", False)
+        echo_mode = kwargs.get("echo", False)
+        if stop is not None:
+            kwargs["stop"] = stop
+
+        async def _one(_idx: int) -> List[SampledCompletion]:
+            return await self._do_one_completion(
+                prompt_token_ids,
+                max_tokens,
+                temperature,
+                max_seq_len,
+                user_requested_logprobs,
+                routing_requested,
+                echo_mode,
+                **kwargs,
+            )
+
+        results = await asyncio.gather(*[_one(i) for i in range(n)])
+        return [c for batch in results for c in batch]
+
     async def _acquire_concurrency(self) -> None:
         """Acquire a concurrency slot from the controller."""
         if self._concurrency_controller is not None:
@@ -1239,6 +1320,45 @@ class DeploymentSampler(_RestClient):
         self._recent_metrics.clear()
         return out
 
+    # Per-completion retry covers two transient server-side classes:
+    # 1. SSE truncation: the deployment closes the stream mid-generation
+    #    without [DONE]/finish_reason/raw_output. Surfaces as a RuntimeError
+    #    raised from async_completions_stream.
+    # 2. Transient HTTP / connection errors right after a fresh deployment
+    #    or hotload: 408/429/502/503/504 plus httpx connection-level errors.
+    # Backoff is exponential with jitter to avoid retry-storm
+    # synchronization across concurrent in-flight completions.
+    _RETRY_MAX_ATTEMPTS = 7
+    _RETRY_BASE_BACKOFF_S = 2.0
+    _RETRY_MAX_BACKOFF_S = 30.0
+    _RETRY_HTTP_TRANSIENT_CODES = (408, 429, 502, 503, 504)
+    _RETRY_HTTPX_CONNECTION_EXC = (
+        httpx.RemoteProtocolError,
+        httpx.ReadError,
+        httpx.ReadTimeout,
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        httpx.WriteError,
+        httpx.WriteTimeout,
+        httpx.PoolTimeout,
+    )
+
+    async def _backoff_after_transient(
+        self, label: str, attempt: int, current_backoff: float
+    ) -> float:
+        """Sleep with jittered exponential backoff and return the next backoff.
+
+        Caller is responsible for the retryability decision; this helper
+        just emits the per-attempt log line and sleeps.
+        """
+        jittered = current_backoff * (0.5 + random.random())
+        logger.warning(
+            "Transient %s (attempt %d/%d); retrying after %.1fs.",
+            label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
+        )
+        await asyncio.sleep(jittered)
+        return min(current_backoff * 2, self._RETRY_MAX_BACKOFF_S)
+
     async def _do_one_completion(
         self,
         prompt_ids: list[int],
@@ -1250,26 +1370,48 @@ class DeploymentSampler(_RestClient):
         echo_mode: bool,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
-        await self._acquire_concurrency()
-        server_metrics: ServerMetrics | None = None
-        try:
-            result, server_metrics = await self.async_completions_stream(
-                prompt=prompt_ids,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                raw_output=True,
-                **kwargs,
-            )
-        finally:
+        backoff = self._RETRY_BASE_BACKOFF_S
+        for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
+            await self._acquire_concurrency()
+            server_metrics: ServerMetrics | None = None
+            transient: BaseException | None = None
+            label = ""
+            try:
+                result, server_metrics = await self.async_completions_stream(
+                    prompt=prompt_ids,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    raw_output=True,
+                    **kwargs,
+                )
+            except _SSETruncationError as e:
+                transient, label = e, "SSE truncation"
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
+                    self._release_concurrency(server_metrics)
+                    raise
+                transient, label = e, f"HTTP {e.response.status_code}"
+            except self._RETRY_HTTPX_CONNECTION_EXC as e:
+                transient, label = e, type(e).__name__
+
             self._release_concurrency(server_metrics)
-        return self._parse_completions_result(
-            result,
-            prompt_ids,
-            max_seq_len,
-            user_requested_logprobs,
-            routing_requested,
-            echo_mode,
-        )
+
+            if transient is None:
+                return self._parse_completions_result(
+                    result,
+                    prompt_ids,
+                    max_seq_len,
+                    user_requested_logprobs,
+                    routing_requested,
+                    echo_mode,
+                )
+            if attempt == self._RETRY_MAX_ATTEMPTS:
+                raise transient
+            backoff = await self._backoff_after_transient(label, attempt, backoff)
+
+        # Range above guarantees the last attempt either returns or re-raises.
+        # This line is here only to satisfy the type checker's flow analysis.
+        raise AssertionError("unreachable: retry loop exited without return/raise")
 
     def _parse_completions_result(
         self,
