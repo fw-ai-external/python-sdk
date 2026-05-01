@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.65 (2026-05-01)
+
+Full Changelog: [v1.1.0-alpha.64...v1.2.0-alpha.65](https://github.com/fw-ai-external/python-sdk/compare/v1.1.0-alpha.64...v1.2.0-alpha.65)
+
+### Features
+
+* **sdk/deployment:** SSE-truncation retry hardening ([#129](https://github.com/fw-ai-external/python-sdk/issues/129)) ([fcfdba6](https://github.com/fw-ai-external/python-sdk/commit/fcfdba6c69edbcb412f5ea29d5ac8e2fc034ed13))
+
 ## 1.1.0-alpha.64 (2026-04-28)
 
 Full Changelog: [v1.0.1-alpha.63...v1.1.0-alpha.64](https://github.com/fw-ai-external/python-sdk/compare/v1.0.1-alpha.63...v1.1.0-alpha.64)
