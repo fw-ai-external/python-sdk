@@ -88,6 +88,12 @@ class WeightSyncer:
     base_saved: bool = field(default=False, init=False)
     base_identity: str | None = field(default=None, init=False)
     _deployment_checked: bool = field(default=False, init=False)
+    _snapshot_paths: dict[str, str] = field(default_factory=dict, init=False)
+    """Maps snapshot_name -> object-storage URI (e.g. ``gs://bucket/...``)
+    captured from the trainer's :class:`SaveSamplerResult`.  Used to feed the
+    snapshot location into the hotload payload so the serving side (vLLM
+    multi-LoRA proxy) can fetch the bytes directly instead of relying on a
+    pre-existing local materialization."""
     last_timing: dict = field(default_factory=dict, init=False)
     """Timing breakdown from the most recent operation (seconds).
     Reset at the start of each save/hotload/dcp call."""
@@ -271,6 +277,24 @@ class WeightSyncer:
         """
         self.base_saved = True
 
+    @staticmethod
+    def _extract_snapshot_path(save_result: object) -> str | None:
+        """Pull the storage URI out of a :class:`SaveSamplerResult`-like object.
+
+        The trainer returns the object-storage URI (``gs://...``) that the
+        sampler weights were uploaded to in ``SaveSamplerResult.path``.  We
+        only forward it when it looks like a real URI — local paths, empty
+        strings, and the legacy ``snapshot_name``-as-``path`` shape are
+        treated as "no URI available", so the proxy falls back to its
+        existing out-of-band materialization (Alluxio mount / addons sidecar).
+        """
+        path = getattr(save_result, "path", None)
+        if not isinstance(path, str) or not path:
+            return None
+        if "://" not in path:
+            return None
+        return path
+
     def save_only(self, name: str, checkpoint_type: str | None = None) -> str | None:
         """Save sampler weights WITHOUT hotloading.
 
@@ -290,19 +314,29 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
+            snapshot_path = self._extract_snapshot_path(save_result)
+            if snapshot_path is not None:
+                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
             return snapshot_name
         except Exception as e:
             logger.warning("Save error for '%s': %s.", name, e)
             return None
 
-    def _do_hotload(self, snapshot_name: str, checkpoint_type: str) -> None:
+    def _do_hotload(
+        self,
+        snapshot_name: str,
+        checkpoint_type: str,
+        snapshot_path: str | None = None,
+    ) -> None:
         """Core hotload logic shared by :meth:`hotload` and :meth:`save_and_hotload`.
 
         Raises on failure so callers can decide how to handle errors.
         """
         self._ensure_deployment_checked()
         incremental = self._build_incremental_metadata(checkpoint_type)
+        if snapshot_path is None:
+            snapshot_path = self._snapshot_paths.get(snapshot_name)
         t0 = time.time()
         ok = self.deploy_mgr.hotload_and_wait(
             deployment_id=self.deployment_id,
@@ -311,6 +345,7 @@ class WeightSyncer:
             incremental_snapshot_metadata=incremental,
             reset_prompt_cache=self.reset_prompt_cache,
             timeout_seconds=self.hotload_timeout,
+            path=snapshot_path,
         )
         self.last_timing["hotload_time_s"] = time.time() - t0
         if not ok:
@@ -373,10 +408,13 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
+            snapshot_path = self._extract_snapshot_path(save_result)
+            if snapshot_path is not None:
+                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
 
             if self._hotload_enabled:
-                self._do_hotload(snapshot_name, ckpt_type)
+                self._do_hotload(snapshot_name, ckpt_type, snapshot_path=snapshot_path)
 
             self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name

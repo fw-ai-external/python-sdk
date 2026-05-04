@@ -198,6 +198,60 @@ class TestDeltaChainProgression:
         assert meta["previous_snapshot_identity"] == "step-1-sess"
 
 
+class TestSnapshotPathPropagation:
+    """The trainer's GCS URI for the saved snapshot must reach the
+    deployment manager so the serving side can fetch the bytes.
+    """
+
+    def test_save_and_hotload_forwards_gcs_path(self):
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="gs://bucket/run/step-0-base-sess",
+            snapshot_name="step-0-base-sess",
+        )
+
+        t.save_and_hotload("step-0-base")
+
+        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
+        assert kwargs.get("path") == "gs://bucket/run/step-0-base-sess"
+
+    def test_save_only_then_hotload_forwards_gcs_path(self):
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="gs://bucket/run/snap-x",
+            snapshot_name="snap-x",
+        )
+
+        snap = t.save_only("snap-x", checkpoint_type="base")
+        assert snap == "snap-x"
+        deploy.hotload_and_wait.assert_not_called()
+
+        ok = t.hotload(snap, checkpoint_type="base")
+        assert ok is True
+        _, kwargs = deploy.hotload_and_wait.call_args
+        assert kwargs.get("path") == "gs://bucket/run/snap-x"
+
+    def test_local_path_is_not_forwarded(self):
+        """Trainer mocks/tests sometimes return a non-URI ``path`` value;
+        the syncer must not pass that through as if it were an object-store URI."""
+        deploy = _make_deploy_mgr()
+        t = _make_tracker(deploy_mgr=deploy)
+        t._deployment_checked = True
+        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
+            path="local-snap-name",
+            snapshot_name="local-snap-name",
+        )
+
+        t.save_and_hotload("base")
+
+        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
+        assert kwargs.get("path") is None
+
+
 class TestResetDeltaChain:
     """Tests the contract: after reset, the next save must be a base checkpoint
     (no incremental metadata), regardless of prior chain state."""

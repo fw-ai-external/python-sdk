@@ -204,6 +204,31 @@ class TestHotload:
         payload = mgr._sync_request.call_args[1]["json"]
         assert payload["incremental_snapshot_metadata"]["previous_snapshot_identity"] == "snap-1"
 
+    def test_hotload_includes_path_when_provided(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {}
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload(
+            "dep-1", "accounts/test/models/m", "snap-123",
+            path="gs://bucket/run/snap-123",
+        )
+        payload = mgr._sync_request.call_args[1]["json"]
+        assert payload["path"] == "gs://bucket/run/snap-123"
+
+    def test_hotload_omits_path_by_default(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {}
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
+        payload = mgr._sync_request.call_args[1]["json"]
+        assert "path" not in payload
+
     def test_hotload_retries_without_reset_prompt_cache_when_rejected(self, mgr):
         unsupported = self._response(
             400,
