@@ -279,6 +279,50 @@ class TestWaitForHotload:
         result = mgr.wait_for_hotload("dep-1", "m", "snap-x", timeout_seconds=0.01, poll_interval=0.005)
         assert result is False
 
+    def test_vllm_multi_lora_loaded_adapters_signal_completion(self, mgr):
+        """vLLM multi-LoRA backend reports completion via ``loaded_adapters``
+        rather than ``current_snapshot_identity`` (which stays None because
+        many adapters can be loaded simultaneously). The SDK must accept
+        this shape as success.
+        """
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "identity": "pod-abc",
+                "current_snapshot_identity": None,
+                "readiness": True,
+                "loading_state": {"stage": "idle", "target_snapshot_identity": None},
+                "loaded_adapters": [
+                    {"identity": "snap-multi-lora", "status": "loaded"},
+                ],
+            }]
+        })
+        result = mgr.wait_for_hotload(
+            "dep-1", "m", "snap-multi-lora",
+            timeout_seconds=5, poll_interval=0,
+        )
+        assert result is True
+
+    def test_vllm_multi_lora_unloaded_does_not_signal_completion(self, mgr):
+        """An adapter listed in ``loaded_adapters`` whose status is not
+        ``loaded`` (e.g. ``loading``, ``failed``) must not be treated as
+        success."""
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "identity": "pod-abc",
+                "current_snapshot_identity": None,
+                "readiness": True,
+                "loading_state": {"stage": "idle"},
+                "loaded_adapters": [
+                    {"identity": "snap-multi-lora", "status": "loading"},
+                ],
+            }]
+        })
+        result = mgr.wait_for_hotload(
+            "dep-1", "m", "snap-multi-lora",
+            timeout_seconds=0.01, poll_interval=0.005,
+        )
+        assert result is False
+
 
 # ---------------------------------------------------------------------------
 # _extract_logprobs

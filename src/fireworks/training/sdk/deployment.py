@@ -702,14 +702,29 @@ class DeploymentManager(_RestClient):
                     current_identity = replica.get("current_snapshot_identity")
                     stage = replica.get("loading_state", {}).get("stage", "unknown")
                     readiness = replica.get("readiness", False)
+                    loaded_adapters = replica.get("loaded_adapters") or []
                 else:
                     current_identity = None
                     stage = "pending"
                     readiness = False
+                    loaded_adapters = []
 
                 elapsed = int(time.time() - start)
 
-                if readiness and current_identity == expected_identity:
+                # vLLM multi-LoRA backend reports completion via
+                # ``loaded_adapters`` rather than ``current_snapshot_identity``
+                # (which stays None because many adapters can be loaded
+                # simultaneously). FA-backed deployments still use
+                # ``current_snapshot_identity``; both shapes are accepted.
+                multi_lora_loaded = any(
+                    isinstance(a, dict)
+                    and a.get("identity") == expected_identity
+                    and a.get("status") == "loaded"
+                    for a in loaded_adapters
+                )
+                if readiness and (
+                    current_identity == expected_identity or multi_lora_loaded
+                ):
                     logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
@@ -744,11 +759,17 @@ class DeploymentManager(_RestClient):
                     )
                 else:
                     logger.info(
-                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s (%ds)",
+                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s, "
+                        "loaded_adapters=%s (%ds)",
                         stage,
                         current_identity,
                         expected_identity,
                         readiness,
+                        [
+                            a.get("identity")
+                            for a in loaded_adapters
+                            if isinstance(a, dict)
+                        ],
                         elapsed,
                     )
             except RuntimeError:

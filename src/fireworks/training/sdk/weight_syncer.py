@@ -89,6 +89,7 @@ class WeightSyncer:
     base_identity: str | None = field(default=None, init=False)
     _deployment_checked: bool = field(default=False, init=False)
     _snapshot_paths: dict[str, str] = field(default_factory=dict, init=False)
+    _cached_bucket_url: str | None = field(default=None, init=False)
     """Maps snapshot_name -> object-storage URI (e.g. ``gs://bucket/...``)
     captured from the trainer's :class:`SaveSamplerResult`.  Used to feed the
     snapshot location into the hotload payload so the serving side (vLLM
@@ -279,21 +280,72 @@ class WeightSyncer:
 
     @staticmethod
     def _extract_snapshot_path(save_result: object) -> str | None:
-        """Pull the storage URI out of a :class:`SaveSamplerResult`-like object.
+        """Pull the raw ``path`` field out of a :class:`SaveSamplerResult`-like object.
 
-        The trainer returns the object-storage URI (``gs://...``) that the
-        sampler weights were uploaded to in ``SaveSamplerResult.path``.  We
-        only forward it when it looks like a real URI — local paths, empty
-        strings, and the legacy ``snapshot_name``-as-``path`` shape are
-        treated as "no URI available", so the proxy falls back to its
-        existing out-of-band materialization (Alluxio mount / addons sidecar).
+        The trainer's ``save_for_sampler`` response carries a ``path``
+        field that is typically the *relative* snapshot directory name
+        (e.g. ``"step-0-base-…"``).  Some configurations may already
+        return a fully-qualified URI (``gs://…``).  We return the field
+        as-is here and defer URI resolution to
+        :meth:`_resolve_full_snapshot_uri`.
         """
         path = getattr(save_result, "path", None)
         if not isinstance(path, str) or not path:
             return None
-        if "://" not in path:
-            return None
         return path
+
+    def _resolve_full_snapshot_uri(self, raw_path: str | None) -> str | None:
+        """Combine a relative trainer-returned path with the deployment's
+        ``hot_load_bucket_url`` to form a fully-qualified ``gs://`` URI.
+
+        - Already-qualified URIs (``gs://…``, ``s3://…``) are returned as-is.
+        - Relative paths require ``deploy_mgr`` and ``deployment_id`` to be
+          set so we can look up the deployment's
+          ``hot_load_bucket_url``.  The bucket URL is cached after the
+          first lookup since it is fixed for the lifetime of a
+          deployment.
+        - If we can't form a valid URI we return ``None`` and the proxy
+          falls back to its existing out-of-band materialization
+          (Alluxio mount / addons sidecar).  Logs at WARNING so callers
+          notice if vLLM hotload can't see the bytes.
+        """
+        if not raw_path:
+            return None
+        if "://" in raw_path:
+            return raw_path
+
+        if self.deploy_mgr is None or not self.deployment_id:
+            logger.debug(
+                "snapshot path %r is relative but no deploy_mgr/deployment_id "
+                "available to resolve bucket URL",
+                raw_path,
+            )
+            return None
+
+        bucket_url = self._cached_bucket_url
+        if bucket_url is None:
+            try:
+                info = self.deploy_mgr.get(self.deployment_id)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "Could not fetch deployment %s to resolve hot_load_bucket_url: %s",
+                    self.deployment_id, e,
+                )
+                return None
+            bucket_url = (
+                getattr(info, "hot_load_bucket_url", None)
+                or getattr(info, "hotLoadBucketUrl", None)
+            )
+            if not bucket_url:
+                logger.warning(
+                    "Deployment %s has no hot_load_bucket_url; cannot resolve "
+                    "snapshot path %r to a gs:// URI for vLLM hotload.",
+                    self.deployment_id, raw_path,
+                )
+                return None
+            self._cached_bucket_url = bucket_url
+
+        return f"{bucket_url.rstrip('/')}/{raw_path.lstrip('/')}"
 
     def save_only(self, name: str, checkpoint_type: str | None = None) -> str | None:
         """Save sampler weights WITHOUT hotloading.
@@ -314,7 +366,8 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
-            snapshot_path = self._extract_snapshot_path(save_result)
+            raw_path = self._extract_snapshot_path(save_result)
+            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
             if snapshot_path is not None:
                 self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
@@ -408,7 +461,8 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
-            snapshot_path = self._extract_snapshot_path(save_result)
+            raw_path = self._extract_snapshot_path(save_result)
+            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
             if snapshot_path is not None:
                 self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
