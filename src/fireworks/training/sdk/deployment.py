@@ -566,6 +566,7 @@ class DeploymentManager(_RestClient):
         incremental_snapshot_metadata: dict[str, Any] | None = None,
         reset_prompt_cache: bool = True,
         timeout: int = 60,
+        path: str | None = None,
     ) -> dict[str, Any]:
         """Load a weight snapshot onto a deployment via the gateway.
 
@@ -577,16 +578,23 @@ class DeploymentManager(_RestClient):
                 previous_snapshot_identity, compression_format, checksum_format.
             reset_prompt_cache: Whether to reset the prompt cache after loading.
             timeout: Request timeout in seconds.
+            path: Optional object-storage URI (``gs://bucket/prefix/``) the
+                serving side should download the snapshot from before
+                loading.  Required for vLLM multi-LoRA hotload, which has
+                no shared snapshot ledger and relies on the proxy to
+                materialize bytes locally.  Ignored by FA-backed
+                deployments (which read from their snapshot ledger).
         """
         headers = self._hotload_headers(deployment_id, base_model)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
         logger.info(
-            "Hotloading %s snapshot '%s' to deployment '%s'",
+            "Hotloading %s snapshot '%s' to deployment '%s'%s",
             ckpt_type,
             snapshot_identity,
             deployment_id,
+            f" (path={path})" if path else "",
         )
 
         include_reset_prompt_cache = self._hotload_reset_prompt_cache_supported is not False
@@ -597,6 +605,8 @@ class DeploymentManager(_RestClient):
                 payload["reset_prompt_cache"] = reset_prompt_cache
             if incremental_snapshot_metadata:
                 payload["incremental_snapshot_metadata"] = incremental_snapshot_metadata
+            if path is not None:
+                payload["path"] = path
             return payload
 
         resp = self._sync_request(
@@ -692,14 +702,29 @@ class DeploymentManager(_RestClient):
                     current_identity = replica.get("current_snapshot_identity")
                     stage = replica.get("loading_state", {}).get("stage", "unknown")
                     readiness = replica.get("readiness", False)
+                    loaded_adapters = replica.get("loaded_adapters") or []
                 else:
                     current_identity = None
                     stage = "pending"
                     readiness = False
+                    loaded_adapters = []
 
                 elapsed = int(time.time() - start)
 
-                if readiness and current_identity == expected_identity:
+                # vLLM multi-LoRA backend reports completion via
+                # ``loaded_adapters`` rather than ``current_snapshot_identity``
+                # (which stays None because many adapters can be loaded
+                # simultaneously). FA-backed deployments still use
+                # ``current_snapshot_identity``; both shapes are accepted.
+                multi_lora_loaded = any(
+                    isinstance(a, dict)
+                    and a.get("identity") == expected_identity
+                    and a.get("status") == "loaded"
+                    for a in loaded_adapters
+                )
+                if readiness and (
+                    current_identity == expected_identity or multi_lora_loaded
+                ):
                     logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
@@ -734,11 +759,17 @@ class DeploymentManager(_RestClient):
                     )
                 else:
                     logger.info(
-                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s (%ds)",
+                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s, "
+                        "loaded_adapters=%s (%ds)",
                         stage,
                         current_identity,
                         expected_identity,
                         readiness,
+                        [
+                            a.get("identity")
+                            for a in loaded_adapters
+                            if isinstance(a, dict)
+                        ],
                         elapsed,
                     )
             except RuntimeError:
@@ -773,14 +804,19 @@ class DeploymentManager(_RestClient):
         incremental_snapshot_metadata: dict[str, Any] | None = None,
         reset_prompt_cache: bool = True,
         timeout_seconds: int = 400,
+        path: str | None = None,
     ) -> bool:
-        """Hotload a snapshot and wait for it to complete. Returns True on success."""
+        """Hotload a snapshot and wait for it to complete. Returns True on success.
+
+        See :meth:`hotload` for *path* semantics.
+        """
         self.hotload(
             deployment_id=deployment_id,
             base_model=base_model,
             snapshot_identity=snapshot_identity,
             incremental_snapshot_metadata=incremental_snapshot_metadata,
             reset_prompt_cache=reset_prompt_cache,
+            path=path,
         )
         return self.wait_for_hotload(
             deployment_id=deployment_id,
