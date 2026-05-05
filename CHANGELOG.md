@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.66 (2026-05-01)
+
+Full Changelog: [v1.2.0-alpha.65...v1.2.0-alpha.66](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.65...v1.2.0-alpha.66)
+
+### Reverts
+
+* restore prerelease versioning in release-please-config.json ([#132](https://github.com/fw-ai-external/python-sdk/issues/132)) ([a574884](https://github.com/fw-ai-external/python-sdk/commit/a574884c6ad6ffd4c1c2c59590e4e48eb83c9263))
+
 ## 1.2.0-alpha.65 (2026-05-01)
 
 Full Changelog: [v1.1.0-alpha.64...v1.2.0-alpha.65](https://github.com/fw-ai-external/python-sdk/compare/v1.1.0-alpha.64...v1.2.0-alpha.65)
