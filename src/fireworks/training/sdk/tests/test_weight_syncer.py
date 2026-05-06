@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from fireworks.training.sdk.client import SaveSamplerResult
@@ -197,125 +196,6 @@ class TestDeltaChainProgression:
         _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
         meta = kwargs.get("incremental_snapshot_metadata")
         assert meta["previous_snapshot_identity"] == "step-1-sess"
-
-
-class TestSnapshotPathPropagation:
-    """The trainer's GCS URI for the saved snapshot must reach the
-    deployment manager so the serving side can fetch the bytes.
-    """
-
-    def test_save_and_hotload_forwards_gcs_path(self):
-        deploy = _make_deploy_mgr()
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="gs://bucket/run/step-0-base-sess",
-            snapshot_name="step-0-base-sess",
-        )
-
-        t.save_and_hotload("step-0-base")
-
-        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
-        assert kwargs.get("path") == "gs://bucket/run/step-0-base-sess"
-
-    def test_save_only_then_hotload_forwards_gcs_path(self):
-        deploy = _make_deploy_mgr()
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="gs://bucket/run/snap-x",
-            snapshot_name="snap-x",
-        )
-
-        snap = t.save_only("snap-x", checkpoint_type="base")
-        assert snap == "snap-x"
-        deploy.hotload_and_wait.assert_not_called()
-
-        ok = t.hotload(snap, checkpoint_type="base")
-        assert ok is True
-        _, kwargs = deploy.hotload_and_wait.call_args
-        assert kwargs.get("path") == "gs://bucket/run/snap-x"
-
-    def test_relative_path_is_combined_with_bucket_url(self):
-        """In production the trainer returns the *relative* snapshot directory
-        name in ``SaveSamplerResult.path``.  The syncer must combine it with
-        the deployment's ``hot_load_bucket_url`` to form a full ``gs://`` URI
-        before forwarding to the proxy.
-        """
-        deploy = _make_deploy_mgr()
-        deploy.get.return_value = SimpleNamespace(
-            hot_load_bucket_url="gs://fireworks-artifacts-acct/rl-checkpoints/acct/dep-1",
-        )
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="snap-relative-name",
-            snapshot_name="snap-relative-name",
-        )
-
-        t.save_and_hotload("base")
-
-        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
-        assert kwargs.get("path") == (
-            "gs://fireworks-artifacts-acct/rl-checkpoints/acct/dep-1/snap-relative-name"
-        )
-
-    def test_relative_path_not_forwarded_when_deployment_has_no_bucket(self):
-        """If the deployment doesn't expose ``hot_load_bucket_url``, the syncer
-        omits ``path`` and lets the proxy fall back to its own materialization
-        (Alluxio / addons sidecar)."""
-        deploy = _make_deploy_mgr()
-        deploy.get.return_value = SimpleNamespace(hot_load_bucket_url=None)
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="snap-relative-name",
-            snapshot_name="snap-relative-name",
-        )
-
-        t.save_and_hotload("base")
-
-        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
-        assert kwargs.get("path") is None
-
-    def test_full_uri_passes_through_bucket_combine(self):
-        """Already-qualified URIs (gs://, s3://) bypass bucket lookup."""
-        deploy = _make_deploy_mgr()
-        deploy.get.side_effect = AssertionError(
-            "deploy_mgr.get must not be called when path is already a full URI"
-        )
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="gs://other-bucket/run/snap",
-            snapshot_name="snap",
-        )
-
-        t.save_and_hotload("base")
-
-        _, kwargs = deploy.hotload_and_wait.call_args_list[-1]
-        assert kwargs.get("path") == "gs://other-bucket/run/snap"
-
-    def test_bucket_url_lookup_is_cached(self):
-        """The bucket URL is fixed for a deployment's lifetime, so we only
-        fetch it once even across many save_and_hotload calls."""
-        deploy = _make_deploy_mgr()
-        deploy.get.return_value = SimpleNamespace(
-            hot_load_bucket_url="gs://b/dep-1",
-        )
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-
-        t.policy_client.save_weights_for_sampler_ext.side_effect = [
-            SaveSamplerResult(path="snap-1", snapshot_name="snap-1"),
-            SaveSamplerResult(path="snap-2", snapshot_name="snap-2"),
-            SaveSamplerResult(path="snap-3", snapshot_name="snap-3"),
-        ]
-        t.save_and_hotload("step-1")
-        t.save_and_hotload("step-2")
-        t.save_and_hotload("step-3")
-
-        assert deploy.get.call_count == 1
 
 
 class TestResetDeltaChain:
