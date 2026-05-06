@@ -82,6 +82,12 @@ class TrainerJobConfig:
 
     base_model: str
     lora_rank: int = 0
+    keep_alive: bool = False
+    """When True, send ``keepAlive=true`` so the trainer pod is not reaped by the
+    server after long client-side idle periods (e.g. during multi-turn RL rollouts
+    that can take 30+ minutes between forward_backward calls). Defaults to False
+    to preserve historical behavior; set explicitly when running RL workloads with
+    long rollout phases."""
     max_context_length: int | None = None
     """Max context length for the trainer.
 
@@ -272,7 +278,7 @@ class TrainerJobManager(FireworksClient):
 
         payload: dict[str, Any] = {
             "serviceMode": True,
-            "keepAlive": False,
+            "keepAlive": config.keep_alive,
             "dataset": "",
             "trainingConfig": training_config,
         }
