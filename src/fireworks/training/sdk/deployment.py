@@ -232,15 +232,38 @@ class DeploymentManager(_RestClient):
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
 
-    def _hotload_headers(self, deployment_id: str, base_model: str) -> dict[str, str]:
-        """Construct headers for hotload API requests."""
-        return self._headers(
-            Authorization=f"Bearer {self.api_key}",
-            **{
-                "fireworks-model": base_model,
-                "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
-            },
-        )
+    # Header that carries the optional snapshot source URI. Some serving
+    # backends use it to fetch the snapshot bytes inline at hot-load time;
+    # others ignore it and resolve the snapshot from the deployment's
+    # configured storage. Carried as a header (rather than a body field)
+    # because the body schema rejects unknown fields, while unknown
+    # headers are tolerated cross-engine.
+    _HOTLOAD_SOURCE_URL_HEADER = "x-fireworks-hot-load-source-url"
+
+    def _hotload_headers(
+        self,
+        deployment_id: str,
+        base_model: str,
+        path: str | None = None,
+    ) -> dict[str, str]:
+        """Construct headers for hotload API requests.
+
+        Args:
+            deployment_id: Target deployment id.
+            base_model: Model name (used for routing).
+            path: Optional object-storage URI (e.g. ``gs://bucket/prefix/``)
+                forwarded as ``x-fireworks-hot-load-source-url``. Set when the
+                trainer wants the deployment to fetch the snapshot bytes from
+                a specific URI instead of resolving from the deployment's
+                configured storage.
+        """
+        extra: dict[str, str] = {
+            "fireworks-model": base_model,
+            "fireworks-deployment": f"accounts/{self.account_id}/deployments/{deployment_id}",
+        }
+        if path:
+            extra[self._HOTLOAD_SOURCE_URL_HEADER] = path
+        return self._headers(Authorization=f"Bearer {self.api_key}", **extra)
 
     # -- Deployment CRUD -------------------------------------------------------
 
@@ -566,6 +589,7 @@ class DeploymentManager(_RestClient):
         incremental_snapshot_metadata: dict[str, Any] | None = None,
         reset_prompt_cache: bool = True,
         timeout: int = 60,
+        path: str | None = None,
     ) -> dict[str, Any]:
         """Load a weight snapshot onto a deployment via the gateway.
 
@@ -577,16 +601,24 @@ class DeploymentManager(_RestClient):
                 previous_snapshot_identity, compression_format, checksum_format.
             reset_prompt_cache: Whether to reset the prompt cache after loading.
             timeout: Request timeout in seconds.
+            path: Optional object-storage URI (``gs://bucket/prefix/``) the
+                serving side may use to fetch the snapshot bytes when the
+                deployment's configured storage is not sufficient. Forwarded
+                as the ``x-fireworks-hot-load-source-url`` header (not a body
+                field) so the same wire shape is accepted across serving
+                backends; backends that do not consume the header simply
+                ignore it.
         """
-        headers = self._hotload_headers(deployment_id, base_model)
+        headers = self._hotload_headers(deployment_id, base_model, path=path)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
         logger.info(
-            "Hotloading %s snapshot '%s' to deployment '%s'",
+            "Hotloading %s snapshot '%s' to deployment '%s'%s",
             ckpt_type,
             snapshot_identity,
             deployment_id,
+            f" (source={path})" if path else "",
         )
 
         include_reset_prompt_cache = self._hotload_reset_prompt_cache_supported is not False
@@ -692,14 +724,30 @@ class DeploymentManager(_RestClient):
                     current_identity = replica.get("current_snapshot_identity")
                     stage = replica.get("loading_state", {}).get("stage", "unknown")
                     readiness = replica.get("readiness", False)
+                    loaded_adapters = replica.get("loaded_adapters") or []
                 else:
                     current_identity = None
                     stage = "pending"
                     readiness = False
+                    loaded_adapters = []
 
                 elapsed = int(time.time() - start)
 
-                if readiness and current_identity == expected_identity:
+                # Some serving backends report multi-adapter completion via a
+                # per-adapter ``loaded_adapters`` array (one ``"loaded"`` entry
+                # per adapter that finished loading) rather than a single
+                # ``current_snapshot_identity`` (which only makes sense when
+                # a single snapshot defines the deployment's identity at a
+                # time). Both shapes are accepted.
+                multi_adapter_loaded = any(
+                    isinstance(a, dict)
+                    and a.get("identity") == expected_identity
+                    and a.get("status") == "loaded"
+                    for a in loaded_adapters
+                )
+                if readiness and (
+                    current_identity == expected_identity or multi_adapter_loaded
+                ):
                     logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
@@ -734,11 +782,17 @@ class DeploymentManager(_RestClient):
                     )
                 else:
                     logger.info(
-                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s (%ds)",
+                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s, "
+                        "loaded_adapters=%s (%ds)",
                         stage,
                         current_identity,
                         expected_identity,
                         readiness,
+                        [
+                            a.get("identity")
+                            for a in loaded_adapters
+                            if isinstance(a, dict)
+                        ],
                         elapsed,
                     )
             except RuntimeError:
@@ -773,14 +827,19 @@ class DeploymentManager(_RestClient):
         incremental_snapshot_metadata: dict[str, Any] | None = None,
         reset_prompt_cache: bool = True,
         timeout_seconds: int = 400,
+        path: str | None = None,
     ) -> bool:
-        """Hotload a snapshot and wait for it to complete. Returns True on success."""
+        """Hotload a snapshot and wait for it to complete. Returns True on success.
+
+        See :meth:`hotload` for ``path`` semantics.
+        """
         self.hotload(
             deployment_id=deployment_id,
             base_model=base_model,
             snapshot_identity=snapshot_identity,
             incremental_snapshot_metadata=incremental_snapshot_metadata,
             reset_prompt_cache=reset_prompt_cache,
+            path=path,
         )
         return self.wait_for_hotload(
             deployment_id=deployment_id,
