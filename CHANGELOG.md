@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.69 (2026-05-06)
+
+Full Changelog: [v1.2.0-alpha.68...v1.2.0-alpha.69](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.68...v1.2.0-alpha.69)
+
+### Features
+
+* **sdk/training/hotload:** forward snapshot URI via x-fireworks-hot-load-source-url header ([a842b84](https://github.com/fw-ai-external/python-sdk/commit/a842b8447ef2cddf9c28af5786a5e6cea7477637))
+
 ## 1.2.0-alpha.68 (2026-05-06)
 
 Full Changelog: [v1.2.0-alpha.67...v1.2.0-alpha.68](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.67...v1.2.0-alpha.68)
