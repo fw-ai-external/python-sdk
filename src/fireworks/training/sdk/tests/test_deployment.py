@@ -225,6 +225,49 @@ class TestHotload:
         assert "reset_prompt_cache" not in second_call_payload
         assert mgr._hotload_reset_prompt_cache_supported is False
 
+    def test_hotload_path_sent_as_header_not_body(self, mgr):
+        # ``path`` rides the ``x-fireworks-hot-load-source-url`` header so
+        # the request body stays a fixed shape across serving backends
+        # (some of which 400 on unknown body fields).
+        resp = self._response(200)
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload(
+            "dep-1",
+            "accounts/test/models/m",
+            "snap-123",
+            path="gs://my-bucket/snapshots/snap-123/",
+        )
+        call_kwargs = mgr._sync_request.call_args[1]
+        body = call_kwargs["json"]
+        headers = call_kwargs["headers"]
+
+        assert "path" not in body
+        assert headers.get("x-fireworks-hot-load-source-url") == "gs://my-bucket/snapshots/snap-123/"
+
+    def test_hotload_omits_source_url_header_when_no_path(self, mgr):
+        resp = self._response(200)
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
+        headers = mgr._sync_request.call_args[1]["headers"]
+        assert "x-fireworks-hot-load-source-url" not in headers
+
+    def test_hotload_and_wait_forwards_path(self, mgr):
+        resp = self._response(200)
+        mgr._sync_request = MagicMock(return_value=resp)
+        mgr.wait_for_hotload = MagicMock(return_value=True)
+
+        ok = mgr.hotload_and_wait(
+            "dep-1",
+            "accounts/test/models/m",
+            "snap-123",
+            path="gs://my-bucket/snapshots/snap-123/",
+        )
+        assert ok is True
+        headers = mgr._sync_request.call_args[1]["headers"]
+        assert headers.get("x-fireworks-hot-load-source-url") == "gs://my-bucket/snapshots/snap-123/"
+
 
 # ---------------------------------------------------------------------------
 # wait_for_hotload
@@ -252,6 +295,40 @@ class TestWaitForHotload:
             }]
         })
         result = mgr.wait_for_hotload("dep-1", "m", "snap-x", timeout_seconds=0.01, poll_interval=0.005)
+        assert result is False
+
+    def test_loaded_adapters_status_loaded_signals_completion(self, mgr):
+        # Some serving backends report multi-adapter completion via a
+        # per-adapter ``loaded_adapters`` array rather than a single
+        # ``current_snapshot_identity``. Both shapes must be accepted.
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "current_snapshot_identity": None,
+                "readiness": True,
+                "loading_state": {"stage": "idle"},
+                "loaded_adapters": [
+                    {"identity": "snap-1", "status": "loaded"},
+                ],
+            }]
+        })
+        result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
+        assert result is True
+
+    def test_loaded_adapters_non_loaded_status_does_not_complete(self, mgr):
+        # A non-``loaded`` status (e.g. ``loading``, ``failed``) must NOT
+        # terminate the wait — the SDK keeps polling until either
+        # ``status: loaded`` shows up or the timeout fires.
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "current_snapshot_identity": None,
+                "readiness": True,
+                "loading_state": {"stage": "downloading"},
+                "loaded_adapters": [
+                    {"identity": "snap-1", "status": "loading"},
+                ],
+            }]
+        })
+        result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=0.01, poll_interval=0.005)
         assert result is False
 
 
