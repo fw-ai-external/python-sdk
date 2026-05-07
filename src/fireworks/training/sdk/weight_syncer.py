@@ -88,6 +88,16 @@ class WeightSyncer:
     base_saved: bool = field(default=False, init=False)
     base_identity: str | None = field(default=None, init=False)
     _deployment_checked: bool = field(default=False, init=False)
+    _snapshot_paths: dict[str, str] = field(default_factory=dict, init=False)
+    """Maps ``snapshot_name`` to a fully-qualified object-storage URI captured
+    from the trainer's ``SaveSamplerResult.path``. Forwarded to the deployment
+    on hotload so the serving side can fetch the snapshot bytes from a
+    specific source when the deployment's configured storage is not
+    sufficient."""
+    _cached_bucket_url: str | None = field(default=None, init=False)
+    """Cached ``hot_load_bucket_url`` from the deployment metadata. Combined
+    with the relative ``SaveSamplerResult.path`` to form a fully-qualified
+    URI, then cached so subsequent saves don't re-fetch the deployment."""
     last_timing: dict = field(default_factory=dict, init=False)
     """Timing breakdown from the most recent operation (seconds).
     Reset at the start of each save/hotload/dcp call."""
@@ -271,6 +281,71 @@ class WeightSyncer:
         """
         self.base_saved = True
 
+    @staticmethod
+    def _extract_snapshot_path(save_result: object) -> str | None:
+        """Return the raw ``path`` field on a ``SaveSamplerResult``-like object.
+
+        Older trainer mocks/test doubles can put a non-string value (or an
+        empty string) there; we filter those out so the rest of the
+        resolution logic stays simple. URI resolution (relative path →
+        full ``gs://`` URI) is deferred to :meth:`_resolve_full_snapshot_uri`.
+        """
+        path = getattr(save_result, "path", None)
+        if not isinstance(path, str) or not path:
+            return None
+        return path
+
+    def _resolve_full_snapshot_uri(self, raw_path: str | None) -> str | None:
+        """Combine a relative trainer-returned path with the deployment's
+        ``hot_load_bucket_url`` to form a fully-qualified ``gs://`` URI.
+
+        - Already-qualified URIs (``gs://…``, ``s3://…``, etc.) pass through.
+        - Relative paths require ``deploy_mgr`` and ``deployment_id`` to be
+          set so we can read the deployment's ``hot_load_bucket_url``. The
+          bucket URL is cached after the first lookup since it is fixed for
+          the lifetime of a deployment.
+        - If the URI cannot be formed (no deploy_mgr, no bucket_url, etc.)
+          we return ``None`` and the deployment is left to resolve the
+          snapshot from its own configured storage.
+        """
+        if not raw_path:
+            return None
+        if "://" in raw_path:
+            return raw_path
+
+        if self.deploy_mgr is None or not self.deployment_id:
+            logger.debug(
+                "snapshot path %r is relative but no deploy_mgr/deployment_id "
+                "available to resolve bucket URL",
+                raw_path,
+            )
+            return None
+
+        bucket_url = self._cached_bucket_url
+        if bucket_url is None:
+            try:
+                info = self.deploy_mgr.get(self.deployment_id)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "Could not fetch deployment %s to resolve hot_load_bucket_url: %s",
+                    self.deployment_id, e,
+                )
+                return None
+            bucket_url = (
+                getattr(info, "hot_load_bucket_url", None)
+                or getattr(info, "hotLoadBucketUrl", None)
+            )
+            if not bucket_url:
+                logger.warning(
+                    "Deployment %s has no hot_load_bucket_url; cannot resolve "
+                    "snapshot path %r to a fully-qualified URI.",
+                    self.deployment_id, raw_path,
+                )
+                return None
+            self._cached_bucket_url = bucket_url
+
+        return f"{bucket_url.rstrip('/')}/{raw_path.lstrip('/')}"
+
     def save_only(self, name: str, checkpoint_type: str | None = None) -> str | None:
         """Save sampler weights WITHOUT hotloading.
 
@@ -290,19 +365,30 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
+            raw_path = self._extract_snapshot_path(save_result)
+            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
+            if snapshot_path is not None:
+                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
             return snapshot_name
         except Exception as e:
             logger.warning("Save error for '%s': %s.", name, e)
             return None
 
-    def _do_hotload(self, snapshot_name: str, checkpoint_type: str) -> None:
+    def _do_hotload(
+        self,
+        snapshot_name: str,
+        checkpoint_type: str,
+        snapshot_path: str | None = None,
+    ) -> None:
         """Core hotload logic shared by :meth:`hotload` and :meth:`save_and_hotload`.
 
         Raises on failure so callers can decide how to handle errors.
         """
         self._ensure_deployment_checked()
         incremental = self._build_incremental_metadata(checkpoint_type)
+        if snapshot_path is None:
+            snapshot_path = self._snapshot_paths.get(snapshot_name)
         t0 = time.time()
         ok = self.deploy_mgr.hotload_and_wait(
             deployment_id=self.deployment_id,
@@ -311,6 +397,7 @@ class WeightSyncer:
             incremental_snapshot_metadata=incremental,
             reset_prompt_cache=self.reset_prompt_cache,
             timeout_seconds=self.hotload_timeout,
+            path=snapshot_path,
         )
         self.last_timing["hotload_time_s"] = time.time() - t0
         if not ok:
@@ -373,10 +460,14 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
+            raw_path = self._extract_snapshot_path(save_result)
+            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
+            if snapshot_path is not None:
+                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
 
             if self._hotload_enabled:
-                self._do_hotload(snapshot_name, ckpt_type)
+                self._do_hotload(snapshot_name, ckpt_type, snapshot_path=snapshot_path)
 
             self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name
