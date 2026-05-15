@@ -89,7 +89,19 @@ class TrainerJobConfig:
     On the manual path it is sent as-is.
     """
     learning_rate: float = 1e-5
-    gradient_accumulation_steps: int = 1
+    gradient_accumulation_steps: int | None = None
+    """**Deprecated.** Ignored when set to ``1``; rejected above ``1``.
+
+    The Tinker/RLOR training path does not honor a server-side
+    ``gradient_accumulation_steps`` knob: each ``forward_backward`` call
+    backprops a raw token-sum loss, and cross-microbatch normalization happens
+    at ``optim_step`` via ``OptimStepRequest.grad_accumulation_normalization``.
+    Express gradient accumulation as client-side control flow: issue N
+    ``forward_backward`` calls before one ``optim_step``.
+
+    Background: a backward-time ``/G`` divide is the naive Unsloth-style
+    bug (https://unsloth.ai/blog/gradient).
+    """
     node_count: int | None = None
     """Number of trainer nodes.
 
@@ -148,6 +160,18 @@ class TrainerJobConfig:
         errors: list[str] = []
         if not self.base_model:
             errors.append("base_model is required")
+        if self.gradient_accumulation_steps is not None and self.gradient_accumulation_steps != 1:
+            errors.append(
+                "gradient_accumulation_steps must be 1. Server-side gradient "
+                "accumulation is deprecated on the Tinker/RLOR path."
+            )
+        if self.gradient_accumulation_steps == 1:
+            logger.warning(
+                "TrainerJobConfig.gradient_accumulation_steps=1 is deprecated and "
+                "ignored. Express gradient accumulation as client-side control flow "
+                "(multiple forward_backward calls per optim_step) and pass "
+                "grad_accumulation_normalization on the optim_step request."
+            )
         if self.training_shape_ref:
             for field in _SHAPE_OWNED_FIELDS:
                 val = getattr(self, field)
@@ -267,7 +291,6 @@ class TrainerJobManager(FireworksClient):
             "baseModel": config.base_model,
             "loraRank": config.lora_rank,
             "learningRate": config.learning_rate,
-            "gradientAccumulationSteps": config.gradient_accumulation_steps,
         }
 
         payload: dict[str, Any] = {

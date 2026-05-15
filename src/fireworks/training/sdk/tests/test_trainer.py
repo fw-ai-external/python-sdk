@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -638,6 +639,32 @@ class TestValidate:
         config = TrainerJobConfig(base_model="")
         with pytest.raises(ValueError, match="base_model"):
             config.validate()
+
+    def test_unset_gradient_accumulation_steps_is_silent(self, caplog):
+        config = TrainerJobConfig(base_model="accounts/test/models/m")
+        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
+            config.validate()
+        assert not any("gradient_accumulation_steps" in rec.message for rec in caplog.records)
+
+    def test_rejects_gradient_accumulation_steps_above_one(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            gradient_accumulation_steps=4,
+        )
+        with pytest.raises(ValueError):
+            config.validate()
+
+    def test_explicit_one_gradient_accumulation_steps_warns(self, caplog):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            gradient_accumulation_steps=1,
+        )
+        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
+            config.validate()
+        assert any(
+            "gradient_accumulation_steps=1 is deprecated" in rec.message
+            for rec in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------
