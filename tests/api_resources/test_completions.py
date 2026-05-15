@@ -74,7 +74,9 @@ class TestCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             top_k=0,
             top_logprobs=0,
@@ -170,7 +172,9 @@ class TestCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             top_k=0,
             top_logprobs=0,
@@ -272,7 +276,9 @@ class TestAsyncCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             top_k=0,
             top_logprobs=0,
@@ -368,7 +374,9 @@ class TestAsyncCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             top_k=0,
             top_logprobs=0,

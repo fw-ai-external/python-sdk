@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, Union
 from datetime import datetime
 from typing_extensions import Literal, Required, Annotated, TypedDict
 
@@ -46,6 +46,7 @@ class DeploymentUpdateParams(TypedDict, total=False):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ],
         PropertyInfo(alias="acceleratorType"),
     ]
@@ -55,6 +56,13 @@ class DeploymentUpdateParams(TypedDict, total=False):
     """
     The model version that is currently active and applied to running replicas of a
     deployment.
+    """
+
+    annotations: Dict[str, str]
+    """
+    Annotations to identify deployment properties. Key/value pairs may be used by
+    external tools or other services. The "image-tag-reason" key is redacted from
+    API responses for non-superuser principals.
     """
 
     autoscaling_policy: Annotated[AutoscalingPolicyParam, PropertyInfo(alias="autoscalingPolicy")]
@@ -130,9 +138,6 @@ class DeploymentUpdateParams(TypedDict, total=False):
     model.
     """
 
-    enable_mtp: Annotated[bool, PropertyInfo(alias="enableMtp")]
-    """If true, MTP is enabled for this deployment."""
-
     enable_session_affinity: Annotated[bool, PropertyInfo(alias="enableSessionAffinity")]
     """
     Whether to apply sticky routing based on `user` field. Serverless will be set to
@@ -151,6 +156,8 @@ class DeploymentUpdateParams(TypedDict, total=False):
     ]
 
     hot_load_bucket_url: Annotated[str, PropertyInfo(alias="hotLoadBucketUrl")]
+
+    hot_load_trainer_job: Annotated[str, PropertyInfo(alias="hotLoadTrainerJob")]
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """
@@ -176,6 +183,8 @@ class DeploymentUpdateParams(TypedDict, total=False):
 
     ngram_speculation_length: Annotated[int, PropertyInfo(alias="ngramSpeculationLength")]
     """The length of previous input sequence to be considered for N-gram speculation."""
+
+    num_peft_device_cached: Annotated[int, PropertyInfo(alias="numPeftDeviceCached")]
 
     placement: PlacementParam
     """

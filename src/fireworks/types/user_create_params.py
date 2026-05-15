@@ -13,7 +13,10 @@ class UserCreateParams(TypedDict, total=False):
     account_id: str
 
     role: Required[str]
-    """The user's role: admin, user, contributor, or inference-user."""
+    """
+    The user's role: admin, user, contributor, inference-user, or custom. When set
+    to "custom", the user's permissions are governed by permission_preset.
+    """
 
     user_id: Annotated[str, PropertyInfo(alias="userId")]
     """The user ID to use in the user name.
@@ -29,5 +32,8 @@ class UserCreateParams(TypedDict, total=False):
 
     email: str
     """The user's email address."""
+
+    permission_preset: Annotated[str, PropertyInfo(alias="permissionPreset")]
+    """The permission preset for this user. Only valid when role is "custom"."""
 
     service_account: Annotated[bool, PropertyInfo(alias="serviceAccount")]

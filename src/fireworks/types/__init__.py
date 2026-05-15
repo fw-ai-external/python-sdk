@@ -48,7 +48,6 @@ from .type_date_param import TypeDateParam as TypeDateParam
 from .user_get_params import UserGetParams as UserGetParams
 from .completion_chunk import CompletionChunk as CompletionChunk
 from .deployment_shape import DeploymentShape as DeploymentShape
-from .evaluator_source import EvaluatorSource as EvaluatorSource
 from .lora_list_params import LoraListParams as LoraListParams
 from .lora_load_params import LoraLoadParams as LoraLoadParams
 from .model_get_params import ModelGetParams as ModelGetParams
@@ -92,7 +91,6 @@ from .evaluator_list_params import EvaluatorListParams as EvaluatorListParams
 from .message_create_params import MessageCreateParams as MessageCreateParams
 from .deployment_list_params import DeploymentListParams as DeploymentListParams
 from .evaluator_get_response import EvaluatorGetResponse as EvaluatorGetResponse
-from .evaluator_source_param import EvaluatorSourceParam as EvaluatorSourceParam
 from .dataset_upload_response import DatasetUploadResponse as DatasetUploadResponse
 from .deployment_scale_params import DeploymentScaleParams as DeploymentScaleParams
 from .evaluation_result_param import EvaluationResultParam as EvaluationResultParam

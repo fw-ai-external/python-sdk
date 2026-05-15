@@ -14,7 +14,10 @@ __all__ = ["User"]
 
 class User(BaseModel):
     role: str
-    """The user's role: admin, user, contributor, or inference-user."""
+    """
+    The user's role: admin, user, contributor, inference-user, or custom. When set
+    to "custom", the user's permissions are governed by permission_preset.
+    """
 
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the user."""
@@ -29,6 +32,9 @@ class User(BaseModel):
     """The user's email address."""
 
     name: Optional[str] = None
+
+    permission_preset: Optional[str] = FieldInfo(alias="permissionPreset", default=None)
+    """The permission preset for this user. Only valid when role is "custom"."""
 
     service_account: Optional[bool] = FieldInfo(alias="serviceAccount", default=None)
 

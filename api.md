@@ -302,7 +302,6 @@ Types:
 
 ```python
 from fireworks.types import (
-    EvaluatorSource,
     EvaluatorCreateResponse,
     EvaluatorUpdateResponse,
     EvaluatorListResponse,

@@ -74,13 +74,23 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     metrics_file_signed_url: Annotated[str, PropertyInfo(alias="metricsFileSignedUrl")]
 
     mtp_enabled: Annotated[bool, PropertyInfo(alias="mtpEnabled")]
+    """Deprecated: MTP is not supported in V2 training.
+
+    These fields are retained for V1 Helm-based SFT backward compatibility only.
+    """
 
     mtp_freeze_base_model: Annotated[bool, PropertyInfo(alias="mtpFreezeBaseModel")]
+    """Deprecated: see mtp_enabled."""
 
     mtp_num_draft_tokens: Annotated[int, PropertyInfo(alias="mtpNumDraftTokens")]
+    """Deprecated: see mtp_enabled."""
 
     nodes: int
-    """The number of nodes to use for the fine-tuning job."""
+    """
+    Deprecated: multi-node scheduling is now handled by the cookbook orchestrator in
+    V2 workflows. This field is ignored for V2 jobs and will be removed in a future
+    release.
+    """
 
     optimizer_weight_decay: Annotated[float, PropertyInfo(alias="optimizerWeightDecay")]
     """Weight decay (L2 regularization) for optimizer."""
@@ -91,52 +101,8 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     If not specified, the job ID will be used.
     """
 
-    region: Literal[
-        "REGION_UNSPECIFIED",
-        "US_IOWA_1",
-        "US_VIRGINIA_1",
-        "US_VIRGINIA_2",
-        "US_ILLINOIS_1",
-        "AP_TOKYO_1",
-        "EU_LONDON_1",
-        "US_ARIZONA_1",
-        "US_TEXAS_1",
-        "US_ILLINOIS_2",
-        "EU_FRANKFURT_1",
-        "US_TEXAS_2",
-        "EU_PARIS_1",
-        "EU_HELSINKI_1",
-        "US_NEVADA_1",
-        "EU_ICELAND_1",
-        "EU_ICELAND_2",
-        "US_WASHINGTON_1",
-        "US_WASHINGTON_2",
-        "EU_ICELAND_DEV_1",
-        "US_WASHINGTON_3",
-        "US_ARIZONA_2",
-        "AP_TOKYO_2",
-        "US_CALIFORNIA_1",
-        "US_MISSOURI_1",
-        "US_UTAH_1",
-        "US_TEXAS_3",
-        "US_ARIZONA_3",
-        "US_GEORGIA_1",
-        "US_GEORGIA_2",
-        "US_WASHINGTON_4",
-        "US_GEORGIA_3",
-        "NA_BRITISHCOLUMBIA_1",
-        "US_GEORGIA_4",
-        "EU_ICELAND_3",
-        "US_OHIO_1",
-        "US_NEWYORK_1",
-    ]
-    """The region where the fine-tuning job is located."""
-
-    use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
-    """Use dedicated resources for the job.
-
-    The only supported value currently is "pilot". Defaults to empty.
-    """
+    purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]
+    """Scheduling purpose for this job."""
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""

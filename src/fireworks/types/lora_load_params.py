@@ -39,8 +39,3 @@ class LoraLoadParams(TypedDict, total=False):
     """If true, the deployed model will be publicly reachable."""
 
     serverless: bool
-    """
-    This field is not applicable when deploying a LoRA addon and should be omitted
-    or set to false. LoRA models require a dedicated deployment. True if the
-    underlying deployment is managed by Fireworks.
-    """

@@ -67,8 +67,7 @@ class TestSupervisedFineTuningJobs:
             nodes=0,
             optimizer_weight_decay=0,
             output_model="outputModel",
-            region="REGION_UNSPECIFIED",
-            use_purpose="usePurpose",
+            purpose="PURPOSE_UNSPECIFIED",
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,
@@ -412,8 +411,7 @@ class TestAsyncSupervisedFineTuningJobs:
             nodes=0,
             optimizer_weight_decay=0,
             output_model="outputModel",
-            region="REGION_UNSPECIFIED",
-            use_purpose="usePurpose",
+            purpose="PURPOSE_UNSPECIFIED",
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,

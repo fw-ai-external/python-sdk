@@ -42,6 +42,7 @@ class TestModels:
             model={
                 "base_model_details": {
                     "checkpoint_format": "CHECKPOINT_FORMAT_UNSPECIFIED",
+                    "huggingface_files": ["string"],
                     "model_type": "modelType",
                     "moe": True,
                     "parameter_count": "parameterCount",
@@ -140,6 +141,7 @@ class TestModels:
             account_id="account_id",
             base_model_details={
                 "checkpoint_format": "CHECKPOINT_FORMAT_UNSPECIFIED",
+                "huggingface_files": ["string"],
                 "model_type": "modelType",
                 "moe": True,
                 "parameter_count": "parameterCount",
@@ -678,6 +680,7 @@ class TestAsyncModels:
             model={
                 "base_model_details": {
                     "checkpoint_format": "CHECKPOINT_FORMAT_UNSPECIFIED",
+                    "huggingface_files": ["string"],
                     "model_type": "modelType",
                     "moe": True,
                     "parameter_count": "parameterCount",
@@ -776,6 +779,7 @@ class TestAsyncModels:
             account_id="account_id",
             base_model_details={
                 "checkpoint_format": "CHECKPOINT_FORMAT_UNSPECIFIED",
+                "huggingface_files": ["string"],
                 "model_type": "modelType",
                 "moe": True,
                 "parameter_count": "parameterCount",

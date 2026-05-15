@@ -33,6 +33,7 @@ class DeploymentShape(BaseModel):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
     ] = FieldInfo(alias="acceleratorType", default=None)
     """
@@ -54,6 +55,12 @@ class DeploymentShape(BaseModel):
     )
     """If true, the deployment size validation is disabled."""
 
+    disable_speculative_decoding: Optional[bool] = FieldInfo(alias="disableSpeculativeDecoding", default=None)
+    """
+    If true, speculative decoding is disabled for deployments created from this
+    shape, even if the base model has default draft model settings.
+    """
+
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
     """Human-readable display name of the deployment shape.
 
@@ -65,7 +72,8 @@ class DeploymentShape(BaseModel):
 
     e.g. accounts/fireworks/models/my-draft-model If empty, speculative decoding
     using a draft model is disabled. Default is the base model's
-    default_draft_model. this behavior.
+    default_draft_model. Deprecated: set default_draft_model on the base model
+    instead.
     """
 
     draft_token_count: Optional[int] = FieldInfo(alias="draftTokenCount", default=None)

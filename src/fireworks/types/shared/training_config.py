@@ -1,13 +1,31 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
-from typing_extensions import Literal
+from typing import List, Optional
 
 from pydantic import Field as FieldInfo
 
 from ..._models import BaseModel
 
-__all__ = ["TrainingConfig"]
+__all__ = ["TrainingConfig", "TrainerShardingScheme"]
+
+
+class TrainerShardingScheme(BaseModel):
+    """Structured trainer sharding/parallelism configuration."""
+
+    context_parallelism: Optional[int] = FieldInfo(alias="contextParallelism", default=None)
+    """Context-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    expert_parallelism: Optional[int] = FieldInfo(alias="expertParallelism", default=None)
+    """Expert-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    pipeline_parallelism: Optional[int] = FieldInfo(alias="pipelineParallelism", default=None)
+    """Pipeline-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    sequence_parallelism: Optional[bool] = FieldInfo(alias="sequenceParallelism", default=None)
+    """Whether sequence parallelism should be enabled."""
+
+    tensor_parallelism: Optional[int] = FieldInfo(alias="tensorParallelism", default=None)
+    """Tensor-parallel degree. 0 means unspecified (server defaults to 1)."""
 
 
 class TrainingConfig(BaseModel):
@@ -35,11 +53,17 @@ class TrainingConfig(BaseModel):
 
     learning_rate_warmup_steps: Optional[int] = FieldInfo(alias="learningRateWarmupSteps", default=None)
 
-    lora_rank: Optional[int] = FieldInfo(alias="loraRank", default=None)
-    """The rank of the LoRA layers.
+    lora_alpha: Optional[int] = FieldInfo(alias="loraAlpha", default=None)
+    """LoRA alpha scaling factor. If not specified (or 0), trainer defaults are used."""
 
-    For service-mode RLOR trainer jobs (`serviceMode=true`), this must be 0.
-    """
+    lora_dropout: Optional[float] = FieldInfo(alias="loraDropout", default=None)
+    """LoRA dropout probability."""
+
+    lora_rank: Optional[int] = FieldInfo(alias="loraRank", default=None)
+    """The rank of the LoRA layers."""
+
+    lora_target_modules: Optional[List[str]] = FieldInfo(alias="loraTargetModules", default=None)
+    """Optional LoRA target module names (e.g. q_proj, k_proj, v_proj)."""
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """The maximum context length to use with the model."""
@@ -53,48 +77,8 @@ class TrainingConfig(BaseModel):
     If not specified, the job ID will be used.
     """
 
-    region: Optional[
-        Literal[
-            "REGION_UNSPECIFIED",
-            "US_IOWA_1",
-            "US_VIRGINIA_1",
-            "US_VIRGINIA_2",
-            "US_ILLINOIS_1",
-            "AP_TOKYO_1",
-            "EU_LONDON_1",
-            "US_ARIZONA_1",
-            "US_TEXAS_1",
-            "US_ILLINOIS_2",
-            "EU_FRANKFURT_1",
-            "US_TEXAS_2",
-            "EU_PARIS_1",
-            "EU_HELSINKI_1",
-            "US_NEVADA_1",
-            "EU_ICELAND_1",
-            "EU_ICELAND_2",
-            "US_WASHINGTON_1",
-            "US_WASHINGTON_2",
-            "EU_ICELAND_DEV_1",
-            "US_WASHINGTON_3",
-            "US_ARIZONA_2",
-            "AP_TOKYO_2",
-            "US_CALIFORNIA_1",
-            "US_MISSOURI_1",
-            "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_ARIZONA_3",
-            "US_GEORGIA_1",
-            "US_GEORGIA_2",
-            "US_WASHINGTON_4",
-            "US_GEORGIA_3",
-            "NA_BRITISHCOLUMBIA_1",
-            "US_GEORGIA_4",
-            "EU_ICELAND_3",
-            "US_OHIO_1",
-            "US_NEWYORK_1",
-        ]
-    ] = None
-    """The region where the fine-tuning job is located."""
+    trainer_sharding_scheme: Optional[TrainerShardingScheme] = FieldInfo(alias="trainerShardingScheme", default=None)
+    """Structured trainer sharding/parallelism configuration."""
 
     warm_start_from: Optional[str] = FieldInfo(alias="warmStartFrom", default=None)
     """

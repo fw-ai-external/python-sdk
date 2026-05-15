@@ -276,7 +276,7 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     raw_output: Optional[bool]
     """Return raw output from the model."""
 
-    reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None]
+    reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
     """Controls reasoning behavior for supported models.
 
     When enabled, the model's reasoning appears in the `reasoning_content` field of
@@ -284,12 +284,14 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     **Accepted values:**
 
-    - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-      reasoning with varying effort levels; `'none'` to disable reasoning.
+    - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+      enable reasoning with varying effort levels; `'none'` to disable reasoning.
     - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
       disable it.
     - **Integer** (Fireworks extension): A positive integer to set a hard token
-      limit on reasoning output (only effective for grammar-based reasoning models).
+      limit on reasoning output. Integer values enable the model's normal
+      medium-style thinking behavior and force the model to end its thinking phase
+      after at most that many generated thinking tokens.
 
     **Important:** Boolean values are normalized internally: `true` becomes
     `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -300,7 +302,8 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
       `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-      output. `'low'` maps to a default token limit (~3000 tokens).
+      output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+      and are not hard budgets.
     - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
       omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
       `'high'`. `'none'` and boolean values are rejected.
@@ -309,6 +312,11 @@ class CompletionCreateParamsBase(TypedDict, total=False):
       `'none'` or `false` to disable.
     - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
       or `false` to disable; effort levels and integers have no additional effect.
+    - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+      and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+      to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+      thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+      or `false` disables thinking.
     - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
       reasoning on. Use `'none'` or `false` to disable; effort levels and integers
       have no additional effect.
@@ -339,11 +347,13 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     | Model            | Default         | Supported values                             |
     | ---------------- | --------------- | -------------------------------------------- |
+    | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
     | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
     | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
     | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+    | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
     For other models, refer to the model provider's documentation.
 
@@ -429,6 +439,9 @@ class CompletionCreateParamsBase(TypedDict, total=False):
       `reasoning_effort: true`)
     - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
       budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+    - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+      historical reasoning content in the prompt (equivalent to
+      `reasoning_history: "preserved"`).
     - `{"type": "disabled"}` - Disable thinking (equivalent to
       `reasoning_effort: "none"`)
 
@@ -555,11 +568,30 @@ class ThinkingThinkingConfigEnabled(TypedDict, total=False):
 
     type: Required[Literal["enabled"]]
 
+    budget_end_str: Optional[str]
+    """
+    Natural-language transition phrase that the model is forced to emit just before
+    the end-thinking token (`</think>`) when `budget_tokens` is exhausted. This
+    produces a more natural conclusion than a hard token slam (matches vLLM's
+    `reasoning_end_str` behavior). Defaults to a built-in phrase. Set to "" to
+    disable the bridge and force `</think>` immediately. Only meaningful when
+    `budget_tokens` is set.
+    """
+
     budget_tokens: Optional[int]
     """Determines how many tokens the model can use for its internal reasoning process.
 
     Larger budgets can enable more thorough analysis for complex problems, improving
     response quality. Must be >= 1024 if specified.
+    """
+
+    keep: Optional[Literal["all"]]
+    """Controls whether historical reasoning content is preserved in the prompt.
+
+    When set to `"all"`, all previous assistant turns' reasoning_content is included
+    in the rendered prompt (equivalent to `reasoning_history: "preserved"`). When
+    omitted (null), the model uses its default history behavior. Only valid when
+    `type` is `"enabled"`.
     """
 
 

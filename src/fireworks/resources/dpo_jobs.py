@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import Literal
+
 import httpx
 
 from ..types import dpo_job_get_params, dpo_job_list_params, dpo_job_create_params, dpo_job_resume_params
@@ -56,6 +58,7 @@ class DpoJobsResource(SyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -77,6 +80,8 @@ class DpoJobsResource(SyncAPIResource):
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
+
+          purpose: Scheduling purpose for this job.
 
           training_config: Common training configurations.
 
@@ -104,6 +109,7 @@ class DpoJobsResource(SyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "purpose": purpose,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -393,6 +399,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -414,6 +421,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
+
+          purpose: Scheduling purpose for this job.
 
           training_config: Common training configurations.
 
@@ -441,6 +450,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "purpose": purpose,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

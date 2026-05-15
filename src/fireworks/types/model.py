@@ -120,8 +120,27 @@ class Model(BaseModel):
     public: Optional[bool] = None
     """If true, the model will be publicly readable."""
 
+    rl_full_parameter_tunable: Optional[bool] = FieldInfo(alias="rlFullParameterTunable", default=None)
+    """V2 only.
+
+    Whether the model supports full-parameter reinforcement learning (lora_rank =
+    0). True when validated POLICY_TRAINER + FORWARD_ONLY training shapes exist plus
+    a deployment shape.
+    """
+
+    rl_lora_tunable: Optional[bool] = FieldInfo(alias="rlLoraTunable", default=None)
+    """V2 only.
+
+    Whether the model supports LoRA reinforcement learning (lora_rank > 0). True
+    when a validated LORA_TRAINER training shape exists plus a deployment shape.
+    """
+
     rl_tunable: Optional[bool] = FieldInfo(alias="rlTunable", default=None)
-    """If true, the model is RL tunable."""
+    """
+    Deprecated: V1 training stack only — LoRA only, limited architecture support. If
+    the model has use_training_v2=true and your account has AllowTrainingV2, use
+    rl_lora_tunable and rl_full_parameter_tunable instead.
+    """
 
     snapshot_type: Optional[Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"]] = FieldInfo(
         alias="snapshotType", default=None
@@ -133,49 +152,19 @@ class Model(BaseModel):
     status: Optional[Status] = None
     """Contains detailed message when the last model operation fails."""
 
-    supported_precisions: Optional[
-        List[
-            Literal[
-                "PRECISION_UNSPECIFIED",
-                "FP16",
-                "FP8",
-                "FP8_MM",
-                "FP8_AR",
-                "FP8_MM_KV_ATTN",
-                "FP8_KV",
-                "FP8_MM_V2",
-                "FP8_V2",
-                "FP8_MM_KV_ATTN_V2",
-                "NF4",
-                "FP4",
-                "BF16",
-                "FP4_BLOCKSCALED_MM",
-                "FP4_MX_MOE",
-            ]
-        ]
-    ] = FieldInfo(alias="supportedPrecisions", default=None)
+    supervised_full_parameter_tunable: Optional[bool] = FieldInfo(alias="supervisedFullParameterTunable", default=None)
+    """V2 only.
 
-    supported_precisions_with_calibration: Optional[
-        List[
-            Literal[
-                "PRECISION_UNSPECIFIED",
-                "FP16",
-                "FP8",
-                "FP8_MM",
-                "FP8_AR",
-                "FP8_MM_KV_ATTN",
-                "FP8_KV",
-                "FP8_MM_V2",
-                "FP8_V2",
-                "FP8_MM_KV_ATTN_V2",
-                "NF4",
-                "FP4",
-                "BF16",
-                "FP4_BLOCKSCALED_MM",
-                "FP4_MX_MOE",
-            ]
-        ]
-    ] = FieldInfo(alias="supportedPrecisionsWithCalibration", default=None)
+    Whether the model supports full-parameter supervised fine-tuning and DPO
+    (lora_rank = 0). True when a validated POLICY_TRAINER training shape exists.
+    """
+
+    supervised_lora_tunable: Optional[bool] = FieldInfo(alias="supervisedLoraTunable", default=None)
+    """V2 only.
+
+    Whether the model supports LoRA supervised fine-tuning and DPO (lora_rank > 0).
+    True when a validated LORA_TRAINER training shape exists.
+    """
 
     supports_image_input: Optional[bool] = FieldInfo(alias="supportsImageInput", default=None)
     """If set, images can be provided as input to the model."""
@@ -203,10 +192,10 @@ class Model(BaseModel):
     """The maximum context length supported by the model."""
 
     tunable: Optional[bool] = None
-    """If true, the model can be fine-tuned.
-
-    The value will be true if the tunable field is true, and the model is validated
-    against the model_type field.
+    """
+    Deprecated: V1 training stack only — LoRA only, limited architecture support. If
+    the model has use_training_v2=true and your account has AllowTrainingV2, use
+    supervised_lora_tunable and supervised_full_parameter_tunable instead.
     """
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)

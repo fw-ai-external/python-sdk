@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, Union
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -81,9 +81,11 @@ class DeploymentsResource(SyncAPIResource):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
+        annotations: Dict[str, str] | Omit = omit,
         autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
         auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
@@ -101,16 +103,17 @@ class DeploymentsResource(SyncAPIResource):
         enable_addons: bool | Omit = omit,
         enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
-        enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        hot_load_trainer_job: str | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
+        num_peft_device_cached: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
@@ -170,6 +173,10 @@ class DeploymentsResource(SyncAPIResource):
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
 
+          annotations: Annotations to identify deployment properties. Key/value pairs may be used by
+              external tools or other services. The "image-tag-reason" key is redacted from
+              API responses for non-superuser principals.
+
           auto_tune: The performance profile to use for this deployment.
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
@@ -208,8 +215,6 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
-
-          enable_mtp: If true, MTP is enabled for this deployment.
 
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
@@ -264,6 +269,7 @@ class DeploymentsResource(SyncAPIResource):
                     "accelerator_count": accelerator_count,
                     "accelerator_type": accelerator_type,
                     "active_model_version": active_model_version,
+                    "annotations": annotations,
                     "autoscaling_policy": autoscaling_policy,
                     "auto_tune": auto_tune,
                     "deployment_shape": deployment_shape,
@@ -278,16 +284,17 @@ class DeploymentsResource(SyncAPIResource):
                     "enable_addons": enable_addons,
                     "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
-                    "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "hot_load_trainer_job": hot_load_trainer_job,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
+                    "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
                     "pricing_plan_id": pricing_plan_id,
@@ -335,9 +342,11 @@ class DeploymentsResource(SyncAPIResource):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
+        annotations: Dict[str, str] | Omit = omit,
         autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
         auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
@@ -355,16 +364,17 @@ class DeploymentsResource(SyncAPIResource):
         enable_addons: bool | Omit = omit,
         enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
-        enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        hot_load_trainer_job: str | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
+        num_peft_device_cached: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
@@ -409,6 +419,10 @@ class DeploymentsResource(SyncAPIResource):
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
 
+          annotations: Annotations to identify deployment properties. Key/value pairs may be used by
+              external tools or other services. The "image-tag-reason" key is redacted from
+              API responses for non-superuser principals.
+
           auto_tune: The performance profile to use for this deployment.
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
@@ -447,8 +461,6 @@ class DeploymentsResource(SyncAPIResource):
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
-
-          enable_mtp: If true, MTP is enabled for this deployment.
 
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
@@ -509,6 +521,7 @@ class DeploymentsResource(SyncAPIResource):
                     "accelerator_count": accelerator_count,
                     "accelerator_type": accelerator_type,
                     "active_model_version": active_model_version,
+                    "annotations": annotations,
                     "autoscaling_policy": autoscaling_policy,
                     "auto_tune": auto_tune,
                     "deployment_shape": deployment_shape,
@@ -523,16 +536,17 @@ class DeploymentsResource(SyncAPIResource):
                     "enable_addons": enable_addons,
                     "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
-                    "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "hot_load_trainer_job": hot_load_trainer_job,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
+                    "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
                     "pricing_plan_id": pricing_plan_id,
@@ -878,9 +892,11 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
+        annotations: Dict[str, str] | Omit = omit,
         autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
         auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
@@ -898,16 +914,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_addons: bool | Omit = omit,
         enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
-        enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        hot_load_trainer_job: str | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
+        num_peft_device_cached: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
@@ -967,6 +984,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
 
+          annotations: Annotations to identify deployment properties. Key/value pairs may be used by
+              external tools or other services. The "image-tag-reason" key is redacted from
+              API responses for non-superuser principals.
+
           auto_tune: The performance profile to use for this deployment.
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
@@ -1005,8 +1026,6 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
-
-          enable_mtp: If true, MTP is enabled for this deployment.
 
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
@@ -1061,6 +1080,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "accelerator_count": accelerator_count,
                     "accelerator_type": accelerator_type,
                     "active_model_version": active_model_version,
+                    "annotations": annotations,
                     "autoscaling_policy": autoscaling_policy,
                     "auto_tune": auto_tune,
                     "deployment_shape": deployment_shape,
@@ -1075,16 +1095,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "enable_addons": enable_addons,
                     "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
-                    "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "hot_load_trainer_job": hot_load_trainer_job,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
+                    "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
                     "pricing_plan_id": pricing_plan_id,
@@ -1132,9 +1153,11 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
+        annotations: Dict[str, str] | Omit = omit,
         autoscaling_policy: AutoscalingPolicyParam | Omit = omit,
         auto_tune: AutoTuneParam | Omit = omit,
         deployment_shape: str | Omit = omit,
@@ -1152,16 +1175,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         enable_addons: bool | Omit = omit,
         enable_hot_load: bool | Omit = omit,
         enable_hot_reload_latest_addon: bool | Omit = omit,
-        enable_mtp: bool | Omit = omit,
         enable_session_affinity: bool | Omit = omit,
         expire_time: Union[str, datetime] | Omit = omit,
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
+        hot_load_trainer_job: str | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
         min_replica_count: int | Omit = omit,
         ngram_speculation_length: int | Omit = omit,
+        num_peft_device_cached: int | Omit = omit,
         placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
@@ -1206,6 +1230,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           active_model_version: The model version that is currently active and applied to running replicas of a
               deployment.
 
+          annotations: Annotations to identify deployment properties. Key/value pairs may be used by
+              external tools or other services. The "image-tag-reason" key is redacted from
+              API responses for non-superuser principals.
+
           auto_tune: The performance profile to use for this deployment.
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
@@ -1244,8 +1272,6 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           enable_hot_reload_latest_addon: Allows up to 1 addon at a time to be loaded, and will merge it into the base
               model.
-
-          enable_mtp: If true, MTP is enabled for this deployment.
 
           enable_session_affinity: Whether to apply sticky routing based on `user` field. Serverless will be set to
               true when creating deployment.
@@ -1306,6 +1332,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "accelerator_count": accelerator_count,
                     "accelerator_type": accelerator_type,
                     "active_model_version": active_model_version,
+                    "annotations": annotations,
                     "autoscaling_policy": autoscaling_policy,
                     "auto_tune": auto_tune,
                     "deployment_shape": deployment_shape,
@@ -1320,16 +1347,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "enable_addons": enable_addons,
                     "enable_hot_load": enable_hot_load,
                     "enable_hot_reload_latest_addon": enable_hot_reload_latest_addon,
-                    "enable_mtp": enable_mtp,
                     "enable_session_affinity": enable_session_affinity,
                     "expire_time": expire_time,
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
+                    "hot_load_trainer_job": hot_load_trainer_job,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
                     "min_replica_count": min_replica_count,
                     "ngram_speculation_length": ngram_speculation_length,
+                    "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
                     "pricing_plan_id": pricing_plan_id,

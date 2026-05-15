@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
-from typing_extensions import Literal, Annotated, TypedDict
+from typing_extensions import Annotated, TypedDict
 
+from ..._types import SequenceNotStr
 from ..._utils import PropertyInfo
 
-__all__ = ["TrainingConfig"]
+__all__ = ["TrainingConfig", "TrainerShardingScheme"]
+
+
+class TrainerShardingScheme(TypedDict, total=False):
+    """Structured trainer sharding/parallelism configuration."""
+
+    context_parallelism: Annotated[int, PropertyInfo(alias="contextParallelism")]
+    """Context-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    expert_parallelism: Annotated[int, PropertyInfo(alias="expertParallelism")]
+    """Expert-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    pipeline_parallelism: Annotated[int, PropertyInfo(alias="pipelineParallelism")]
+    """Pipeline-parallel degree. 0 means unspecified (server defaults to 1)."""
+
+    sequence_parallelism: Annotated[bool, PropertyInfo(alias="sequenceParallelism")]
+    """Whether sequence parallelism should be enabled."""
+
+    tensor_parallelism: Annotated[int, PropertyInfo(alias="tensorParallelism")]
+    """Tensor-parallel degree. 0 means unspecified (server defaults to 1)."""
 
 
 class TrainingConfig(TypedDict, total=False):
@@ -34,11 +54,17 @@ class TrainingConfig(TypedDict, total=False):
 
     learning_rate_warmup_steps: Annotated[int, PropertyInfo(alias="learningRateWarmupSteps")]
 
-    lora_rank: Annotated[int, PropertyInfo(alias="loraRank")]
-    """The rank of the LoRA layers.
+    lora_alpha: Annotated[int, PropertyInfo(alias="loraAlpha")]
+    """LoRA alpha scaling factor. If not specified (or 0), trainer defaults are used."""
 
-    For service-mode RLOR trainer jobs (`serviceMode=true`), this must be 0.
-    """
+    lora_dropout: Annotated[float, PropertyInfo(alias="loraDropout")]
+    """LoRA dropout probability."""
+
+    lora_rank: Annotated[int, PropertyInfo(alias="loraRank")]
+    """The rank of the LoRA layers."""
+
+    lora_target_modules: Annotated[SequenceNotStr[str], PropertyInfo(alias="loraTargetModules")]
+    """Optional LoRA target module names (e.g. q_proj, k_proj, v_proj)."""
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """The maximum context length to use with the model."""
@@ -52,46 +78,8 @@ class TrainingConfig(TypedDict, total=False):
     If not specified, the job ID will be used.
     """
 
-    region: Literal[
-        "REGION_UNSPECIFIED",
-        "US_IOWA_1",
-        "US_VIRGINIA_1",
-        "US_VIRGINIA_2",
-        "US_ILLINOIS_1",
-        "AP_TOKYO_1",
-        "EU_LONDON_1",
-        "US_ARIZONA_1",
-        "US_TEXAS_1",
-        "US_ILLINOIS_2",
-        "EU_FRANKFURT_1",
-        "US_TEXAS_2",
-        "EU_PARIS_1",
-        "EU_HELSINKI_1",
-        "US_NEVADA_1",
-        "EU_ICELAND_1",
-        "EU_ICELAND_2",
-        "US_WASHINGTON_1",
-        "US_WASHINGTON_2",
-        "EU_ICELAND_DEV_1",
-        "US_WASHINGTON_3",
-        "US_ARIZONA_2",
-        "AP_TOKYO_2",
-        "US_CALIFORNIA_1",
-        "US_MISSOURI_1",
-        "US_UTAH_1",
-        "US_TEXAS_3",
-        "US_ARIZONA_3",
-        "US_GEORGIA_1",
-        "US_GEORGIA_2",
-        "US_WASHINGTON_4",
-        "US_GEORGIA_3",
-        "NA_BRITISHCOLUMBIA_1",
-        "US_GEORGIA_4",
-        "EU_ICELAND_3",
-        "US_OHIO_1",
-        "US_NEWYORK_1",
-    ]
-    """The region where the fine-tuning job is located."""
+    trainer_sharding_scheme: Annotated[TrainerShardingScheme, PropertyInfo(alias="trainerShardingScheme")]
+    """Structured trainer sharding/parallelism configuration."""
 
     warm_start_from: Annotated[str, PropertyInfo(alias="warmStartFrom")]
     """

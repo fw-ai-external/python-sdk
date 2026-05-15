@@ -36,6 +36,7 @@ class TestAPIKeys:
             user_id="user_id",
             account_id="account_id",
             api_key={
+                "annotations": {"foo": "string"},
                 "display_name": "displayName",
                 "expire_time": parse_datetime("2019-12-27T18:11:19.117Z"),
             },
@@ -235,6 +236,7 @@ class TestAsyncAPIKeys:
             user_id="user_id",
             account_id="account_id",
             api_key={
+                "annotations": {"foo": "string"},
                 "display_name": "displayName",
                 "expire_time": parse_datetime("2019-12-27T18:11:19.117Z"),
             },

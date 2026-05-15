@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing_extensions import Required, Annotated, TypedDict
 
-from .._types import SequenceNotStr
 from .._utils import PropertyInfo
 
 __all__ = ["EvaluationJobCreateParams", "EvaluationJob", "EvaluationJobAwsS3Config"]
@@ -16,9 +15,6 @@ class EvaluationJobCreateParams(TypedDict, total=False):
     evaluation_job: Required[Annotated[EvaluationJob, PropertyInfo(alias="evaluationJob")]]
 
     evaluation_job_id: Annotated[str, PropertyInfo(alias="evaluationJobId")]
-
-    leaderboard_ids: Annotated[SequenceNotStr[str], PropertyInfo(alias="leaderboardIds")]
-    """Optional leaderboards to attach this job to upon creation."""
 
 
 class EvaluationJobAwsS3Config(TypedDict, total=False):

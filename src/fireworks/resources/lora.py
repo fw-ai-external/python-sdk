@@ -75,10 +75,6 @@ class LoraResource(SyncAPIResource):
 
           public: If true, the deployed model will be publicly reachable.
 
-          serverless: This field is not applicable when deploying a LoRA addon and should be omitted
-              or set to false. LoRA models require a dedicated deployment. True if the
-              underlying deployment is managed by Fireworks.
-
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -279,10 +275,6 @@ class LoraResource(SyncAPIResource):
 
           public: If true, the deployed model will be publicly reachable.
 
-          serverless: This field is not applicable when deploying a LoRA addon and should be omitted
-              or set to false. LoRA models require a dedicated deployment. True if the
-              underlying deployment is managed by Fireworks.
-
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -416,10 +408,6 @@ class AsyncLoraResource(AsyncAPIResource):
           description: Description of the resource.
 
           public: If true, the deployed model will be publicly reachable.
-
-          serverless: This field is not applicable when deploying a LoRA addon and should be omitted
-              or set to false. LoRA models require a dedicated deployment. True if the
-              underlying deployment is managed by Fireworks.
 
           extra_headers: Send extra headers
 
@@ -620,10 +608,6 @@ class AsyncLoraResource(AsyncAPIResource):
           description: Description of the resource.
 
           public: If true, the deployed model will be publicly reachable.
-
-          serverless: This field is not applicable when deploying a LoRA addon and should be omitted
-              or set to false. LoRA models require a dedicated deployment. True if the
-              underlying deployment is managed by Fireworks.
 
           extra_headers: Send extra headers
 

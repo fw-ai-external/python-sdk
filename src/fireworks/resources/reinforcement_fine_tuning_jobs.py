@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import Literal
+
 import httpx
 
 from ..types import (
@@ -69,8 +71,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         max_concurrent_evaluations: int | Omit = omit,
         max_concurrent_rollouts: int | Omit = omit,
         max_inference_replica_count: int | Omit = omit,
-        mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -114,6 +116,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
 
+          purpose: Scheduling purpose for this job.
+
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -148,8 +152,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "max_concurrent_evaluations": max_concurrent_evaluations,
                     "max_concurrent_rollouts": max_concurrent_rollouts,
                     "max_inference_replica_count": max_inference_replica_count,
-                    "mcp_server": mcp_server,
                     "node_count": node_count,
+                    "purpose": purpose,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -480,8 +484,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         max_concurrent_evaluations: int | Omit = omit,
         max_concurrent_rollouts: int | Omit = omit,
         max_inference_replica_count: int | Omit = omit,
-        mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -525,6 +529,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
 
+          purpose: Scheduling purpose for this job.
+
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -559,8 +565,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "max_concurrent_evaluations": max_concurrent_evaluations,
                     "max_concurrent_rollouts": max_concurrent_rollouts,
                     "max_inference_replica_count": max_inference_replica_count,
-                    "mcp_server": mcp_server,
                     "node_count": node_count,
+                    "purpose": purpose,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

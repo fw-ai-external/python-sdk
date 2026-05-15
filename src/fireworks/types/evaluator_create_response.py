@@ -8,9 +8,8 @@ from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
 from .shared.status import Status
-from .evaluator_source import EvaluatorSource
 
-__all__ = ["EvaluatorCreateResponse", "Criterion", "CriterionCodeSnippets"]
+__all__ = ["EvaluatorCreateResponse", "Criterion", "CriterionCodeSnippets", "Source"]
 
 
 class CriterionCodeSnippets(BaseModel):
@@ -31,6 +30,19 @@ class Criterion(BaseModel):
     name: Optional[str] = None
 
     type: Optional[Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]] = None
+
+
+class Source(BaseModel):
+    """Source information for the evaluator codebase."""
+
+    github_repository_name: Optional[str] = FieldInfo(alias="githubRepositoryName", default=None)
+    """Normalized GitHub repository name (e.g.
+
+    owner/repository) when the source is GitHub.
+    """
+
+    type: Optional[Literal["TYPE_UNSPECIFIED", "TYPE_UPLOAD", "TYPE_GITHUB", "TYPE_TEMPORARY"]] = None
+    """Identifies how the evaluator source code is provided."""
 
 
 class EvaluatorCreateResponse(BaseModel):
@@ -54,7 +66,7 @@ class EvaluatorCreateResponse(BaseModel):
 
     requirements: Optional[str] = None
 
-    source: Optional[EvaluatorSource] = None
+    source: Optional[Source] = None
     """Source information for the evaluator codebase."""
 
     state: Optional[Literal["STATE_UNSPECIFIED", "ACTIVE", "BUILDING", "BUILD_FAILED"]] = None

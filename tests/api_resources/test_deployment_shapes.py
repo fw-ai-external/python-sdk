@@ -90,6 +90,7 @@ class TestDeploymentShapes:
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
             read_mask="readMask",
+            skip_shape_validation=True,
         )
         assert_matches_type(DeploymentShape, deployment_shape, path=["response"])
 
@@ -214,6 +215,7 @@ class TestAsyncDeploymentShapes:
             deployment_shape_id="deployment_shape_id",
             account_id="account_id",
             read_mask="readMask",
+            skip_shape_validation=True,
         )
         assert_matches_type(DeploymentShape, deployment_shape, path=["response"])
 

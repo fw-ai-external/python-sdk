@@ -125,6 +125,7 @@ class DeploymentShapesResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         read_mask: str | Omit = omit,
+        skip_shape_validation: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -138,6 +139,9 @@ class DeploymentShapesResource(SyncAPIResource):
         Args:
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
               returned.
+
+          skip_shape_validation: If true, returns the latest version regardless of validation status. By default,
+              returns the latest validated version.
 
           extra_headers: Send extra headers
 
@@ -167,7 +171,13 @@ class DeploymentShapesResource(SyncAPIResource):
                 extra_query=extra_query,
                 extra_body=extra_body,
                 timeout=timeout,
-                query=maybe_transform({"read_mask": read_mask}, deployment_shape_get_params.DeploymentShapeGetParams),
+                query=maybe_transform(
+                    {
+                        "read_mask": read_mask,
+                        "skip_shape_validation": skip_shape_validation,
+                    },
+                    deployment_shape_get_params.DeploymentShapeGetParams,
+                ),
             ),
             cast_to=DeploymentShape,
         )
@@ -276,6 +286,7 @@ class AsyncDeploymentShapesResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         read_mask: str | Omit = omit,
+        skip_shape_validation: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -289,6 +300,9 @@ class AsyncDeploymentShapesResource(AsyncAPIResource):
         Args:
           read_mask: The fields to be returned in the response. If empty or "\\**", all fields will be
               returned.
+
+          skip_shape_validation: If true, returns the latest version regardless of validation status. By default,
+              returns the latest validated version.
 
           extra_headers: Send extra headers
 
@@ -319,7 +333,11 @@ class AsyncDeploymentShapesResource(AsyncAPIResource):
                 extra_body=extra_body,
                 timeout=timeout,
                 query=await async_maybe_transform(
-                    {"read_mask": read_mask}, deployment_shape_get_params.DeploymentShapeGetParams
+                    {
+                        "read_mask": read_mask,
+                        "skip_shape_validation": skip_shape_validation,
+                    },
+                    deployment_shape_get_params.DeploymentShapeGetParams,
                 ),
             ),
             cast_to=DeploymentShape,

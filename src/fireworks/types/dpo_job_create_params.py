@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Required, Annotated, TypedDict
+from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
@@ -34,6 +34,9 @@ class DpoJobCreateParams(TypedDict, total=False):
     Loss configuration for the training job. If not specified, defaults to DPO loss.
     Set method to ORPO for ORPO training.
     """
+
+    purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]
+    """Scheduling purpose for this job."""
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""

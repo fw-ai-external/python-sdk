@@ -36,6 +36,7 @@ class TestUsers:
             user_id="userId",
             display_name="displayName",
             email="email",
+            permission_preset="permissionPreset",
             service_account=True,
         )
         assert_matches_type(User, user, path=["response"])
@@ -96,6 +97,7 @@ class TestUsers:
             role="role",
             display_name="displayName",
             email="email",
+            permission_preset="permissionPreset",
             service_account=True,
         )
         assert_matches_type(User, user, path=["response"])
@@ -288,6 +290,7 @@ class TestAsyncUsers:
             user_id="userId",
             display_name="displayName",
             email="email",
+            permission_preset="permissionPreset",
             service_account=True,
         )
         assert_matches_type(User, user, path=["response"])
@@ -348,6 +351,7 @@ class TestAsyncUsers:
             role="role",
             display_name="displayName",
             email="email",
+            permission_preset="permissionPreset",
             service_account=True,
         )
         assert_matches_type(User, user, path=["response"])

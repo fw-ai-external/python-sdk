@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
+from typing import List, Optional
 from typing_extensions import Literal
 
 from pydantic import Field as FieldInfo
@@ -36,6 +36,12 @@ class BaseModelDetails(BaseModel):
     ] = FieldInfo(alias="defaultPrecision", default=None)
     """Default precision of the model."""
 
+    huggingface_files: Optional[List[str]] = FieldInfo(alias="huggingfaceFiles", default=None)
+    """A list of Hugging Face files associated with this model.
+
+    Specified if and only if the checkpoint_format is HUGGINGFACE.
+    """
+
     api_model_type: Optional[str] = FieldInfo(alias="modelType", default=None)
     """The type of the model."""
 
@@ -58,7 +64,10 @@ class BaseModelDetails(BaseModel):
     """If true, this model supports MTP."""
 
     tunable: Optional[bool] = None
-    """If true, this model is available for fine-tuning."""
+    """Deprecated: V1 training stack only.
+
+    Use per-category tunable flags on Model instead.
+    """
 
     world_size: Optional[int] = FieldInfo(alias="worldSize", default=None)
     """

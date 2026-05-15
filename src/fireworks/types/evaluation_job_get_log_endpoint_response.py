@@ -11,10 +11,7 @@ __all__ = ["EvaluationJobGetLogEndpointResponse"]
 
 
 class EvaluationJobGetLogEndpointResponse(BaseModel):
-    """Response carries the stream log URL (for VirtualizedLogViewer).
-
-    Next ID: 4
-    """
+    """Response carries the stream log URL (for VirtualizedLogViewer)."""
 
     content_type: Optional[str] = FieldInfo(alias="contentType", default=None)
     """Content type for the log file (e.g.

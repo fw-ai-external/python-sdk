@@ -80,47 +80,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
-        region: Literal[
-            "REGION_UNSPECIFIED",
-            "US_IOWA_1",
-            "US_VIRGINIA_1",
-            "US_VIRGINIA_2",
-            "US_ILLINOIS_1",
-            "AP_TOKYO_1",
-            "EU_LONDON_1",
-            "US_ARIZONA_1",
-            "US_TEXAS_1",
-            "US_ILLINOIS_2",
-            "EU_FRANKFURT_1",
-            "US_TEXAS_2",
-            "EU_PARIS_1",
-            "EU_HELSINKI_1",
-            "US_NEVADA_1",
-            "EU_ICELAND_1",
-            "EU_ICELAND_2",
-            "US_WASHINGTON_1",
-            "US_WASHINGTON_2",
-            "EU_ICELAND_DEV_1",
-            "US_WASHINGTON_3",
-            "US_ARIZONA_2",
-            "AP_TOKYO_2",
-            "US_CALIFORNIA_1",
-            "US_MISSOURI_1",
-            "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_ARIZONA_3",
-            "US_GEORGIA_1",
-            "US_GEORGIA_2",
-            "US_WASHINGTON_4",
-            "US_GEORGIA_3",
-            "NA_BRITISHCOLUMBIA_1",
-            "US_GEORGIA_4",
-            "EU_ICELAND_3",
-            "US_OHIO_1",
-            "US_NEWYORK_1",
-        ]
-        | Omit = omit,
-        use_purpose: str | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -164,17 +124,23 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           max_context_length: The maximum context length to use with the model.
 
-          nodes: The number of nodes to use for the fine-tuning job.
+          mtp_enabled: Deprecated: MTP is not supported in V2 training. These fields are retained for
+              V1 Helm-based SFT backward compatibility only.
+
+          mtp_freeze_base_model: Deprecated: see mtp_enabled.
+
+          mtp_num_draft_tokens: Deprecated: see mtp_enabled.
+
+          nodes: Deprecated: multi-node scheduling is now handled by the cookbook orchestrator in
+              V2 workflows. This field is ignored for V2 jobs and will be removed in a future
+              release.
 
           optimizer_weight_decay: Weight decay (L2 regularization) for optimizer.
 
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
-          region: The region where the fine-tuning job is located.
-
-          use_purpose: Use dedicated resources for the job. The only supported value currently is
-              "pilot". Defaults to empty.
+          purpose: Scheduling purpose for this job.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -223,8 +189,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
-                    "region": region,
-                    "use_purpose": use_purpose,
+                    "purpose": purpose,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },
@@ -515,47 +480,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
-        region: Literal[
-            "REGION_UNSPECIFIED",
-            "US_IOWA_1",
-            "US_VIRGINIA_1",
-            "US_VIRGINIA_2",
-            "US_ILLINOIS_1",
-            "AP_TOKYO_1",
-            "EU_LONDON_1",
-            "US_ARIZONA_1",
-            "US_TEXAS_1",
-            "US_ILLINOIS_2",
-            "EU_FRANKFURT_1",
-            "US_TEXAS_2",
-            "EU_PARIS_1",
-            "EU_HELSINKI_1",
-            "US_NEVADA_1",
-            "EU_ICELAND_1",
-            "EU_ICELAND_2",
-            "US_WASHINGTON_1",
-            "US_WASHINGTON_2",
-            "EU_ICELAND_DEV_1",
-            "US_WASHINGTON_3",
-            "US_ARIZONA_2",
-            "AP_TOKYO_2",
-            "US_CALIFORNIA_1",
-            "US_MISSOURI_1",
-            "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_ARIZONA_3",
-            "US_GEORGIA_1",
-            "US_GEORGIA_2",
-            "US_WASHINGTON_4",
-            "US_GEORGIA_3",
-            "NA_BRITISHCOLUMBIA_1",
-            "US_GEORGIA_4",
-            "EU_ICELAND_3",
-            "US_OHIO_1",
-            "US_NEWYORK_1",
-        ]
-        | Omit = omit,
-        use_purpose: str | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -599,17 +524,23 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           max_context_length: The maximum context length to use with the model.
 
-          nodes: The number of nodes to use for the fine-tuning job.
+          mtp_enabled: Deprecated: MTP is not supported in V2 training. These fields are retained for
+              V1 Helm-based SFT backward compatibility only.
+
+          mtp_freeze_base_model: Deprecated: see mtp_enabled.
+
+          mtp_num_draft_tokens: Deprecated: see mtp_enabled.
+
+          nodes: Deprecated: multi-node scheduling is now handled by the cookbook orchestrator in
+              V2 workflows. This field is ignored for V2 jobs and will be removed in a future
+              release.
 
           optimizer_weight_decay: Weight decay (L2 regularization) for optimizer.
 
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
-          region: The region where the fine-tuning job is located.
-
-          use_purpose: Use dedicated resources for the job. The only supported value currently is
-              "pilot". Defaults to empty.
+          purpose: Scheduling purpose for this job.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -658,8 +589,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
-                    "region": region,
-                    "use_purpose": use_purpose,
+                    "purpose": purpose,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },

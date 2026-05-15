@@ -17,3 +17,9 @@ class DeploymentShapeGetParams(TypedDict, total=False):
 
     If empty or "\\**", all fields will be returned.
     """
+
+    skip_shape_validation: Annotated[bool, PropertyInfo(alias="skipShapeValidation")]
+    """
+    If true, returns the latest version regardless of validation status. By default,
+    returns the latest validated version.
+    """

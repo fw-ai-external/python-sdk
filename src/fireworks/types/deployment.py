@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 from typing_extensions import Literal
 
@@ -28,11 +28,15 @@ class ReplicaStats(BaseModel):
     initializing_replica_count: Optional[int] = FieldInfo(alias="initializingReplicaCount", default=None)
     """Number of replicas initializing the model server."""
 
+    partial_replica_count: Optional[float] = FieldInfo(alias="partialReplicaCount", default=None)
+
     pending_scheduling_replica_count: Optional[int] = FieldInfo(alias="pendingSchedulingReplicaCount", default=None)
     """Number of replicas waiting to be scheduled to a node."""
 
     ready_replica_count: Optional[int] = FieldInfo(alias="readyReplicaCount", default=None)
     """Number of replicas that are ready and serving traffic."""
+
+    revocable_replica_count: Optional[int] = FieldInfo(alias="revocableReplicaCount", default=None)
 
 
 class Deployment(BaseModel):
@@ -57,6 +61,7 @@ class Deployment(BaseModel):
             "NVIDIA_B200_180GB",
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
+            "NVIDIA_B300_288GB",
         ]
     ] = FieldInfo(alias="acceleratorType", default=None)
     """The type of accelerator to use."""
@@ -65,6 +70,13 @@ class Deployment(BaseModel):
     """
     The model version that is currently active and applied to running replicas of a
     deployment.
+    """
+
+    annotations: Optional[Dict[str, str]] = None
+    """
+    Annotations to identify deployment properties. Key/value pairs may be used by
+    external tools or other services. The "image-tag-reason" key is redacted from
+    API responses for non-superuser principals.
     """
 
     autoscaling_policy: Optional[AutoscalingPolicy] = FieldInfo(alias="autoscalingPolicy", default=None)
@@ -166,9 +178,6 @@ class Deployment(BaseModel):
     model.
     """
 
-    enable_mtp: Optional[bool] = FieldInfo(alias="enableMtp", default=None)
-    """If true, MTP is enabled for this deployment."""
-
     enable_session_affinity: Optional[bool] = FieldInfo(alias="enableSessionAffinity", default=None)
     """
     Whether to apply sticky routing based on `user` field. Serverless will be set to
@@ -186,6 +195,8 @@ class Deployment(BaseModel):
     )
 
     hot_load_bucket_url: Optional[str] = FieldInfo(alias="hotLoadBucketUrl", default=None)
+
+    hot_load_trainer_job: Optional[str] = FieldInfo(alias="hotLoadTrainerJob", default=None)
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """
@@ -261,37 +272,33 @@ class Deployment(BaseModel):
             "US_VIRGINIA_2",
             "US_ILLINOIS_1",
             "AP_TOKYO_1",
-            "EU_LONDON_1",
             "US_ARIZONA_1",
             "US_TEXAS_1",
             "US_ILLINOIS_2",
             "EU_FRANKFURT_1",
             "US_TEXAS_2",
-            "EU_PARIS_1",
-            "EU_HELSINKI_1",
-            "US_NEVADA_1",
             "EU_ICELAND_1",
             "EU_ICELAND_2",
             "US_WASHINGTON_1",
             "US_WASHINGTON_2",
-            "EU_ICELAND_DEV_1",
             "US_WASHINGTON_3",
-            "US_ARIZONA_2",
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
-            "US_MISSOURI_1",
             "US_UTAH_1",
-            "US_TEXAS_3",
-            "US_ARIZONA_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
             "US_GEORGIA_3",
             "NA_BRITISHCOLUMBIA_1",
             "US_GEORGIA_4",
-            "EU_ICELAND_3",
             "US_OHIO_1",
             "US_NEWYORK_1",
+            "EU_NETHERLANDS_1",
+            "US_WASHINGTON_5",
+            "US_MINNESOTA_1",
+            "US_CALIFORNIA_2",
+            "AP_MALAYSIA_1",
+            "US_OHIO_2",
         ]
     ] = None
     """The geographic region where the deployment is presently located.

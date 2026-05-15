@@ -138,6 +138,9 @@ class ReinforcementFineTuningStep(BaseModel):
     Reinforcement learning loss method + hyperparameters for the underlying trainer.
     """
 
+    managed_by: Optional[str] = FieldInfo(alias="managedBy", default=None)
+    """For managed service use only. Users do not need to set this field."""
+
     name: Optional[str] = None
 
     node_count: Optional[int] = FieldInfo(alias="nodeCount", default=None)
@@ -145,6 +148,9 @@ class ReinforcementFineTuningStep(BaseModel):
     The number of nodes to use for the fine-tuning job. If not specified, the
     default is 1.
     """
+
+    purpose: Optional[Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]] = None
+    """Scheduling purpose for this job."""
 
     reward_weights: Optional[List[str]] = FieldInfo(alias="rewardWeights", default=None)
     """
@@ -159,10 +165,6 @@ class ReinforcementFineTuningStep(BaseModel):
     """
 
     service_mode: Optional[bool] = FieldInfo(alias="serviceMode", default=None)
-    """Service-mode RLOR trainers currently support full-parameter tuning only.
-
-    When enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
-    """
 
     state: Optional[
         Literal[
@@ -184,24 +186,20 @@ class ReinforcementFineTuningStep(BaseModel):
             "JOB_STATE_CANCELLING",
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
+            "JOB_STATE_DELETED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
 
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
+    - JOB_STATE_DELETED: Job has been deleted.
     """
 
     status: Optional[Status] = None
 
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
-
-    use_purpose: Optional[str] = FieldInfo(alias="usePurpose", default=None)
-    """Use dedicated resources for the job.
-
-    The only supported value currently is "pilot". Defaults to empty.
-    """
 
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
     """The Weights & Biases team/user account for logging training progress."""

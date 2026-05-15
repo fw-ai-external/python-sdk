@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Required, Annotated, TypedDict
+from typing_extensions import Literal, Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
@@ -64,13 +64,14 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
 
     max_inference_replica_count: Annotated[int, PropertyInfo(alias="maxInferenceReplicaCount")]
 
-    mcp_server: Annotated[str, PropertyInfo(alias="mcpServer")]
-
     node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
     """
     The number of nodes to use for the fine-tuning job. If not specified, the
     default is 1.
     """
+
+    purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]
+    """Scheduling purpose for this job."""
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""

@@ -53,7 +53,6 @@ class TestEvaluationJobs:
                 "output_stats": "outputStats",
             },
             evaluation_job_id="evaluationJobId",
-            leaderboard_ids=["string"],
         )
         assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
 
@@ -363,7 +362,6 @@ class TestAsyncEvaluationJobs:
                 "output_stats": "outputStats",
             },
             evaluation_job_id="evaluationJobId",
-            leaderboard_ids=["string"],
         )
         assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
 

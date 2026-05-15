@@ -167,8 +167,6 @@ class ReinforcementFineTuningJob(BaseModel):
 
     max_inference_replica_count: Optional[int] = FieldInfo(alias="maxInferenceReplicaCount", default=None)
 
-    mcp_server: Optional[str] = FieldInfo(alias="mcpServer", default=None)
-
     name: Optional[str] = None
 
     node_count: Optional[int] = FieldInfo(alias="nodeCount", default=None)
@@ -181,6 +179,9 @@ class ReinforcementFineTuningJob(BaseModel):
 
     output_stats: Optional[str] = FieldInfo(alias="outputStats", default=None)
     """The output dataset's aggregated stats for the evaluation job."""
+
+    purpose: Optional[Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]] = None
+    """Scheduling purpose for this job."""
 
     state: Optional[
         Literal[
@@ -202,12 +203,14 @@ class ReinforcementFineTuningJob(BaseModel):
             "JOB_STATE_CANCELLING",
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
+            "JOB_STATE_DELETED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
 
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
+    - JOB_STATE_DELETED: Job has been deleted.
     """
 
     status: Optional[Status] = None

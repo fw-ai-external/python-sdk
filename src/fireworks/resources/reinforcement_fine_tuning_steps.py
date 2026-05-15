@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import Literal
+
 import httpx
 
 from ..types import (
@@ -56,6 +58,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
+        training_shape: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
@@ -66,12 +69,13 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        managed_by: str | Omit = omit,
         node_count: int | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
-        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -85,6 +89,14 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
         Args:
           rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
+
+          training_shape: Optional validated training-shape selector for service-mode launches. Accepted
+              formats:
+
+              - accounts/{account}/trainingShapes/{shape}
+              - accounts/{account}/trainingShapes/{shape}/versions/{version}
+              - accounts/{account}/trainingShapes/{shape}/versions/latest When a shape
+                (without /versions/\\**) is provided, the latest validated version is used.
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
@@ -105,8 +117,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
+          managed_by: For managed service use only. Users do not need to set this field.
+
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
+
+          purpose: Scheduling purpose for this job.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -114,13 +130,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
 
-          service_mode: Service-mode RLOR trainers currently support full-parameter tuning only. When
-              enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
-
           training_config: Common training configurations.
-
-          use_purpose: Use dedicated resources for the job. The only supported value currently is
-              "pilot". Defaults to empty.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -151,12 +161,13 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
+                    "managed_by": managed_by,
                     "node_count": node_count,
+                    "purpose": purpose,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
                     "training_config": training_config,
-                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                 },
                 reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
@@ -167,7 +178,10 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 extra_body=extra_body,
                 timeout=timeout,
                 query=maybe_transform(
-                    {"rlor_trainer_job_id": rlor_trainer_job_id},
+                    {
+                        "rlor_trainer_job_id": rlor_trainer_job_id,
+                        "training_shape": training_shape,
+                    },
                     reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
                 ),
             ),
@@ -481,6 +495,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         rlor_trainer_job_id: str | Omit = omit,
+        training_shape: str | Omit = omit,
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
@@ -491,12 +506,13 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         hot_load_deployment_id: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        managed_by: str | Omit = omit,
         node_count: int | Omit = omit,
+        purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"] | Omit = omit,
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
-        use_purpose: str | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -510,6 +526,14 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
         Args:
           rlor_trainer_job_id: ID of the RLOR trainer job, a random UUID will be generated if not specified.
+
+          training_shape: Optional validated training-shape selector for service-mode launches. Accepted
+              formats:
+
+              - accounts/{account}/trainingShapes/{shape}
+              - accounts/{account}/trainingShapes/{shape}/versions/{version}
+              - accounts/{account}/trainingShapes/{shape}/versions/latest When a shape
+                (without /versions/\\**) is provided, the latest validated version is used.
 
           aws_s3_config: The AWS configuration for S3 dataset access.
 
@@ -530,8 +554,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
+          managed_by: For managed service use only. Users do not need to set this field.
+
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
+
+          purpose: Scheduling purpose for this job.
 
           reward_weights: A list of reward metrics to use for training in format of
               "<reward_name>=<weight>".
@@ -539,13 +567,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
 
-          service_mode: Service-mode RLOR trainers currently support full-parameter tuning only. When
-              enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
-
           training_config: Common training configurations.
-
-          use_purpose: Use dedicated resources for the job. The only supported value currently is
-              "pilot". Defaults to empty.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -576,12 +598,13 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "hot_load_deployment_id": hot_load_deployment_id,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
+                    "managed_by": managed_by,
                     "node_count": node_count,
+                    "purpose": purpose,
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
                     "training_config": training_config,
-                    "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
                 },
                 reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
@@ -592,7 +615,10 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 extra_body=extra_body,
                 timeout=timeout,
                 query=await async_maybe_transform(
-                    {"rlor_trainer_job_id": rlor_trainer_job_id},
+                    {
+                        "rlor_trainer_job_id": rlor_trainer_job_id,
+                        "training_shape": training_shape,
+                    },
                     reinforcement_fine_tuning_step_create_params.ReinforcementFineTuningStepCreateParams,
                 ),
             ),

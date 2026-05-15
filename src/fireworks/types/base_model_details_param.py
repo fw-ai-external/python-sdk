@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing_extensions import Literal, Annotated, TypedDict
 
+from .._types import SequenceNotStr
 from .._utils import PropertyInfo
 
 __all__ = ["BaseModelDetailsParam"]
@@ -14,6 +15,12 @@ class BaseModelDetailsParam(TypedDict, total=False):
         Literal["CHECKPOINT_FORMAT_UNSPECIFIED", "NATIVE", "HUGGINGFACE", "UNINITIALIZED"],
         PropertyInfo(alias="checkpointFormat"),
     ]
+
+    huggingface_files: Annotated[SequenceNotStr[str], PropertyInfo(alias="huggingfaceFiles")]
+    """A list of Hugging Face files associated with this model.
+
+    Specified if and only if the checkpoint_format is HUGGINGFACE.
+    """
 
     model_type: Annotated[str, PropertyInfo(alias="modelType")]
     """The type of the model."""
@@ -37,7 +44,10 @@ class BaseModelDetailsParam(TypedDict, total=False):
     """If true, this model supports MTP."""
 
     tunable: bool
-    """If true, this model is available for fine-tuning."""
+    """Deprecated: V1 training stack only.
+
+    Use per-category tunable flags on Model instead.
+    """
 
     world_size: Annotated[int, PropertyInfo(alias="worldSize")]
     """

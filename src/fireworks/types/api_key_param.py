@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Dict, Union
 from datetime import datetime
 from typing_extensions import Annotated, TypedDict
 
@@ -12,6 +12,9 @@ __all__ = ["APIKeyParam"]
 
 
 class APIKeyParam(TypedDict, total=False):
+    annotations: Dict[str, str]
+    """Optional key-value annotations for this API key."""
+
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
     """Display name for the API key, defaults to "default" if not specified."""
 

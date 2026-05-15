@@ -73,7 +73,8 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -310,12 +311,14 @@ class CompletionsResource(SyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -326,7 +329,8 @@ class CompletionsResource(SyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -335,6 +339,11 @@ class CompletionsResource(SyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -362,11 +371,13 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -438,6 +449,9 @@ class CompletionsResource(SyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -519,7 +533,8 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -761,12 +776,14 @@ class CompletionsResource(SyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -777,7 +794,8 @@ class CompletionsResource(SyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -786,6 +804,11 @@ class CompletionsResource(SyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -813,11 +836,13 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -883,6 +908,9 @@ class CompletionsResource(SyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -964,7 +992,8 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -1206,12 +1235,14 @@ class CompletionsResource(SyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -1222,7 +1253,8 @@ class CompletionsResource(SyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -1231,6 +1263,11 @@ class CompletionsResource(SyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -1258,11 +1295,13 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -1328,6 +1367,9 @@ class CompletionsResource(SyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -1408,7 +1450,8 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -1539,7 +1582,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -1776,12 +1820,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -1792,7 +1838,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -1801,6 +1848,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -1828,11 +1880,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -1904,6 +1958,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -1985,7 +2042,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -2227,12 +2285,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -2243,7 +2303,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -2252,6 +2313,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -2279,11 +2345,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -2349,6 +2417,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -2430,7 +2501,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
@@ -2672,12 +2744,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Accepted values:**
 
-              - **String** (OpenAI-compatible): `'low'`, `'medium'`, or `'high'` to enable
-                reasoning with varying effort levels; `'none'` to disable reasoning.
+              - **String** (OpenAI-compatible): `'low'`, `'medium'`, `'high'`, or `'max'` to
+                enable reasoning with varying effort levels; `'none'` to disable reasoning.
               - **Boolean** (Fireworks extension): `true` to enable reasoning, `false` to
                 disable it.
               - **Integer** (Fireworks extension): A positive integer to set a hard token
-                limit on reasoning output (only effective for grammar-based reasoning models).
+                limit on reasoning output. Integer values enable the model's normal
+                medium-style thinking behavior and force the model to end its thinking phase
+                after at most that many generated thinking tokens.
 
               **Important:** Boolean values are normalized internally: `true` becomes
               `'medium'`, and `false` becomes `'none'`. This normalization happens before
@@ -2688,7 +2762,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
                 `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'` maps to a default token limit (~3000 tokens).
+                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
+                and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -2697,6 +2772,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `'none'` or `false` to disable.
               - **DeepSeek V3.2**: Binary on/off reasoning. Default reasoning on. Use `'none'`
                 or `false` to disable; effort levels and integers have no additional effect.
+              - **DeepSeek V4**: Accepts `'none'`, `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+                and `'max'`. Default reasoning on (`'high'`). `'xhigh'` is silently promoted
+                to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
+                thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
+                or `false` disables thinking.
               - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
                 reasoning on. Use `'none'` or `false` to disable; effort levels and integers
                 have no additional effect.
@@ -2724,11 +2804,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
+              | DeepSeek V4      | `'interleaved'` | `'interleaved'`                              |
 
               For other models, refer to the model provider's documentation.
 
@@ -2794,6 +2876,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `reasoning_effort: true`)
               - `{"type": "enabled", "budget_tokens": <int>}` - Enable thinking with a token
                 budget (equivalent to `reasoning_effort: <int>`). Must be >= 1024.
+              - `{"type": "enabled", "keep": "all"}` - Enable thinking and preserve all
+                historical reasoning content in the prompt (equivalent to
+                `reasoning_history: "preserved"`).
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
@@ -2874,7 +2959,8 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "none"], int, bool, None] | Omit = omit,
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,

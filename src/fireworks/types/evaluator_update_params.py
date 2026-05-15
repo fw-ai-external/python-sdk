@@ -6,9 +6,8 @@ from typing import Dict, Iterable
 from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
-from .evaluator_source_param import EvaluatorSourceParam
 
-__all__ = ["EvaluatorUpdateParams", "Criterion", "CriterionCodeSnippets"]
+__all__ = ["EvaluatorUpdateParams", "Criterion", "CriterionCodeSnippets", "Source"]
 
 
 class EvaluatorUpdateParams(TypedDict, total=False):
@@ -34,7 +33,7 @@ class EvaluatorUpdateParams(TypedDict, total=False):
 
     requirements: str
 
-    source: EvaluatorSourceParam
+    source: Source
     """Source information for the evaluator codebase."""
 
 
@@ -56,3 +55,16 @@ class Criterion(TypedDict, total=False):
     name: str
 
     type: Literal["TYPE_UNSPECIFIED", "CODE_SNIPPETS"]
+
+
+class Source(TypedDict, total=False):
+    """Source information for the evaluator codebase."""
+
+    github_repository_name: Annotated[str, PropertyInfo(alias="githubRepositoryName")]
+    """Normalized GitHub repository name (e.g.
+
+    owner/repository) when the source is GitHub.
+    """
+
+    type: Literal["TYPE_UNSPECIFIED", "TYPE_UPLOAD", "TYPE_GITHUB", "TYPE_TEMPORARY"]
+    """Identifies how the evaluator source code is provided."""

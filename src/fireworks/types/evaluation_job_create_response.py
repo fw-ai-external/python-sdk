@@ -75,12 +75,14 @@ class EvaluationJobCreateResponse(BaseModel):
             "JOB_STATE_CANCELLING",
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
+            "JOB_STATE_DELETED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
 
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
+    - JOB_STATE_DELETED: Job has been deleted.
     """
 
     status: Optional[Status] = None

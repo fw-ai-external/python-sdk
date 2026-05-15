@@ -50,6 +50,7 @@ class UsersResource(SyncAPIResource):
         user_id: str | Omit = omit,
         display_name: str | Omit = omit,
         email: str | Omit = omit,
+        permission_preset: str | Omit = omit,
         service_account: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -62,7 +63,8 @@ class UsersResource(SyncAPIResource):
         Create User
 
         Args:
-          role: The user's role: admin, user, contributor, or inference-user.
+          role: The user's role: admin, user, contributor, inference-user, or custom. When set
+              to "custom", the user's permissions are governed by permission_preset.
 
           user_id: The user ID to use in the user name. e.g. my-user If not specified, a default ID
               is generated from user.email.
@@ -71,6 +73,8 @@ class UsersResource(SyncAPIResource):
               characters long.
 
           email: The user's email address.
+
+          permission_preset: The permission preset for this user. Only valid when role is "custom".
 
           extra_headers: Send extra headers
 
@@ -92,6 +96,7 @@ class UsersResource(SyncAPIResource):
                     "role": role,
                     "display_name": display_name,
                     "email": email,
+                    "permission_preset": permission_preset,
                     "service_account": service_account,
                 },
                 user_create_params.UserCreateParams,
@@ -114,6 +119,7 @@ class UsersResource(SyncAPIResource):
         role: str,
         display_name: str | Omit = omit,
         email: str | Omit = omit,
+        permission_preset: str | Omit = omit,
         service_account: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -126,12 +132,15 @@ class UsersResource(SyncAPIResource):
         Update User
 
         Args:
-          role: The user's role: admin, user, contributor, or inference-user.
+          role: The user's role: admin, user, contributor, inference-user, or custom. When set
+              to "custom", the user's permissions are governed by permission_preset.
 
           display_name: Human-readable display name of the user. e.g. "Alice" Must be fewer than 64
               characters long.
 
           email: The user's email address.
+
+          permission_preset: The permission preset for this user. Only valid when role is "custom".
 
           extra_headers: Send extra headers
 
@@ -155,6 +164,7 @@ class UsersResource(SyncAPIResource):
                     "role": role,
                     "display_name": display_name,
                     "email": email,
+                    "permission_preset": permission_preset,
                     "service_account": service_account,
                 },
                 user_update_params.UserUpdateParams,
@@ -315,6 +325,7 @@ class AsyncUsersResource(AsyncAPIResource):
         user_id: str | Omit = omit,
         display_name: str | Omit = omit,
         email: str | Omit = omit,
+        permission_preset: str | Omit = omit,
         service_account: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -327,7 +338,8 @@ class AsyncUsersResource(AsyncAPIResource):
         Create User
 
         Args:
-          role: The user's role: admin, user, contributor, or inference-user.
+          role: The user's role: admin, user, contributor, inference-user, or custom. When set
+              to "custom", the user's permissions are governed by permission_preset.
 
           user_id: The user ID to use in the user name. e.g. my-user If not specified, a default ID
               is generated from user.email.
@@ -336,6 +348,8 @@ class AsyncUsersResource(AsyncAPIResource):
               characters long.
 
           email: The user's email address.
+
+          permission_preset: The permission preset for this user. Only valid when role is "custom".
 
           extra_headers: Send extra headers
 
@@ -357,6 +371,7 @@ class AsyncUsersResource(AsyncAPIResource):
                     "role": role,
                     "display_name": display_name,
                     "email": email,
+                    "permission_preset": permission_preset,
                     "service_account": service_account,
                 },
                 user_create_params.UserCreateParams,
@@ -379,6 +394,7 @@ class AsyncUsersResource(AsyncAPIResource):
         role: str,
         display_name: str | Omit = omit,
         email: str | Omit = omit,
+        permission_preset: str | Omit = omit,
         service_account: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -391,12 +407,15 @@ class AsyncUsersResource(AsyncAPIResource):
         Update User
 
         Args:
-          role: The user's role: admin, user, contributor, or inference-user.
+          role: The user's role: admin, user, contributor, inference-user, or custom. When set
+              to "custom", the user's permissions are governed by permission_preset.
 
           display_name: Human-readable display name of the user. e.g. "Alice" Must be fewer than 64
               characters long.
 
           email: The user's email address.
+
+          permission_preset: The permission preset for this user. Only valid when role is "custom".
 
           extra_headers: Send extra headers
 
@@ -420,6 +439,7 @@ class AsyncUsersResource(AsyncAPIResource):
                     "role": role,
                     "display_name": display_name,
                     "email": email,
+                    "permission_preset": permission_preset,
                     "service_account": service_account,
                 },
                 user_update_params.UserUpdateParams,

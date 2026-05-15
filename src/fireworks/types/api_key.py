@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
+from typing import Dict, Optional
 from datetime import datetime
 
 from pydantic import Field as FieldInfo
@@ -11,6 +11,9 @@ __all__ = ["APIKey"]
 
 
 class APIKey(BaseModel):
+    annotations: Optional[Dict[str, str]] = None
+    """Optional key-value annotations for this API key."""
+
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """Timestamp indicating when the API key was created."""
 
@@ -34,6 +37,12 @@ class APIKey(BaseModel):
 
     key_id: Optional[str] = FieldInfo(alias="keyId", default=None)
     """Unique identifier (Key ID) for the API key, used primarily for deletion."""
+
+    last_used: Optional[datetime] = FieldInfo(alias="lastUsed", default=None)
+    """Timestamp indicating when the API key was last used.
+
+    Not set if the key has never been used.
+    """
 
     prefix: Optional[str] = None
 

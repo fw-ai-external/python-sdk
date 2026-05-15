@@ -102,7 +102,9 @@ class TestCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             tool_choice="auto",
             tools=[
@@ -238,7 +240,9 @@ class TestCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             tool_choice="auto",
             tools=[
@@ -380,7 +384,9 @@ class TestAsyncCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             tool_choice="auto",
             tools=[
@@ -516,7 +522,9 @@ class TestAsyncCompletions:
             temperature=0,
             thinking={
                 "type": "enabled",
+                "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "keep": "all",
             },
             tool_choice="auto",
             tools=[

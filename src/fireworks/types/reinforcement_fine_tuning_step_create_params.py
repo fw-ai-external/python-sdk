@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import Literal, Annotated, TypedDict
 
 from .._types import SequenceNotStr
 from .._utils import PropertyInfo
@@ -18,6 +18,17 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     rlor_trainer_job_id: Annotated[str, PropertyInfo(alias="rlorTrainerJobId")]
     """ID of the RLOR trainer job, a random UUID will be generated if not specified."""
+
+    training_shape: Annotated[str, PropertyInfo(alias="trainingShape")]
+    """
+    Optional validated training-shape selector for service-mode launches. Accepted
+    formats:
+
+    - accounts/{account}/trainingShapes/{shape}
+    - accounts/{account}/trainingShapes/{shape}/versions/{version}
+    - accounts/{account}/trainingShapes/{shape}/versions/latest When a shape
+      (without /versions/\\**) is provided, the latest validated version is used.
+    """
 
     aws_s3_config: Annotated[AwsS3Config, PropertyInfo(alias="awsS3Config")]
     """The AWS configuration for S3 dataset access."""
@@ -56,11 +67,17 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     Reinforcement learning loss method + hyperparameters for the underlying trainer.
     """
 
+    managed_by: Annotated[str, PropertyInfo(alias="managedBy")]
+    """For managed service use only. Users do not need to set this field."""
+
     node_count: Annotated[int, PropertyInfo(alias="nodeCount")]
     """
     The number of nodes to use for the fine-tuning job. If not specified, the
     default is 1.
     """
+
+    purpose: Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]
+    """Scheduling purpose for this job."""
 
     reward_weights: Annotated[SequenceNotStr[str], PropertyInfo(alias="rewardWeights")]
     """
@@ -75,19 +92,9 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     """
 
     service_mode: Annotated[bool, PropertyInfo(alias="serviceMode")]
-    """Service-mode RLOR trainers currently support full-parameter tuning only.
-
-    When enabled, `trainingConfig.loraRank` must be 0 (`loraRank>0` is rejected).
-    """
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
-
-    use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
-    """Use dedicated resources for the job.
-
-    The only supported value currently is "pilot". Defaults to empty.
-    """
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""

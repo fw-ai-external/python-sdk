@@ -3,11 +3,57 @@
 from __future__ import annotations
 
 from typing import Dict
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import Required, Annotated, TypedDict
 
 from .._utils import PropertyInfo
 
-__all__ = ["AutoscalingPolicyParam"]
+__all__ = ["AutoscalingPolicyParam", "ScalingSchedules"]
+
+
+class ScalingSchedules(TypedDict, total=False):
+    duration: Required[str]
+    """
+    Duration that the schedule remains active after the cron trigger. Must be
+    between 300 seconds (5 minutes) and 604,800 seconds (7 days), and use
+    whole-second precision. Schedules needing longer windows should raise the
+    deployment's base min_replica_count instead. Example: "36000s" = 10 hours (e.g.,
+    8am to 6pm).
+    """
+
+    min_replica_count: Required[Annotated[int, PropertyInfo(alias="minReplicaCount")]]
+    """
+    Minimum number of replicas guaranteed when this schedule is active. When
+    multiple schedules overlap, the effective minimum is the highest
+    min_replica_count across all active schedules ("max wins"). Must be >= 0 and <=
+    the deployment's max_replica_count.
+    """
+
+    schedule: Required[str]
+    """
+    Cron expression defining when this schedule's window starts. Standard 5-field
+    cron format: minute hour day-of-month month day-of-week. Examples: "0 8 \\** _
+    Mon-Fri" (8am weekdays), "0 0 1 _ \\**" (midnight on 1st of month).
+    """
+
+    timezone: Required[str]
+    """IANA timezone for the cron expression.
+
+    e.g., "America/New_York", "Europe/London", "UTC". Required because cron
+    expressions without a timezone are ambiguous. DST transitions are handled
+    automatically.
+    """
+
+    description: str
+    """
+    Human-readable description of the schedule. e.g., "Weekday business hours",
+    "Wednesday peak load".
+    """
+
+    disabled: bool
+    """
+    If true, this schedule is temporarily disabled without being deleted. Useful for
+    holidays or temporary schedule changes.
+    """
 
 
 class AutoscalingPolicyParam(TypedDict, total=False):
@@ -30,4 +76,13 @@ class AutoscalingPolicyParam(TypedDict, total=False):
     """
     The duration the autoscaler will wait before scaling up a deployment after
     observing increased load. Default is 30s. Must be less than or equal to 1 hour.
+    """
+
+    scaling_schedules: Annotated[Dict[str, ScalingSchedules], PropertyInfo(alias="scalingSchedules")]
+    """
+    Named scaling schedules that override min_replica_count on a time-based cron
+    schedule. When multiple schedules are active simultaneously, the highest
+    min_replica_count across all active schedules is used ("max wins"). When no
+    schedule is active, the deployment's base min_replica_count applies. Maximum 5
+    schedules per deployment.
     """
