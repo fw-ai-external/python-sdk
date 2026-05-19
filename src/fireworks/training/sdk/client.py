@@ -179,6 +179,32 @@ def _dump_tinker_model(obj: Any) -> Any:
     return obj
 
 
+def _text_token_count(datum: types.Datum) -> int:
+    raw_datum = _dump_tinker_model(datum)
+    model_input = raw_datum.get("model_input", {})
+    return sum(
+        len(chunk.get("tokens", []))
+        for chunk in model_input.get("chunks", [])
+        if chunk.get("type", "encoded_text") == "encoded_text"
+    )
+
+
+def _pool_embedding_tensor(
+    embedding, datum: types.Datum, pooling: Literal["mean", "last"]
+):
+    if embedding.ndim <= 1:
+        return embedding
+    token_count = _text_token_count(datum)
+    if token_count <= 0:
+        raise ValueError("Cannot pool embedding from an empty text sequence")
+    token_embeddings = embedding[:token_count]
+    if pooling == "mean":
+        return token_embeddings.mean(dim=0)
+    if pooling == "last":
+        return token_embeddings[-1]
+    raise ValueError(f"Unsupported pooling={pooling!r}; expected 'mean' or 'last'")
+
+
 # -- SaveSamplerResult ---------------------------------------------------------
 
 
@@ -475,13 +501,14 @@ class FiretitanTrainingClient(TrainingClient):
         forward_result = await forward_future.result_async()
 
         embeddings = []
-        for out in forward_result.loss_fn_outputs:
+        for datum, out in zip(data, forward_result.loss_fn_outputs, strict=True):
             if "embedding" not in out:
                 raise ValueError("Embedding response missing 'embedding' tensor")
             embedding_data = out["embedding"]
             embedding = torch.tensor(embedding_data.data, dtype=torch.float32)
             if embedding_data.shape is not None:
                 embedding = embedding.reshape(embedding_data.shape)
+            embedding = _pool_embedding_tensor(embedding, datum, pooling)
             embeddings.append(embedding.clone().detach().requires_grad_(True))
 
         loss, metrics = loss_fn(data, embeddings)
