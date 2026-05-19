@@ -127,7 +127,9 @@ class TestCreateDeployment:
         mgr._post = MagicMock(return_value=resp)
         mgr._create_deployment(deploy_config)
         path = mgr._post.call_args[0][0]
+        body = mgr._post.call_args[1]["json"]
         assert "/deployments" in path
+        assert body["forTraining"] is True
 
     def test_create_omits_placement_when_region_unset(self, mgr):
         resp = MagicMock()
@@ -148,6 +150,27 @@ class TestCreateDeployment:
 
         body = mgr._post.call_args[1]["json"]
         assert "placement" not in body
+
+    def test_create_includes_annotations(self, mgr):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {
+            "name": "accounts/test-acct/deployments/dep-1",
+            "state": "CREATING",
+        }
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create_deployment(
+            DeploymentConfig(
+                deployment_id="dep-1",
+                base_model="accounts/test/models/qwen3-1p7b",
+                annotations={"purpose": "test"},
+            )
+        )
+
+        body = mgr._post.call_args[1]["json"]
+        assert body["annotations"] == {"purpose": "test"}
 
     def test_409_is_not_raised(self, mgr, deploy_config):
         resp = MagicMock()
