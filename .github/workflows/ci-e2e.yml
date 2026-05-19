@@ -9,7 +9,7 @@ on:
 
 jobs:
   e2e:
-    if: github.repository == 'stainless-sdks/fireworks-ai-python' || github.repository == 'fw-ai-external/python-sdk'
+    if: github.repository == 'fw-ai-external/python-sdk'
     timeout-minutes: 15
     name: e2e (${{ matrix.python-version }})
     runs-on: ubuntu-latest
