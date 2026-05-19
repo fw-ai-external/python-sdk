@@ -174,7 +174,6 @@ class DeploymentConfig:
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
     extra_values: dict[str, str] | None = None
-    annotations: dict[str, str] | None = None
 
 
 class DeploymentManager(_RestClient):
@@ -319,8 +318,6 @@ class DeploymentManager(_RestClient):
             body["extraArgs"] = flat
         if config.extra_values:
             body["extraValues"] = config.extra_values
-        if config.annotations:
-            body["annotations"] = config.annotations
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = self._post(path, json=body)

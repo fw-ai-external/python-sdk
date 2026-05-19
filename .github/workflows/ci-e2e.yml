@@ -1,0 +1,40 @@
+name: E2E Tests
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  e2e:
+    if: github.repository == 'stainless-sdks/fireworks-ai-python' || github.repository == 'fw-ai-external/python-sdk'
+    timeout-minutes: 15
+    name: e2e (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Rye
+        run: |
+          curl -sSf https://rye.astral.sh/get | bash
+          echo "$HOME/.rye/shims" >> $GITHUB_PATH
+        env:
+          RYE_VERSION: '0.44.0'
+          RYE_INSTALL_OPTION: '--yes'
+
+      - name: Install dependencies
+        run: rye sync --all-features
+
+      - name: Run e2e tests
+        run: rye run pytest tests/ -m e2e --timeout=60 -v
+        env:
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_E2E_API_KEY }}

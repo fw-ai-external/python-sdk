@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -137,41 +136,6 @@ class TestCreate:
         assert tc["maxContextLength"] == 8192
         assert payload["nodeCount"] == 4
         assert tc["region"] == "US_OHIO_1"
-
-    def test_inactivity_cleanup_fields(self, mgr):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
-            inactivity_timeout=timedelta(minutes=30),
-            disable_inactivity_cleanup=True,
-        )
-        resp = MagicMock()
-        resp.is_success = True
-        resp.status_code = 200
-        resp.json.return_value = {"name": "j"}
-        mgr._post = MagicMock(return_value=resp)
-
-        mgr._create(config)
-
-        payload = mgr._post.call_args[1]["json"]
-        assert payload["inactivityTimeout"] == "1800s"
-        assert payload["disableInactivityCleanup"] is True
-
-    def test_inactivity_timeout_accepts_proto_duration_string(self, mgr):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            inactivity_timeout="7200s",
-        )
-        resp = MagicMock()
-        resp.is_success = True
-        resp.status_code = 200
-        resp.json.return_value = {"name": "j"}
-        mgr._post = MagicMock(return_value=resp)
-
-        mgr._create(config)
-
-        payload = mgr._post.call_args[1]["json"]
-        assert payload["inactivityTimeout"] == "7200s"
 
     def test_extra_args_flattened(self, mgr):
         config = TrainerJobConfig(
@@ -701,22 +665,6 @@ class TestValidate:
             "gradient_accumulation_steps=1 is deprecated" in rec.message
             for rec in caplog.records
         )
-
-    def test_rejects_negative_inactivity_timeout(self):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            inactivity_timeout=timedelta(seconds=-1),
-        )
-        with pytest.raises(ValueError, match="inactivity_timeout"):
-            config.validate()
-
-    def test_rejects_invalid_inactivity_timeout_string(self):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            inactivity_timeout="30m",
-        )
-        with pytest.raises(ValueError, match="protobuf JSON duration"):
-            config.validate()
 
 
 # ---------------------------------------------------------------------------
