@@ -391,6 +391,70 @@ class TestForwardBackwardCustomEmbedding:
         assert grad_data.data == [5.0, -2.0]
         assert grad_data.shape == [2]
 
+    def test_embedding_output_pools_shaped_sequence_hidden_states(self, monkeypatch):
+        client = self._make_client()
+        datum = types.Datum(
+            model_input=types.ModelInput.from_ints([1, 2]),
+            loss_fn_inputs={},
+        )
+        forward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="forward",
+            loss_fn_outputs=[
+                {
+                    "embedding": types.TensorData(
+                        data=[1.0, 2.0, 3.0, 4.0, 100.0, 200.0],
+                        dtype="float32",
+                        shape=[3, 2],
+                    )
+                }
+            ],
+            metrics={},
+        )
+        backward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 0.0},
+        )
+        captured = {}
+
+        class _ImmediateFuture:
+            def __init__(self, value):
+                self._value = value
+
+            async def result_async(self, timeout=None):
+                return self._value
+
+            def result(self, timeout=None):
+                return self._value
+
+        async def fake_forward(data, pooling):
+            return _ImmediateFuture(forward_output)
+
+        async def fake_backward(data, pooling):
+            captured["backward_data"] = data
+            return _ImmediateFuture(backward_output)
+
+        monkeypatch.setattr(client, "_forward_embedding_async", fake_forward)
+        monkeypatch.setattr(client, "_forward_backward_embedding_async", fake_backward)
+
+        def loss_fn(data, embeddings):
+            assert embeddings[0].tolist() == [3.0, 4.0]
+            return (embeddings[0] * torch.tensor([7.0, -3.0])).sum(), {}
+
+        future = asyncio.run(
+            client.forward_backward_custom_async(
+                [datum],
+                loss_fn,
+                output="embedding",
+                pooling="last",
+            )
+        )
+        future.result()
+
+        grad_data = captured["backward_data"][0].loss_fn_inputs["embedding_grads"]
+        assert grad_data.data == [7.0, -3.0]
+        assert grad_data.shape == [2]
+
 
 # ---------------------------------------------------------------------------
 # FiretitanServiceClient.create_training_client — duplicate detection

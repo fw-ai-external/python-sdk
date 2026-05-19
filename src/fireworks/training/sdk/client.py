@@ -190,7 +190,9 @@ def _text_token_count(datum: types.Datum) -> int:
 
 
 def _pool_embedding_tensor(
-    embedding, datum: types.Datum, pooling: Literal["mean", "last"]
+    embedding,
+    datum: types.Datum,
+    pooling: Literal["mean", "last"],
 ):
     if embedding.ndim <= 1:
         return embedding
@@ -251,7 +253,12 @@ class FiretitanTrainingClient(TrainingClient):
     tinker.TrainingClient.
     """
 
-    def __init__(self, holder, model_seq_id: int, model_id):
+    def __init__(
+        self,
+        holder,
+        model_seq_id: int,
+        model_id,
+    ):
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Track checkpoint names to detect reuse within a session.
         # Sampler and state names are tracked separately because the same name
