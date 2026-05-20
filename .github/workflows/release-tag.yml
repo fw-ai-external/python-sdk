@@ -43,9 +43,15 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DISPATCH_VERSION}" ]]; then
             version="${DISPATCH_VERSION}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            # Manual recovery dispatch with no version: read the manifest.
+            version="$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')"
           else
+            # Push to main: the commit subject is the source of truth.
+            # The optional " (#NNN)" suffix is what GitHub appends on
+            # squash-merge; capture only the version token.
             subject="$(git log -1 --format=%s)"
-            if [[ ! "${subject}" =~ ^release:\ +([0-9].*)$ ]]; then
+            if [[ ! "${subject}" =~ ^release:\ +([0-9][0-9A-Za-z._-]*)(\ +\(#[0-9]+\))?$ ]]; then
               echo "Most recent commit is not a release commit; nothing to tag."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
