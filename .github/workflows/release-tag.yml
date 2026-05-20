@@ -1,10 +1,14 @@
 name: Release Tag
 
-# Fires when a "release: vX.Y.Z" commit lands on main (typically via
-# squash-merge of an upstream-prepared release PR). Creates the matching
-# git tag and a GitHub Release, which is what publish-pypi.yml listens
-# for. Idempotent — the tag/release won't be recreated if they already
-# exist.
+# Fires when a "release: X.Y.Z" commit lands on main (typically via
+# squash-merge of an upstream-prepared release PR; subject has no "v"
+# prefix, the tag does). Creates the matching git tag vX.Y.Z and a
+# GitHub Release, which is what publish-pypi.yml listens for. The
+# GitHub Release MUST be created with FW_AI_BOT_TOKEN (a PAT) rather
+# than github.token, because Release events triggered by github.token
+# do not cascade into other workflows — using github.token would
+# silently break the publish chain. Idempotent — the tag/release won't
+# be recreated if they already exist.
 
 on:
   push:
@@ -62,10 +66,17 @@ jobs:
             echo "tag=${tag}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Require FW_AI_BOT_TOKEN
+        if: steps.version.outputs.skip != 'true'
+        env:
+          BOT_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+        run: |
+          [[ -n "${BOT_TOKEN}" ]] || { echo "::error::FW_AI_BOT_TOKEN is required"; exit 1; }
+
       - name: Create tag and GitHub Release
         if: steps.version.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
