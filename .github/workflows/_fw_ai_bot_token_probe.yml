@@ -1,0 +1,25 @@
+name: FW_AI_BOT_TOKEN probe (temporary)
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.repository == 'fw-ai-external/python-sdk'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secret presence (does not print value)
+        env:
+          FW_AI_BOT_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+        run: |
+          if [ -z "${FW_AI_BOT_TOKEN}" ]; then
+            echo "RESULT: FW_AI_BOT_TOKEN is NOT accessible from this repo (empty)."
+            exit 1
+          fi
+          echo "RESULT: FW_AI_BOT_TOKEN is accessible (length=${#FW_AI_BOT_TOKEN})."
