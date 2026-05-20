@@ -59,6 +59,13 @@ jobs:
             version="${BASH_REMATCH[1]}"
           fi
 
+          # Belt-and-suspenders: validate the version regardless of source
+          # (push subject, explicit dispatch input, or manifest fallback).
+          if [[ ! "${version}" =~ ^[0-9][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::Invalid release version: ${version}"
+            exit 1
+          fi
+
           tag="v${version}"
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             echo "Tag ${tag} already exists; skipping."
