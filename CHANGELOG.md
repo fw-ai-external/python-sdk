@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0-alpha.71 (2026-05-19)
+
+Full Changelog: [v1.2.0-alpha.70...v1.2.0-alpha.71](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.70...v1.2.0-alpha.71)
+
 ## 1.2.0-alpha.70 (2026-05-15)
 
 Full Changelog: [v1.2.0-alpha.69...v1.2.0-alpha.70](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.69...v1.2.0-alpha.70)
