@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from __future__ import annotations
 
 import os
@@ -40,7 +42,7 @@ class TestAccounts:
         response = client.accounts.with_raw_response.list()
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         account = response.parse()
         assert_matches_type(SyncCursorAccounts[Account], account, path=["response"])
 
@@ -49,7 +51,7 @@ class TestAccounts:
     def test_streaming_response_list(self, client: Fireworks) -> None:
         with client.accounts.with_streaming_response.list() as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             account = response.parse()
             assert_matches_type(SyncCursorAccounts[Account], account, path=["response"])
@@ -81,7 +83,7 @@ class TestAccounts:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         account = response.parse()
         assert_matches_type(Account, account, path=["response"])
 
@@ -92,7 +94,7 @@ class TestAccounts:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             account = response.parse()
             assert_matches_type(Account, account, path=["response"])
@@ -137,7 +139,7 @@ class TestAsyncAccounts:
         response = await async_client.accounts.with_raw_response.list()
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         account = await response.parse()
         assert_matches_type(AsyncCursorAccounts[Account], account, path=["response"])
 
@@ -146,7 +148,7 @@ class TestAsyncAccounts:
     async def test_streaming_response_list(self, async_client: AsyncFireworks) -> None:
         async with async_client.accounts.with_streaming_response.list() as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             account = await response.parse()
             assert_matches_type(AsyncCursorAccounts[Account], account, path=["response"])
@@ -178,7 +180,7 @@ class TestAsyncAccounts:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         account = await response.parse()
         assert_matches_type(Account, account, path=["response"])
 
@@ -189,7 +191,7 @@ class TestAsyncAccounts:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             account = await response.parse()
             assert_matches_type(Account, account, path=["response"])

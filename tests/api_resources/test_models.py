@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from __future__ import annotations
 
 import os
@@ -93,7 +95,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -105,7 +107,7 @@ class TestModels:
             model_id="modelId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -190,7 +192,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -202,7 +204,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -253,7 +255,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(SyncCursorModels[Model], model, path=["response"])
 
@@ -264,7 +266,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(SyncCursorModels[Model], model, path=["response"])
@@ -297,7 +299,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(object, model, path=["response"])
 
@@ -309,7 +311,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(object, model, path=["response"])
@@ -359,7 +361,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -371,7 +373,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -421,7 +423,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
@@ -433,7 +435,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
@@ -487,7 +489,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
@@ -500,7 +502,7 @@ class TestModels:
             filename_to_size={"foo": "string"},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
@@ -553,7 +555,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(object, model, path=["response"])
 
@@ -565,7 +567,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(object, model, path=["response"])
@@ -617,7 +619,7 @@ class TestModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = response.parse()
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
@@ -629,7 +631,7 @@ class TestModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = response.parse()
             assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
@@ -729,7 +731,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -741,7 +743,7 @@ class TestAsyncModels:
             model_id="modelId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -826,7 +828,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -838,7 +840,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -889,7 +891,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
 
@@ -900,7 +902,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(AsyncCursorModels[Model], model, path=["response"])
@@ -933,7 +935,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(object, model, path=["response"])
 
@@ -945,7 +947,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(object, model, path=["response"])
@@ -995,7 +997,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(Model, model, path=["response"])
 
@@ -1007,7 +1009,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(Model, model, path=["response"])
@@ -1057,7 +1059,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
 
@@ -1069,7 +1071,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(ModelGetDownloadEndpointResponse, model, path=["response"])
@@ -1123,7 +1125,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
 
@@ -1136,7 +1138,7 @@ class TestAsyncModels:
             filename_to_size={"foo": "string"},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(ModelGetUploadEndpointResponse, model, path=["response"])
@@ -1189,7 +1191,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(object, model, path=["response"])
 
@@ -1201,7 +1203,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(object, model, path=["response"])
@@ -1253,7 +1255,7 @@ class TestAsyncModels:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         model = await response.parse()
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
@@ -1265,7 +1267,7 @@ class TestAsyncModels:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             model = await response.parse()
             assert_matches_type(ModelValidateUploadResponse, model, path=["response"])

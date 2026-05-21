@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from __future__ import annotations
 
 import os
@@ -57,7 +59,7 @@ class TestBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 
@@ -68,7 +70,7 @@ class TestBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
             assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
@@ -112,7 +114,7 @@ class TestBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
         assert_matches_type(SyncCursorBatchInferenceJobs[BatchInferenceJob], batch_inference_job, path=["response"])
 
@@ -123,7 +125,7 @@ class TestBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
             assert_matches_type(SyncCursorBatchInferenceJobs[BatchInferenceJob], batch_inference_job, path=["response"])
@@ -156,7 +158,7 @@ class TestBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
         assert_matches_type(object, batch_inference_job, path=["response"])
 
@@ -168,7 +170,7 @@ class TestBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
             assert_matches_type(object, batch_inference_job, path=["response"])
@@ -220,7 +222,7 @@ class TestBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = response.parse()
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 
@@ -232,7 +234,7 @@ class TestBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = response.parse()
             assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
@@ -301,7 +303,7 @@ class TestAsyncBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 
@@ -312,7 +314,7 @@ class TestAsyncBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
             assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
@@ -356,7 +358,7 @@ class TestAsyncBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
         assert_matches_type(AsyncCursorBatchInferenceJobs[BatchInferenceJob], batch_inference_job, path=["response"])
 
@@ -367,7 +369,7 @@ class TestAsyncBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
             assert_matches_type(
@@ -402,7 +404,7 @@ class TestAsyncBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
         assert_matches_type(object, batch_inference_job, path=["response"])
 
@@ -414,7 +416,7 @@ class TestAsyncBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
             assert_matches_type(object, batch_inference_job, path=["response"])
@@ -466,7 +468,7 @@ class TestAsyncBatchInferenceJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         batch_inference_job = await response.parse()
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 
@@ -478,7 +480,7 @@ class TestAsyncBatchInferenceJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             batch_inference_job = await response.parse()
             assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])

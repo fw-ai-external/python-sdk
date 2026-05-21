@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from .choice import Choice as Choice
 from .status import Status as Status
 from .log_probs import LogProbs as LogProbs

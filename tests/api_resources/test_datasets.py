@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from __future__ import annotations
 
 import os
@@ -68,7 +70,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -81,7 +83,7 @@ class TestDatasets:
             dataset_id="datasetId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -139,7 +141,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -151,7 +153,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -202,7 +204,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
 
@@ -213,7 +215,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(SyncCursorDatasets[Dataset], dataset, path=["response"])
@@ -246,7 +248,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(object, dataset, path=["response"])
 
@@ -258,7 +260,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(object, dataset, path=["response"])
@@ -308,7 +310,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -320,7 +322,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -371,7 +373,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(DatasetGetDownloadEndpointResponse, dataset, path=["response"])
 
@@ -383,7 +385,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(DatasetGetDownloadEndpointResponse, dataset, path=["response"])
@@ -436,7 +438,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(DatasetGetUploadEndpointResponse, dataset, path=["response"])
 
@@ -449,7 +451,7 @@ class TestDatasets:
             filename_to_size={"foo": "string"},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(DatasetGetUploadEndpointResponse, dataset, path=["response"])
@@ -501,7 +503,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
 
@@ -513,7 +515,7 @@ class TestDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
@@ -555,7 +557,7 @@ class TestDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = response.parse()
         assert_matches_type(object, dataset, path=["response"])
 
@@ -568,7 +570,7 @@ class TestDatasets:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = response.parse()
             assert_matches_type(object, dataset, path=["response"])
@@ -645,7 +647,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -658,7 +660,7 @@ class TestAsyncDatasets:
             dataset_id="datasetId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -716,7 +718,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -728,7 +730,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -779,7 +781,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
 
@@ -790,7 +792,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(AsyncCursorDatasets[Dataset], dataset, path=["response"])
@@ -823,7 +825,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(object, dataset, path=["response"])
 
@@ -835,7 +837,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(object, dataset, path=["response"])
@@ -885,7 +887,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(Dataset, dataset, path=["response"])
 
@@ -897,7 +899,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(Dataset, dataset, path=["response"])
@@ -948,7 +950,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(DatasetGetDownloadEndpointResponse, dataset, path=["response"])
 
@@ -960,7 +962,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(DatasetGetDownloadEndpointResponse, dataset, path=["response"])
@@ -1013,7 +1015,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(DatasetGetUploadEndpointResponse, dataset, path=["response"])
 
@@ -1026,7 +1028,7 @@ class TestAsyncDatasets:
             filename_to_size={"foo": "string"},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(DatasetGetUploadEndpointResponse, dataset, path=["response"])
@@ -1078,7 +1080,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
 
@@ -1090,7 +1092,7 @@ class TestAsyncDatasets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(DatasetUploadResponse, dataset, path=["response"])
@@ -1132,7 +1134,7 @@ class TestAsyncDatasets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         dataset = await response.parse()
         assert_matches_type(object, dataset, path=["response"])
 
@@ -1145,7 +1147,7 @@ class TestAsyncDatasets:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             dataset = await response.parse()
             assert_matches_type(object, dataset, path=["response"])

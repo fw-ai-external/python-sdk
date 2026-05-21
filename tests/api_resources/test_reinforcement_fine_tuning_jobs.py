@@ -1,3 +1,5 @@
+# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+
 from __future__ import annotations
 
 import os
@@ -102,7 +104,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -115,7 +117,7 @@ class TestReinforcementFineTuningJobs:
             evaluator="evaluator",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
@@ -169,7 +171,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(
             SyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
@@ -184,7 +186,7 @@ class TestReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(
@@ -221,7 +223,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
 
@@ -233,7 +235,7 @@ class TestReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
@@ -277,7 +279,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
 
@@ -290,7 +292,7 @@ class TestReinforcementFineTuningJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
@@ -344,7 +346,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -356,7 +358,7 @@ class TestReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
@@ -400,7 +402,7 @@ class TestReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -413,7 +415,7 @@ class TestReinforcementFineTuningJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
@@ -529,7 +531,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -542,7 +544,7 @@ class TestAsyncReinforcementFineTuningJobs:
             evaluator="evaluator",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
@@ -596,7 +598,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(
             AsyncCursorReinforcementFineTuningJobs[ReinforcementFineTuningJob],
@@ -611,7 +613,7 @@ class TestAsyncReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(
@@ -648,7 +650,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
 
@@ -660,7 +662,7 @@ class TestAsyncReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
@@ -704,7 +706,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
 
@@ -717,7 +719,7 @@ class TestAsyncReinforcementFineTuningJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(object, reinforcement_fine_tuning_job, path=["response"])
@@ -771,7 +773,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -783,7 +785,7 @@ class TestAsyncReinforcementFineTuningJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
@@ -827,7 +829,7 @@ class TestAsyncReinforcementFineTuningJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
         reinforcement_fine_tuning_job = await response.parse()
         assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])
 
@@ -840,7 +842,7 @@ class TestAsyncReinforcementFineTuningJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
+            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
 
             reinforcement_fine_tuning_job = await response.parse()
             assert_matches_type(ReinforcementFineTuningJob, reinforcement_fine_tuning_job, path=["response"])

@@ -1,3 +1,4 @@
-This directory holds hand-maintained code that extends the SDK.
+File generated from our OpenAPI spec by Stainless.
 
-The REST API client code generator does not write into this directory; its contents (other than this keep file) are preserved across regenerations.
+This directory can be used to store custom files to expand the SDK.
+It is ignored by Stainless code generation and its content (other than this keep file) won't be touched.
