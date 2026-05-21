@@ -1,4 +1,10 @@
 name: CI
+
+# Minimal safety net for direct PRs. The authoritative CI suite
+# (lint, build, unit + mock-server matrix, coverage, security audit,
+# e2e) runs upstream before promotion, so this workflow only needs
+# to catch the rare direct edit.
+
 on:
   push:
     branches:
@@ -7,10 +13,10 @@ on:
 
 jobs:
   lint:
-    timeout-minutes: 10
     name: lint
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.fork) && (github.event_name != 'push' || github.event.head_commit.message != 'codegen metadata')
+    timeout-minutes: 10
+    if: github.event.head_commit.message != 'codegen metadata'
     steps:
       - uses: actions/checkout@v6
 
@@ -28,137 +34,20 @@ jobs:
       - name: Run lints
         run: ./scripts/lint
 
-  build:
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.fork) && (github.event_name != 'push' || github.event.head_commit.message != 'codegen metadata')
-    timeout-minutes: 10
-    name: build
+  import-smoke:
+    name: import-smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.head_commit.message != 'codegen metadata'
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rye
-        run: |
-          curl -sSf https://rye.astral.sh/get | bash
-          echo "$HOME/.rye/shims" >> $GITHUB_PATH
-        env:
-          RYE_VERSION: '0.44.0'
-          RYE_INSTALL_OPTION: '--yes'
-
-      - name: Install dependencies
-        run: rye sync --all-features
-
-      - name: Run build
-        run: rye build
-
-  test:
-    timeout-minutes: 10
-    name: test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rye
-        run: |
-          curl -sSf https://rye.astral.sh/get | bash
-          echo "$HOME/.rye/shims" >> $GITHUB_PATH
-        env:
-          RYE_VERSION: '0.44.0'
-          RYE_INSTALL_OPTION: '--yes'
-
-      - name: Bootstrap
-        run: ./scripts/bootstrap
-
-      - name: Run tests
-        run: ./scripts/test
-
-  test-mock-server:
-    timeout-minutes: 15
-    name: test-mock-server (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.9', '3.11', '3.13']
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Install package
+        run: pip install -e . 2>/dev/null || pip install -e .[training]
 
-      - name: Install Prism mock server
-        run: npm install -g @stoplight/prism-cli
-
-      - name: Download OpenAPI spec
-        run: |
-          SPEC_URL=$(grep 'openapi_spec_url' .stats.yml | sed 's/openapi_spec_url: //')
-          curl -sSL "$SPEC_URL" -o openapi-spec.yml
-
-      - name: Start Prism mock server
-        run: |
-          prism mock openapi-spec.yml --port 4010 --host 127.0.0.1 &
-          # Wait for Prism to be ready
-          for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:4010 > /dev/null 2>&1; then
-              echo "Prism is ready"
-              break
-            fi
-            sleep 1
-          done
-          curl -s http://127.0.0.1:4010 > /dev/null 2>&1 || { echo "Prism failed to start"; exit 1; }
-
-      - name: Install dependencies
-        run: |
-          pip install -e ".[training]" 2>/dev/null || pip install -e .
-          pip install pytest pytest-asyncio pytest-timeout respx aiohttp httpx_aiohttp dirty-equals
-
-      - name: Run mock server tests
-        env:
-          RUN_MOCK_SERVER_TESTS: 'true'
-          TEST_API_BASE_URL: http://127.0.0.1:4010
-          DEFER_PYDANTIC_BUILD: 'false'
-        run: |
-          python -m pytest tests/api_resources/ -v --timeout=30 -x
-
-  test-coverage:
-    timeout-minutes: 15
-    name: test-coverage
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rye
-        run: |
-          curl -sSf https://rye.astral.sh/get | bash
-          echo "$HOME/.rye/shims" >> $GITHUB_PATH
-        env:
-          RYE_VERSION: '0.44.0'
-          RYE_INSTALL_OPTION: '--yes'
-
-      - name: Install dependencies
-        run: rye sync --all-features
-
-      - name: Run tests with coverage
-        env:
-          DEFER_PYDANTIC_BUILD: 'false'
-        run: |
-          rye run pytest tests/ \
-            --ignore=tests/api_resources \
-            --cov=fireworks \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under=70
-
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
+      - name: Smoke import
+        run: python -c "import fireworks; print('fireworks', getattr(fireworks, '__version__', '<unknown>'))"

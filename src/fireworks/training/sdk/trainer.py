@@ -8,12 +8,12 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
-import logging
 import re
 import time
-from dataclasses import dataclass
-from datetime import timedelta
+import logging
 from typing import Any
+from datetime import timedelta
+from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (

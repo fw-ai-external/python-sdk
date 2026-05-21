@@ -3,16 +3,28 @@ from tempfile import NamedTemporaryFile
 
 import nox
 
-_TRAINING_ONLY_PACKAGES = ("tinker==", "tinker-cookbook==")
+_TRAINING_ONLY_PACKAGES = (
+    "tinker==",
+    "tinker-cookbook==",
+    "torch==",
+    "triton==",
+    "transformers==",
+    "datasets==",
+    "tiktoken==",
+    "wandb==",
+    "nvidia-",
+)
 
 
 def _install_dev_deps_without_training_extras(session: nox.Session) -> None:
     """Install lockfile deps while skipping training-only extras.
 
-    `test-pydantic-v1` runs on Python 3.9 to validate base SDK compatibility.
-    Training extras (`tinker`, `tinker-cookbook`) currently require newer
-    Python versions, so we exclude only those packages from the shared dev
-    lockfile for this session.
+    `test-pydantic-v1` validates base SDK compatibility on Python 3.9; it does
+    not need the training stack. Skip tinker / tinker-cookbook (which require
+    newer Python) plus the heavy ML wheels (torch, triton, transformers,
+    datasets, tiktoken, wandb, and the nvidia-* CUDA wheels) that would
+    otherwise be reinstalled into a second venv on top of the .venv
+    `rye sync --all-features` already produced, overflowing runner disk.
     """
     lockfile_lines = Path("requirements-dev.lock").read_text(encoding="utf-8").splitlines()
     filtered_lines = [
