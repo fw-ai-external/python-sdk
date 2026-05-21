@@ -107,6 +107,13 @@ class ReinforcementFineTuningStep(BaseModel):
 
     direct_route_handle: Optional[str] = FieldInfo(alias="directRouteHandle", default=None)
 
+    disable_inactivity_cleanup: Optional[bool] = FieldInfo(alias="disableInactivityCleanup", default=None)
+    """Disable trainer inactivity cleanup.
+
+    When true, the trainer is not automatically stopped due to inactivity. GPU usage
+    continues to accrue while the trainer is running.
+    """
+
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
     eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
@@ -126,6 +133,16 @@ class ReinforcementFineTuningStep(BaseModel):
 
     When set, checkpoints are saved to this deployment's hot load bucket, enabling
     weight swaps on inference. Only valid for service-mode or keep-alive jobs.
+    """
+
+    inactivity_timeout: Optional[str] = FieldInfo(alias="inactivityTimeout", default=None)
+    """Trainer inactivity timeout.
+
+    The trainer reports tracked activity, including trainer API operations and
+    active-session heartbeats. If no tracked activity is observed for this duration,
+    the trainer is automatically stopped. When unset or 0, defaults to 60 minutes.
+    Set disableInactivityCleanup to true to disable automatic cleanup. GPU usage
+    continues to accrue while the trainer is running.
     """
 
     job_progress: Optional[JobProgress] = FieldInfo(alias="jobProgress", default=None)

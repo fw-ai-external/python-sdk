@@ -39,6 +39,13 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     dataset: str
     """The name of the dataset used for training."""
 
+    disable_inactivity_cleanup: Annotated[bool, PropertyInfo(alias="disableInactivityCleanup")]
+    """Disable trainer inactivity cleanup.
+
+    When true, the trainer is not automatically stopped due to inactivity. GPU usage
+    continues to accrue while the trainer is running.
+    """
+
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
     eval_auto_carveout: Annotated[bool, PropertyInfo(alias="evalAutoCarveout")]
@@ -58,6 +65,16 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
 
     When set, checkpoints are saved to this deployment's hot load bucket, enabling
     weight swaps on inference. Only valid for service-mode or keep-alive jobs.
+    """
+
+    inactivity_timeout: Annotated[str, PropertyInfo(alias="inactivityTimeout")]
+    """Trainer inactivity timeout.
+
+    The trainer reports tracked activity, including trainer API operations and
+    active-session heartbeats. If no tracked activity is observed for this duration,
+    the trainer is automatically stopped. When unset or 0, defaults to 60 minutes.
+    Set disableInactivityCleanup to true to disable automatic cleanup. GPU usage
+    continues to accrue while the trainer is running.
     """
 
     keep_alive: Annotated[bool, PropertyInfo(alias="keepAlive")]

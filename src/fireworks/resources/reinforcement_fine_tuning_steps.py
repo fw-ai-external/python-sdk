@@ -62,11 +62,13 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
+        disable_inactivity_cleanup: bool | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         forward_only: bool | Omit = omit,
         hot_load_deployment_id: str | Omit = omit,
+        inactivity_timeout: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         managed_by: str | Omit = omit,
@@ -104,6 +106,10 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           dataset: The name of the dataset used for training.
 
+          disable_inactivity_cleanup: Disable trainer inactivity cleanup. When true, the trainer is not automatically
+              stopped due to inactivity. GPU usage continues to accrue while the trainer is
+              running.
+
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
@@ -114,6 +120,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
               deployment's hot load bucket, enabling weight swaps on inference. Only valid for
               service-mode or keep-alive jobs.
+
+          inactivity_timeout: Trainer inactivity timeout. The trainer reports tracked activity, including
+              trainer API operations and active-session heartbeats. If no tracked activity is
+              observed for this duration, the trainer is automatically stopped. When unset or
+              0, defaults to 60 minutes. Set disableInactivityCleanup to true to disable
+              automatic cleanup. GPU usage continues to accrue while the trainer is running.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
@@ -154,11 +166,13 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "aws_s3_config": aws_s3_config,
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "dataset": dataset,
+                    "disable_inactivity_cleanup": disable_inactivity_cleanup,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "forward_only": forward_only,
                     "hot_load_deployment_id": hot_load_deployment_id,
+                    "inactivity_timeout": inactivity_timeout,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
                     "managed_by": managed_by,
@@ -499,11 +513,13 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         aws_s3_config: reinforcement_fine_tuning_step_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: reinforcement_fine_tuning_step_create_params.AzureBlobStorageConfig | Omit = omit,
         dataset: str | Omit = omit,
+        disable_inactivity_cleanup: bool | Omit = omit,
         display_name: str | Omit = omit,
         eval_auto_carveout: bool | Omit = omit,
         evaluation_dataset: str | Omit = omit,
         forward_only: bool | Omit = omit,
         hot_load_deployment_id: str | Omit = omit,
+        inactivity_timeout: str | Omit = omit,
         keep_alive: bool | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         managed_by: str | Omit = omit,
@@ -541,6 +557,10 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           dataset: The name of the dataset used for training.
 
+          disable_inactivity_cleanup: Disable trainer inactivity cleanup. When true, the trainer is not automatically
+              stopped due to inactivity. GPU usage continues to accrue while the trainer is
+              running.
+
           eval_auto_carveout: Whether to auto-carve the dataset for eval.
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
@@ -551,6 +571,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
           hot_load_deployment_id: The deployment ID used for hot loading. When set, checkpoints are saved to this
               deployment's hot load bucket, enabling weight swaps on inference. Only valid for
               service-mode or keep-alive jobs.
+
+          inactivity_timeout: Trainer inactivity timeout. The trainer reports tracked activity, including
+              trainer API operations and active-session heartbeats. If no tracked activity is
+              observed for this duration, the trainer is automatically stopped. When unset or
+              0, defaults to 60 minutes. Set disableInactivityCleanup to true to disable
+              automatic cleanup. GPU usage continues to accrue while the trainer is running.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
 
@@ -591,11 +617,13 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "aws_s3_config": aws_s3_config,
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "dataset": dataset,
+                    "disable_inactivity_cleanup": disable_inactivity_cleanup,
                     "display_name": display_name,
                     "eval_auto_carveout": eval_auto_carveout,
                     "evaluation_dataset": evaluation_dataset,
                     "forward_only": forward_only,
                     "hot_load_deployment_id": hot_load_deployment_id,
+                    "inactivity_timeout": inactivity_timeout,
                     "keep_alive": keep_alive,
                     "loss_config": loss_config,
                     "managed_by": managed_by,

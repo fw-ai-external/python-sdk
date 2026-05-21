@@ -45,11 +45,13 @@ class TestReinforcementFineTuningSteps:
                 "tenant_id": "tenantId",
             },
             dataset="dataset",
+            disable_inactivity_cleanup=True,
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
             forward_only=True,
             hot_load_deployment_id="hotLoadDeploymentId",
+            inactivity_timeout="inactivityTimeout",
             keep_alive=True,
             loss_config={
                 "dpo": {
@@ -471,11 +473,13 @@ class TestAsyncReinforcementFineTuningSteps:
                 "tenant_id": "tenantId",
             },
             dataset="dataset",
+            disable_inactivity_cleanup=True,
             display_name="displayName",
             eval_auto_carveout=True,
             evaluation_dataset="evaluationDataset",
             forward_only=True,
             hot_load_deployment_id="hotLoadDeploymentId",
+            inactivity_timeout="inactivityTimeout",
             keep_alive=True,
             loss_config={
                 "dpo": {
