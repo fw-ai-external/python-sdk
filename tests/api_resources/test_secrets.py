@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -49,7 +47,7 @@ class TestSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -62,7 +60,7 @@ class TestSecrets:
             name="name",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = response.parse()
             assert_matches_type(Secret, secret, path=["response"])
@@ -110,7 +108,7 @@ class TestSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -123,7 +121,7 @@ class TestSecrets:
             key_name="keyName",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = response.parse()
             assert_matches_type(Secret, secret, path=["response"])
@@ -176,7 +174,7 @@ class TestSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = response.parse()
         assert_matches_type(SyncCursorSecrets[Secret], secret, path=["response"])
 
@@ -187,7 +185,7 @@ class TestSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = response.parse()
             assert_matches_type(SyncCursorSecrets[Secret], secret, path=["response"])
@@ -220,7 +218,7 @@ class TestSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = response.parse()
         assert_matches_type(object, secret, path=["response"])
 
@@ -232,7 +230,7 @@ class TestSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = response.parse()
             assert_matches_type(object, secret, path=["response"])
@@ -282,7 +280,7 @@ class TestSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -294,7 +292,7 @@ class TestSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = response.parse()
             assert_matches_type(Secret, secret, path=["response"])
@@ -353,7 +351,7 @@ class TestAsyncSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = await response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -366,7 +364,7 @@ class TestAsyncSecrets:
             name="name",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = await response.parse()
             assert_matches_type(Secret, secret, path=["response"])
@@ -414,7 +412,7 @@ class TestAsyncSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = await response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -427,7 +425,7 @@ class TestAsyncSecrets:
             key_name="keyName",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = await response.parse()
             assert_matches_type(Secret, secret, path=["response"])
@@ -480,7 +478,7 @@ class TestAsyncSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = await response.parse()
         assert_matches_type(AsyncCursorSecrets[Secret], secret, path=["response"])
 
@@ -491,7 +489,7 @@ class TestAsyncSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = await response.parse()
             assert_matches_type(AsyncCursorSecrets[Secret], secret, path=["response"])
@@ -524,7 +522,7 @@ class TestAsyncSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = await response.parse()
         assert_matches_type(object, secret, path=["response"])
 
@@ -536,7 +534,7 @@ class TestAsyncSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = await response.parse()
             assert_matches_type(object, secret, path=["response"])
@@ -586,7 +584,7 @@ class TestAsyncSecrets:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         secret = await response.parse()
         assert_matches_type(Secret, secret, path=["response"])
 
@@ -598,7 +596,7 @@ class TestAsyncSecrets:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             secret = await response.parse()
             assert_matches_type(Secret, secret, path=["response"])

@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -52,7 +50,7 @@ class TestLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -64,7 +62,7 @@ class TestLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -115,7 +113,7 @@ class TestLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = response.parse()
         assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
 
@@ -126,7 +124,7 @@ class TestLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = response.parse()
             assert_matches_type(SyncCursorLora[DeployedModel], lora, path=["response"])
@@ -169,7 +167,7 @@ class TestLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -181,7 +179,7 @@ class TestLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -235,7 +233,7 @@ class TestLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -246,7 +244,7 @@ class TestLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -279,7 +277,7 @@ class TestLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = response.parse()
         assert_matches_type(object, lora, path=["response"])
 
@@ -291,7 +289,7 @@ class TestLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = response.parse()
             assert_matches_type(object, lora, path=["response"])
@@ -353,7 +351,7 @@ class TestAsyncLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -365,7 +363,7 @@ class TestAsyncLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = await response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -416,7 +414,7 @@ class TestAsyncLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = await response.parse()
         assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
 
@@ -427,7 +425,7 @@ class TestAsyncLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = await response.parse()
             assert_matches_type(AsyncCursorLora[DeployedModel], lora, path=["response"])
@@ -470,7 +468,7 @@ class TestAsyncLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -482,7 +480,7 @@ class TestAsyncLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = await response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -536,7 +534,7 @@ class TestAsyncLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = await response.parse()
         assert_matches_type(DeployedModel, lora, path=["response"])
 
@@ -547,7 +545,7 @@ class TestAsyncLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = await response.parse()
             assert_matches_type(DeployedModel, lora, path=["response"])
@@ -580,7 +578,7 @@ class TestAsyncLora:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         lora = await response.parse()
         assert_matches_type(object, lora, path=["response"])
 
@@ -592,7 +590,7 @@ class TestAsyncLora:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             lora = await response.parse()
             assert_matches_type(object, lora, path=["response"])

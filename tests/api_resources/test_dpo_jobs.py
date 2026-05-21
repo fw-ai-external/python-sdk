@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -86,7 +84,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -98,7 +96,7 @@ class TestDpoJobs:
             dataset="dataset",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])
@@ -143,7 +141,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(SyncCursorDpoJobs[DpoJob], dpo_job, path=["response"])
 
@@ -154,7 +152,7 @@ class TestDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(SyncCursorDpoJobs[DpoJob], dpo_job, path=["response"])
@@ -187,7 +185,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(object, dpo_job, path=["response"])
 
@@ -199,7 +197,7 @@ class TestDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(object, dpo_job, path=["response"])
@@ -249,7 +247,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -261,7 +259,7 @@ class TestDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])
@@ -301,7 +299,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
 
@@ -313,7 +311,7 @@ class TestDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
@@ -355,7 +353,7 @@ class TestDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -368,7 +366,7 @@ class TestDpoJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])
@@ -463,7 +461,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -475,7 +473,7 @@ class TestAsyncDpoJobs:
             dataset="dataset",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])
@@ -520,7 +518,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(AsyncCursorDpoJobs[DpoJob], dpo_job, path=["response"])
 
@@ -531,7 +529,7 @@ class TestAsyncDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(AsyncCursorDpoJobs[DpoJob], dpo_job, path=["response"])
@@ -564,7 +562,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(object, dpo_job, path=["response"])
 
@@ -576,7 +574,7 @@ class TestAsyncDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(object, dpo_job, path=["response"])
@@ -626,7 +624,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -638,7 +636,7 @@ class TestAsyncDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])
@@ -678,7 +676,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
 
@@ -690,7 +688,7 @@ class TestAsyncDpoJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(DpoJobGetMetricsFileEndpointResponse, dpo_job, path=["response"])
@@ -732,7 +730,7 @@ class TestAsyncDpoJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         dpo_job = await response.parse()
         assert_matches_type(DpoJob, dpo_job, path=["response"])
 
@@ -745,7 +743,7 @@ class TestAsyncDpoJobs:
             body={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             dpo_job = await response.parse()
             assert_matches_type(DpoJob, dpo_job, path=["response"])

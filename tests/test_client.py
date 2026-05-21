@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import gc
@@ -382,7 +380,7 @@ class TestFireworks:
         )
         request = test_client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "bar"
-        assert request.headers.get("x-stainless-lang") == "python"
+        assert request.headers.get("x-fireworks-lang") == "python"
 
         test_client2 = Fireworks(
             base_url=base_url,
@@ -390,12 +388,12 @@ class TestFireworks:
             _strict_response_validation=True,
             default_headers={
                 "X-Foo": "stainless",
-                "X-Stainless-Lang": "my-overriding-header",
+                "X-Fireworks-Lang": "my-overriding-header",
             },
         )
         request = test_client2._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "stainless"
-        assert request.headers.get("x-stainless-lang") == "my-overriding-header"
+        assert request.headers.get("x-fireworks-lang") == "my-overriding-header"
 
         test_client.close()
         test_client2.close()
@@ -938,7 +936,7 @@ class TestFireworks:
         response = client.chat.completions.with_raw_response.create(messages=[{"role": "role"}], model="model")
 
         assert response.retries_taken == failures_before_success
-        assert int(response.http_request.headers.get("x-stainless-retry-count")) == failures_before_success
+        assert int(response.http_request.headers.get("x-fireworks-retry-count")) == failures_before_success
 
     @pytest.mark.parametrize("failures_before_success", [0, 2, 4])
     @mock.patch("fireworks._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
@@ -960,10 +958,10 @@ class TestFireworks:
         respx_mock.post("/v1/chat/completions").mock(side_effect=retry_handler)
 
         response = client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}], model="model", extra_headers={"x-stainless-retry-count": Omit()}
+            messages=[{"role": "role"}], model="model", extra_headers={"x-fireworks-retry-count": Omit()}
         )
 
-        assert len(response.http_request.headers.get_list("x-stainless-retry-count")) == 0
+        assert len(response.http_request.headers.get_list("x-fireworks-retry-count")) == 0
 
     @pytest.mark.parametrize("failures_before_success", [0, 2, 4])
     @mock.patch("fireworks._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
@@ -985,10 +983,10 @@ class TestFireworks:
         respx_mock.post("/v1/chat/completions").mock(side_effect=retry_handler)
 
         response = client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}], model="model", extra_headers={"x-stainless-retry-count": "42"}
+            messages=[{"role": "role"}], model="model", extra_headers={"x-fireworks-retry-count": "42"}
         )
 
-        assert response.http_request.headers.get("x-stainless-retry-count") == "42"
+        assert response.http_request.headers.get("x-fireworks-retry-count") == "42"
 
     def test_proxy_environment_variables(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Test that the proxy environment variables are set correctly
@@ -1318,7 +1316,7 @@ class TestAsyncFireworks:
         )
         request = test_client._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "bar"
-        assert request.headers.get("x-stainless-lang") == "python"
+        assert request.headers.get("x-fireworks-lang") == "python"
 
         test_client2 = AsyncFireworks(
             base_url=base_url,
@@ -1326,12 +1324,12 @@ class TestAsyncFireworks:
             _strict_response_validation=True,
             default_headers={
                 "X-Foo": "stainless",
-                "X-Stainless-Lang": "my-overriding-header",
+                "X-Fireworks-Lang": "my-overriding-header",
             },
         )
         request = test_client2._build_request(FinalRequestOptions(method="get", url="/foo"))
         assert request.headers.get("x-foo") == "stainless"
-        assert request.headers.get("x-stainless-lang") == "my-overriding-header"
+        assert request.headers.get("x-fireworks-lang") == "my-overriding-header"
 
         await test_client.close()
         await test_client2.close()
@@ -1899,7 +1897,7 @@ class TestAsyncFireworks:
         response = await client.chat.completions.with_raw_response.create(messages=[{"role": "role"}], model="model")
 
         assert response.retries_taken == failures_before_success
-        assert int(response.http_request.headers.get("x-stainless-retry-count")) == failures_before_success
+        assert int(response.http_request.headers.get("x-fireworks-retry-count")) == failures_before_success
 
     @pytest.mark.parametrize("failures_before_success", [0, 2, 4])
     @mock.patch("fireworks._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
@@ -1921,10 +1919,10 @@ class TestAsyncFireworks:
         respx_mock.post("/v1/chat/completions").mock(side_effect=retry_handler)
 
         response = await client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}], model="model", extra_headers={"x-stainless-retry-count": Omit()}
+            messages=[{"role": "role"}], model="model", extra_headers={"x-fireworks-retry-count": Omit()}
         )
 
-        assert len(response.http_request.headers.get_list("x-stainless-retry-count")) == 0
+        assert len(response.http_request.headers.get_list("x-fireworks-retry-count")) == 0
 
     @pytest.mark.parametrize("failures_before_success", [0, 2, 4])
     @mock.patch("fireworks._base_client.BaseClient._calculate_retry_timeout", _low_retry_timeout)
@@ -1946,10 +1944,10 @@ class TestAsyncFireworks:
         respx_mock.post("/v1/chat/completions").mock(side_effect=retry_handler)
 
         response = await client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}], model="model", extra_headers={"x-stainless-retry-count": "42"}
+            messages=[{"role": "role"}], model="model", extra_headers={"x-fireworks-retry-count": "42"}
         )
 
-        assert response.http_request.headers.get("x-stainless-retry-count") == "42"
+        assert response.http_request.headers.get("x-fireworks-retry-count") == "42"
 
     async def test_get_platform(self) -> None:
         platform = await asyncify(get_platform)()

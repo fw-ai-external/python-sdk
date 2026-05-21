@@ -1,7 +1,7 @@
 """Backwards-compatibility shims for the 0.x SDK API surface.
 
 The old ``fireworks-ai`` (0.x) SDK exposed ``acreate()`` on async completion
-resources. The new Stainless-generated 1.x SDK uses ``create()`` for both sync
+resources. The new auto-generated 1.x SDK uses ``create()`` for both sync
 and async (the async version is a coroutine).  Downstream packages like
 ``langchain-fireworks`` and ``instructor`` call ``acreate()``, so we add it as
 a deprecated alias.

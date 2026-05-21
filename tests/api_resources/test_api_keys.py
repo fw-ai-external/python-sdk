@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -52,7 +50,7 @@ class TestAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = response.parse()
         assert_matches_type(APIKey, api_key, path=["response"])
 
@@ -65,7 +63,7 @@ class TestAPIKeys:
             api_key={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = response.parse()
             assert_matches_type(APIKey, api_key, path=["response"])
@@ -121,7 +119,7 @@ class TestAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = response.parse()
         assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
@@ -133,7 +131,7 @@ class TestAPIKeys:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = response.parse()
             assert_matches_type(SyncCursorAPIKeys[APIKey], api_key, path=["response"])
@@ -175,7 +173,7 @@ class TestAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = response.parse()
         assert_matches_type(object, api_key, path=["response"])
 
@@ -188,7 +186,7 @@ class TestAPIKeys:
             key_id="keyId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = response.parse()
             assert_matches_type(object, api_key, path=["response"])
@@ -251,7 +249,7 @@ class TestAsyncAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = await response.parse()
         assert_matches_type(APIKey, api_key, path=["response"])
 
@@ -264,7 +262,7 @@ class TestAsyncAPIKeys:
             api_key={},
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = await response.parse()
             assert_matches_type(APIKey, api_key, path=["response"])
@@ -320,7 +318,7 @@ class TestAsyncAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = await response.parse()
         assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
 
@@ -332,7 +330,7 @@ class TestAsyncAPIKeys:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = await response.parse()
             assert_matches_type(AsyncCursorAPIKeys[APIKey], api_key, path=["response"])
@@ -374,7 +372,7 @@ class TestAsyncAPIKeys:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         api_key = await response.parse()
         assert_matches_type(object, api_key, path=["response"])
 
@@ -387,7 +385,7 @@ class TestAsyncAPIKeys:
             key_id="keyId",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             api_key = await response.parse()
             assert_matches_type(object, api_key, path=["response"])

@@ -1,28 +1,23 @@
 name: Release Tag
 
-# Fires when a "release: X.Y.Z" commit lands on main (typically via
-# squash-merge of an upstream-prepared release PR; subject has no "v"
-# prefix, the tag does). Creates the matching git tag vX.Y.Z and a
-# GitHub Release, which is what publish-pypi.yml listens for. The
-# GitHub Release MUST be created with FW_AI_BOT_TOKEN (a PAT) rather
-# than github.token, because Release events triggered by github.token
-# do not cascade into other workflows — using github.token would
-# silently break the publish chain. Idempotent — the tag/release won't
-# be recreated if they already exist.
+# Fires on every push to main. If pyproject.toml carries a version that has
+# not yet been tagged, this workflow creates the matching git tag vX.Y.Z and a
+# GitHub Release, which is what publish-pypi.yml listens for. pyproject.toml
+# is the single source of truth for the released version — no commit-subject
+# regex, no manifest, no workflow_dispatch override. The GitHub Release MUST
+# be created with FW_AI_BOT_TOKEN (a PAT) rather than github.token, because
+# Release events triggered by github.token do not cascade into other
+# workflows. Idempotent — the tag/release won't be recreated if they already
+# exist.
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version to tag (e.g. 1.2.0-alpha.72); leave blank to read manifest
-        type: string
-        required: false
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   tag:
@@ -32,43 +27,33 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.FW_AI_BOT_TOKEN || github.token }}
+          token: ${{ secrets.FW_AI_BOT_TOKEN }}
 
       - name: Determine version
         id: version
-        env:
-          DISPATCH_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DISPATCH_VERSION}" ]]; then
-            version="${DISPATCH_VERSION}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            # Manual recovery dispatch with no version: read the manifest.
-            version="$(python3 -c 'import json; print(json.load(open(".release-please-manifest.json"))["."])')"
-          else
-            # Push to main: the commit subject is the source of truth.
-            # The optional " (#NNN)" suffix is what GitHub appends on
-            # squash-merge; capture only the version token.
-            subject="$(git log -1 --format=%s)"
-            if [[ ! "${subject}" =~ ^release:\ +([0-9][0-9A-Za-z._-]*)(\ +\(#[0-9]+\))?$ ]]; then
-              echo "Most recent commit is not a release commit; nothing to tag."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            version="${BASH_REMATCH[1]}"
-          fi
+          # Single source of truth: pyproject.toml [project] version on the
+          # merged commit. No commit-subject parsing, no manifest, no fallback.
+          version="$(python3 -c '
+          import sys
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              import tomli as tomllib
+          with open("pyproject.toml", "rb") as f:
+              print(tomllib.load(f)["project"]["version"])
+          ')"
 
-          # Belt-and-suspenders: validate the version regardless of source
-          # (push subject, explicit dispatch input, or manifest fallback).
           if [[ ! "${version}" =~ ^[0-9][0-9A-Za-z._-]*$ ]]; then
-            echo "::error::Invalid release version: ${version}"
+            echo "::error::Invalid version in pyproject.toml: ${version}"
             exit 1
           fi
 
           tag="v${version}"
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists; skipping."
+            echo "Tag ${tag} already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -127,16 +112,17 @@ jobs:
         run: |
           set -euo pipefail
           # Find the PR that was squash-merged to produce this release commit
-          # and flip the autorelease labels: pending -> tagged.
-          # Failure here is informational only — the tag and GitHub Release
-          # are already created and the next workflow listening on Release
-          # has fired.
+          # and flip the autorelease labels: pending -> tagged. Fails loudly
+          # if the label flip cannot complete — no silent || true masks. If
+          # this step fails after the tag and Release are created, re-run
+          # the failed job; it is safe to re-run (label add/remove are
+          # idempotent).
           pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-            --jq '.[0].number // empty' 2>/dev/null || true)"
+            --jq '.[0].number // empty')"
           if [[ -z "${pr_number}" ]]; then
-            echo "No PR association for ${GITHUB_SHA}; skipping label update."
-            exit 0
+            echo "::error::No PR association found for ${GITHUB_SHA}. Cannot flip autorelease label."
+            exit 1
           fi
           gh pr edit "${pr_number}" --repo "${GITHUB_REPOSITORY}" \
             --remove-label "autorelease: pending" \
-            --add-label "autorelease: tagged" || true
+            --add-label "autorelease: tagged"

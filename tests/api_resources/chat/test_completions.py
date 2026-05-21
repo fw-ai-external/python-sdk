@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -133,7 +131,7 @@ class TestCompletions:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         completion = response.parse()
         assert_matches_type(CompletionCreateResponse, completion, path=["response"])
 
@@ -145,7 +143,7 @@ class TestCompletions:
             model="model",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             completion = response.parse()
             assert_matches_type(CompletionCreateResponse, completion, path=["response"])
@@ -269,7 +267,7 @@ class TestCompletions:
             stream=True,
         )
 
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         stream = response.parse()
         stream.close()
 
@@ -282,7 +280,7 @@ class TestCompletions:
             stream=True,
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             stream = response.parse()
             stream.close()
@@ -411,7 +409,7 @@ class TestAsyncCompletions:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         completion = await response.parse()
         assert_matches_type(CompletionCreateResponse, completion, path=["response"])
 
@@ -423,7 +421,7 @@ class TestAsyncCompletions:
             model="model",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             completion = await response.parse()
             assert_matches_type(CompletionCreateResponse, completion, path=["response"])
@@ -547,7 +545,7 @@ class TestAsyncCompletions:
             stream=True,
         )
 
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         stream = await response.parse()
         await stream.close()
 
@@ -560,7 +558,7 @@ class TestAsyncCompletions:
             stream=True,
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             stream = await response.parse()
             await stream.close()

@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -118,7 +116,7 @@ class TestMessages:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         message = response.parse()
         assert_matches_type(MessageCreateResponse, message, path=["response"])
 
@@ -135,7 +133,7 @@ class TestMessages:
             model="claude-opus-4-6",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             message = response.parse()
             assert_matches_type(MessageCreateResponse, message, path=["response"])
@@ -249,7 +247,7 @@ class TestAsyncMessages:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         message = await response.parse()
         assert_matches_type(MessageCreateResponse, message, path=["response"])
 
@@ -266,7 +264,7 @@ class TestAsyncMessages:
             model="claude-opus-4-6",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             message = await response.parse()
             assert_matches_type(MessageCreateResponse, message, path=["response"])

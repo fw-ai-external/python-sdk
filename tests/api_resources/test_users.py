@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -49,7 +47,7 @@ class TestUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -61,7 +59,7 @@ class TestUsers:
             role="role",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = response.parse()
             assert_matches_type(User, user, path=["response"])
@@ -110,7 +108,7 @@ class TestUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -123,7 +121,7 @@ class TestUsers:
             role="role",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = response.parse()
             assert_matches_type(User, user, path=["response"])
@@ -176,7 +174,7 @@ class TestUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = response.parse()
         assert_matches_type(SyncCursorUsers[User], user, path=["response"])
 
@@ -187,7 +185,7 @@ class TestUsers:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = response.parse()
             assert_matches_type(SyncCursorUsers[User], user, path=["response"])
@@ -230,7 +228,7 @@ class TestUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -242,7 +240,7 @@ class TestUsers:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = response.parse()
             assert_matches_type(User, user, path=["response"])
@@ -301,7 +299,7 @@ class TestAsyncUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = await response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -313,7 +311,7 @@ class TestAsyncUsers:
             role="role",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = await response.parse()
             assert_matches_type(User, user, path=["response"])
@@ -362,7 +360,7 @@ class TestAsyncUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = await response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -375,7 +373,7 @@ class TestAsyncUsers:
             role="role",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = await response.parse()
             assert_matches_type(User, user, path=["response"])
@@ -428,7 +426,7 @@ class TestAsyncUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = await response.parse()
         assert_matches_type(AsyncCursorUsers[User], user, path=["response"])
 
@@ -439,7 +437,7 @@ class TestAsyncUsers:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = await response.parse()
             assert_matches_type(AsyncCursorUsers[User], user, path=["response"])
@@ -482,7 +480,7 @@ class TestAsyncUsers:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         user = await response.parse()
         assert_matches_type(User, user, path=["response"])
 
@@ -494,7 +492,7 @@ class TestAsyncUsers:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             user = await response.parse()
             assert_matches_type(User, user, path=["response"])

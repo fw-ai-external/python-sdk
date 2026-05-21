@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -48,7 +46,7 @@ class TestDeploymentShapes:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         deployment_shape = response.parse()
         assert_matches_type(SyncCursorDeploymentShapes[DeploymentShape], deployment_shape, path=["response"])
 
@@ -59,7 +57,7 @@ class TestDeploymentShapes:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             deployment_shape = response.parse()
             assert_matches_type(SyncCursorDeploymentShapes[DeploymentShape], deployment_shape, path=["response"])
@@ -102,7 +100,7 @@ class TestDeploymentShapes:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         deployment_shape = response.parse()
         assert_matches_type(DeploymentShape, deployment_shape, path=["response"])
 
@@ -114,7 +112,7 @@ class TestDeploymentShapes:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             deployment_shape = response.parse()
             assert_matches_type(DeploymentShape, deployment_shape, path=["response"])
@@ -172,7 +170,7 @@ class TestAsyncDeploymentShapes:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         deployment_shape = await response.parse()
         assert_matches_type(AsyncCursorDeploymentShapes[DeploymentShape], deployment_shape, path=["response"])
 
@@ -183,7 +181,7 @@ class TestAsyncDeploymentShapes:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             deployment_shape = await response.parse()
             assert_matches_type(AsyncCursorDeploymentShapes[DeploymentShape], deployment_shape, path=["response"])
@@ -226,7 +224,7 @@ class TestAsyncDeploymentShapes:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         deployment_shape = await response.parse()
         assert_matches_type(DeploymentShape, deployment_shape, path=["response"])
 
@@ -238,7 +236,7 @@ class TestAsyncDeploymentShapes:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             deployment_shape = await response.parse()
             assert_matches_type(DeploymentShape, deployment_shape, path=["response"])

@@ -1,5 +1,3 @@
-# File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 from __future__ import annotations
 
 import os
@@ -70,7 +68,7 @@ class TestEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = response.parse()
         assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
 
@@ -86,7 +84,7 @@ class TestEvaluationJobs:
             },
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = response.parse()
             assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
@@ -135,7 +133,7 @@ class TestEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = response.parse()
         assert_matches_type(SyncCursorEvaluationJobs[EvaluationJobListResponse], evaluation_job, path=["response"])
 
@@ -146,7 +144,7 @@ class TestEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = response.parse()
             assert_matches_type(SyncCursorEvaluationJobs[EvaluationJobListResponse], evaluation_job, path=["response"])
@@ -179,7 +177,7 @@ class TestEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = response.parse()
         assert_matches_type(object, evaluation_job, path=["response"])
 
@@ -191,7 +189,7 @@ class TestEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = response.parse()
             assert_matches_type(object, evaluation_job, path=["response"])
@@ -241,7 +239,7 @@ class TestEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = response.parse()
         assert_matches_type(EvaluationJobGetResponse, evaluation_job, path=["response"])
 
@@ -253,7 +251,7 @@ class TestEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = response.parse()
             assert_matches_type(EvaluationJobGetResponse, evaluation_job, path=["response"])
@@ -293,7 +291,7 @@ class TestEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = response.parse()
         assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
 
@@ -305,7 +303,7 @@ class TestEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = response.parse()
             assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
@@ -380,7 +378,7 @@ class TestAsyncEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = await response.parse()
         assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
 
@@ -396,7 +394,7 @@ class TestAsyncEvaluationJobs:
             },
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = await response.parse()
             assert_matches_type(EvaluationJobCreateResponse, evaluation_job, path=["response"])
@@ -445,7 +443,7 @@ class TestAsyncEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = await response.parse()
         assert_matches_type(AsyncCursorEvaluationJobs[EvaluationJobListResponse], evaluation_job, path=["response"])
 
@@ -456,7 +454,7 @@ class TestAsyncEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = await response.parse()
             assert_matches_type(AsyncCursorEvaluationJobs[EvaluationJobListResponse], evaluation_job, path=["response"])
@@ -489,7 +487,7 @@ class TestAsyncEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = await response.parse()
         assert_matches_type(object, evaluation_job, path=["response"])
 
@@ -501,7 +499,7 @@ class TestAsyncEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = await response.parse()
             assert_matches_type(object, evaluation_job, path=["response"])
@@ -551,7 +549,7 @@ class TestAsyncEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = await response.parse()
         assert_matches_type(EvaluationJobGetResponse, evaluation_job, path=["response"])
 
@@ -563,7 +561,7 @@ class TestAsyncEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = await response.parse()
             assert_matches_type(EvaluationJobGetResponse, evaluation_job, path=["response"])
@@ -603,7 +601,7 @@ class TestAsyncEvaluationJobs:
         )
 
         assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+        assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
         evaluation_job = await response.parse()
         assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
 
@@ -615,7 +613,7 @@ class TestAsyncEvaluationJobs:
             account_id="account_id",
         ) as response:
             assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
+            assert response.http_request.headers.get("X-Fireworks-Lang") == "python"
 
             evaluation_job = await response.parse()
             assert_matches_type(EvaluationJobGetLogEndpointResponse, evaluation_job, path=["response"])
