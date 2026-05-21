@@ -1,0 +1,59 @@
+name: CI
+
+# Minimal safety net for direct PRs. The authoritative CI suite
+# (lint, build, unit + mock-server matrix, coverage, security audit,
+# e2e) runs upstream before promotion, so this workflow only needs
+# to catch the rare direct edit.
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.head_commit.message != 'codegen metadata'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rye
+        run: |
+          curl -sSf https://rye.astral.sh/get | bash
+          echo "$HOME/.rye/shims" >> $GITHUB_PATH
+        env:
+          RYE_VERSION: '0.44.0'
+          RYE_INSTALL_OPTION: '--yes'
+
+      - name: Install dependencies
+        run: rye sync --all-features
+
+      - name: Run lints
+        run: ./scripts/lint
+
+  import-smoke:
+    name: import-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.head_commit.message != 'codegen metadata'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        # Smoke import only exercises the base package (`import fireworks`),
+        # so install without extras. The previous `pip install -e . 2>/dev/null
+        # || pip install -e .[training]` chain swallowed real install errors
+        # and silently chose between two install modes -- exactly the
+        # silent-fallback pattern the rest of this hotfix tightens. Pinned to
+        # plain install for predictable, fast CI.
+        run: pip install -e .
+
+      - name: Smoke import
+        run: python -c "import fireworks; print('fireworks', getattr(fireworks, '__version__', '<unknown>'))"
