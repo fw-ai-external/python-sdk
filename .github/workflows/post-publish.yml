@@ -22,8 +22,12 @@ jobs:
 
       - name: Wait for PyPI propagation and install
         run: |
+          # --upgrade --pre is required: the runner toolcache ships an older
+          # fireworks-ai which would otherwise satisfy the requirement and skip
+          # the install, so the smoke test would silently exercise the stale
+          # cached version instead of the release we just published.
           for i in $(seq 1 10); do
-            if pip install fireworks-ai 2>/dev/null; then
+            if pip install --upgrade --pre fireworks-ai 2>/dev/null; then
               echo "Package available"
               exit 0
             fi
@@ -39,5 +43,5 @@ jobs:
       - name: Verify training extras
         if: matrix.python-version != '3.9'
         run: |
-          pip install "fireworks-ai[training]"
+          pip install --upgrade --pre "fireworks-ai[training]"
           python -c "from fireworks.training import sdk; print('Training SDK OK')"

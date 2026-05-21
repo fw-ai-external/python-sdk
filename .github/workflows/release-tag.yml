@@ -119,3 +119,24 @@ jobs:
             --title "${TAG}" \
             --notes-file "${notes_file}" \
             ${prerelease_flag}
+
+      - name: Mark release PR as tagged
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Find the PR that was squash-merged to produce this release commit
+          # and flip the autorelease labels: pending -> tagged.
+          # Failure here is informational only — the tag and GitHub Release
+          # are already created and the next workflow listening on Release
+          # has fired.
+          pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0].number // empty' 2>/dev/null || true)"
+          if [[ -z "${pr_number}" ]]; then
+            echo "No PR association for ${GITHUB_SHA}; skipping label update."
+            exit 0
+          fi
+          gh pr edit "${pr_number}" --repo "${GITHUB_REPOSITORY}" \
+            --remove-label "autorelease: pending" \
+            --add-label "autorelease: tagged" || true
