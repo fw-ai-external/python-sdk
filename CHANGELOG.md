@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.72 (2026-05-21)
+
+Full Changelog: [v1.2.0-alpha.71...v1.2.0-alpha.72](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.71...v1.2.0-alpha.72)
+
+### Chores
+* bootstrap public SDK release workflows (#83) ([7dcb03e](https://github.com/fw-ai-external/python-sdk/commit/7dcb03e5380a70b28dd7d438a6e10f55be0e493f))
+* bootstrap promotion pipeline workflows (#86) ([e0042ab](https://github.com/fw-ai-external/python-sdk/commit/e0042ab3117a02a7ca5266b4a8400f47627c5402))
+
 ## 1.2.0-alpha.71 (2026-05-19)
 
 Full Changelog: [v1.2.0-alpha.70...v1.2.0-alpha.71](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.70...v1.2.0-alpha.71)

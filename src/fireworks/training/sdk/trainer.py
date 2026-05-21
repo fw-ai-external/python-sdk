@@ -12,6 +12,7 @@ import re
 import time
 import logging
 from typing import Any
+from datetime import timedelta
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
@@ -28,6 +29,30 @@ logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
 _POLL_LOG_HEARTBEAT_S = 60.0
+_PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
+
+
+def _format_proto_duration(value: timedelta | str) -> str:
+    """Format a non-negative duration for protobuf JSON REST fields."""
+    if isinstance(value, timedelta):
+        total_seconds = value.total_seconds()
+        if total_seconds < 0:
+            raise ValueError("must be non-negative")
+        if total_seconds.is_integer():
+            return f"{int(total_seconds)}s"
+        return f"{total_seconds:.9f}".rstrip("0").rstrip(".") + "s"
+
+    if isinstance(value, str):
+        if not _PROTO_DURATION_RE.match(value):
+            raise ValueError(
+                "must be a protobuf JSON duration string such as '1800s'; "
+                "use datetime.timedelta for minute/hour values"
+            )
+        if value.startswith("-"):
+            raise ValueError("must be non-negative")
+        return value
+
+    raise TypeError("must be datetime.timedelta or protobuf JSON duration string")
 
 
 def _extract_job_status_message(job: dict[str, Any]) -> str:
@@ -144,6 +169,21 @@ class TrainerJobConfig:
     must not be set.
     """
     forward_only: bool = False
+    inactivity_timeout: timedelta | str | None = None
+    """Trainer inactivity timeout.
+
+    The trainer reports tracked activity, including trainer API operations and
+    active-session heartbeats. If no tracked activity is observed for this
+    duration, the trainer is automatically stopped. When unset or 0, Fireworks
+    uses the 60-minute default. Use ``disable_inactivity_cleanup=True`` to
+    disable automatic cleanup.
+    """
+    disable_inactivity_cleanup: bool = False
+    """Disable trainer inactivity cleanup.
+
+    When true, the trainer is not automatically stopped due to inactivity. GPU
+    usage continues to accrue while the trainer is running.
+    """
     skip_validations: bool = False
     """Skip server-side shape validation. Requires superuser API key."""
     purpose: str | None = None
@@ -172,6 +212,11 @@ class TrainerJobConfig:
                 "(multiple forward_backward calls per optim_step) and pass "
                 "grad_accumulation_normalization on the optim_step request."
             )
+        if self.inactivity_timeout is not None:
+            try:
+                _format_proto_duration(self.inactivity_timeout)
+            except (TypeError, ValueError) as e:
+                errors.append(f"inactivity_timeout {e}")
         if self.training_shape_ref:
             for field in _SHAPE_OWNED_FIELDS:
                 val = getattr(self, field)
@@ -328,6 +373,10 @@ class TrainerJobManager(FireworksClient):
             payload["purpose"] = config.purpose
         if config.managed_by:
             payload["managedBy"] = config.managed_by
+        if config.inactivity_timeout is not None:
+            payload["inactivityTimeout"] = _format_proto_duration(config.inactivity_timeout)
+        if config.disable_inactivity_cleanup:
+            payload["disableInactivityCleanup"] = True
 
         logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
         resp = self._post(path, json=payload, timeout=60)
