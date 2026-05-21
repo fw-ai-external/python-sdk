@@ -19,17 +19,20 @@ import time
 import uuid
 import logging
 from enum import Enum
-from typing import Literal, TypeVar, Callable, Optional
+from typing import Any, Literal, TypeVar, Callable, Optional
 from dataclasses import dataclass
 
 from tinker import types
 from pydantic import BaseModel
-from tinker.lib.api_future_impl import _APIFuture
+from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
 from tinker.lib.public_interfaces.api_future import APIFuture
 from tinker.lib.public_interfaces.service_client import ServiceClient
-from tinker.lib.public_interfaces.training_client import TrainingClient
+from tinker.lib.public_interfaces.training_client import (
+    TrainingClient,
+    combine_fwd_bwd_output_results,
+)
 
 
 class LoadAdapterResponse(BaseModel):
@@ -40,6 +43,7 @@ class LoadAdapterResponse(BaseModel):
     type: Literal["load_adapter"] = "load_adapter"
 
     model_config = {"protected_namespaces": ()}
+
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -86,8 +90,12 @@ def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -
         raise ValueError("source_job_id cannot be empty")
     if not normalized_checkpoint_name:
         raise ValueError("checkpoint_name cannot be empty")
-    if normalized_checkpoint_name.startswith("gs://") or normalized_checkpoint_name.startswith("/"):
-        raise ValueError("checkpoint_name must be a logical checkpoint name, not a full path")
+    if normalized_checkpoint_name.startswith(
+        "gs://"
+    ) or normalized_checkpoint_name.startswith("/"):
+        raise ValueError(
+            "checkpoint_name must be a logical checkpoint name, not a full path"
+        )
     return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
 
 
@@ -163,6 +171,42 @@ def _add_cross_entropy_response_tokens(
     return output
 
 
+def _dump_tinker_model(obj: Any) -> Any:
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(exclude_unset=True, mode="json")
+    if hasattr(obj, "dict"):
+        return obj.dict(exclude_unset=True)
+    return obj
+
+
+def _text_token_count(datum: types.Datum) -> int:
+    raw_datum = _dump_tinker_model(datum)
+    model_input = raw_datum.get("model_input", {})
+    return sum(
+        len(chunk.get("tokens", []))
+        for chunk in model_input.get("chunks", [])
+        if chunk.get("type", "encoded_text") == "encoded_text"
+    )
+
+
+def _pool_embedding_tensor(
+    embedding,
+    datum: types.Datum,
+    pooling: Literal["mean", "last"],
+):
+    if embedding.ndim <= 1:
+        return embedding
+    token_count = _text_token_count(datum)
+    if token_count <= 0:
+        raise ValueError("Cannot pool embedding from an empty text sequence")
+    token_embeddings = embedding[:token_count]
+    if pooling == "mean":
+        return token_embeddings.mean(dim=0)
+    if pooling == "last":
+        return token_embeddings[-1]
+    raise ValueError(f"Unsupported pooling={pooling!r}; expected 'mean' or 'last'")
+
+
 # -- SaveSamplerResult ---------------------------------------------------------
 
 
@@ -209,7 +253,12 @@ class FiretitanTrainingClient(TrainingClient):
     tinker.TrainingClient.
     """
 
-    def __init__(self, holder, model_seq_id: int, model_id):
+    def __init__(
+        self,
+        holder,
+        model_seq_id: int,
+        model_id,
+    ):
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Track checkpoint names to detect reuse within a session.
         # Sampler and state names are tracked separately because the same name
@@ -260,7 +309,9 @@ class FiretitanTrainingClient(TrainingClient):
         """
         extra_body: dict = {}
         if grad_accumulation_normalization is not None:
-            extra_body["grad_accumulation_normalization"] = grad_accumulation_normalization.value
+            extra_body["grad_accumulation_normalization"] = (
+                grad_accumulation_normalization.value
+            )
         request_id = self._get_request_id()
 
         async def _optim_step_async():
@@ -305,6 +356,231 @@ class FiretitanTrainingClient(TrainingClient):
             future,
             lambda output: _add_cross_entropy_response_tokens(output, data=data),
         )
+
+    async def _send_single_forward_embedding_request(
+        self,
+        request_id: int,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+    ):
+        request = types.ForwardRequest(
+            forward_input=types.ForwardBackwardInput(
+                data=data,
+                loss_fn="cross_entropy",
+                loss_fn_config=None,
+            ),
+            model_id=self._guaranteed_model_id(),
+            seq_id=request_id + 1,
+        )
+        extra_body = {
+            "forward_input": {
+                "data": [_dump_tinker_model(datum) for datum in data],
+                "loss_fn": "cross_entropy",
+                "loss_fn_config": {"output": "embedding", "pooling": pooling},
+            }
+        }
+        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            return await client.training.forward(
+                request=request,
+                extra_body=extra_body,
+            )
+
+    async def _send_single_forward_backward_embedding_request(
+        self,
+        request_id: int,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+    ):
+        request = types.ForwardBackwardRequest(
+            forward_backward_input=types.ForwardBackwardInput(
+                data=data,
+                loss_fn="cross_entropy",
+                loss_fn_config=None,
+            ),
+            model_id=self._guaranteed_model_id(),
+            seq_id=request_id + 1,
+        )
+        extra_body = {
+            "forward_backward_input": {
+                "data": [_dump_tinker_model(datum) for datum in data],
+                "loss_fn": "cross_entropy",
+                "loss_fn_config": {"output": "embedding", "pooling": pooling},
+            }
+        }
+        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            return await client.training.forward_backward(
+                request=request,
+                extra_body=extra_body,
+            )
+
+    async def _forward_embedding_async(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        requests = self._chunked_requests(data)
+        futures = []
+        start_time = time.time()
+        for request_id, chunk in requests:
+            async with self._take_turn(request_id):
+                untyped_future = await self.holder.execute_with_retries(
+                    self._send_single_forward_embedding_request,
+                    request_id,
+                    chunk,
+                    pooling,
+                )
+            futures.append(
+                _APIFuture(
+                    types.ForwardBackwardOutput,
+                    self.holder,
+                    untyped_future,
+                    request_start_time=start_time,
+                    request_type="Forward",
+                    queue_state_observer=self._queue_state_logger,
+                )
+            )
+        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+
+    async def _forward_backward_embedding_async(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        requests = self._chunked_requests(data)
+        futures = []
+        start_time = time.time()
+        for request_id, chunk in requests:
+            async with self._take_turn(request_id):
+                untyped_future = await self.holder.execute_with_retries(
+                    self._send_single_forward_backward_embedding_request,
+                    request_id,
+                    chunk,
+                    pooling,
+                )
+            futures.append(
+                _APIFuture(
+                    types.ForwardBackwardOutput,
+                    self.holder,
+                    untyped_future,
+                    request_start_time=start_time,
+                    request_type="ForwardBackward",
+                    queue_state_observer=self._queue_state_logger,
+                )
+            )
+        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+
+    async def forward_backward_custom_async(
+        self,
+        data: list[types.Datum],
+        loss_fn: Callable,
+        *,
+        loss_type_input: Literal["logprobs"] = "logprobs",
+        output: Literal["logprobs", "embedding"] = "logprobs",
+        pooling: Literal["mean", "last"] = "mean",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        if output == "logprobs":
+            return await super().forward_backward_custom_async(
+                data,
+                loss_fn,
+                loss_type_input=loss_type_input,
+            )
+        if output != "embedding":
+            raise ValueError(
+                f"Unsupported output={output!r}; expected 'logprobs' or 'embedding'"
+            )
+        if loss_type_input != "logprobs":
+            raise ValueError(
+                "Set output='embedding' instead of loss_type_input for embedding custom loss."
+            )
+        if pooling not in ("mean", "last"):
+            raise ValueError(
+                f"Unsupported pooling={pooling!r}; expected 'mean' or 'last'"
+            )
+
+        try:
+            import torch
+        except ImportError as err:
+            raise ImportError(
+                "PyTorch is not installed. Cannot run custom forward_backward."
+            ) from err
+
+        forward_future = await self._forward_embedding_async(data, pooling)
+        forward_result = await forward_future.result_async()
+
+        embeddings = []
+        for datum, out in zip(data, forward_result.loss_fn_outputs, strict=True):
+            if "embedding" not in out:
+                raise ValueError("Embedding response missing 'embedding' tensor")
+            embedding_data = out["embedding"]
+            embedding = torch.tensor(embedding_data.data, dtype=torch.float32)
+            if embedding_data.shape is not None:
+                embedding = embedding.reshape(embedding_data.shape)
+            embedding = _pool_embedding_tensor(embedding, datum, pooling)
+            embeddings.append(embedding.clone().detach().requires_grad_(True))
+
+        loss, metrics = loss_fn(data, embeddings)
+        loss.backward()
+
+        backward_data = []
+        for datum, embedding in zip(data, embeddings, strict=True):
+            if embedding.grad is None:
+                raise ValueError("No gradient computed for embedding tensor")
+            grad = (
+                embedding.grad.detach()
+                .to(dtype=torch.float32)
+                .reshape(-1)
+                .cpu()
+                .tolist()
+            )
+            backward_data.append(
+                types.Datum(
+                    model_input=datum.model_input,
+                    loss_fn_inputs={
+                        "embedding_grads": types.TensorData(
+                            data=grad,
+                            dtype="float32",
+                            shape=list(embedding.grad.shape),
+                        )
+                    },
+                )
+            )
+
+        backward_future = await self._forward_backward_embedding_async(
+            backward_data, pooling
+        )
+
+        def add_custom_metrics(
+            output_value: types.ForwardBackwardOutput,
+        ) -> types.ForwardBackwardOutput:
+            output_value.metrics.update(metrics)
+            return output_value
+
+        return _MappedAPIFuture(backward_future, add_custom_metrics)
+
+    def forward_backward_custom(
+        self,
+        data: list[types.Datum],
+        loss_fn: Callable,
+        *,
+        loss_type_input: Literal["logprobs"] = "logprobs",
+        output: Literal["logprobs", "embedding"] = "logprobs",
+        pooling: Literal["mean", "last"] = "mean",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        if output == "logprobs":
+            return super().forward_backward_custom(
+                data,
+                loss_fn,
+                loss_type_input=loss_type_input,
+            )
+        return self.holder.run_coroutine_threadsafe(
+            self.forward_backward_custom_async(
+                data,
+                loss_fn,
+                loss_type_input=loss_type_input,
+                output=output,
+                pooling=pooling,
+            )
+        ).result()
 
     def list_checkpoints(self) -> list[str]:
         """List available DCP checkpoints from the trainer.
@@ -659,7 +935,9 @@ class FiretitanServiceClient(ServiceClient):
                 future,
                 request_start_time=start,
                 request_type="CreateModel",
-                queue_state_observer=QueueStateLogger(base_model, "Base model creation"),
+                queue_state_observer=QueueStateLogger(
+                    base_model, "Base model creation"
+                ),
             ).result_async()
             return resp.model_id
 
@@ -678,4 +956,6 @@ class FiretitanServiceClient(ServiceClient):
         base_model=None,
         retry_config=None,
     ):
-        raise NotImplementedError("FiretitanServiceClient.create_sampling_client() is not supported")
+        raise NotImplementedError(
+            "FiretitanServiceClient.create_sampling_client() is not supported"
+        )
