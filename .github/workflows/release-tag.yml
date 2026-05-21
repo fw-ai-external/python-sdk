@@ -51,28 +51,32 @@ jobs:
             exit 1
           fi
 
-          tag="v${version}"
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists; nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           {
-            echo "skip=false"
             echo "version=${version}"
-            echo "tag=${tag}"
+            echo "tag=v${version}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Check if tag exists
+        id: tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Require FW_AI_BOT_TOKEN
-        if: steps.version.outputs.skip != 'true'
         env:
           BOT_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
         run: |
           [[ -n "${BOT_TOKEN}" ]] || { echo "::error::FW_AI_BOT_TOKEN is required"; exit 1; }
 
       - name: Create tag and GitHub Release
-        if: steps.version.outputs.skip != 'true'
+        if: steps.tag.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -106,22 +110,32 @@ jobs:
             ${prerelease_flag}
 
       - name: Mark release PR as tagged
-        if: steps.version.outputs.skip != 'true'
+        # Runs unconditionally so that recovering from a partial prior failure
+        # (tag created, label flip failed) just needs a workflow rerun. The
+        # step is a no-op on commits that aren't release-PR merges (no PR
+        # found) and on PRs already flipped to 'tagged' (no pending label).
+        # Loud failure only when this run just created the tag but no PR is
+        # associated — that indicates a misconfigured release commit.
         env:
           GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+          TAG_JUST_CREATED: ${{ steps.tag.outputs.exists == 'false' }}
         run: |
           set -euo pipefail
-          # Find the PR that was squash-merged to produce this release commit
-          # and flip the autorelease labels: pending -> tagged. Fails loudly
-          # if the label flip cannot complete — no silent || true masks. If
-          # this step fails after the tag and Release are created, re-run
-          # the failed job; it is safe to re-run (label add/remove are
-          # idempotent).
           pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
             --jq '.[0].number // empty')"
           if [[ -z "${pr_number}" ]]; then
-            echo "::error::No PR association found for ${GITHUB_SHA}. Cannot flip autorelease label."
-            exit 1
+            if [[ "${TAG_JUST_CREATED}" == "true" ]]; then
+              echo "::error::Tag was created this run but no PR is associated with ${GITHUB_SHA}."
+              exit 1
+            fi
+            echo "No PR associated with ${GITHUB_SHA}; nothing to flip."
+            exit 0
+          fi
+          labels="$(gh pr view "${pr_number}" --repo "${GITHUB_REPOSITORY}" \
+            --json labels --jq '[.labels[].name] | join(",")')"
+          if [[ ",${labels}," != *",autorelease: pending,"* ]]; then
+            echo "PR #${pr_number} does not carry 'autorelease: pending'; nothing to flip."
+            exit 0
           fi
           gh pr edit "${pr_number}" --repo "${GITHUB_REPOSITORY}" \
             --remove-label "autorelease: pending" \
