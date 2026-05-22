@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0-alpha.73 (2026-05-22)
+
+Full Changelog: [v1.2.0-alpha.72...v1.2.0-alpha.73](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.72...v1.2.0-alpha.73)
+
+### Bug Fixes
+* **public-sdk:** restore embedding client wiped by 1.2.0-alpha.72 release (#26423) ([7ac0ed8](https://github.com/fw-ai-external/python-sdk/commit/7ac0ed8d35854733f31cc607d7a798f0bdc5c62d))
+
+### Chores
+* autorelease single source of truth (#90) ([fc3f8c7](https://github.com/fw-ai-external/python-sdk/commit/fc3f8c72d7a72f40d95d32658488bea44e443d18))
+* stage SDK deployment annotations (#26077) ([8eb9f95](https://github.com/fw-ai-external/python-sdk/commit/8eb9f95014dd449f038d6e78fad9df4ca02bed34))
+* clean up staged public repo references (#26200) ([8037b48](https://github.com/fw-ai-external/python-sdk/commit/8037b48f7242072256841345eef9ec14142ed189))
+* unblock public SDK promotion flow (#26242) ([79a1c79](https://github.com/fw-ai-external/python-sdk/commit/79a1c79157d74e0443666344ef872bf5609cfd4c))
+* catch up cookbook + SDK from public main; delete dead Stainless CI; autorelease SST + guards (#26426) ([9d62fe4](https://github.com/fw-ai-external/python-sdk/commit/9d62fe4c45fa91d3780093bb15524ec26600408c))
+
 ## 1.2.0-alpha.72 (2026-05-21)
 
 Full Changelog: [v1.2.0-alpha.71...v1.2.0-alpha.72](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.71...v1.2.0-alpha.72)
