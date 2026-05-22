@@ -30,6 +30,8 @@ jobs:
 
       - name: Install dependencies
         run: rye sync --all-features
+        env:
+          UV_HTTP_TIMEOUT: '120'
 
       - name: Run lints
         run: ./scripts/lint
@@ -47,7 +49,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install package
-        run: pip install -e . 2>/dev/null || pip install -e .[training]
+        # Smoke import only exercises the base package (`import fireworks`),
+        # so install without extras. The previous `pip install -e . 2>/dev/null
+        # || pip install -e .[training]` chain swallowed real install errors
+        # and silently chose between two install modes -- exactly the
+        # silent-fallback pattern the rest of this hotfix tightens. Pinned to
+        # plain install for predictable, fast CI.
+        run: pip install -e .
 
       - name: Smoke import
         run: python -c "import fireworks; print('fireworks', getattr(fireworks, '__version__', '<unknown>'))"
