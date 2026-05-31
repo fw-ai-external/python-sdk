@@ -30,7 +30,7 @@ def _make_tracker(
 ):
     client = _make_policy_client()
     client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-        path="gs://bucket/snap", snapshot_name="snap-test1234"
+        path="snap-test1234", snapshot_name="snap-test1234"
     )
     return WeightSyncer(
         policy_client=client,
@@ -125,6 +125,30 @@ class TestEnsureDeploymentChecked:
         }
         t._ensure_deployment_checked()
         assert t.base_identity is None
+
+
+# ---------------------------------------------------------------------------
+# Sampling client helpers
+# ---------------------------------------------------------------------------
+
+
+class TestGetSamplingClient:
+    def test_returns_firetitan_sampling_client_for_deployment(self):
+        deploy = _make_deploy_mgr()
+        deploy.inference_url = "https://api.fireworks.ai"
+        deploy.api_key = "test-key"
+        t = _make_tracker(deploy_mgr=deploy, deployment_id="dep-123")
+
+        from fireworks.training.sdk.deployment import FiretitanSamplingClient
+
+        client = t.get_sampling_client()
+        try:
+            assert isinstance(client, FiretitanSamplingClient)
+            assert client.deployment_sampler.base_url == "https://api.fireworks.ai"
+            assert client.deployment_sampler.model == "accounts/test-acct/deployments/dep-123"
+            assert client.deployment_sampler.api_key == "test-key"
+        finally:
+            client.close()
 
 
 # ---------------------------------------------------------------------------
@@ -243,36 +267,15 @@ class TestResetDeltaChain:
 
 
 # ---------------------------------------------------------------------------
-# Snapshot path resolution + plumbing
+# Snapshot identity plumbing
 # ---------------------------------------------------------------------------
 
 
-def _deploy_mgr_with_bucket(bucket_url: str | None):
-    """``DeploymentManager`` mock whose ``get(...)`` returns a deployment
-    with the given ``hot_load_bucket_url``. Used to exercise the relative-
-    path → fully-qualified-URI resolution.
+class TestSnapshotIdentityPlumbing:
+    """Hotload uses the public snapshot identity, not a trainer storage path."""
 
-    Both attribute spellings (``hot_load_bucket_url`` and the camelCase
-    ``hotLoadBucketUrl``) need to be set explicitly: ``MagicMock``
-    auto-generates an attribute on first access otherwise, which would
-    masquerade as a present-but-truthy bucket URL when we want ``None``.
-    """
-    deploy = _make_deploy_mgr()
-    info = MagicMock()
-    info.hot_load_bucket_url = bucket_url
-    info.hotLoadBucketUrl = bucket_url
-    deploy.get.return_value = info
-    return deploy
-
-
-class TestSnapshotPathPlumbing:
-    """The trainer's ``SaveSamplerResult.path`` is forwarded to the
-    deployment via ``hotload_and_wait(..., path=...)`` so the serving side
-    can fetch the snapshot bytes when its configured storage is not
-    sufficient. This pins the resolution rules and the propagation."""
-
-    def test_relative_path_is_combined_with_bucket_url(self):
-        deploy = _deploy_mgr_with_bucket("gs://my-bucket/runs/job-1")
+    def test_save_and_hotload_uses_snapshot_identity_only(self):
+        deploy = _make_deploy_mgr()
         t = _make_tracker(deploy_mgr=deploy)
         t._deployment_checked = True
         t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
@@ -283,62 +286,12 @@ class TestSnapshotPathPlumbing:
         t.save_and_hotload("step-0-base")
 
         kwargs = deploy.hotload_and_wait.call_args.kwargs
-        assert kwargs["path"] == "gs://my-bucket/runs/job-1/step-0-base-sess"
-
-    def test_already_qualified_uri_passes_through(self):
-        deploy = _deploy_mgr_with_bucket("gs://other-bucket/should-be-ignored")
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="gs://my-bucket/explicit/snap-1",
-            snapshot_name="snap-1",
-        )
-
-        t.save_and_hotload("snap-1")
-
-        kwargs = deploy.hotload_and_wait.call_args.kwargs
-        assert kwargs["path"] == "gs://my-bucket/explicit/snap-1"
-        # Already-qualified URIs do not require fetching bucket info.
+        assert kwargs["snapshot_identity"] == "step-0-base-sess"
+        assert kwargs["path"] is None
         deploy.get.assert_not_called()
 
-    def test_missing_bucket_url_falls_back_to_no_path(self):
-        deploy = _deploy_mgr_with_bucket(bucket_url=None)
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="step-0-base-sess",
-            snapshot_name="step-0-base-sess",
-        )
-
-        t.save_and_hotload("step-0-base")
-
-        kwargs = deploy.hotload_and_wait.call_args.kwargs
-        assert kwargs["path"] is None
-
-    def test_bucket_url_is_cached_across_calls(self):
-        deploy = _deploy_mgr_with_bucket("gs://my-bucket/runs/job-1")
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="step-0-base-sess",
-            snapshot_name="step-0-base-sess",
-        )
-        t.save_and_hotload("step-0-base")
-
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="step-1-sess",
-            snapshot_name="step-1-sess",
-        )
-        t.save_and_hotload("step-1")
-
-        # Single bucket lookup across two save_and_hotload calls.
-        assert deploy.get.call_count == 1
-
-    def test_save_only_then_hotload_propagates_path(self):
-        """When save and hotload are split across two calls, ``_do_hotload``
-        must still receive the resolved path via the per-snapshot cache."""
-        deploy = _deploy_mgr_with_bucket("gs://my-bucket/runs/job-1")
+    def test_save_only_then_hotload_uses_snapshot_identity_only(self):
+        deploy = _make_deploy_mgr()
         t = _make_tracker(deploy_mgr=deploy)
         t._deployment_checked = True
         t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
@@ -354,21 +307,6 @@ class TestSnapshotPathPlumbing:
         ok = t.hotload(snapshot_name, checkpoint_type="base")
         assert ok is True
         kwargs = deploy.hotload_and_wait.call_args.kwargs
-        assert kwargs["path"] == "gs://my-bucket/runs/job-1/step-0-base-sess"
-
-    def test_non_uri_save_result_path_still_resolves_to_none_when_no_bucket(self):
-        """If the trainer returns an empty/None ``path``, no resolution is
-        attempted and the deployment is left to its own snapshot resolution."""
-        deploy = _deploy_mgr_with_bucket("gs://my-bucket/runs/job-1")
-        t = _make_tracker(deploy_mgr=deploy)
-        t._deployment_checked = True
-        t.policy_client.save_weights_for_sampler_ext.return_value = SaveSamplerResult(
-            path="",  # empty path from older trainer
-            snapshot_name="step-0-base-sess",
-        )
-
-        t.save_and_hotload("step-0-base")
-
-        kwargs = deploy.hotload_and_wait.call_args.kwargs
+        assert kwargs["snapshot_identity"] == "step-0-base-sess"
         assert kwargs["path"] is None
         deploy.get.assert_not_called()

@@ -1,11 +1,8 @@
 # Changelog
 
-## 1.2.0-alpha.73 (2026-05-22)
+## 1.2.0-alpha.73 (2026-05-31)
 
-Full Changelog: [v1.2.0-alpha.72...v1.2.0-alpha.73](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.72...v1.2.0-alpha.73)
-
-### Chores
-* autorelease single source of truth (#90) ([fc3f8c7](https://github.com/fw-ai-external/python-sdk/commit/fc3f8c72d7a72f40d95d32658488bea44e443d18))
+Full Changelog: [v1.2.0-alpha.73...v1.2.0-alpha.73](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.73...v1.2.0-alpha.73)
 
 ## 1.2.0-alpha.72 (2026-05-21)
 

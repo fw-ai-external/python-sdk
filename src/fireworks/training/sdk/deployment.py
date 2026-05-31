@@ -8,16 +8,12 @@ tokenization (token-in, token-out).
 from __future__ import annotations
 
 import time
-import random
-import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any
 from dataclasses import dataclass
 
-import httpx
-
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase
+    pass
 
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
@@ -26,108 +22,29 @@ from fireworks.training.sdk.errors import (
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
-    async_request_with_retries,
+)
+from fireworks.training.sdk._constants import (
+    HTTP_READ_TIMEOUT_S,
+    WARMUP_PROBE_TIMEOUT_S,
 )
 from fireworks.training.sdk._rest_client import _RestClient, _should_verify_ssl
 
 logger = logging.getLogger(__name__)
 
 
-class _SSETruncationError(RuntimeError):
-    """Server closed the SSE completion stream mid-generation.
-
-    Raised by :meth:`DeploymentSampler.async_completions_stream` when the
-    response stream ends without ``[DONE]``, ``finish_reason``, or
-    ``raw_output``. The per-completion retry loop in
-    :meth:`DeploymentSampler._do_one_completion` recognises this exact
-    type and retries it; other ``RuntimeError`` subclasses propagate
-    unchanged.
-    """
-
-
-# =============================================================================
-# SSE decoder for streaming completions
-# =============================================================================
-
-
-class _SSEEvent:
-    """A single Server-Sent Event."""
-
-    __slots__ = ("data", "event")
-
-    def __init__(self, data: str = "", event: str | None = None):
-        self.data = data
-        self.event = event
-
-
-class _SSEDecoder:
-    """Minimal async SSE decoder for ``httpx.Response.aiter_bytes``.
-
-    Implements the subset of the `SSE spec`_ used by the Fireworks
-    completions endpoint:
-
-    * ``data:`` fields (single- and multi-line)
-    * ``event:`` fields
-    * Comment lines (``:…``) are skipped
-    * ``[DONE]`` sentinel terminates the stream
-
-    .. _SSE spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
-    """
-
-    def __init__(self) -> None:
-        self._event: str | None = None
-        self._data: list[str] = []
-
-    @staticmethod
-    async def _aiter_chunks(stream: Any) -> Any:
-        """Reassemble raw bytes into SSE chunks (delimited by blank lines)."""
-        buf = b""
-        async for raw in stream.aiter_bytes():
-            for line in raw.splitlines(keepends=True):
-                buf += line
-                if buf.endswith((b"\r\r", b"\n\n", b"\r\n\r\n")):
-                    yield buf
-                    buf = b""
-        if buf:
-            yield buf
-
-    async def aiter_events(self, response: Any) -> Any:
-        """Yield :class:`_SSEEvent` objects from an ``httpx.Response``."""
-        async for chunk in self._aiter_chunks(response):
-            for raw_line in chunk.splitlines():
-                line = raw_line.decode("utf-8")
-                event = self._decode_line(line)
-                if event is not None:
-                    yield event
-
-    def _decode_line(self, line: str) -> _SSEEvent | None:
-        # Blank line → dispatch accumulated event.
-        if not line:
-            if not self._data and self._event is None:
-                return None
-            event = _SSEEvent(data="\n".join(self._data), event=self._event)
-            self._data = []
-            self._event = None
-            return event
-
-        # Comment line.
-        if line.startswith(":"):
-            return None
-
-        field, _, value = line.partition(":")
-        if value.startswith(" "):
-            value = value[1:]
-
-        if field == "data":
-            self._data.append(value)
-        elif field == "event":
-            self._event = value
-
-        return None
-
-
 DEFAULT_DELTA_COMPRESSION = "arc_v2"
 DEFAULT_CHECKSUM_FORMAT = "alder32"
+
+# Deployment-specific wait budgets and poll intervals (seconds).
+# Default budget for the low-level wait_for_ready (direct deployment CRUD).
+# SDK-managed large-model deployments pass the longer
+# _constants.DEPLOYMENT_READY_TIMEOUT_S budget explicitly instead.
+DEPLOYMENT_READY_DEFAULT_TIMEOUT_S: float = 600
+DEPLOYMENT_READY_POLL_S: float = 15
+DEPLOYMENT_DELETION_TIMEOUT_S: float = 60
+DEPLOYMENT_DELETION_POLL_S: float = 2
+HOTLOAD_WAIT_TIMEOUT_S: int = 400
+HOTLOAD_WAIT_POLL_S: int = 5
 
 
 @dataclass
@@ -138,8 +55,15 @@ class DeploymentInfo:
     name: str
     state: str
     hot_load_bucket_url: str | None = None
+    hot_load_trainer_job: str | None = None
+    deployment_shape_version: str | None = None
     inference_model: str | None = None
     """Model string for completions API (``accounts/{account}/deployments/{id}``)."""
+
+
+def _deployment_hot_load_trainer_job(deployment: DeploymentInfo) -> str | None:
+    """Return the trainer job currently attached to a parsed deployment."""
+    return deployment.hot_load_trainer_job
 
 
 @dataclass
@@ -276,6 +200,25 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
         return resp.json()
 
+    def _get_trainer_region(self, trainer_job: str) -> str | None:
+        """Resolve a trainer job's training region for hot-load colocation.
+
+        ``trainer_job`` is a full resource name
+        (``accounts/{account}/rlorTrainerJobs/{job}``). Returns the region
+        string (e.g. ``US_OHIO_1``) or ``None`` when it can't be resolved.
+        Best-effort: any failure returns ``None`` so deployment creation still
+        proceeds and the control plane colocates server-side.
+        """
+        path = f"/v1/{trainer_job.lstrip('/')}"
+        try:
+            resp = self._get(path)
+        except Exception:
+            return None
+        if not resp.is_success:
+            return None
+        region = resp.json().get("trainingConfig", {}).get("region")
+        return region or None
+
     def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
         path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         params = []
@@ -295,32 +238,36 @@ class DeploymentManager(_RestClient):
         if config.disable_speculative_decoding:
             path = f"{path}&disableSpeculativeDecoding=true"
 
-        body: dict[str, Any] = {
-            "baseModel": config.base_model,
-            "minReplicaCount": config.min_replica_count,
-            "maxReplicaCount": config.max_replica_count,
-            "enableHotLoad": True,
-            "forTraining": True,
-        }
-        if config.region:
-            body["placement"] = {"region": config.region}
-        if config.hot_load_bucket_type:
-            body["hotLoadBucketType"] = config.hot_load_bucket_type
+        # Colocation: a hot-load deployment must live in the same region as its
+        # trainer (the trainer writes checkpoints to region-local fast storage,
+        # and cross-region hot-load silently falls back / fails). When a
+        # hot_load_trainer_job is set we resolve the trainer's region and either
+        # inherit it (region unset) or reject an explicit conflict, so SDK
+        # callers get colocation without copying cookbook orchestration. The
+        # control plane enforces the same invariant server-side; this is a
+        # best-effort, friendlier client-side guard.
+        region = config.region
         if config.hot_load_trainer_job:
-            body["hotLoadTrainerJob"] = config.hot_load_trainer_job
-        if config.deployment_shape:
-            body["deploymentShape"] = config.deployment_shape
-        else:
-            body["acceleratorType"] = config.accelerator_type
-        if config.extra_args:
-            flat = []
-            for arg in config.extra_args:
-                flat.extend(arg.split()) if " " in arg else flat.append(arg)
-            body["extraArgs"] = flat
-        if config.extra_values:
-            body["extraValues"] = config.extra_values
-        if config.annotations:
-            body["annotations"] = config.annotations
+            trainer_region = self._get_trainer_region(config.hot_load_trainer_job)
+            if trainer_region:
+                if config.region and config.region != trainer_region:
+                    raise ValueError(
+                        f"hot_load_trainer_job {config.hot_load_trainer_job} is in region "
+                        f"{trainer_region}, but the deployment requests region {config.region}; "
+                        "hot-load requires the deployment to be colocated with the trainer. "
+                        "Leave region unset to inherit the trainer's region."
+                    )
+                if not config.region:
+                    logger.info(
+                        "Colocating hot-load deployment with trainer %s in region %s",
+                        config.hot_load_trainer_job,
+                        trainer_region,
+                    )
+                    # Resolved region flows through a local into the request body;
+                    # the caller's DeploymentConfig is not mutated.
+                    region = trainer_region
+
+        body = self._build_deployment_body(config, region=region)
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = self._post(path, json=body)
@@ -353,20 +300,64 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
         return resp.json()
 
+    @staticmethod
+    def _build_deployment_body(config: DeploymentConfig, *, region: str | None = None) -> dict[str, Any]:
+        """Assemble the deployment creation request body from the config.
+
+        ``region`` is the resolved placement region (falling back to
+        ``config.region``); the caller passes the colocation-resolved value so
+        this method never has to mutate the config. The accelerator type is
+        omitted when a deployment shape is set — the shape owns the hardware
+        selection.
+        """
+        region = region or config.region
+        body: dict[str, Any] = {
+            "baseModel": config.base_model,
+            "minReplicaCount": config.min_replica_count,
+            "maxReplicaCount": config.max_replica_count,
+            "enableHotLoad": True,
+            "forTraining": True,
+        }
+        if region:
+            body["placement"] = {"region": region}
+        if config.hot_load_bucket_type:
+            body["hotLoadBucketType"] = config.hot_load_bucket_type
+        if config.hot_load_trainer_job:
+            body["hotLoadTrainerJob"] = config.hot_load_trainer_job
+        if config.deployment_shape:
+            body["deploymentShape"] = config.deployment_shape
+        else:
+            body["acceleratorType"] = config.accelerator_type
+        if config.extra_args:
+            flat = []
+            for arg in config.extra_args:
+                if " " in arg:
+                    flat.extend(arg.split())
+                else:
+                    flat.append(arg)
+            body["extraArgs"] = flat
+        if config.extra_values:
+            body["extraValues"] = config.extra_values
+        if config.annotations:
+            body["annotations"] = config.annotations
+        return body
+
     def _parse_deployment_info(self, deployment_id: str, data: dict) -> DeploymentInfo:
         return DeploymentInfo(
             deployment_id=deployment_id,
             name=data.get("name", ""),
             state=data.get("state", "UNKNOWN"),
             hot_load_bucket_url=data.get("hotLoadBucketUrl"),
+            hot_load_trainer_job=data.get("hotLoadTrainerJob") or data.get("hot_load_trainer_job"),
+            deployment_shape_version=data.get("deploymentShape") or data.get("deployment_shape"),
             inference_model=f"accounts/{self.account_id}/deployments/{deployment_id}",
         )
 
     def _wait_for_deletion(
         self,
         deployment_id: str,
-        timeout_s: float = 60,
-        poll_interval_s: float = 2,
+        timeout_s: float = DEPLOYMENT_DELETION_TIMEOUT_S,
+        poll_interval_s: float = DEPLOYMENT_DELETION_POLL_S,
     ) -> None:
         """Poll until the deployment is gone (404) or in DELETED state."""
         start = time.time()
@@ -429,8 +420,8 @@ class DeploymentManager(_RestClient):
     def wait_for_ready(
         self,
         deployment_id: str,
-        timeout_s: float = 600,
-        poll_interval_s: float = 15,
+        timeout_s: float = DEPLOYMENT_READY_DEFAULT_TIMEOUT_S,
+        poll_interval_s: float = DEPLOYMENT_READY_POLL_S,
     ) -> DeploymentInfo:
         """Wait for a deployment to reach READY state.
 
@@ -568,6 +559,76 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
         return self._parse_deployment_info(deployment_id, resp.json())
 
+    def _read_replica_identity(self, deployment_id: str, base_model: str) -> str | None:
+        """Return the first replica identity from hotload status, or None if no replica is up."""
+        status = self.hotload_check_status(deployment_id, base_model)
+        replicas = status.get("replicas") or []
+        if not replicas:
+            return None
+        replica = replicas[0]
+        return replica.get("current_snapshot_identity") or replica.get("identity")
+
+    def reattach_trainer(
+        self,
+        deployment: DeploymentInfo | str,
+        *,
+        base_model: str,
+        trainer_job_name: str,
+        timeout_s: float,
+        poll_interval_s: float = HOTLOAD_WAIT_POLL_S,
+    ) -> DeploymentInfo:
+        """Point an existing deployment at a trainer bucket and wait for the serving pod to roll."""
+        if isinstance(deployment, str):
+            deployment_id = deployment
+            deployment_info = self.get(deployment_id)
+            if deployment_info is None:
+                raise RuntimeError(f"Deployment {deployment_id!r} does not exist")
+        else:
+            deployment_info = deployment
+            deployment_id = deployment.deployment_id
+
+        if _deployment_hot_load_trainer_job(deployment_info) == trainer_job_name:
+            logger.info(
+                "Deployment %s is already attached to trainer %s",
+                deployment_id,
+                trainer_job_name,
+            )
+            return deployment_info
+
+        logger.info(
+            "Re-attaching deployment %s to trainer %s via hotLoadTrainerJob PATCH",
+            deployment_id,
+            trainer_job_name,
+        )
+        prev_identity = self._read_replica_identity(deployment_id, base_model)
+        updated = self.update(
+            deployment_id,
+            body={"hotLoadTrainerJob": trainer_job_name},
+            update_mask="hot_load_trainer_job",
+        )
+
+        deadline = time.time() + max(timeout_s, 1)
+        saw_pod_gone = prev_identity is None
+        while time.time() < deadline:
+            current = self._read_replica_identity(deployment_id, base_model)
+            if prev_identity is None:
+                if current is not None:
+                    logger.info("Re-attach settled: hotload manager up on pod %s", current)
+                    return updated
+            elif current is None:
+                if not saw_pod_gone:
+                    logger.info("Old pod %s has gone; waiting for new pod...", prev_identity)
+                saw_pod_gone = True
+            elif current != prev_identity:
+                logger.info("Re-attach settled: new pod %s replaced %s", current, prev_identity)
+                return updated
+            time.sleep(poll_interval_s)
+
+        raise TimeoutError(
+            f"Re-attach for deployment {deployment_id!r} did not produce a fresh pod "
+            f"within {timeout_s}s (prev_identity={prev_identity!r})."
+        )
+
     # -- Hotload operations ----------------------------------------------------
 
     @staticmethod
@@ -697,8 +758,8 @@ class DeploymentManager(_RestClient):
         deployment_id: str,
         base_model: str,
         expected_identity: str,
-        timeout_seconds: int = 400,
-        poll_interval: int = 5,
+        timeout_seconds: int = HOTLOAD_WAIT_TIMEOUT_S,
+        poll_interval: int = HOTLOAD_WAIT_POLL_S,
     ) -> bool:
         """Wait for hotload to complete. Returns True on success."""
         logger.info("Waiting for hotload (identity=%s)...", expected_identity)
@@ -830,7 +891,7 @@ class DeploymentManager(_RestClient):
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
         reset_prompt_cache: bool = True,
-        timeout_seconds: int = 400,
+        timeout_seconds: int = HOTLOAD_WAIT_TIMEOUT_S,
         path: str | None = None,
     ) -> bool:
         """Hotload a snapshot and wait for it to complete. Returns True on success.
@@ -868,7 +929,7 @@ class DeploymentManager(_RestClient):
                 method="POST",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=WARMUP_PROBE_TIMEOUT_S,
             )
             return resp.status_code == 200
         except Exception:
@@ -900,7 +961,7 @@ class DeploymentManager(_RestClient):
                     method="POST",
                     headers=headers,
                     json=payload,
-                    timeout=30,
+                    timeout=HTTP_READ_TIMEOUT_S,
                 )
                 if resp.status_code == 200:
                     logger.info("Inference deployment ready after %d attempt(s)", attempt)
@@ -929,825 +990,25 @@ class DeploymentManager(_RestClient):
         return False
 
 
-# =============================================================================
-# DeploymentSampler — completions API with client-side tokenization
-# =============================================================================
 
 
-@dataclass
-class ServerMetrics:
-    """Server-side metrics extracted from response headers.
-
-    Available on dedicated deployments.  Fields are ``None`` when the
-    header is absent (e.g. serverless deployments).
-    """
-
-    num_concurrent_requests: int | None = None
-    prefill_queue_duration: float | None = None
-    generation_queue_duration: float | None = None
-    server_ttft: float | None = None
-    cached_prompt_tokens: int | None = None
-    prompt_tokens: int | None = None
-    server_processing_time: float | None = None
-    client_ttft: float | None = None
-    """Client-measured time-to-first-token (seconds).  Only set for streaming."""
-
-    @staticmethod
-    def from_headers(headers: dict[str, str], client_ttft: float | None = None) -> "ServerMetrics":
-        """Parse server metrics from HTTP response headers."""
-
-        def _float(key: str) -> float | None:
-            v = headers.get(key)
-            if v is None:
-                return None
-            try:
-                return float(v)
-            except (ValueError, TypeError):
-                return None
-
-        def _int(key: str) -> int | None:
-            v = headers.get(key)
-            if v is None:
-                return None
-            try:
-                return int(v)
-            except (ValueError, TypeError):
-                return None
-
-        return ServerMetrics(
-            num_concurrent_requests=_int("num-concurrent-requests"),
-            prefill_queue_duration=_float("prefill-queue-duration"),
-            generation_queue_duration=_float("generation-queue-duration"),
-            server_ttft=_float("server-time-to-first-token"),
-            cached_prompt_tokens=_int("cached-prompt-tokens"),
-            prompt_tokens=_int("prompt-tokens"),
-            server_processing_time=_float("server-processing-time"),
-            client_ttft=client_ttft,
-        )
-
-
-@dataclass
-class SampledCompletion:
-    """A single sampled completion with tokenized representation.
-
-    Contains the full token sequence (prompt + completion) needed for training,
-    with prompt tokens from client-side tokenization and completion tokens from
-    the deployment's ``raw_output`` response.
-    """
-
-    text: str
-    full_tokens: List[int]  # prompt_token_ids + completion_token_ids
-    prompt_len: int
-    finish_reason: str = "unknown"
-    completion_len: int = 0
-    inference_logprobs: List[float] | None = None
-    logprobs_echoed: bool = False
-    """True when echo=True was used: inference_logprobs has P+C-1 entries
-    (training-aligned).  False: completion-only."""
-    routing_matrices: List[str] | None = None
-
-
-class DeploymentSampler(_RestClient):
-    """Wraps Fireworks deployment completions API with client-side tokenization.
-
-    Uses a local HuggingFace tokenizer to apply chat templates and tokenize
-    prompts, then sends token IDs to the ``/inference/v1/completions`` endpoint
-    (token-in, token-out).  Completion token IDs come back via ``raw_output``.
-
-    BOS and special tokens are handled by the tokenizer's chat template --
-    no manual prepend is needed.
-
-    Handles URL construction, auth headers, SSL verification, and basic
-    retries -- so training scripts never do raw HTTP for sampling.
-
-    Example::
-
-        from transformers import AutoTokenizer
-
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
-        sampler = DeploymentSampler(
-            inference_url="https://api.fireworks.ai",
-            model="accounts/your-account/deployments/my-deploy",
-            api_key="...",
-            tokenizer=tokenizer,
-        )
-
-        completions = await sampler.sample_with_tokens(messages=[...], n=4)
-        for c in completions:
-            print(c.text, len(c.full_tokens), c.finish_reason)
-    """
-
-    def __init__(
-        self,
-        inference_url: str,
-        model: str,
-        api_key: str,
-        tokenizer: PreTrainedTokenizerBase | None = None,
-        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
-        max_concurrency: int | None = None,  # TODO: remove after deprecation period
-    ):
-        super().__init__(api_key=api_key, base_url=inference_url)
-        self.model = model
-        self.tokenizer = tokenizer
-        self._recent_metrics: list[ServerMetrics] = []
-
-        if max_concurrency is not None:
-            import warnings
-            warnings.warn(
-                "max_concurrency is deprecated and will be removed in a future release. "
-                "Use concurrency_controller=FixedConcurrencyController(max_concurrency) "
-                "or AdaptiveConcurrencyController() instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if concurrency_controller is None:
-                concurrency_controller = FixedConcurrencyController(max_concurrency)
-
-        self._concurrency_controller = concurrency_controller
-
-    def _inference_headers(self) -> dict[str, str]:
-        """Headers for inference completions requests."""
-        return self._headers(Authorization=f"Bearer {self.api_key}")
-
-    _HOTLOAD_RETRY_INTERVAL_S = 5.0
-    _HOTLOAD_MAX_RETRIES = 10
-
-    async def async_completions_stream(
-        self,
-        prompt: list[int],
-        max_tokens: int = 1024,
-        temperature: float = 1.0,
-        hotload_retry_interval: float = _HOTLOAD_RETRY_INTERVAL_S,
-        hotload_max_retries: int = _HOTLOAD_MAX_RETRIES,
-        **kwargs: Any,
-    ) -> tuple[dict[str, Any], ServerMetrics]:
-        """Streaming n=1 async completions request.
-
-        Opens an SSE stream, accumulates chunks into the same response
-        format that ``async_completions`` returns, and extracts
-        ``ServerMetrics`` from both:
-
-        * **HTTP response headers** -- available immediately (partial:
-          ``prompt-tokens``, ``cached-prompt-tokens``, ``server-time-to-first-token``).
-        * **``perf_metrics`` in the final SSE chunk** -- available after
-          completion (full timing: ``prefill-queue-duration``,
-          ``generation-queue-duration``, ``num-concurrent-requests``, etc.).
-
-        The request automatically sets ``perf_metrics_in_response=True``
-        so the server includes complete metrics in the last chunk.
-        """
-        import json as _json
-
-        http_timeout = kwargs.pop("http_timeout", 600)
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "prompt": prompt,
-            "n": 1,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": True,
-            "perf_metrics_in_response": True,
-            **kwargs,
-        }
-        url = f"{self.base_url}/inference/v1/completions"
-        headers = self._inference_headers()
-        client = self._get_async_client()
-        prompt_len = len(prompt)
-
-        for hotload_attempt in range(hotload_max_retries + 1):
-            t0 = time.time()
-            resp = await async_request_with_retries(
-                client.post,
-                url,
-                headers=headers,
-                json=payload,
-                timeout=http_timeout,
-            )
-
-            if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
-                logger.info(
-                    "Deployment not ready (HTTP %d), retry %d/%d in %ds...",
-                    resp.status_code,
-                    hotload_attempt + 1,
-                    hotload_max_retries,
-                    int(hotload_retry_interval),
-                )
-                await asyncio.sleep(hotload_retry_interval)
-                continue
-
-            resp.raise_for_status()
-
-            accumulated_text = ""
-            accumulated_logprobs: list[dict] = []
-            finish_reason = None
-            usage_info = None
-            raw_output = None
-            perf_metrics_dict: dict[str, str] | None = None
-            first_token_time: float | None = None
-
-            # Track whether the stream ended cleanly. A well-formed completion
-            # must close with [DONE] and/or set finish_reason. A clean TCP close
-            # without either signals server-side mid-stream truncation.
-            has_seen_done = False
-            has_seen_finish_reason = False
-
-            decoder = _SSEDecoder()
-            async for sse in decoder.aiter_events(resp):
-                if sse.data.startswith("[DONE]"):
-                    has_seen_done = True
-                    break
-
-                try:
-                    chunk = _json.loads(sse.data)
-                except (ValueError, TypeError):
-                    continue
-
-                for choice in chunk.get("choices", []):
-                    text_delta = choice.get("text", "")
-                    if text_delta:
-                        if first_token_time is None:
-                            first_token_time = time.time()
-                        accumulated_text += text_delta
-
-                    lp = choice.get("logprobs")
-                    if lp and isinstance(lp, dict):
-                        content = lp.get("content")
-                        if isinstance(content, list):
-                            accumulated_logprobs.extend(content)
-
-                    fr = choice.get("finish_reason")
-                    if fr:
-                        finish_reason = fr
-                        has_seen_finish_reason = True
-
-                    ro = choice.get("raw_output")
-                    if ro:
-                        raw_output = ro
-
-                if "usage" in chunk:
-                    usage_info = chunk["usage"]
-
-                # perf_metrics is patched into the final chunk by the server
-                # (with is_completed=True, so it has full timing data).
-                if "perf_metrics" in chunk:
-                    perf_metrics_dict = chunk["perf_metrics"]
-
-            if not raw_output and not has_seen_done and not has_seen_finish_reason:
-                raise _SSETruncationError(
-                    "Transient server-side error: the inference deployment "
-                    "closed the SSE stream mid-generation without sending "
-                    "[DONE], finish_reason, or raw_output. The SDK is "
-                    "retrying. If this persists across all retry attempts, "
-                    "contact the Fireworks team."
-                )
-
-            client_ttft = (first_token_time - t0) if first_token_time else None
-
-            # Build ServerMetrics: prefer perf_metrics from final chunk
-            # (has complete timing), fall back to HTTP headers (partial).
-            metrics_source = perf_metrics_dict or dict(resp.headers)
-            server_metrics = ServerMetrics.from_headers(metrics_source, client_ttft=client_ttft)
-
-            assembled_choice: dict[str, Any] = {
-                "text": accumulated_text,
-                "finish_reason": finish_reason or "stop",
-            }
-            if accumulated_logprobs:
-                assembled_choice["logprobs"] = {"content": accumulated_logprobs}
-            if raw_output:
-                assembled_choice["raw_output"] = raw_output
-            result: dict[str, Any] = {"choices": [assembled_choice]}
-            if usage_info:
-                result["usage"] = usage_info
-
-            elapsed = time.time() - t0
-            logger.debug(
-                "Stream completions: prompt=%d, text_len=%d, %.1fs",
-                prompt_len,
-                len(accumulated_text),
-                elapsed,
-            )
-            return result, server_metrics
-
-        raise RuntimeError("Exhausted hotload retries in streaming mode")
-
-    @staticmethod
-    def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
-        """Extract per-token logprobs from a completions response.
-
-        Expects modern structured logprobs format:
-        ``choice.logprobs.content[].logprob``.
-
-        Returns:
-            List of per-token logprobs, or ``None`` if absent/empty.
-        """
-        lp_data = choice.get("logprobs")
-        if not lp_data or not isinstance(lp_data, dict):
-            return None
-        content = lp_data.get("content")
-        if isinstance(content, list) and content:
-            return [tok.get("logprob", 0.0) for tok in content]
-        return None
-
-    @staticmethod
-    def _extract_routing_matrices(choice: dict[str, Any]) -> List[str] | None:
-        """Extract per-token routing matrices from logprobs content.
-
-        When ``include_routing_matrix=True`` is passed to the API, each token
-        in ``choice.logprobs.content`` may contain a ``routing_matrix`` field
-        with a base64-encoded expert-index array for Router Replay (R3).
-
-        Returns:
-            List of base64-encoded routing matrix strings (one per completion
-            token), or ``None`` if no routing matrices are present.
-        """
-        lp_data = choice.get("logprobs")
-        if lp_data and isinstance(lp_data, dict):
-            content = lp_data.get("content", [])
-            if content:
-                matrices = [tok.get("routing_matrix", "") for tok in content]
-                if any(m for m in matrices):
-                    return matrices
-        return None
-
-    async def sample_with_tokens(
-        self,
-        messages: list[dict[str, str]],
-        n: int = 1,
-        max_tokens: int = 1024,
-        temperature: float = 1.0,
-        max_seq_len: int | None = None,
-        **kwargs: Any,
-    ) -> List[SampledCompletion]:
-        """Sample n completions via streaming, firing n individual requests concurrently.
-
-        Each completion is an independent async streaming request.
-        Server metrics from response headers are fed into the
-        ``AdaptiveConcurrencyController`` (if one was provided).
-        """
-        if self.tokenizer is None:
-            raise ValueError("Tokenizer is required for sample_with_tokens")
-        user_requested_logprobs = kwargs.get("logprobs", False)
-        routing_requested = kwargs.get("include_routing_matrix", False)
-        echo_mode = kwargs.get("echo", False)
-
-        prompt_ids: list[int] = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_dict=False,
-        )
-
-        if max_seq_len is not None and len(prompt_ids) >= max_seq_len:
-            return []
-
-        async def _one(idx: int) -> List[SampledCompletion]:
-            return await self._do_one_completion(
-                prompt_ids,
-                max_tokens,
-                temperature,
-                max_seq_len,
-                user_requested_logprobs,
-                routing_requested,
-                echo_mode,
-                **kwargs,
-            )
-
-        results = await asyncio.gather(*[_one(i) for i in range(n)])
-        return [c for batch in results for c in batch]
-
-    async def sample_with_prompt_tokens(
-        self,
-        prompt_token_ids: list[int],
-        n: int = 1,
-        max_tokens: int = 1024,
-        temperature: float = 1.0,
-        max_seq_len: int | None = None,
-        stop: list[str] | list[int] | None = None,
-        **kwargs: Any,
-    ) -> List[SampledCompletion]:
-        """Sample n completions from a pre-tokenized prompt.
-
-        Unlike :meth:`sample_with_tokens`, this primitive accepts ``prompt_token_ids``
-        directly and never invokes ``tokenizer.apply_chat_template(...)``. It is the
-        sampler entry point for renderer-backed RL rollouts where the prompt has
-        already been built from a token-native renderer.
-
-        Concurrency control, ``raw_output`` echo semantics, ``max_seq_len`` filtering,
-        and logprob extraction are inherited from :meth:`_do_one_completion` and
-        :meth:`_parse_completions_result`.
-
-        ``stop`` preserves its caller-provided shape: ``list[str]`` is forwarded as
-        string stop sequences and ``list[int]`` as integer stop token IDs. No
-        coercion happens here.
-        """
-        if max_seq_len is not None and len(prompt_token_ids) >= max_seq_len:
-            return []
-
-        user_requested_logprobs = kwargs.get("logprobs", False)
-        routing_requested = kwargs.get("include_routing_matrix", False)
-        echo_mode = kwargs.get("echo", False)
-        if stop is not None:
-            kwargs["stop"] = stop
-
-        async def _one(_idx: int) -> List[SampledCompletion]:
-            return await self._do_one_completion(
-                prompt_token_ids,
-                max_tokens,
-                temperature,
-                max_seq_len,
-                user_requested_logprobs,
-                routing_requested,
-                echo_mode,
-                **kwargs,
-            )
-
-        results = await asyncio.gather(*[_one(i) for i in range(n)])
-        return [c for batch in results for c in batch]
-
-    async def _acquire_concurrency(self) -> None:
-        """Acquire a concurrency slot from the controller."""
-        if self._concurrency_controller is not None:
-            await self._concurrency_controller.acquire()
-
-    def _release_concurrency(self, server_metrics: ServerMetrics | None = None) -> None:
-        """Release a concurrency slot, feeding metrics to the controller."""
-        if server_metrics is not None:
-            self._recent_metrics.append(server_metrics)
-        if self._concurrency_controller is not None:
-            self._concurrency_controller.release(server_metrics)
-
-    def drain_metrics(self) -> list[ServerMetrics]:
-        """Return and clear all collected ServerMetrics since last drain."""
-        out = list(self._recent_metrics)
-        self._recent_metrics.clear()
-        return out
-
-    # Per-completion retry covers two transient server-side classes:
-    # 1. SSE truncation: the deployment closes the stream mid-generation
-    #    without [DONE]/finish_reason/raw_output. Surfaces as a RuntimeError
-    #    raised from async_completions_stream.
-    # 2. Transient HTTP / connection errors right after a fresh deployment
-    #    or hotload: 408/429/502/503/504 plus httpx connection-level errors.
-    # Backoff is exponential with jitter to avoid retry-storm
-    # synchronization across concurrent in-flight completions.
-    _RETRY_MAX_ATTEMPTS = 7
-    _RETRY_BASE_BACKOFF_S = 2.0
-    _RETRY_MAX_BACKOFF_S = 30.0
-    _RETRY_HTTP_TRANSIENT_CODES = (408, 429, 502, 503, 504)
-    _RETRY_HTTPX_CONNECTION_EXC = (
-        httpx.RemoteProtocolError,
-        httpx.ReadError,
-        httpx.ReadTimeout,
-        httpx.ConnectError,
-        httpx.ConnectTimeout,
-        httpx.WriteError,
-        httpx.WriteTimeout,
-        httpx.PoolTimeout,
-    )
-
-    async def _backoff_after_transient(
-        self, label: str, attempt: int, current_backoff: float
-    ) -> float:
-        """Sleep with jittered exponential backoff and return the next backoff.
-
-        Caller is responsible for the retryability decision; this helper
-        just emits the per-attempt log line and sleeps.
-        """
-        jittered = current_backoff * (0.5 + random.random())
-        logger.warning(
-            "Transient %s (attempt %d/%d); retrying after %.1fs.",
-            label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
-        )
-        await asyncio.sleep(jittered)
-        return min(current_backoff * 2, self._RETRY_MAX_BACKOFF_S)
-
-    async def _do_one_completion(
-        self,
-        prompt_ids: list[int],
-        max_tokens: int,
-        temperature: float,
-        max_seq_len: int | None,
-        user_requested_logprobs: bool,
-        routing_requested: bool,
-        echo_mode: bool,
-        **kwargs: Any,
-    ) -> List[SampledCompletion]:
-        backoff = self._RETRY_BASE_BACKOFF_S
-        for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
-            await self._acquire_concurrency()
-            server_metrics: ServerMetrics | None = None
-            transient: BaseException | None = None
-            label = ""
-            try:
-                result, server_metrics = await self.async_completions_stream(
-                    prompt=prompt_ids,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    raw_output=True,
-                    **kwargs,
-                )
-            except _SSETruncationError as e:
-                transient, label = e, "SSE truncation"
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
-                    self._release_concurrency(server_metrics)
-                    raise
-                transient, label = e, f"HTTP {e.response.status_code}"
-            except self._RETRY_HTTPX_CONNECTION_EXC as e:
-                transient, label = e, type(e).__name__
-
-            self._release_concurrency(server_metrics)
-
-            if transient is None:
-                return self._parse_completions_result(
-                    result,
-                    prompt_ids,
-                    max_seq_len,
-                    user_requested_logprobs,
-                    routing_requested,
-                    echo_mode,
-                )
-            if attempt == self._RETRY_MAX_ATTEMPTS:
-                raise transient
-            backoff = await self._backoff_after_transient(label, attempt, backoff)
-
-        # Range above guarantees the last attempt either returns or re-raises.
-        # This line is here only to satisfy the type checker's flow analysis.
-        raise AssertionError("unreachable: retry loop exited without return/raise")
-
-    def _parse_completions_result(
-        self,
-        result: dict[str, Any],
-        prompt_ids: list[int],
-        max_seq_len: int | None,
-        user_requested_logprobs: bool,
-        routing_requested: bool,
-        echo_mode: bool,
-    ) -> List[SampledCompletion]:
-        """Parse a completions API response into SampledCompletion objects."""
-        completions: List[SampledCompletion] = []
-        for choice in result.get("choices", []):
-            text = choice.get("text", "")
-            finish_reason = choice.get("finish_reason", "unknown")
-            raw = choice.get("raw_output") or {}
-            completion_ids = raw.get("completion_token_ids")
-
-            if completion_ids is None:
-                raise RuntimeError(
-                    format_sdk_error(
-                        "Deployment did not return raw_output token IDs",
-                        f"The API response is missing completion_token_ids. Got choice keys: {list(choice.keys())}",
-                        "Ensure the deployment supports raw_output=True.\n"
-                        "  This requires a deployment running a compatible model version.\n"
-                        "  Check that the deployment base model matches your training model.",
-                        docs_url=DOCS_SDK,
-                        show_support=True,
-                    )
-                )
-
-            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
-            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
-
-            # With echo=True the API returns P+C tokens in
-            # completion_token_ids and logprobs cover all P+C positions.
-            # Strip the prompt prefix (verified by actual content match)
-            # and drop the unconditional first-token logprob to get
-            # P+C-1 training-aligned entries.
-            lp_is_echo = False
-            if echo_mode:
-                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
-                    raise RuntimeError(
-                        format_sdk_error(
-                            "Echo response format mismatch",
-                            "echo=True was requested but completion_token_ids do not include the prompt prefix.",
-                            "Ensure the deployment supports token echo with raw_output=True.",
-                            docs_url=DOCS_SDK,
-                            show_support=True,
-                        )
-                    )
-
-                completion_ids = completion_ids[len(prompt_ids) :]
-                if token_logprobs is not None:
-                    token_logprobs = token_logprobs[1:]
-                    lp_is_echo = True
-                if routing_matrices is not None:
-                    routing_matrices = routing_matrices[1:]
-
-            full_tokens = list(prompt_ids) + list(completion_ids)
-            if max_seq_len is not None and len(full_tokens) > max_seq_len:
-                logger.debug(
-                    "Completion post-filtered: %d tokens > max_seq_len %d",
-                    len(full_tokens),
-                    max_seq_len,
-                )
-                continue
-
-            completions.append(
-                SampledCompletion(
-                    text=text,
-                    full_tokens=full_tokens,
-                    prompt_len=len(prompt_ids),
-                    finish_reason=finish_reason,
-                    completion_len=len(completion_ids),
-                    inference_logprobs=token_logprobs,
-                    logprobs_echoed=lp_is_echo,
-                    routing_matrices=routing_matrices,
-                )
-            )
-
-        return completions
-
-
-# =============================================================================
-# FixedConcurrencyController — static semaphore
-# =============================================================================
-
-
-class FixedConcurrencyController:
-    """Fixed concurrency controller backed by an asyncio.Semaphore.
-
-    Same interface as ``AdaptiveConcurrencyController`` so ``DeploymentSampler``
-    can use either interchangeably.
-    """
-
-    def __init__(self, max_concurrency: int):
-        self._max_concurrency = max_concurrency
-        self._semaphore = asyncio.Semaphore(max_concurrency)
-
-    @property
-    def window_size(self) -> int:
-        return self._max_concurrency
-
-    async def acquire(self) -> None:
-        await self._semaphore.acquire()
-
-    def release(self, metrics: "ServerMetrics | None" = None) -> None:
-        self._semaphore.release()
-
-    def step_completed(self) -> dict[str, float]:
-        return {"window": float(self._max_concurrency)}
-
-
-# =============================================================================
-# AdaptiveConcurrencyController — AIMD-based dynamic concurrency
-# =============================================================================
-
-
-class AdaptiveConcurrencyController:
-    """AIMD concurrency controller with proportional increase.
-
-    Uses ``prefill_queue_duration`` from server response headers as the
-    congestion signal.  When the prefill queue is above the target, the
-    window shrinks (multiplicative decrease).  When below, the window
-    grows proportionally to the headroom (further below target = faster
-    growth), capped at ``_MAX_INCREASE_FACTOR``.
-
-    Compatible with ``DeploymentSampler`` -- pass as ``concurrency_controller``.
-    """
-
-    # -- Internal constants (not user-configurable) --
-    _MAX_INCREASE_FACTOR = 4.0   # Cap proportional increase at 4x base rate.
-    _MIN_PQ_FLOOR = 0.001        # Avoid division by zero in headroom calc.
-    _DEFAULT_INITIAL_WINDOW = 16
-    _DEFAULT_MIN_WINDOW = 1
-    _DEFAULT_MAX_WINDOW = 256
-    _DEFAULT_PQ_TARGET = 0.5     # Prefill queue target in seconds.
-    _DEFAULT_ADDITIVE_INCREASE = 1.0
-    _DEFAULT_MULTIPLICATIVE_DECREASE = 0.5
-    _DEFAULT_EMA_ALPHA = 0.3
-
-    def __init__(
-        self,
-        initial_window: int = _DEFAULT_INITIAL_WINDOW,
-        min_window: int = _DEFAULT_MIN_WINDOW,
-        max_window: int = _DEFAULT_MAX_WINDOW,
-        prefill_queue_target: float = _DEFAULT_PQ_TARGET,
-        additive_increase: float = _DEFAULT_ADDITIVE_INCREASE,
-        multiplicative_decrease: float = _DEFAULT_MULTIPLICATIVE_DECREASE,
-        ema_alpha: float = _DEFAULT_EMA_ALPHA,
-    ):
-        self._window: float = float(initial_window)
-        self._min_window = min_window
-        self._max_window = max_window
-        self._prefill_queue_target = prefill_queue_target
-        self._additive_increase = additive_increase
-        self._multiplicative_decrease = multiplicative_decrease
-        self._ema_alpha = ema_alpha
-
-        self._ema_prefill_queue: float | None = None
-        self._semaphore = asyncio.Semaphore(initial_window)
-
-        self._completed_requests: int = 0
-        self._last_logged_window: int = initial_window
-
-        # Batch-level metrics: collected per-request, aggregated at step boundary.
-        self._step_prefill_queues: list[float] = []
-        self._step_metrics_count: int = 0
-        self._step_cache_hits: int = 0
-        self._step_cache_total: int = 0
-
-    @property
-    def window_size(self) -> int:
-        return max(self._min_window, min(self._max_window, int(self._window)))
-
-    @property
-    def ema_prefill_queue(self) -> float | None:
-        return self._ema_prefill_queue
-
-    async def acquire(self) -> None:
-        await self._semaphore.acquire()
-
-    def release(self, metrics: ServerMetrics | None = None) -> None:
-        """Release a slot and collect metrics.  Window is NOT adjusted here.
-
-        Call :meth:`step_completed` between RL steps to trigger the AIMD
-        adjustment based on the average prefill queue across the step.
-        """
-        self._semaphore.release()
-        self._completed_requests += 1
-        if metrics is None:
-            return
-        if metrics.prefill_queue_duration is not None:
-            self._step_prefill_queues.append(metrics.prefill_queue_duration)
-        self._step_metrics_count += 1
-        if metrics.cached_prompt_tokens is not None:
-            self._step_cache_hits += metrics.cached_prompt_tokens
-        if metrics.prompt_tokens is not None:
-            self._step_cache_total += metrics.prompt_tokens
-
-    def step_completed(self) -> dict[str, float]:
-        """Called between RL steps.  Adjusts window based on the step's
-        average prefill queue duration and returns a summary dict for logging.
-
-        Returns:
-            Dict with step-level metrics (``avg_pq``, ``window``, ``cache_hit_rate``, etc.).
-        """
-        summary: dict[str, float] = {
-            "window": float(self.window_size),
-            "requests": float(self._step_metrics_count),
-        }
-
-        # Compute step-level average prefill queue.
-        if self._step_prefill_queues:
-            avg_pq = sum(self._step_prefill_queues) / len(self._step_prefill_queues)
-            summary["avg_pq"] = avg_pq
-            self._update_window(avg_pq)
-            summary["window_after"] = float(self.window_size)
-
-        if self._step_cache_total > 0:
-            summary["cache_hit_rate"] = self._step_cache_hits / self._step_cache_total
-
-        if self._ema_prefill_queue is not None:
-            summary["ema_pq"] = self._ema_prefill_queue
-
-        logger.info(
-            "AdaptiveConcurrency step: window=%d, reqs=%d, avg_pq=%.3fs, ema_pq=%s, cache=%.1f%%",
-            self.window_size,
-            self._step_metrics_count,
-            summary.get("avg_pq", 0.0),
-            f"{self._ema_prefill_queue:.3f}" if self._ema_prefill_queue is not None else "N/A",
-            summary.get("cache_hit_rate", 0.0) * 100,
-        )
-
-        # Reset per-step accumulators.
-        self._step_prefill_queues.clear()
-        self._step_metrics_count = 0
-        self._step_cache_hits = 0
-        self._step_cache_total = 0
-
-        return summary
-
-    def _update_window(self, avg_prefill_queue: float) -> None:
-        """AIMD adjustment based on step-averaged prefill queue."""
-        if self._ema_prefill_queue is None:
-            self._ema_prefill_queue = avg_prefill_queue
-        else:
-            a = self._ema_alpha
-            self._ema_prefill_queue = a * avg_prefill_queue + (1 - a) * self._ema_prefill_queue
-
-        old_int_window = self.window_size
-
-        if self._ema_prefill_queue > self._prefill_queue_target:
-            self._window *= self._multiplicative_decrease
-        else:
-            # Proportional increase: grow faster when far below target.
-            headroom = self._prefill_queue_target / max(self._ema_prefill_queue, self._MIN_PQ_FLOOR)
-            increase = self._additive_increase * min(headroom, self._MAX_INCREASE_FACTOR)
-            self._window += increase
-
-        self._window = max(float(self._min_window), min(float(self._max_window), self._window))
-        new_int_window = self.window_size
-
-        if new_int_window != old_int_window:
-            self._resize_semaphore(old_int_window, new_int_window)
-
-    def _resize_semaphore(self, old_size: int, new_size: int) -> None:
-        delta = new_size - old_size
-        if delta > 0:
-            for _ in range(delta):
-                self._semaphore.release()
-        elif delta < 0:
-            for _ in range(-delta):
-                if self._semaphore._value > 0:
-                    self._semaphore._value -= 1
+# ---------------------------------------------------------------------------
+# Backwards-compatible re-exports (these classes moved to sibling modules
+# when deployment.py was split). Existing import sites continue to use
+# ``fireworks.training.sdk.deployment``.
+# ---------------------------------------------------------------------------
+from fireworks.training.sdk._sse import (  # noqa: F401,E402
+    _SSEEvent,
+    _SSEDecoder,
+    _SSETruncationError,
+)
+from fireworks.training.sdk.sampling import (  # noqa: F401,E402
+    ServerMetrics,
+    DeploymentSampler,
+    SampledCompletion,
+    FiretitanSamplingClient,
+)
+from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
+    FixedConcurrencyController,
+    AdaptiveConcurrencyController,
+)
