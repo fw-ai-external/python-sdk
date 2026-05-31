@@ -138,6 +138,41 @@ class TestCreate:
         assert payload["nodeCount"] == 4
         assert tc["region"] == "US_OHIO_1"
 
+    def test_trainer_replica_count_sent_on_shape_path(self, mgr):
+        """trainer_replica_count is a run-level HSDP knob: it rides the shape
+        path (which otherwise omits infra fields) as top-level trainerReplicaCount."""
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
+            trainer_replica_count=3,
+        )
+        config.validate()  # must not reject the run-level knob on the shape path
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(config)
+
+        payload = mgr._post.call_args[1]["json"]
+        assert payload["trainerReplicaCount"] == 3
+        # Still on the shape path -> infra fields stay shape-owned.
+        assert "nodeCount" not in payload
+
+    def test_trainer_replica_count_omitted_when_unset(self, mgr, basic_config):
+        """No HSDP override -> the field is absent so the backend default applies."""
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(basic_config)
+
+        payload = mgr._post.call_args[1]["json"]
+        assert "trainerReplicaCount" not in payload
+
     def test_inactivity_cleanup_fields(self, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",

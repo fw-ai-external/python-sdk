@@ -21,6 +21,7 @@ from fireworks.training.sdk.client import (
     FiretitanServiceClient,
     FiretitanTrainingClient,
 )
+from fireworks.training.sdk.managed import FiretitanProvisioningConfig
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
@@ -36,8 +37,14 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     SampledCompletion,
+    FiretitanSamplingClient,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
+)
+from fireworks.training.sdk.tinker_compat import (
+    install_tinker_service_client,
+    patched_tinker_service_client,
+    restore_tinker_service_client,
 )
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 from fireworks.training.sdk.fireworks_client import (
@@ -50,9 +57,13 @@ __all__ = [
     # Training (tinker protocol)
     "FiretitanServiceClient",
     "FiretitanTrainingClient",
+    "FiretitanProvisioningConfig",
     "GradAccNormalization",
     "SaveSamplerResult",
     "WeightSyncer",
+    "install_tinker_service_client",
+    "patched_tinker_service_client",
+    "restore_tinker_service_client",
     # Orchestration (Fireworks platform) — trainer-free
     "FireworksClient",
     "TrainingShapeProfile",
@@ -69,6 +80,7 @@ __all__ = [
     "DeploymentInfo",
     "DeploymentManager",
     "DeploymentSampler",
+    "FiretitanSamplingClient",
     "AdaptiveConcurrencyController",
     "FixedConcurrencyController",
     "SampledCompletion",

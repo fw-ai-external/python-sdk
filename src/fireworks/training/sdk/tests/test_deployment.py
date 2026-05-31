@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import types as pytypes
 import asyncio
 from unittest.mock import MagicMock
 
@@ -9,11 +11,14 @@ import pytest
 
 from fireworks.training.sdk.deployment import (
     ServerMetrics,
+    DeploymentInfo,
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
+    FiretitanSamplingClient,
     AdaptiveConcurrencyController,
     _SSETruncationError,
+    _deployment_hot_load_trainer_job,
 )
 from fireworks.training.sdk._rest_client import _should_verify_ssl
 
@@ -44,6 +49,12 @@ def deploy_config():
 def _make_mock_tokenizer(return_ids=None):
     tok = MagicMock()
     tok.apply_chat_template.return_value = return_ids or [1, 2, 3]
+    # Integer stop IDs are converted to strings via decode for the completions
+    # API (token-in, string-stop). Map id -> "<id>" so tests can assert on it.
+    def _decode(ids, **_kwargs):
+        return f"<{ids[0]}>"
+
+    tok.decode.side_effect = _decode
     return tok
 
 
@@ -63,6 +74,61 @@ def _mock_async_completions_stream(sampler, return_value):
     async def _fake(*args, **kwargs):
         return return_value, ServerMetrics()
     sampler.async_completions_stream = _fake
+
+
+class _FakeModelInput:
+    def __init__(self, tokens):
+        self._tokens = list(tokens)
+
+    @classmethod
+    def from_ints(cls, tokens):
+        return cls(tokens)
+
+    def to_ints(self):
+        return list(self._tokens)
+
+
+class _FakeSamplingParams:
+    def __init__(
+        self,
+        max_tokens=None,
+        seed=None,
+        stop=None,
+        temperature=1,
+        top_k=-1,
+        top_p=1,
+    ):
+        self.max_tokens = max_tokens
+        self.seed = seed
+        self.stop = stop
+        self.temperature = temperature
+        self.top_k = top_k
+        self.top_p = top_p
+
+
+class _FakeSampledSequence:
+    def __init__(self, stop_reason, tokens, logprobs=None):
+        self.stop_reason = stop_reason
+        self.tokens = tokens
+        self.logprobs = logprobs
+
+
+class _FakeSampleResponse:
+    def __init__(self, sequences, prompt_logprobs=None):
+        self.sequences = sequences
+        self.prompt_logprobs = prompt_logprobs
+
+
+@pytest.fixture
+def fake_tinker(monkeypatch):
+    fake_types = pytypes.SimpleNamespace(
+        ModelInput=_FakeModelInput,
+        SamplingParams=_FakeSamplingParams,
+        SampledSequence=_FakeSampledSequence,
+        SampleResponse=_FakeSampleResponse,
+    )
+    monkeypatch.setitem(sys.modules, "tinker", pytypes.SimpleNamespace(types=fake_types))
+    return fake_types
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +217,75 @@ class TestCreateDeployment:
         body = mgr._post.call_args[1]["json"]
         assert "placement" not in body
 
+    def _trainer_resp(self, region):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {"trainingConfig": {"region": region}}
+        return resp
+
+    def _create_resp(self):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {
+            "name": "accounts/test-acct/deployments/dep-1",
+            "state": "CREATING",
+        }
+        return resp
+
+    def test_hotload_colocates_with_trainer_region_when_unset(self, mgr):
+        mgr._get = MagicMock(return_value=self._trainer_resp("US_OHIO_1"))
+        mgr._post = MagicMock(return_value=self._create_resp())
+
+        mgr._create_deployment(
+            DeploymentConfig(
+                deployment_id="dep-1",
+                base_model="accounts/test/models/qwen3-1p7b",
+                hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            )
+        )
+
+        # Trainer region was resolved and applied as placement.
+        assert mgr._get.call_args[0][0] == "/v1/accounts/test-acct/rlorTrainerJobs/job-1"
+        body = mgr._post.call_args[1]["json"]
+        assert body["placement"] == {"region": "US_OHIO_1"}
+
+    def test_hotload_rejects_conflicting_region(self, mgr):
+        mgr._get = MagicMock(return_value=self._trainer_resp("US_OHIO_1"))
+        mgr._post = MagicMock(return_value=self._create_resp())
+
+        with pytest.raises(ValueError, match="colocated"):
+            mgr._create_deployment(
+                DeploymentConfig(
+                    deployment_id="dep-1",
+                    base_model="accounts/test/models/qwen3-1p7b",
+                    region="US_VIRGINIA_1",
+                    hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+                )
+            )
+        mgr._post.assert_not_called()
+
+    def test_hotload_unresolvable_trainer_region_proceeds(self, mgr):
+        # Best-effort: if the trainer region can't be resolved, create proceeds
+        # (the control plane colocates server-side).
+        not_found = MagicMock()
+        not_found.status_code = 404
+        not_found.is_success = False
+        mgr._get = MagicMock(return_value=not_found)
+        mgr._post = MagicMock(return_value=self._create_resp())
+
+        mgr._create_deployment(
+            DeploymentConfig(
+                deployment_id="dep-1",
+                base_model="accounts/test/models/qwen3-1p7b",
+                hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            )
+        )
+
+        body = mgr._post.call_args[1]["json"]
+        assert "placement" not in body
+
     def test_create_includes_annotations(self, mgr):
         resp = MagicMock()
         resp.status_code = 200
@@ -178,7 +313,87 @@ class TestCreateDeployment:
         resp.is_success = False
         resp.json.return_value = {"error": "already exists"}
         mgr._post = MagicMock(return_value=resp)
+        # On 409, _create_deployment fetches the existing deployment instead of
+        # raising; mock that follow-up GET so it doesn't hit the network.
+        mgr._get_deployment = MagicMock(return_value={"name": "dep-1", "state": "READY"})
         mgr._create_deployment(deploy_config)
+
+
+# ---------------------------------------------------------------------------
+# Trainer reattach
+# ---------------------------------------------------------------------------
+
+
+class TestReattachTrainer:
+    def test_deployment_hot_load_trainer_job_reads_parsed_info(self):
+        deployment = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+
+        assert _deployment_hot_load_trainer_job(deployment) == "accounts/test-acct/rlorTrainerJobs/job-1"
+
+    def test_already_attached_returns_existing(self, mgr):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+        mgr.update = MagicMock()
+        mgr.hotload_check_status = MagicMock()
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+        )
+
+        assert result is existing
+        mgr.update.assert_not_called()
+        mgr.hotload_check_status.assert_not_called()
+
+    def test_patch_and_waits_for_new_replica(self, mgr, monkeypatch):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
+        )
+        updated = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+        mgr.update = MagicMock(return_value=updated)
+        mgr.hotload_check_status = MagicMock(
+            side_effect=[
+                {"replicas": [{"current_snapshot_identity": "old-pod"}]},
+                {"replicas": []},
+                {"replicas": [{"current_snapshot_identity": "new-pod"}]},
+            ]
+        )
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+        )
+
+        assert result is updated
+        mgr.update.assert_called_once_with(
+            "dep-1",
+            body={"hotLoadTrainerJob": "accounts/test-acct/rlorTrainerJobs/job-1"},
+            update_mask="hot_load_trainer_job",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -301,9 +516,9 @@ class TestWaitForHotload:
     def test_immediate_success(self, mgr):
         mgr.hotload_check_status = MagicMock(return_value={
             "replicas": [{
-                "identity": "snap-1",
-                "stage": "idle",
-                "ready": True,
+                "current_snapshot_identity": "snap-1",
+                "loading_state": {"stage": "idle"},
+                "readiness": True,
             }]
         })
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
@@ -658,8 +873,10 @@ class TestSampleWithPromptTokens:
         assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
         sampler.close()
 
-    def test_stop_int_shape_preserved(self):
-        sampler = _make_sampler(tokenizer=None)
+    def test_stop_int_converted_to_strings_via_tokenizer(self):
+        # The completions API takes string stop sequences, so integer stop IDs
+        # are decoded to strings client-side before the request.
+        sampler = _make_sampler()
         captured: dict[str, object] = {}
 
         async def _fake_stream(*args, **kwargs):
@@ -673,10 +890,9 @@ class TestSampleWithPromptTokens:
 
         sampler.async_completions_stream = _fake_stream
 
-        stop_ids = [13, 42]
-        asyncio.run(sampler.sample_with_prompt_tokens([1, 2], stop=stop_ids))
-        assert captured["stop"] == stop_ids
-        assert all(isinstance(s, int) for s in captured["stop"])  # type: ignore[arg-type]
+        asyncio.run(sampler.sample_with_prompt_tokens([1, 2], stop=[13, 42]))
+        assert captured["stop"] == ["<13>", "<42>"]
+        assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
         sampler.close()
 
     def test_max_seq_len_pre_filter(self):
@@ -720,6 +936,195 @@ class TestSampleWithPromptTokens:
         assert call_count["n"] == 4
         assert len(results) == 4
         sampler.close()
+
+
+class TestFiretitanSamplingClient:
+    def test_sample_returns_tinker_response(self, fake_tinker):
+        prompt_ids = [10, 20, 30]
+        completion_ids = [40, 50]
+        sampler = _make_sampler()
+        captured = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "choices": [{
+                    "text": "out",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                    "logprobs": {"content": [
+                        {"logprob": -0.3},
+                        {"logprob": -0.4},
+                    ]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            response = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                num_samples=1,
+                sampling_params=fake_tinker.SamplingParams(
+                    max_tokens=2,
+                    stop=[99],
+                    temperature=0.7,
+                    top_p=0.9,
+                    top_k=10,
+                    seed=123,
+                ),
+            ).result(timeout=5)
+        finally:
+            client.close()
+
+        assert len(response.sequences) == 1
+        assert response.sequences[0].tokens == completion_ids
+        assert response.sequences[0].logprobs == [-0.3, -0.4]
+        assert response.sequences[0].stop_reason == "stop"
+        assert response.prompt_logprobs is None
+        assert captured["prompt"] == prompt_ids
+        assert captured["max_tokens"] == 2
+        assert captured["temperature"] == 0.7
+        assert captured["stop"] == ["<99>"]
+        assert captured["top_p"] == 0.9
+        assert captured["top_k"] == 10
+        assert captured["seed"] == 123
+        assert captured["logprobs"] is True
+
+    def test_sample_splits_echo_prompt_logprobs(self, fake_tinker):
+        prompt_ids = [10, 20, 30]
+        completion_ids = [40, 50]
+        sampler = _make_sampler(tokenizer=None)
+        captured = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "choices": [{
+                    "text": "out",
+                    "finish_reason": "length",
+                    "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
+                    "logprobs": {"content": [
+                        {"logprob": 0.0},
+                        {"logprob": -0.1},
+                        {"logprob": -0.2},
+                        {"logprob": -0.3},
+                        {"logprob": -0.4},
+                    ]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            response = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                num_samples=1,
+                sampling_params=fake_tinker.SamplingParams(max_tokens=2),
+                include_prompt_logprobs=True,
+            ).result(timeout=5)
+        finally:
+            client.close()
+
+        assert captured["echo"] is True
+        assert response.prompt_logprobs == [None, -0.1, -0.2]
+        assert response.sequences[0].tokens == completion_ids
+        assert response.sequences[0].logprobs == [-0.3, -0.4]
+        assert response.sequences[0].stop_reason == "length"
+
+    def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
+        prompt_ids = [10, 20, 30]
+        sampler = _make_sampler(tokenizer=None)
+
+        async def _fake_stream(*args, **kwargs):
+            return {
+                "choices": [{
+                    "text": "x",
+                    "finish_reason": "length",
+                    "raw_output": {"completion_token_ids": prompt_ids + [40]},
+                    "logprobs": {"content": [
+                        {"logprob": 0.0},
+                        {"logprob": -0.1},
+                        {"logprob": -0.2},
+                        {"logprob": -0.3},
+                    ]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            with pytest.warns(UserWarning, match="training_client.forward"):
+                logprobs = client.compute_logprobs(
+                    fake_tinker.ModelInput.from_ints(prompt_ids)
+                ).result(timeout=5)
+        finally:
+            client.close()
+
+        assert logprobs == [None, -0.1, -0.2]
+
+    def test_topk_prompt_logprobs_is_explicitly_unsupported(self, fake_tinker):
+        sampler = _make_sampler(tokenizer=None)
+        client = FiretitanSamplingClient(sampler)
+        try:
+            future = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                num_samples=1,
+                sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                topk_prompt_logprobs=1,
+            )
+            with pytest.raises(NotImplementedError, match="topk_prompt_logprobs"):
+                future.result(timeout=5)
+        finally:
+            client.close()
+
+    def test_close_does_not_close_loop_if_thread_join_times_out(self, monkeypatch):
+        sampler = _make_sampler(tokenizer=None)
+        client = FiretitanSamplingClient(sampler)
+
+        class _FakeLoop:
+            closed = False
+
+            def is_running(self):
+                return True
+
+            def call_soon_threadsafe(self, callback, *args):
+                return None
+
+            def stop(self):
+                return None
+
+            def close(self):
+                self.closed = True
+                raise RuntimeError("Cannot close a running event loop")
+
+        class _FakeThread:
+            joined = False
+
+            def is_alive(self):
+                return True
+
+            def join(self, timeout=None):
+                self.joined = True
+
+        class _FakeFuture:
+            def result(self, timeout=None):
+                raise TimeoutError
+
+        def _run_coroutine_threadsafe(coro, loop):
+            coro.close()
+            return _FakeFuture()
+
+        fake_loop = _FakeLoop()
+        fake_thread = _FakeThread()
+        client._loop = fake_loop
+        client._loop_thread = fake_thread
+        monkeypatch.setattr(asyncio, "run_coroutine_threadsafe", _run_coroutine_threadsafe)
+
+        client.close()
+
+        assert fake_thread.joined is True
+        assert fake_loop.closed is False
 
 
 # ---------------------------------------------------------------------------

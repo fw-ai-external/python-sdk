@@ -23,12 +23,21 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
 )
+from fireworks.training.sdk._constants import (
+    POLL_INTERVAL_S,
+    HTTP_READ_TIMEOUT_S,
+    RECONNECT_TIMEOUT_S,
+    HTTP_WRITE_TIMEOUT_S,
+    POLL_LOG_HEARTBEAT_S,
+    SLOW_POLL_INTERVAL_S,
+    TRAINER_READY_TIMEOUT_S,
+    RESUMABLE_WAIT_TIMEOUT_S,
+)
 from fireworks.training.sdk.fireworks_client import FireworksClient
 
 logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
-_POLL_LOG_HEARTBEAT_S = 60.0
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 
 
@@ -132,6 +141,15 @@ class TrainerJobConfig:
 
     Shape-owned on the shape path (must not be set).
     Defaults to ``1`` when sent on the manual path.
+    """
+    trainer_replica_count: int | None = None
+    """Data-parallel trainer replica count for service-mode HSDP launches.
+
+    Unlike ``node_count``/accelerator fields, this is a **run-level** knob, not
+    part of the validated training shape, so it is allowed alongside
+    ``training_shape_ref``. Leave unset for the backend default; values greater
+    than ``1`` request replicated HSDP for this launch. Sent as the top-level
+    ``trainerReplicaCount`` field on both the shape and manual paths.
     """
     display_name: str | None = None
     hot_load_deployment_id: str | None = None
@@ -332,18 +350,33 @@ class TrainerJobManager(FireworksClient):
         if query_params:
             path = f"{path}?{urlencode(query_params)}"
 
+        payload = self._build_trainer_create_payload(config)
+
+        logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
+        resp = self._post(path, json=payload, timeout=HTTP_WRITE_TIMEOUT_S)
+        if not resp.is_success:
+            self._log_create_failure(resp)
+        resp.raise_for_status()
+        return resp.json()
+
+    @staticmethod
+    def _build_trainer_create_payload(config: TrainerJobConfig) -> dict[str, Any]:
+        """Assemble the RLOR job creation request body from a trainer config."""
+        is_shape_path = bool(config.training_shape_ref)
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
             "loraRank": config.lora_rank,
             "learningRate": config.learning_rate,
         }
-
         payload: dict[str, Any] = {
             "serviceMode": True,
             "keepAlive": False,
             "dataset": "",
             "trainingConfig": training_config,
         }
+        # Run-level HSDP knob, valid on both shape and manual paths.
+        if config.trainer_replica_count is not None:
+            payload["trainerReplicaCount"] = config.trainer_replica_count
 
         if not is_shape_path:
             if config.max_context_length is not None:
@@ -365,7 +398,10 @@ class TrainerJobManager(FireworksClient):
         if config.extra_args:
             flat = []
             for arg in config.extra_args:
-                flat.extend(arg.split()) if " " in arg else flat.append(arg)
+                if " " in arg:
+                    flat.extend(arg.split())
+                else:
+                    flat.append(arg)
             training_config["extraArgs"] = flat
         if config.forward_only:
             payload["forwardOnly"] = True
@@ -377,45 +413,44 @@ class TrainerJobManager(FireworksClient):
             payload["inactivityTimeout"] = _format_proto_duration(config.inactivity_timeout)
         if config.disable_inactivity_cleanup:
             payload["disableInactivityCleanup"] = True
+        return payload
 
-        logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
-        resp = self._post(path, json=payload, timeout=60)
-        if not resp.is_success:
-            error_msg = parse_api_error(resp)
-            hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
-            extra = ""
-            if resp.status_code == 400:
-                extra = (
-                    "\n  Verify the request parameters are correct."
-                    "\n  If using hotload, ensure the deployment has hotLoadBucketUrl configured."
-                )
-            logger.warning(
-                "\n%s",
-                format_sdk_error(
-                    f"RLOR job creation failed (HTTP {resp.status_code})",
-                    error_msg,
-                    f"{hint}{extra}",
-                    docs_url=DOCS_SDK,
-                ),
+    @staticmethod
+    def _log_create_failure(resp: Any) -> None:
+        """Log a formatted hint for a failed RLOR job creation response."""
+        error_msg = parse_api_error(resp)
+        hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
+        extra = ""
+        if resp.status_code == 400:
+            extra = (
+                "\n  Verify the request parameters are correct."
+                "\n  If using hotload, ensure the deployment has hotLoadBucketUrl configured."
             )
-        resp.raise_for_status()
-        return resp.json()
+        logger.warning(
+            "\n%s",
+            format_sdk_error(
+                f"RLOR job creation failed (HTTP {resp.status_code})",
+                error_msg,
+                f"{hint}{extra}",
+                docs_url=DOCS_SDK,
+            ),
+        )
 
     def get(self, job_id: str) -> dict:
         """Get the current state of an RLOR job. Returns raw API response dict."""
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = self._get(path, timeout=30)
+        resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
         resp.raise_for_status()
         return resp.json()
 
     def _delete_job(self, job_id: str) -> None:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        resp = self._delete(path, timeout=30)
+        resp = self._delete(path, timeout=HTTP_READ_TIMEOUT_S)
         resp.raise_for_status()
 
     def _resume(self, job_id: str) -> dict:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
-        resp = self._post(path, timeout=60)
+        resp = self._post(path, timeout=HTTP_WRITE_TIMEOUT_S)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
             hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
@@ -464,14 +499,14 @@ class TrainerJobManager(FireworksClient):
         self,
         job_id: str,
         job_name: str,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 15 * 60,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = TRAINER_READY_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         start = time.time()
         service_ready = False
         base_url = self._get_trainer_gateway_url(job_id)
         last_log_signature: tuple[str, str, bool] | None = None
-        last_log_elapsed_s = -_POLL_LOG_HEARTBEAT_S
+        last_log_elapsed_s = -POLL_LOG_HEARTBEAT_S
 
         while time.time() - start < timeout_s:
             job = self.get(job_id)
@@ -509,7 +544,7 @@ class TrainerJobManager(FireworksClient):
             log_signature = (state, status_message, service_ready)
             should_log = (
                 log_signature != last_log_signature
-                or elapsed - last_log_elapsed_s >= _POLL_LOG_HEARTBEAT_S
+                or elapsed - last_log_elapsed_s >= POLL_LOG_HEARTBEAT_S
             )
             if should_log:
                 if state == "JOB_STATE_RUNNING":
@@ -560,8 +595,8 @@ class TrainerJobManager(FireworksClient):
     def create_and_wait(
         self,
         config: TrainerJobConfig,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 15 * 60,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = TRAINER_READY_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Create a service-mode trainer job and wait for it to be ready."""
         created = self.create(config)
@@ -584,8 +619,8 @@ class TrainerJobManager(FireworksClient):
         self,
         job_id: str,
         job_name: str | None = None,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 15 * 60,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = TRAINER_READY_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Wait for a trainer job to reach RUNNING state and pass health checks."""
         if job_name is None:
@@ -595,8 +630,8 @@ class TrainerJobManager(FireworksClient):
     def wait_for_existing(
         self,
         job_id: str,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 15 * 60,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = TRAINER_READY_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Wait for an already-existing trainer job to reach RUNNING state."""
         return self.wait_for_ready(
@@ -608,8 +643,8 @@ class TrainerJobManager(FireworksClient):
     def resume_and_wait(
         self,
         job_id: str,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 15 * 60,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = TRAINER_READY_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Resume a failed/cancelled/paused trainer job and wait for it to be ready."""
         self._resume(job_id)
@@ -619,19 +654,17 @@ class TrainerJobManager(FireworksClient):
     def reconnect_and_wait(
         self,
         job_id: str,
-        poll_interval_s: float = 5.0,
-        timeout_s: float = 600.0,
-        max_wait_for_resumable_s: float = 120.0,
+        poll_interval_s: float = POLL_INTERVAL_S,
+        timeout_s: float = RECONNECT_TIMEOUT_S,
+        max_wait_for_resumable_s: float = RESUMABLE_WAIT_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Reconnect to a preempted/failed trainer job.
 
         Handles pod preemption: waits for the job to reach a resumable state
         (tolerates transitional states like CREATING/DELETING), resumes it,
-        then polls until RUNNING with a healthy endpoint.
-
-        This is more robust than ``resume_if_needed_and_wait()`` because it
-        retries when the job is in a transitional state (e.g. the control plane
-        is still processing the pod death) instead of failing immediately.
+        then polls until RUNNING with a healthy endpoint. It retries while the
+        job is in a transitional state (e.g. the control plane is still
+        processing the pod death) instead of failing immediately.
 
         Args:
             job_id: The RLOR job ID to reconnect.
@@ -652,7 +685,7 @@ class TrainerJobManager(FireworksClient):
                     job_id,
                     e,
                 )
-                time.sleep(5)
+                time.sleep(POLL_INTERVAL_S)
                 continue
 
             state = job.get("state", "")
@@ -691,7 +724,7 @@ class TrainerJobManager(FireworksClient):
                 job_id,
                 state,
             )
-            time.sleep(10)
+            time.sleep(SLOW_POLL_INTERVAL_S)
 
     def delete(self, job_id: str) -> None:
         """Delete a trainer job."""

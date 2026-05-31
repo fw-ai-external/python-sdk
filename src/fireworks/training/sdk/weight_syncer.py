@@ -34,14 +34,26 @@ from __future__ import annotations
 
 import time
 import logging
-from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
 
-from fireworks.training.sdk.client import FiretitanTrainingClient
-from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
+from transformers import PreTrainedTokenizerBase
 
-if TYPE_CHECKING:
-    from fireworks.training.sdk.deployment import DeploymentManager
+from fireworks.training.sdk.client import FiretitanTrainingClient
+from fireworks.training.sdk._constants import (
+    POLL_INTERVAL_S,
+    HOTLOAD_TIMEOUT_S,
+    HOTLOAD_READY_TIMEOUT_S,
+)
+from fireworks.training.sdk.deployment import (
+    DEFAULT_DELTA_COMPRESSION,
+    DeploymentManager,
+    DeploymentSampler,
+    FiretitanSamplingClient,
+)
+from fireworks.training.sdk._snapshot_chain import (
+    build_incremental_metadata,
+    resolve_next_checkpoint_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +79,9 @@ class WeightSyncer:
     deploy_mgr: DeploymentManager | None = None
     deployment_id: str | None = None
     base_model: str = ""
-    hotload_timeout: int = 600
+    hotload_timeout: int = HOTLOAD_TIMEOUT_S
     first_checkpoint_type: str = "base"
-    compression_format: str = "arc_v2"
+    compression_format: str = DEFAULT_DELTA_COMPRESSION
     warmup_after_hotload: bool = True
     """If True, send a warmup request after each successful hotload."""
     warmup_max_retries: int = 10
@@ -88,16 +100,6 @@ class WeightSyncer:
     base_saved: bool = field(default=False, init=False)
     base_identity: str | None = field(default=None, init=False)
     _deployment_checked: bool = field(default=False, init=False)
-    _snapshot_paths: dict[str, str] = field(default_factory=dict, init=False)
-    """Maps ``snapshot_name`` to a fully-qualified object-storage URI captured
-    from the trainer's ``SaveSamplerResult.path``. Forwarded to the deployment
-    on hotload so the serving side can fetch the snapshot bytes from a
-    specific source when the deployment's configured storage is not
-    sufficient."""
-    _cached_bucket_url: str | None = field(default=None, init=False)
-    """Cached ``hot_load_bucket_url`` from the deployment metadata. Combined
-    with the relative ``SaveSamplerResult.path`` to form a fully-qualified
-    URI, then cached so subsequent saves don't re-fetch the deployment."""
     last_timing: dict = field(default_factory=dict, init=False)
     """Timing breakdown from the most recent operation (seconds).
     Reset at the start of each save/hotload/dcp call."""
@@ -188,7 +190,9 @@ class WeightSyncer:
         self.base_saved = False
         self.base_identity = None
 
-    def wait_for_hotload_ready(self, timeout_s: int = 300, poll_interval_s: int = 5) -> None:
+    def wait_for_hotload_ready(
+        self, timeout_s: int = HOTLOAD_READY_TIMEOUT_S, poll_interval_s: int = POLL_INTERVAL_S
+    ) -> None:
         """Block until the deployment's hot load manager is initialized.
 
         The deployment's healthz may return 200 before the internal process
@@ -256,21 +260,20 @@ class WeightSyncer:
 
         Always returns ``"base"`` when ``lora_rank > 0``.
         """
-        if self.lora_rank > 0:
-            return "base"
-        return "delta" if self.base_saved else self.first_checkpoint_type
+        return resolve_next_checkpoint_type(
+            lora_rank=self.lora_rank,
+            base_saved=self.base_saved,
+            first_checkpoint_type=self.first_checkpoint_type,
+        )
 
     def _build_incremental_metadata(self, ckpt_type: str) -> dict | None:
         """Build incremental hotload metadata for delta checkpoints."""
-        if self.lora_rank > 0:
-            return None
-        if ckpt_type == "delta" and self.base_identity:
-            return {
-                "previous_snapshot_identity": self.base_identity,
-                "compression_format": self.compression_format,
-                "checksum_format": DEFAULT_CHECKSUM_FORMAT,
-            }
-        return None
+        return build_incremental_metadata(
+            lora_rank=self.lora_rank,
+            checkpoint_type=ckpt_type,
+            base_identity=self.base_identity,
+            compression_format=self.compression_format,
+        )
 
     def _mark_first_save_done(self) -> None:
         """Record that at least one checkpoint has been saved.
@@ -280,71 +283,6 @@ class WeightSyncer:
         since it represents the last snapshot the deployment actually has.
         """
         self.base_saved = True
-
-    @staticmethod
-    def _extract_snapshot_path(save_result: object) -> str | None:
-        """Return the raw ``path`` field on a ``SaveSamplerResult``-like object.
-
-        Older trainer mocks/test doubles can put a non-string value (or an
-        empty string) there; we filter those out so the rest of the
-        resolution logic stays simple. URI resolution (relative path →
-        full ``gs://`` URI) is deferred to :meth:`_resolve_full_snapshot_uri`.
-        """
-        path = getattr(save_result, "path", None)
-        if not isinstance(path, str) or not path:
-            return None
-        return path
-
-    def _resolve_full_snapshot_uri(self, raw_path: str | None) -> str | None:
-        """Combine a relative trainer-returned path with the deployment's
-        ``hot_load_bucket_url`` to form a fully-qualified ``gs://`` URI.
-
-        - Already-qualified URIs (``gs://…``, ``s3://…``, etc.) pass through.
-        - Relative paths require ``deploy_mgr`` and ``deployment_id`` to be
-          set so we can read the deployment's ``hot_load_bucket_url``. The
-          bucket URL is cached after the first lookup since it is fixed for
-          the lifetime of a deployment.
-        - If the URI cannot be formed (no deploy_mgr, no bucket_url, etc.)
-          we return ``None`` and the deployment is left to resolve the
-          snapshot from its own configured storage.
-        """
-        if not raw_path:
-            return None
-        if "://" in raw_path:
-            return raw_path
-
-        if self.deploy_mgr is None or not self.deployment_id:
-            logger.debug(
-                "snapshot path %r is relative but no deploy_mgr/deployment_id "
-                "available to resolve bucket URL",
-                raw_path,
-            )
-            return None
-
-        bucket_url = self._cached_bucket_url
-        if bucket_url is None:
-            try:
-                info = self.deploy_mgr.get(self.deployment_id)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(
-                    "Could not fetch deployment %s to resolve hot_load_bucket_url: %s",
-                    self.deployment_id, e,
-                )
-                return None
-            bucket_url = (
-                getattr(info, "hot_load_bucket_url", None)
-                or getattr(info, "hotLoadBucketUrl", None)
-            )
-            if not bucket_url:
-                logger.warning(
-                    "Deployment %s has no hot_load_bucket_url; cannot resolve "
-                    "snapshot path %r to a fully-qualified URI.",
-                    self.deployment_id, raw_path,
-                )
-                return None
-            self._cached_bucket_url = bucket_url
-
-        return f"{bucket_url.rstrip('/')}/{raw_path.lstrip('/')}"
 
     def save_only(self, name: str, checkpoint_type: str | None = None) -> str | None:
         """Save sampler weights WITHOUT hotloading.
@@ -365,10 +303,6 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
-            raw_path = self._extract_snapshot_path(save_result)
-            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
-            if snapshot_path is not None:
-                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
             return snapshot_name
         except Exception as e:
@@ -379,7 +313,6 @@ class WeightSyncer:
         self,
         snapshot_name: str,
         checkpoint_type: str,
-        snapshot_path: str | None = None,
     ) -> None:
         """Core hotload logic shared by :meth:`hotload` and :meth:`save_and_hotload`.
 
@@ -387,8 +320,6 @@ class WeightSyncer:
         """
         self._ensure_deployment_checked()
         incremental = self._build_incremental_metadata(checkpoint_type)
-        if snapshot_path is None:
-            snapshot_path = self._snapshot_paths.get(snapshot_name)
         t0 = time.time()
         ok = self.deploy_mgr.hotload_and_wait(
             deployment_id=self.deployment_id,
@@ -397,7 +328,7 @@ class WeightSyncer:
             incremental_snapshot_metadata=incremental,
             reset_prompt_cache=self.reset_prompt_cache,
             timeout_seconds=self.hotload_timeout,
-            path=snapshot_path,
+            path=None,
         )
         self.last_timing["hotload_time_s"] = time.time() - t0
         if not ok:
@@ -460,14 +391,10 @@ class WeightSyncer:
             )
             self.last_timing["save_time_s"] = time.time() - t0
             snapshot_name = save_result.snapshot_name
-            raw_path = self._extract_snapshot_path(save_result)
-            snapshot_path = self._resolve_full_snapshot_uri(raw_path)
-            if snapshot_path is not None:
-                self._snapshot_paths[snapshot_name] = snapshot_path
             self._mark_first_save_done()
 
             if self._hotload_enabled:
-                self._do_hotload(snapshot_name, ckpt_type, snapshot_path=snapshot_path)
+                self._do_hotload(snapshot_name, ckpt_type)
 
             self.last_timing["total_time_s"] = time.time() - t_total
             return snapshot_name
@@ -480,11 +407,17 @@ class WeightSyncer:
             )
             raise
 
-    def get_deployment_sampler(self):
-        """Get the deployment's current sampler"""
-        from fireworks.training.sdk.deployment import DeploymentSampler
+    def get_deployment_sampler(self, tokenizer: PreTrainedTokenizerBase | None = None) -> DeploymentSampler:
+        """Get the deployment's current sampler."""
+
         return DeploymentSampler(
             inference_url=self.deploy_mgr.inference_url,
             model=self._get_model(),
             api_key=self.deploy_mgr.api_key,
+            tokenizer=tokenizer,
         )
+
+    def get_sampling_client(self, tokenizer: PreTrainedTokenizerBase | None = None) -> FiretitanSamplingClient:
+        """Get a Tinker-compatible sampling client for the deployment."""
+
+        return FiretitanSamplingClient(self.get_deployment_sampler(tokenizer))

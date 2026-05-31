@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import logging
 import warnings
+from typing import Any
 from urllib.parse import urlencode
 
 from fireworks.training.sdk.errors import (
@@ -19,6 +20,10 @@ from fireworks.training.sdk.errors import (
     CONSOLE_URL,
     parse_api_error,
     format_sdk_error,
+)
+from fireworks.training.sdk._constants import (
+    HTTP_READ_TIMEOUT_S,
+    HTTP_LONG_WRITE_TIMEOUT_S,
 )
 from fireworks.training.sdk._rest_client import _RestClient
 
@@ -197,58 +202,70 @@ class FireworksClient(_RestClient):
                 f"/v1/{training_shape_id}/versions?"
                 f"{urlencode({'filter': 'latest_validated=true', 'pageSize': 1})}"
             )
-        resp = self._get(path, timeout=30)
+        resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
         if not resp.is_success:
-            error_msg = parse_api_error(resp)
-            show_support = False
-            if resp.status_code == 401:
-                solution = (
-                    "The API key was rejected for training APIs. Ensure you are using a "
-                    "training-scoped Fireworks API key; inference-only keys return 401 here."
-                )
-            elif resp.status_code == 404:
-                solution = (
-                    f"Training shape '{training_shape_id}' was not found. "
-                    "Verify the training_shape_id is correct and the shape exists."
-                )
-            elif resp.status_code == 403:
-                solution = (
-                    f"Permission denied for training shape '{training_shape_id}'. "
-                    f"Ensure your account owns or has access to this shape."
-                )
-            else:
-                solution = "Verify the training_shape_id and account have the shape registered."
-                show_support = True
+            self._raise_for_training_shape_error(resp, training_shape_id)
+
+        version = self._select_training_shape_version(resp.json(), is_versioned, training_shape_id)
+        return self._profile_from_version(version)
+
+    @staticmethod
+    def _raise_for_training_shape_error(resp: Any, training_shape_id: str) -> None:
+        """Raise a formatted RuntimeError for a failed training-shape fetch."""
+        error_msg = parse_api_error(resp)
+        show_support = False
+        if resp.status_code == 401:
+            solution = (
+                "The API key was rejected for training APIs. Ensure you are using a "
+                "training-scoped Fireworks API key; inference-only keys return 401 here."
+            )
+        elif resp.status_code == 404:
+            solution = (
+                f"Training shape '{training_shape_id}' was not found. "
+                "Verify the training_shape_id is correct and the shape exists."
+            )
+        elif resp.status_code == 403:
+            solution = (
+                f"Permission denied for training shape '{training_shape_id}'. "
+                f"Ensure your account owns or has access to this shape."
+            )
+        else:
+            solution = "Verify the training_shape_id and account have the shape registered."
+            show_support = True
+        raise RuntimeError(
+            format_sdk_error(
+                f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
+                error_msg,
+                solution,
+                docs_url=DOCS_SDK,
+                show_support=show_support,
+            )
+        )
+
+    @staticmethod
+    def _select_training_shape_version(data: dict, is_versioned: bool, training_shape_id: str) -> dict:
+        """Return the version payload, picking the latest validated when unversioned."""
+        if is_versioned:
+            return data
+        versions = data.get("trainingShapeVersions", []) or []
+        if not versions:
             raise RuntimeError(
                 format_sdk_error(
-                    f"Failed to fetch training shape '{training_shape_id}' (HTTP {resp.status_code})",
-                    error_msg,
-                    solution,
+                    f"Failed to resolve latest validated training shape for '{training_shape_id}'",
+                    "No latest validated training-shape version was returned.",
+                    (
+                        "Validate a training-shape version first, or check that the "
+                        "training_shape_id is correct and visible to your account."
+                    ),
                     docs_url=DOCS_SDK,
-                    show_support=show_support,
+                    show_support=False,
                 )
             )
+        return versions[0]
 
-        if is_versioned:
-            version = resp.json()
-        else:
-            data = resp.json()
-            versions = data.get("trainingShapeVersions", []) or []
-            if not versions:
-                raise RuntimeError(
-                    format_sdk_error(
-                        f"Failed to resolve latest validated training shape for '{training_shape_id}'",
-                        "No latest validated training-shape version was returned.",
-                        (
-                            "Validate a training-shape version first, or check that the "
-                            "training_shape_id is correct and visible to your account."
-                        ),
-                        docs_url=DOCS_SDK,
-                        show_support=False,
-                    )
-                )
-            version = versions[0]
-
+    @staticmethod
+    def _profile_from_version(version: dict) -> TrainingShapeProfile:
+        """Map a training-shape version payload to a TrainingShapeProfile."""
         snapshot = version.get("snapshot", {}) or {}
         sharding = snapshot.get("trainerShardingScheme", {}) or {}
         pp = int(sharding.get("pipelineParallelism", 1) or 1)
@@ -326,41 +343,7 @@ class FireworksClient(_RestClient):
             Model dict from the API response (includes ``state``,
             ``kind``, ``peftDetails``, etc.).
         """
-        if name is not None:
-            if checkpoint_id is not None:
-                raise ValueError("pass either name= or checkpoint_id, not both")
-            parsed = _parse_checkpoint_name(name)
-            if parsed is None:
-                raise ValueError(
-                    f"Invalid checkpoint name {name!r}. Expected 4 segments: "
-                    "accounts/<account>/rlorTrainerJobs/<job>/checkpoints/<id>."
-                )
-            parsed_account, parsed_job_id, parsed_checkpoint_id = parsed
-            if job_id is not None and job_id != parsed_job_id:
-                raise ValueError(
-                    f"job_id={job_id!r} conflicts with name's trainer job "
-                    f"{parsed_job_id!r}."
-                )
-            account_id = parsed_account
-            job_id = parsed_job_id
-            checkpoint_id = parsed_checkpoint_id
-        else:
-            if not job_id or not checkpoint_id:
-                raise ValueError(
-                    "Either name= (4-segment resource path) or both job_id "
-                    "and checkpoint_id are required."
-                )
-            warnings.warn(
-                "promote_checkpoint(job_id, checkpoint_id, ...) positional form "
-                "is deprecated. Pass the 4-segment resource name instead: "
-                "promote_checkpoint(name=entry['name'], output_model_id=..., "
-                "base_model=...). The 'name' field comes straight from "
-                "list_checkpoints output. See the public docs at "
-                "/fine-tuning/training-api/saving-and-loading.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            account_id = self.account_id
+        account_id, job_id, checkpoint_id = self._resolve_promote_target(name, job_id, checkpoint_id)
 
         if not output_model_id or not base_model:
             raise ValueError("output_model_id and base_model are required")
@@ -381,29 +364,15 @@ class FireworksClient(_RestClient):
         if errors:
             raise ValueError("\n\n".join(errors))
 
-        path = (
-            f"/v1/accounts/{account_id}"
-            f"/checkpoints/{checkpoint_id}:promote"
+        path, body = self._build_promote_request(
+            account_id=account_id,
+            job_id=job_id,
+            checkpoint_id=checkpoint_id,
+            output_model_id=output_model_id,
+            base_model=base_model,
+            hot_load_deployment_id=hot_load_deployment_id,
         )
-        output_model = f"accounts/{account_id}/models/{output_model_id}"
-        trainer_job = f"accounts/{account_id}/rlorTrainerJobs/{job_id}"
-        logger.info(
-            "Promoting checkpoint '%s' -> model '%s'",
-            checkpoint_id,
-            output_model,
-        )
-
-        body: dict = {
-            "output_model": output_model,
-            "trainer_job_id": trainer_job,
-            "base_model": base_model,
-        }
-        if hot_load_deployment_id is not None:
-            body["hot_load_deployment_id"] = (
-                f"accounts/{account_id}/deployments/{hot_load_deployment_id}"
-            )
-
-        resp = self._post(path, json=body, timeout=300)
+        resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
             raise RuntimeError(
@@ -416,12 +385,82 @@ class FireworksClient(_RestClient):
                 )
             )
 
-        result = resp.json()
-        model = result.get("model", {})
-        state = model.get("state", "UNKNOWN")
-        kind = model.get("kind", "UNKNOWN")
-        logger.info("Promoted! Model state=%s, kind=%s", state, kind)
+        return self._log_promoted_model(resp.json())
 
+    def _build_promote_request(
+        self,
+        *,
+        account_id: str,
+        job_id: str,
+        checkpoint_id: str,
+        output_model_id: str,
+        base_model: str,
+        hot_load_deployment_id: str | None,
+    ) -> tuple[str, dict]:
+        """Build the (path, body) for the checkpoint :promote request."""
+        path = f"/v1/accounts/{account_id}/checkpoints/{checkpoint_id}:promote"
+        output_model = f"accounts/{account_id}/models/{output_model_id}"
+        logger.info("Promoting checkpoint '%s' -> model '%s'", checkpoint_id, output_model)
+        body: dict = {
+            "output_model": output_model,
+            "trainer_job_id": f"accounts/{account_id}/rlorTrainerJobs/{job_id}",
+            "base_model": base_model,
+        }
+        if hot_load_deployment_id is not None:
+            body["hot_load_deployment_id"] = (
+                f"accounts/{account_id}/deployments/{hot_load_deployment_id}"
+            )
+        return path, body
+
+    def _resolve_promote_target(
+        self,
+        name: str | None,
+        job_id: str | None,
+        checkpoint_id: str | None,
+    ) -> tuple[str, str, str]:
+        """Resolve (account_id, job_id, checkpoint_id) from name= or positional args."""
+        if name is not None:
+            if checkpoint_id is not None:
+                raise ValueError("pass either name= or checkpoint_id, not both")
+            parsed = _parse_checkpoint_name(name)
+            if parsed is None:
+                raise ValueError(
+                    f"Invalid checkpoint name {name!r}. Expected 4 segments: "
+                    "accounts/<account>/rlorTrainerJobs/<job>/checkpoints/<id>."
+                )
+            parsed_account, parsed_job_id, parsed_checkpoint_id = parsed
+            if job_id is not None and job_id != parsed_job_id:
+                raise ValueError(
+                    f"job_id={job_id!r} conflicts with name's trainer job "
+                    f"{parsed_job_id!r}."
+                )
+            return parsed_account, parsed_job_id, parsed_checkpoint_id
+        if not job_id or not checkpoint_id:
+            raise ValueError(
+                "Either name= (4-segment resource path) or both job_id "
+                "and checkpoint_id are required."
+            )
+        warnings.warn(
+            "promote_checkpoint(job_id, checkpoint_id, ...) positional form "
+            "is deprecated. Pass the 4-segment resource name instead: "
+            "promote_checkpoint(name=entry['name'], output_model_id=..., "
+            "base_model=...). The 'name' field comes straight from "
+            "list_checkpoints output. See the public docs at "
+            "/fine-tuning/training-api/saving-and-loading.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return self.account_id, job_id, checkpoint_id
+
+    @staticmethod
+    def _log_promoted_model(result: dict) -> dict:
+        """Log the promoted model's state/kind/PEFT details and return the model."""
+        model = result.get("model", {})
+        logger.info(
+            "Promoted! Model state=%s, kind=%s",
+            model.get("state", "UNKNOWN"),
+            model.get("kind", "UNKNOWN"),
+        )
         peft = model.get("peftDetails", {})
         if peft:
             logger.info(
@@ -430,7 +469,6 @@ class FireworksClient(_RestClient):
                 peft.get("r"),
                 peft.get("targetModules"),
             )
-
         return model
 
     # -- Checkpoint listing -----------------------------------------------------
@@ -495,31 +533,9 @@ class FireworksClient(_RestClient):
             if page_token:
                 query["pageToken"] = page_token
             path = f"{base_path}?{urlencode(query)}"
-            resp = self._get(path, timeout=30)
+            resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
             if not resp.is_success:
-                error_msg = parse_api_error(resp)
-                if resp.status_code == 404:
-                    solution = (
-                        f"Trainer job '{job_id}' was not found in this account. "
-                        "Verify the job ID and that your API key resolves to the "
-                        "account that owns it."
-                    )
-                elif resp.status_code == 403:
-                    solution = (
-                        "Your API key does not have access to this trainer job."
-                    )
-                else:
-                    solution = None
-                raise RuntimeError(
-                    format_sdk_error(
-                        f"Failed to list checkpoints for trainer job '{job_id}' "
-                        f"(HTTP {resp.status_code})",
-                        error_msg,
-                        solution or "Retry; if it persists, contact Fireworks support.",
-                        docs_url=DOCS_SDK,
-                        show_support=solution is None,
-                    )
-                )
+                self._raise_for_list_checkpoints_error(resp, job_id)
 
             body = resp.json() or {}
             page = body.get("checkpoints") or body.get("rlorTrainerJobCheckpoints") or []
@@ -530,3 +546,28 @@ class FireworksClient(_RestClient):
                 break
 
         return rows
+
+    @staticmethod
+    def _raise_for_list_checkpoints_error(resp: Any, job_id: str) -> None:
+        """Raise a formatted RuntimeError for a failed list-checkpoints response."""
+        error_msg = parse_api_error(resp)
+        if resp.status_code == 404:
+            solution = (
+                f"Trainer job '{job_id}' was not found in this account. "
+                "Verify the job ID and that your API key resolves to the "
+                "account that owns it."
+            )
+        elif resp.status_code == 403:
+            solution = "Your API key does not have access to this trainer job."
+        else:
+            solution = None
+        raise RuntimeError(
+            format_sdk_error(
+                f"Failed to list checkpoints for trainer job '{job_id}' "
+                f"(HTTP {resp.status_code})",
+                error_msg,
+                solution or "Retry; if it persists, contact Fireworks support.",
+                docs_url=DOCS_SDK,
+                show_support=solution is None,
+            )
+        )
