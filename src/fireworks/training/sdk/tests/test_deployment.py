@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import types as pytypes
 import asyncio
+from dataclasses import replace
 from unittest.mock import MagicMock
 
 import pytest
@@ -195,7 +196,17 @@ class TestCreateDeployment:
         path = mgr._post.call_args[0][0]
         body = mgr._post.call_args[1]["json"]
         assert "/deployments" in path
+        assert body["description"] == "Fireworks training deployment"
         assert body["forTraining"] is True
+        assert body["enableHotLoad"] is True
+
+    def test_create_can_disable_hotload(self, mgr, deploy_config):
+        body = DeploymentManager._build_deployment_body(
+            replace(deploy_config, enable_hot_load=False)
+        )
+
+        assert body["enableHotLoad"] is False
+        assert body["forTraining"] is False
 
     def test_create_omits_placement_when_region_unset(self, mgr):
         resp = MagicMock()

@@ -1641,6 +1641,16 @@ class FiretitanServiceClient(ServiceClient):
         return self._managed_config.max_context_length
 
     @property
+    def managed_deployment_shape(self) -> str | None:
+        if self._managed_handle is not None:
+            deployment_shape = getattr(self._managed_handle, "deployment_shape", None)
+            if deployment_shape is not None:
+                return deployment_shape
+        if self._managed_config is None:
+            return None
+        return self._managed_config.deployment_shape
+
+    @property
     def trainer_job_id(self) -> str:
         """Resolved SDK-managed policy trainer job id."""
         return self._require_managed_value(self.managed_trainer_job_id, "trainer job id")
@@ -1654,6 +1664,11 @@ class FiretitanServiceClient(ServiceClient):
     def max_context_length(self) -> int:
         """Resolved max context length from config or training shape."""
         return self._require_managed_value(self.managed_max_context_length, "max context length")
+
+    @property
+    def deployment_shape(self) -> str:
+        """Resolved SDK-managed deployment shape from config or training shape."""
+        return self._require_managed_value(self.managed_deployment_shape, "deployment shape")
 
     @property
     def training_profile(self) -> Any | None:

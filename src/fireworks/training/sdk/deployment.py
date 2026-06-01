@@ -45,6 +45,7 @@ DEPLOYMENT_DELETION_TIMEOUT_S: float = 60
 DEPLOYMENT_DELETION_POLL_S: float = 2
 HOTLOAD_WAIT_TIMEOUT_S: int = 400
 HOTLOAD_WAIT_POLL_S: int = 5
+DEFAULT_DEPLOYMENT_DESCRIPTION = "Fireworks training deployment"
 
 
 @dataclass
@@ -82,6 +83,7 @@ class DeploymentConfig:
 
     deployment_id: str
     base_model: str
+    description: str | None = None
     deployment_shape: str | None = None
     region: str | None = None
     min_replica_count: int = 0
@@ -94,6 +96,8 @@ class DeploymentConfig:
     """Trainer job whose hot_load_bucket_url this deployment should use.
     Format: accounts/{account}/rlorTrainerJobs/{job}.
     When set, the deployment shares the trainer's checkpoint bucket."""
+    enable_hot_load: bool = True
+    """Whether the deployment should be created with hot-load training support."""
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
@@ -313,10 +317,11 @@ class DeploymentManager(_RestClient):
         region = region or config.region
         body: dict[str, Any] = {
             "baseModel": config.base_model,
+            "description": config.description or DEFAULT_DEPLOYMENT_DESCRIPTION,
             "minReplicaCount": config.min_replica_count,
             "maxReplicaCount": config.max_replica_count,
-            "enableHotLoad": True,
-            "forTraining": True,
+            "enableHotLoad": config.enable_hot_load,
+            "forTraining": config.enable_hot_load,
         }
         if region:
             body["placement"] = {"region": region}

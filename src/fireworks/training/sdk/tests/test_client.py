@@ -374,6 +374,7 @@ class TestFiretitanServiceClientManagedCompat:
             trainer_endpoint=SimpleNamespace(job_id="trainer-1"),
             deployment=SimpleNamespace(deployment_id="deployment-1"),
             max_context_length=32768,
+            deployment_shape="accounts/acct/deploymentShapes/ds/versions/v1",
             training_profile=SimpleNamespace(
                 accelerator_type="NVIDIA_H100_80GB",
                 accelerator_count=8,
@@ -395,6 +396,7 @@ class TestFiretitanServiceClientManagedCompat:
         assert svc.trainer_job_id == "trainer-1"
         assert svc.deployment_id == "deployment-1"
         assert svc.max_context_length == 32768
+        assert svc.deployment_shape == "accounts/acct/deploymentShapes/ds/versions/v1"
         assert svc.accelerator_type == "NVIDIA_H100_80GB"
         assert svc.accelerator_count == 8
         assert svc.training_profile is handle.training_profile

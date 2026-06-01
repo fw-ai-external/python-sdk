@@ -159,6 +159,7 @@ class _ManagedTinkerHandle:
     trainer_endpoint: TrainerServiceEndpoint
     training_profile: Any | None = None
     max_context_length: int | None = None
+    deployment_shape: str | None = None
     deployment: DeploymentInfo | None = None
     sampler_backend: "_TinkerSamplerBackend | None" = None
     trainer_manager: TrainerJobManager | None = None
@@ -447,6 +448,7 @@ def _create_managed_tinker_client(
         trainer_endpoint=endpoint,
         training_profile=profile,
         max_context_length=max_context_length,
+        deployment_shape=deployment_shape,
         deployment=deployment,
         sampler_backend=sampler_backend,
         trainer_manager=trainer_mgr,
@@ -502,6 +504,7 @@ def _reference_managed_config(
         create_deployment=False,
         forward_only=True,
         reference_required=False,
+        trainer_replica_count=None,
         cleanup_trainer_on_close=(
             config.reference_trainer_job_id is None
             and config.cleanup_reference_trainer_on_close
