@@ -106,6 +106,17 @@ class TestReferenceManagedConfig:
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.region == "US_OHIO_1"
 
+    def test_reference_drops_policy_hsdp_replicas(self):
+        # HSDP replicas are a policy-trainer knob. A forward-only reference is
+        # single-replica on its own shape and must never inherit the policy
+        # trainer_replica_count (would mis-size + launch a replicated ref).
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            trainer_replica_count=2,
+        )
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.trainer_replica_count is None
+
 
 class TestManagedProvisioning:
     def test_policy_reference_and_deployment_provision_in_parallel(self, monkeypatch):
