@@ -10,6 +10,7 @@ methods (create, wait, reconnect, delete).
 from __future__ import annotations
 
 import re
+import time
 import logging
 import warnings
 from typing import Any
@@ -18,8 +19,10 @@ from urllib.parse import urlencode
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     CONSOLE_URL,
+    RETRYABLE_EXCEPTIONS,
     parse_api_error,
     format_sdk_error,
+    _is_retryable_status_code,
 )
 from fireworks.training.sdk._constants import (
     HTTP_READ_TIMEOUT_S,
@@ -28,6 +31,13 @@ from fireworks.training.sdk._constants import (
 from fireworks.training.sdk._rest_client import _RestClient
 
 logger = logging.getLogger(__name__)
+
+_POLL_TRANSIENT_MAX_BACKOFF_S = 60.0
+
+
+class _TransientOperationPollError(Exception):
+    """Retryable failure while polling a long-running operation."""
+
 
 _RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
@@ -158,6 +168,98 @@ class FireworksClient(_RestClient):
             additional_headers=additional_headers,
             verify_ssl=verify_ssl,
         )
+
+    def _get_operation(self, name: str) -> dict:
+        """Fetch operation state from the control plane.
+
+        Raises :class:`_TransientOperationPollError` for retryable HTTP/network
+        failures so long-running poll loops can back off without aborting.
+        """
+        try:
+            resp = self._get(f"/v1/{name}", timeout=30)
+        except RETRYABLE_EXCEPTIONS as e:
+            raise _TransientOperationPollError(str(e)) from e
+
+        if resp.is_success:
+            return resp.json()
+
+        if _is_retryable_status_code(resp.status_code):
+            raise _TransientOperationPollError(parse_api_error(resp))
+
+        error_msg = parse_api_error(resp)
+        raise RuntimeError(
+            format_sdk_error(
+                f"Failed to poll operation '{name}'",
+                error_msg,
+                "Retry; if it persists, contact Fireworks support.",
+                docs_url=DOCS_SDK,
+            )
+        )
+
+    def _wait_for_operation(
+        self,
+        operation: dict,
+        *,
+        timeout_s: float = 7200,
+        poll_interval_s: float = 10,
+    ) -> dict:
+        name = operation.get("name")
+        if not name:
+            raise RuntimeError("Operation response did not include a name")
+
+        deadline = time.monotonic() + timeout_s
+        current = operation
+        last_status = None
+        consecutive_transient_errors = 0
+        while not current.get("done", False):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Operation '{name}' did not complete within {timeout_s:.0f}s"
+                )
+            metadata = current.get("metadata") or {}
+            metadata_value = (
+                metadata.get("value") if isinstance(metadata.get("value"), dict) else {}
+            )
+            status = (
+                metadata.get("status_message")
+                or metadata.get("statusMessage")
+                or metadata_value.get("status_message")
+                or metadata_value.get("statusMessage")
+            )
+            if status and status != last_status:
+                logger.info("Operation %s: %s", name, status)
+                last_status = status
+            time.sleep(poll_interval_s)
+
+            try:
+                current = self._get_operation(name)
+                consecutive_transient_errors = 0
+            except _TransientOperationPollError as e:
+                consecutive_transient_errors += 1
+                backoff_s = min(
+                    poll_interval_s * (2 ** min(consecutive_transient_errors - 1, 5)),
+                    _POLL_TRANSIENT_MAX_BACKOFF_S,
+                )
+                remaining_s = deadline - time.monotonic()
+                if remaining_s <= 0:
+                    raise TimeoutError(
+                        f"Operation '{name}' did not complete within {timeout_s:.0f}s"
+                    ) from e
+                sleep_s = min(backoff_s, remaining_s)
+                logger.warning(
+                    "Transient error polling operation %s: %s; retrying in %.0fs",
+                    name,
+                    e,
+                    sleep_s,
+                )
+                time.sleep(sleep_s)
+                continue
+
+        error = current.get("error")
+        if error:
+            message = error.get("message") or str(error)
+            raise RuntimeError(f"Operation '{name}' failed: {message}")
+        return current
 
     # -- Training shape resolution ------------------------------------------------
 
@@ -385,7 +487,27 @@ class FireworksClient(_RestClient):
                 )
             )
 
-        return self._log_promoted_model(resp.json())
+        result = resp.json()
+        operation = result.get("operation")
+        if operation:
+            logger.info("Promotion operation started: %s", operation.get("name"))
+            operation = self._wait_for_operation(operation)
+            model = operation.get("response")
+            if model is None:
+                model = result.get("model")
+            if not model:
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to promote checkpoint '{checkpoint_id}'",
+                        "promotion operation completed without a model response",
+                        f"Check that the checkpoint is valid and base_model is correct.\n"
+                        f"  Console: {CONSOLE_URL}",
+                        docs_url=DOCS_SDK,
+                    )
+                )
+            model.pop("@type", None)
+            return self._log_promoted_model({"model": model})
+        return self._log_promoted_model(result)
 
     def _build_promote_request(
         self,

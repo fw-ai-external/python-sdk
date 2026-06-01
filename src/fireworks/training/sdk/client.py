@@ -4,13 +4,13 @@ This layer extends the upstream tinker client with:
   1. FiretitanServiceClient.create_training_client() — supports lora_config=None
   2. FiretitanTrainingClient.optim_step() — adds grad_accumulation_normalization
   3. FiretitanTrainingClient.forward_backward() — backfills response_tokens for cross_entropy
-  4. FiretitanTrainingClient.save_state() — supports blocking waits with timeout handling
+  4. FiretitanTrainingClient.save_state() — supports blocking waits and guards unsupported overwrite
   5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
   6. FiretitanTrainingClient.list_checkpoints() — firetitan-specific DCP checkpoint listing
   7. FiretitanTrainingClient.load_adapter() — HF PEFT adapter warm-start (weights-only)
 
-Most other methods (forward, forward_backward_custom, load_state,
-get_tokenizer, etc.) are inherited from tinker.
+Most other methods (forward, forward_backward_custom, etc.) are inherited from
+tinker.
 """
 
 from __future__ import annotations
@@ -21,11 +21,14 @@ import uuid
 import asyncio
 import logging
 import warnings
+import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
 from dataclasses import dataclass
+from collections.abc import AsyncGenerator
 
+import httpx
 from tinker import types
 from pydantic import BaseModel
 from transformers import AutoTokenizer
@@ -60,6 +63,14 @@ class LoadAdapterResponse(BaseModel):
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
+FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
+    "parallel_fwdbwd_chunks": False,
+    "proto_write_fwdbwd": False,
+    "proto_compress_fwdbwd": False,
+    "sample_no_retries": False,
+    "use_pyqwest_transport": True,
+}
+_TINKER_AUTH_PROVIDER_PATCH_LOCK = threading.Lock()
 
 
 class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
@@ -90,6 +101,25 @@ class _MappedAPIFuture(APIFuture[T]):
 
     def __await__(self):
         return self.result_async().__await__()
+
+
+class _FireworksApiKeyAuthProvider(httpx.Auth):
+    """Tinker auth provider that accepts Fireworks API keys for FireTitan.
+
+    Tinker 0.22.x validates API keys before sending requests and only accepts
+    ``tml-`` keys or JWTs. FireTitan trainer endpoints are authenticated by the
+    Fireworks control plane, which expects Fireworks API keys on ``X-API-Key``.
+    """
+
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    async def async_auth_flow(
+        self,
+        request: httpx.Request,
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        request.headers["X-API-Key"] = self._api_key
+        yield request
 
 
 class _ImmediateAPIFuture(APIFuture[T]):
@@ -307,6 +337,26 @@ class _LazyManagedRestClient:
 
     async def get_checkpoint_archive_url_from_tinker_path_async(self, tinker_path: str):
         raise self._unsupported("get_checkpoint_archive_url_from_tinker_path_async")
+
+    def get_audit_log(
+        self,
+        event_type: Literal["all", "checkpoints"] = "all",
+        day: Any | None = None,
+    ):
+        return self._unsupported_future("get_audit_log")
+
+    async def get_audit_log_async(
+        self,
+        event_type: Literal["all", "checkpoints"] = "all",
+        day: Any | None = None,
+    ):
+        raise self._unsupported("get_audit_log_async")
+
+    def assign_session_project(self, session_id: str, project_id: str):
+        return self._unsupported_future("assign_session_project")
+
+    async def assign_session_project_async(self, session_id: str, project_id: str) -> None:
+        raise self._unsupported("assign_session_project_async")
 
     def delete_checkpoint_from_tinker_path(self, path: str):
         return _ImmediateAPIFuture(None)
@@ -672,7 +722,8 @@ class FiretitanTrainingClient(TrainingClient):
     Overrides:
       - optim_step(): adds ``grad_accumulation_normalization`` parameter
       - forward_backward(): backfills ``response_tokens`` for ``cross_entropy``
-      - save_state(): supports blocking waits with timeout handling
+      - save_state(): supports blocking waits and rejects unsupported overwrite
+      - load_state()/load_state_with_optimizer(): reject unsupported cross-account tokens
       - get_tokenizer(): loads from the managed tokenizer_model name, no get_info RPC
       - save_weights_and_get_sampling_client(): raises NotImplementedError —
         Fireworks samples from a separate hot-load deployment, not an in-service
@@ -681,8 +732,8 @@ class FiretitanTrainingClient(TrainingClient):
     The async/sync surface is otherwise complete by inheritance: the base
     ``forward_backward_async`` / ``save_state_async`` wrappers call our
     overridden sync methods, so they pick up FireTitan behavior unchanged.
-    Other core methods (forward, forward_backward_custom,
-    load_state_with_optimizer) are inherited from tinker.TrainingClient.
+    Other core methods (forward, forward_backward_custom) are inherited from
+    tinker.TrainingClient.
     """
 
     def __init__(
@@ -822,6 +873,17 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: types.LossFnType,
         loss_fn_config: dict[str, float] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
+        holder = getattr(self, "holder", None)
+        client_config = getattr(holder, "_client_config", None)
+        proto_write = getattr(client_config, "proto_write_fwdbwd", False)
+        proto_compress = getattr(client_config, "proto_compress_fwdbwd", False)
+        if proto_write or proto_compress:
+            raise NotImplementedError(
+                "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
+                "Use the JSON forward_backward path."
+            )
+        if getattr(client_config, "parallel_fwdbwd_chunks", False):
+            client_config.parallel_fwdbwd_chunks = False
         future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future
@@ -1328,6 +1390,7 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         name: str,
         ttl_seconds: int | None = None,
+        overwrite: bool = False,
         *,
         timeout: float | None = None,
     ):
@@ -1345,12 +1408,63 @@ class FiretitanTrainingClient(TrainingClient):
         while supporting call sites that expect ``save_state(name, timeout=...)``
         to wait for completion.
         """
+        if overwrite:
+            raise NotImplementedError(
+                "FiretitanTrainingClient.save_state(overwrite=True) is not supported. "
+                "Use a new checkpoint name instead."
+            )
         self._warn_if_name_reused(name, self._saved_state_names, "DCP")
         self._saved_state_names.add(name)
-        future = super().save_state(name, ttl_seconds=ttl_seconds)
+        future = super().save_state(name, ttl_seconds=ttl_seconds, overwrite=overwrite)
         if timeout is not None:
             future.result(timeout=timeout)
         return future
+
+    async def save_state_async(
+        self,
+        name: str,
+        ttl_seconds: int | None = None,
+        overwrite: bool = False,
+    ):
+        return self.save_state(name, ttl_seconds=ttl_seconds, overwrite=overwrite)
+
+    def load_state(
+        self,
+        path: str,
+        weights_access_token: str | None = None,
+    ):
+        if weights_access_token is not None:
+            raise NotImplementedError(
+                "FiretitanTrainingClient.load_state(weights_access_token=...) is not supported. "
+                "Load checkpoints that are accessible to the current Fireworks API key."
+            )
+        return super().load_state(path, weights_access_token=weights_access_token)
+
+    async def load_state_async(
+        self,
+        path: str,
+        weights_access_token: str | None = None,
+    ):
+        return self.load_state(path, weights_access_token=weights_access_token)
+
+    def load_state_with_optimizer(
+        self,
+        path: str,
+        weights_access_token: str | None = None,
+    ):
+        if weights_access_token is not None:
+            raise NotImplementedError(
+                "FiretitanTrainingClient.load_state_with_optimizer(weights_access_token=...) is not supported. "
+                "Load checkpoints that are accessible to the current Fireworks API key."
+            )
+        return super().load_state_with_optimizer(path, weights_access_token=weights_access_token)
+
+    async def load_state_with_optimizer_async(
+        self,
+        path: str,
+        weights_access_token: str | None = None,
+    ):
+        return self.load_state_with_optimizer(path, weights_access_token=weights_access_token)
 
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
         """Load HF PEFT adapter weights into a LoRA training session (weights-only)."""
@@ -1430,9 +1544,23 @@ class FiretitanServiceClient(ServiceClient):
         if self._fireworks_api_key is not None:
             headers = dict(kwargs.pop("default_headers", None) or {})
             headers.setdefault("X-API-Key", self._fireworks_api_key)
-            headers.setdefault("Authorization", f"Bearer {self._fireworks_api_key}")
             kwargs["default_headers"] = headers
-            api_key = "tml-local"
+            kwargs.setdefault("_client_config", dict(FIRETITAN_TINKER_CLIENT_CONFIG))
+            from tinker.lib import internal_client_holder as holder_module
+
+            original_auth_provider = getattr(holder_module, "ApiKeyAuthProvider", None)
+            if original_auth_provider is None:
+                super().__init__(*args, api_key=api_key, **kwargs)
+            else:
+                with _TINKER_AUTH_PROVIDER_PATCH_LOCK:
+                    holder_module.ApiKeyAuthProvider = lambda *_, **__: _FireworksApiKeyAuthProvider(  # type: ignore[assignment]
+                        self._fireworks_api_key or ""
+                    )
+                    try:
+                        super().__init__(*args, api_key=api_key, **kwargs)
+                    finally:
+                        holder_module.ApiKeyAuthProvider = original_auth_provider
+            return
         super().__init__(*args, api_key=api_key, **kwargs)
 
     def _user_metadata(
@@ -1889,15 +2017,21 @@ class FiretitanServiceClient(ServiceClient):
             return None
         return self._managed_config
 
+    @staticmethod
+    def _reject_weights_access_token(method: str, weights_access_token: str | None) -> None:
+        if weights_access_token is not None:
+            raise NotImplementedError(
+                f"FiretitanServiceClient.{method}(weights_access_token=...) is not supported. "
+                "Load checkpoints that are accessible to the current Fireworks API key."
+            )
+
     def create_training_client_from_state(
         self,
         path: str,
         user_metadata: dict[str, str] | None = None,
-        *,
         weights_access_token: str | None = None,
     ) -> FiretitanTrainingClient:
-        if weights_access_token is not None:
-            logger.warning("weights_access_token is accepted for Tinker compatibility but is not used by FireTitan")
+        self._reject_weights_access_token("create_training_client_from_state", weights_access_token)
         managed_config = self._managed_config_for_resume()
         if managed_config is None:
             weights_info = self.create_rest_client().get_weights_info_by_tinker_path(path).result()
@@ -1924,11 +2058,9 @@ class FiretitanServiceClient(ServiceClient):
         self,
         path: str,
         user_metadata: dict[str, str] | None = None,
-        *,
         weights_access_token: str | None = None,
     ) -> FiretitanTrainingClient:
-        if weights_access_token is not None:
-            logger.warning("weights_access_token is accepted for Tinker compatibility but is not used by FireTitan")
+        self._reject_weights_access_token("create_training_client_from_state_async", weights_access_token)
         managed_config = self._managed_config_for_resume()
         if managed_config is None:
             rest_client = self.create_rest_client()
@@ -1949,6 +2081,71 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         load_future = await training_client.load_state_async(path)
+        await load_future.result_async()
+        return training_client
+
+    def create_training_client_from_state_with_optimizer(
+        self,
+        path: str,
+        user_metadata: dict[str, str] | None = None,
+        weights_access_token: str | None = None,
+    ) -> FiretitanTrainingClient:
+        self._reject_weights_access_token(
+            "create_training_client_from_state_with_optimizer",
+            weights_access_token,
+        )
+        managed_config = self._managed_config_for_resume()
+        if managed_config is None:
+            weights_info = self.create_rest_client().get_weights_info_by_tinker_path(path).result()
+            training_client = self._create_training_client_from_weights_info(
+                weights_info,
+                user_metadata=user_metadata,
+            )
+            training_client.load_state_with_optimizer(path).result()
+            return training_client
+
+        training_client = self.create_lora_training_client(
+            base_model=managed_config.base_model,
+            rank=managed_config.lora_rank,
+            seed=managed_config.seed,
+            train_unembed=managed_config.train_unembed,
+            train_mlp=managed_config.train_mlp,
+            train_attn=managed_config.train_attn,
+            user_metadata=user_metadata,
+        )
+        training_client.load_state_with_optimizer(path).result()
+        return training_client
+
+    async def create_training_client_from_state_with_optimizer_async(
+        self,
+        path: str,
+        user_metadata: dict[str, str] | None = None,
+        weights_access_token: str | None = None,
+    ) -> FiretitanTrainingClient:
+        self._reject_weights_access_token(
+            "create_training_client_from_state_with_optimizer_async",
+            weights_access_token,
+        )
+        managed_config = self._managed_config_for_resume()
+        if managed_config is None:
+            rest_client = self.create_rest_client()
+            weights_info = await rest_client.get_weights_info_by_tinker_path(path)
+            training_client = await self._create_training_client_from_weights_info_async(
+                weights_info,
+                user_metadata=user_metadata,
+            )
+        else:
+            training_client = await self.create_lora_training_client_async(
+                base_model=managed_config.base_model,
+                rank=managed_config.lora_rank,
+                seed=managed_config.seed,
+                train_unembed=managed_config.train_unembed,
+                train_mlp=managed_config.train_mlp,
+                train_attn=managed_config.train_attn,
+                user_metadata=user_metadata,
+            )
+
+        load_future = await training_client.load_state_with_optimizer_async(path)
         await load_future.result_async()
         return training_client
 

@@ -29,9 +29,9 @@ Training SDK calls require a training-scoped Fireworks API key. Inference-only
 keys can still work for completions, but they return HTTP 401 on trainer and
 training-shape endpoints.
 
-The training extra installs a companion `tinker-cookbook` version alongside the
-pinned `tinker` runtime. Avoid upgrading `tinker-cookbook` independently from
-the SDK release unless you are intentionally testing a newer pairing.
+The training extra installs the pinned `tinker` runtime used by the SDK.
+Cookbook packages that use recipe helpers should declare `tinker-cookbook`
+directly so SDK-only environments do not install cookbook-only dependencies.
 
 > **Note:** The training SDK source lives entirely in
 > [`src/fireworks/training/`](src/fireworks/training/). All other code in this

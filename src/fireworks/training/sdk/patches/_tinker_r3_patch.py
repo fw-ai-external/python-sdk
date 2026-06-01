@@ -12,6 +12,8 @@ from typing import List, Optional
 
 from pydantic.fields import FieldInfo
 
+from fireworks.training.sdk.patches._model_utils import rebuild_model
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,17 +27,17 @@ def _apply_r3_patch() -> None:
         default=None, annotation=Optional[List[str]]
     )
     ModelInput.__annotations__["routing_matrices"] = Optional[List[str]]
-    ModelInput.model_rebuild(force=True)
+    rebuild_model(ModelInput)
 
     from tinker.types.datum import Datum
     from tinker.types.forward_request import ForwardRequest
     from tinker.types.forward_backward_input import ForwardBackwardInput
     from tinker.types.forward_backward_request import ForwardBackwardRequest
 
-    Datum.model_rebuild(force=True)
-    ForwardBackwardInput.model_rebuild(force=True)
-    ForwardRequest.model_rebuild(force=True)
-    ForwardBackwardRequest.model_rebuild(force=True)
+    rebuild_model(Datum)
+    rebuild_model(ForwardBackwardInput)
+    rebuild_model(ForwardRequest)
+    rebuild_model(ForwardBackwardRequest)
 
     from tinker.types.encoded_text_chunk import EncodedTextChunk
 
