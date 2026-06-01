@@ -14,11 +14,12 @@ from __future__ import annotations
 import logging
 from typing import Literal, get_args
 
+from fireworks.training.sdk.patches._model_utils import rebuild_model
+
 logger = logging.getLogger(__name__)
 
 _SENTINEL = "_builtin_loss_fn_patch_applied"
 _FIREWORKS_BUILTIN_LOSS_FNS = ("dapo", "gspo")
-
 
 def _apply_builtin_loss_fn_patch() -> None:
     from tinker.types.forward_backward_input import ForwardBackwardInput
@@ -27,7 +28,12 @@ def _apply_builtin_loss_fn_patch() -> None:
     if getattr(ForwardBackwardInput, _SENTINEL, False):
         return
 
-    loss_fn_field = ForwardBackwardInput.model_fields.get("loss_fn")
+    model_fields = getattr(ForwardBackwardInput, "model_fields", None)
+    if model_fields is None:
+        logger.warning("Builtin loss patch skipped: ForwardBackwardInput.model_fields not found")
+        return
+
+    loss_fn_field = model_fields.get("loss_fn")
     if loss_fn_field is None:
         logger.warning("Builtin loss patch skipped: ForwardBackwardInput.loss_fn field not found")
         return
@@ -45,10 +51,10 @@ def _apply_builtin_loss_fn_patch() -> None:
         return
 
     patched_loss_fn = Literal.__getitem__(existing_loss_fns + missing_loss_fns)
-    ForwardBackwardInput.model_fields["loss_fn"].annotation = patched_loss_fn
+    model_fields["loss_fn"].annotation = patched_loss_fn
     ForwardBackwardInput.__annotations__["loss_fn"] = patched_loss_fn
-    ForwardBackwardInput.model_rebuild(force=True)
-    ForwardBackwardRequest.model_rebuild(force=True)
+    rebuild_model(ForwardBackwardInput)
+    rebuild_model(ForwardBackwardRequest)
 
     setattr(ForwardBackwardInput, _SENTINEL, True)
     logger.info(

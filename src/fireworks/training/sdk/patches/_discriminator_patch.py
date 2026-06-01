@@ -25,10 +25,11 @@ from typing_extensions import Annotated
 
 from pydantic import Discriminator
 
+from fireworks.training.sdk.patches._model_utils import rebuild_model
+
 logger = logging.getLogger(__name__)
 
 _SENTINEL = "_discriminator_patch_applied"
-
 
 def _apply_discriminator_patch() -> None:
     from tinker._utils import PropertyInfo
@@ -48,17 +49,17 @@ def _apply_discriminator_patch() -> None:
 
     ModelInput.model_fields["chunks"].annotation = List[PatchedModelInputChunk]
     ModelInput.__annotations__["chunks"] = List[PatchedModelInputChunk]
-    ModelInput.model_rebuild(force=True)
+    rebuild_model(ModelInput)
 
     from tinker.types.datum import Datum
     from tinker.types.forward_request import ForwardRequest
     from tinker.types.forward_backward_input import ForwardBackwardInput
     from tinker.types.forward_backward_request import ForwardBackwardRequest
 
-    Datum.model_rebuild(force=True)
-    ForwardBackwardInput.model_rebuild(force=True)
-    ForwardRequest.model_rebuild(force=True)
-    ForwardBackwardRequest.model_rebuild(force=True)
+    rebuild_model(Datum)
+    rebuild_model(ForwardBackwardInput)
+    rebuild_model(ForwardRequest)
+    rebuild_model(ForwardBackwardRequest)
 
     setattr(ModelInput, _SENTINEL, True)
     logger.info(

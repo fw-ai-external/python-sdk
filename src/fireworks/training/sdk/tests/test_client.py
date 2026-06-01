@@ -8,18 +8,22 @@ import warnings
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import httpx
 import torch
 import pytest
 from tinker import types
 
 from fireworks.training.sdk.client import (
+    FIRETITAN_TINKER_CLIENT_CONFIG,
     SAMPLING_CLIENT_FROM_TRAINER_MESSAGE,
     SaveSamplerResult,
     FiretitanServiceClient,
     FiretitanTrainingClient,
     generate_session_id,
     qualify_snapshot_name,
+    _LazyManagedRestClient,
     _BaseOnlyCreateModelRequest,
+    _FireworksApiKeyAuthProvider,
 )
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
@@ -99,6 +103,13 @@ class TestResolveCheckpointPath:
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
+        client.holder = SimpleNamespace(
+            _client_config=SimpleNamespace(
+                parallel_fwdbwd_chunks=False,
+                proto_write_fwdbwd=False,
+                proto_compress_fwdbwd=False,
+            )
+        )
         return client
 
     def test_gs_path_returned_as_is(self):
@@ -142,7 +153,7 @@ class TestSaveState:
         result = client.save_state("step-1", timeout=30)
 
         assert result is future
-        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None)
+        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None, overwrite=False)
         future.result.assert_called_once_with(timeout=30)
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
@@ -154,8 +165,61 @@ class TestSaveState:
         result = client.save_state("step-1")
 
         assert result is future
-        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None)
+        mock_save_state.assert_called_once_with("step-1", ttl_seconds=None, overwrite=False)
         future.result.assert_not_called()
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_overwrite_true_raises_not_implemented(self, mock_save_state):
+        client = self._make_client()
+
+        with pytest.raises(NotImplementedError, match="overwrite=True"):
+            client.save_state("step-1", overwrite=True)
+
+        mock_save_state.assert_not_called()
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_save_state_async_rejects_overwrite_true(self, mock_save_state):
+        client = self._make_client()
+
+        with pytest.raises(NotImplementedError, match="overwrite=True"):
+            asyncio.run(client.save_state_async("step-1", overwrite=True))
+
+        mock_save_state.assert_not_called()
+
+
+class TestLoadStateCompatibility:
+    def _make_client(self):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        return client
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    def test_load_state_passes_through_without_access_token(self, mock_load_state):
+        client = self._make_client()
+        future = MagicMock()
+        mock_load_state.return_value = future
+
+        result = client.load_state("tinker://run/weights/step-1")
+
+        assert result is future
+        mock_load_state.assert_called_once_with("tinker://run/weights/step-1", weights_access_token=None)
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    def test_load_state_rejects_access_token(self, mock_load_state):
+        client = self._make_client()
+
+        with pytest.raises(NotImplementedError, match="weights_access_token"):
+            client.load_state("tinker://run/weights/step-1", weights_access_token="token")
+
+        mock_load_state.assert_not_called()
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state_with_optimizer")
+    def test_load_state_with_optimizer_rejects_access_token(self, mock_load_state):
+        client = self._make_client()
+
+        with pytest.raises(NotImplementedError, match="weights_access_token"):
+            client.load_state_with_optimizer("tinker://run/weights/step-1", weights_access_token="token")
+
+        mock_load_state.assert_not_called()
 
 
 class TestForwardBackward:
@@ -164,6 +228,13 @@ class TestForwardBackward:
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
+        client.holder = SimpleNamespace(
+            _client_config=SimpleNamespace(
+                parallel_fwdbwd_chunks=False,
+                proto_write_fwdbwd=False,
+                proto_compress_fwdbwd=False,
+            )
+        )
         return client
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
@@ -205,6 +276,28 @@ class TestForwardBackward:
         result = client.forward_backward([datum], "cross_entropy").result()
 
         assert result.metrics["response_tokens"] == 3.0
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_proto_forward_backward_is_rejected(self, mock_forward_backward):
+        client = self._make_client()
+        client.holder._client_config.proto_write_fwdbwd = True
+
+        with pytest.raises(NotImplementedError, match="proto forward_backward"):
+            client.forward_backward([MagicMock()], "cross_entropy")
+
+        mock_forward_backward.assert_not_called()
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_parallel_forward_backward_is_disabled_for_firetitan(self, mock_forward_backward):
+        client = self._make_client()
+        client.holder._client_config.parallel_fwdbwd_chunks = True
+        future = MagicMock()
+        mock_forward_backward.return_value = future
+
+        result = client.forward_backward([MagicMock()], "supervised")
+
+        assert result is future
+        assert client.holder._client_config.parallel_fwdbwd_chunks is False
 
 
 class TestFiretitanServiceClientManagedCompat:
@@ -287,6 +380,83 @@ class TestFiretitanServiceClientManagedCompat:
                 training_shape="shape-a",
                 training_shape_ref="shape-b",
             )
+
+    def test_fireworks_key_service_client_uses_local_client_config(self):
+        from tinker.lib import internal_client_holder as holder_module
+
+        original_auth_provider = getattr(holder_module, "ApiKeyAuthProvider", None)
+        with patch(
+            "tinker.lib.public_interfaces.service_client.ServiceClient.__init__",
+            return_value=None,
+        ) as init:
+            FiretitanServiceClient(base_url="https://trainer.test", api_key="fw-key")
+
+        init.assert_called_once()
+        assert init.call_args.kwargs["api_key"] == "fw-key"
+        assert init.call_args.kwargs["_client_config"] == FIRETITAN_TINKER_CLIENT_CONFIG
+        assert init.call_args.kwargs["default_headers"]["X-API-Key"] == "fw-key"
+        assert "Authorization" not in init.call_args.kwargs["default_headers"]
+        assert getattr(holder_module, "ApiKeyAuthProvider", None) is original_auth_provider
+
+    def test_fireworks_key_auth_provider_sends_control_plane_api_key_header(self):
+        async def apply_auth() -> httpx.Request:
+            provider = _FireworksApiKeyAuthProvider("fw-key")
+            request = httpx.Request("GET", "https://trainer.test/api/v1/healthz")
+            async for authed_request in provider.async_auth_flow(request):
+                return authed_request
+            raise AssertionError("auth flow did not yield a request")
+
+        request = asyncio.run(apply_auth())
+
+        assert request.headers["X-API-Key"] == "fw-key"
+        assert "X-TINKER-API" not in request.headers
+        assert "Authorization" not in request.headers
+
+    def test_create_training_client_from_state_rejects_access_token(self):
+        svc = self._make_service()
+
+        with pytest.raises(NotImplementedError, match="weights_access_token"):
+            svc.create_training_client_from_state("tinker://run/weights/step-1", weights_access_token="token")
+
+    def test_create_training_client_from_state_with_optimizer_rejects_access_token(self):
+        svc = self._make_service()
+
+        with pytest.raises(NotImplementedError, match="weights_access_token"):
+            svc.create_training_client_from_state_with_optimizer(
+                "tinker://run/weights/step-1",
+                weights_access_token="token",
+            )
+
+    def test_create_training_client_from_state_with_optimizer_is_thin_wrapper(self):
+        svc = self._make_service()
+        svc._managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            lora_rank=8,
+            seed=123,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+        )
+        training_client = MagicMock()
+        training_client.load_state_with_optimizer.return_value.result.return_value = None
+        svc.create_lora_training_client = MagicMock(return_value=training_client)
+
+        result = svc.create_training_client_from_state_with_optimizer(
+            "tinker://run/weights/step-1",
+            user_metadata={"owner": "test"},
+        )
+
+        assert result is training_client
+        svc.create_lora_training_client.assert_called_once_with(
+            base_model="accounts/acct/models/base",
+            rank=8,
+            seed=123,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+            user_metadata={"owner": "test"},
+        )
+        training_client.load_state_with_optimizer.assert_called_once_with("tinker://run/weights/step-1")
 
     def test_from_firetitan_config_deprecates_accelerator_fields(self):
         with pytest.warns(DeprecationWarning) as record:
@@ -731,6 +901,43 @@ class TestFiretitanServiceClientManagedCompat:
 
         assert result is None
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("snapshot-1")
+
+
+class TestLazyManagedRestClient:
+    def _make_rest_client(self):
+        managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            trainer_job_id=None,
+            lora_rank=8,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+        )
+        return _LazyManagedRestClient(managed_config)
+
+    def test_get_audit_log_raises_not_implemented(self):
+        rest_client = self._make_rest_client()
+
+        with pytest.raises(NotImplementedError, match="get_audit_log"):
+            rest_client.get_audit_log().result()
+
+    def test_assign_session_project_raises_not_implemented(self):
+        rest_client = self._make_rest_client()
+
+        with pytest.raises(NotImplementedError, match="assign_session_project"):
+            rest_client.assign_session_project("session-1", "project-1").result()
+
+    def test_get_audit_log_async_raises_not_implemented(self):
+        rest_client = self._make_rest_client()
+
+        with pytest.raises(NotImplementedError, match="get_audit_log_async"):
+            asyncio.run(rest_client.get_audit_log_async())
+
+    def test_assign_session_project_async_raises_not_implemented(self):
+        rest_client = self._make_rest_client()
+
+        with pytest.raises(NotImplementedError, match="assign_session_project_async"):
+            asyncio.run(rest_client.assign_session_project_async("session-1", "project-1"))
 
 
 def _bare_training_client():
