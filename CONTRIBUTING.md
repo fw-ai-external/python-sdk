@@ -113,9 +113,9 @@ the changes aren't made through the automated pipeline, you may want to make rel
 
 ### Publish with a GitHub workflow
 
-You can release to package managers by using [the `Publish PyPI` GitHub action](https://www.github.com/fw-ai-external/python-sdk/actions/workflows/publish-pypi.yml). This requires a setup organization or repository secret to be set up.
+You can release to package managers by using [the `Publish PyPI` GitHub action](https://www.github.com/fw-ai-external/python-sdk/actions/workflows/publish-pypi.yml). This requires the `FIREWORKS_PYPI_TOKEN` organization or repository Actions secret to be set.
 
 ### Publish manually
 
-If you need to manually release a package, you can run the `bin/publish-pypi` script with a `PYPI_TOKEN` set on
+If you need to manually release a package, you can run the `bin/publish-pypi` script with `FIREWORKS_PYPI_TOKEN` set on
 the environment.
