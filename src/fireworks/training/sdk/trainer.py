@@ -423,8 +423,9 @@ class TrainerJobManager(FireworksClient):
         extra = ""
         if resp.status_code == 400:
             extra = (
-                "\n  Verify the request parameters are correct."
-                "\n  If using hotload, ensure the deployment has hotLoadBucketUrl configured."
+                "\n  Verify the request parameters match either the training_shape_ref path or the manual infra path."
+                "\n  For hotload, use one documented scope: PER_TRAINER via deployment hot_load_trainer_job, "
+                "or PER_DEPLOYMENT via trainer hot_load_deployment_id."
             )
         logger.warning(
             "\n%s",
@@ -520,9 +521,9 @@ class TrainerJobManager(FireworksClient):
                     format_sdk_error(
                         f"Trainer job {job_id} failed",
                         msg,
-                        "Check the job logs in the Fireworks console for details.\n"
-                        f"  Console: {CONSOLE_URL}\n"
-                        "  Common causes: invalid model name, insufficient quota, or region unavailable.",
+                        "The trainer status detail above is from the control plane. "
+                        "Check trainer logs and events in the Fireworks console before retrying.\n"
+                        f"  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
                         show_support=True,
                     )
@@ -586,8 +587,8 @@ class TrainerJobManager(FireworksClient):
         raise TimeoutError(
             format_sdk_error(
                 f"Trainer job {job_id} did not become ready within {timeout_s}s",
-                "The job is still provisioning or waiting for GPU resources.",
-                f"Increase timeout with --rlor-timeout-s (current: {timeout_s}s).\n  Check job status: {CONSOLE_URL}",
+                "The job did not reach JOB_STATE_RUNNING with a healthy /api/v1/healthz response before the timeout.",
+                f"Increase the trainer ready timeout (current: {timeout_s}s) and check job status in the Fireworks console: {CONSOLE_URL}",
                 docs_url=DOCS_SDK,
             )
         )
@@ -712,9 +713,8 @@ class TrainerJobManager(FireworksClient):
                         f"Trainer job {job_id} stuck in {state}",
                         f"Job has been in '{state}' state for {max_wait_for_resumable_s}s "
                         "without transitioning to a resumable state.",
-                        "1. Check the Fireworks console for job details\n"
-                        "  2. Try cancelling the job and creating a new one\n"
-                        f"  Console: {CONSOLE_URL}",
+                        "Check the Fireworks console for job details. If the job will not reach a resumable state, "
+                        f"cancel it and create a new one.\n  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
                         show_support=True,
                     )

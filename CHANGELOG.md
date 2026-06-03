@@ -1,16 +1,5 @@
 # Changelog
 
-## 1.2.0-alpha.74 (2026-06-01)
-
-Full Changelog: [v1.2.0-alpha.73...v1.2.0-alpha.74](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.73...v1.2.0-alpha.74)
-
-## 1.2.0-alpha.73 (2026-06-01)
-
-Full Changelog: [v1.2.0-alpha.73...v1.2.0-alpha.73](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.73...v1.2.0-alpha.73)
-
-### Bug Fixes
-* **training-sdk:** keep forward-only reference trainer single-replica under HSDP (#28043) ([24eef8e](https://github.com/fw-ai-external/python-sdk/commit/24eef8ee7665f84d91b4408a8d56eb1664607e97))
-
 ## 1.2.0-alpha.72 (2026-05-21)
 
 Full Changelog: [v1.2.0-alpha.71...v1.2.0-alpha.72](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.71...v1.2.0-alpha.72)

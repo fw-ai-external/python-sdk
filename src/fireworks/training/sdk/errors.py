@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 DOCS_SDK = "https://docs.fireworks.ai/fine-tuning/training-sdk/introduction"
 DISCORD_URL = "https://discord.gg/mMqQxvFD9A"
 CONSOLE_URL = "https://app.fireworks.ai/account/home"
+AGENT_DEBUG_INSTRUCTIONS = (
+    "First search the Fireworks training cookbook skill for this error. "
+    "If the cookbook is not available locally, clone "
+    "https://github.com/fw-ai/cookbook and search cookbook/skills."
+)
 
 HTTP_STATUS_HINTS: dict[int, str] = {
     400: "Check that all request parameters are valid.",
@@ -50,6 +55,7 @@ def format_sdk_error(
         f"ERROR: {what}",
         f"  Cause: {cause}",
         f"  Solution: {solution}",
+        f"  Agent debug: {AGENT_DEBUG_INSTRUCTIONS}",
     ]
     if docs_url:
         lines.append(f"  Docs: {docs_url}")

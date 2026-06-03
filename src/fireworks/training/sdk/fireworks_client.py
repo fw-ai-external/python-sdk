@@ -77,6 +77,13 @@ def validate_output_model_id(output_model_id: str | None) -> list[str]:
     return errors
 
 
+def _is_unknown_async_promotion_field(resp: Any) -> bool:
+    if resp.is_success or resp.status_code != 400:
+        return False
+    error_msg = parse_api_error(resp).lower()
+    return "async_promotion" in error_msg or "asyncpromotion" in error_msg
+
+
 class TrainingShapeProfile:
     """Resolved training shape profile from the control plane.
 
@@ -191,7 +198,8 @@ class FireworksClient(_RestClient):
             format_sdk_error(
                 f"Failed to poll operation '{name}'",
                 error_msg,
-                "Retry; if it persists, contact Fireworks support.",
+                "Operation polling retries transient HTTP and network failures automatically. "
+                "Retry the original request; if this persists, inspect the operation in the Fireworks console.",
                 docs_url=DOCS_SDK,
             )
         )
@@ -258,7 +266,16 @@ class FireworksClient(_RestClient):
         error = current.get("error")
         if error:
             message = error.get("message") or str(error)
-            raise RuntimeError(f"Operation '{name}' failed: {message}")
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Operation '{name}' failed",
+                    message,
+                    "The control-plane operation reached done=true with an error payload. "
+                    "Use the operation message above and the Fireworks console to decide whether to retry.",
+                    docs_url=DOCS_SDK,
+                    show_support=True,
+                )
+            )
         return current
 
     # -- Training shape resolution ------------------------------------------------
@@ -324,7 +341,7 @@ class FireworksClient(_RestClient):
         elif resp.status_code == 404:
             solution = (
                 f"Training shape '{training_shape_id}' was not found. "
-                "Verify the training_shape_id is correct and the shape exists."
+                "Verify the resource name, version segment, and account visibility."
             )
         elif resp.status_code == 403:
             solution = (
@@ -332,7 +349,7 @@ class FireworksClient(_RestClient):
                 f"Ensure your account owns or has access to this shape."
             )
         else:
-            solution = "Verify the training_shape_id and account have the shape registered."
+            solution = "Verify the training_shape_id is registered and visible to the account resolved from your API key."
             show_support = True
         raise RuntimeError(
             format_sdk_error(
@@ -356,8 +373,8 @@ class FireworksClient(_RestClient):
                     f"Failed to resolve latest validated training shape for '{training_shape_id}'",
                     "No latest validated training-shape version was returned.",
                     (
-                        "Validate a training-shape version first, or check that the "
-                        "training_shape_id is correct and visible to your account."
+                        "Pass a versioned training_shape_id, or validate one version of this "
+                        "shape before using the unversioned shape resource."
                     ),
                     docs_url=DOCS_SDK,
                     show_support=False,
@@ -474,14 +491,22 @@ class FireworksClient(_RestClient):
             base_model=base_model,
             hot_load_deployment_id=hot_load_deployment_id,
         )
-        resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
+        body_with_async = {**body, "async_promotion": True}
+        resp = self._post(path, json=body_with_async, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
+        if _is_unknown_async_promotion_field(resp):
+            logger.info(
+                "Server does not support async checkpoint promotion opt-in; "
+                "retrying synchronously."
+            )
+            resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
         if not resp.is_success:
             error_msg = parse_api_error(resp)
             raise RuntimeError(
                 format_sdk_error(
                     f"Failed to promote checkpoint '{checkpoint_id}'",
                     error_msg,
-                    f"Check that the checkpoint is valid and base_model is correct.\n"
+                    "Use a checkpoint name returned by list_checkpoints, ensure the row is promotable, "
+                    "and pass the base_model that matches the trainer.\n"
                     f"  Console: {CONSOLE_URL}",
                     docs_url=DOCS_SDK,
                 )
@@ -500,7 +525,8 @@ class FireworksClient(_RestClient):
                     format_sdk_error(
                         f"Failed to promote checkpoint '{checkpoint_id}'",
                         "promotion operation completed without a model response",
-                        f"Check that the checkpoint is valid and base_model is correct.\n"
+                        "The promote operation finished, but the server response did not contain the promoted model payload. "
+                        "Check the operation and output model in the Fireworks console.\n"
                         f"  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
                     )
@@ -677,7 +703,8 @@ class FireworksClient(_RestClient):
             solution = (
                 f"Trainer job '{job_id}' was not found in this account. "
                 "Verify the job ID and that your API key resolves to the "
-                "account that owns it."
+                "account that owns it. If the trainer was deleted after the retention window, "
+                "the checkpoint rows and backing blobs are expected to be gone."
             )
         elif resp.status_code == 403:
             solution = "Your API key does not have access to this trainer job."

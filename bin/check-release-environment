@@ -2,8 +2,8 @@
 
 errors=()
 
-if [ -z "${PYPI_TOKEN}" ]; then
-  errors+=("The PYPI_TOKEN secret has not been set. Please set it in either this repository's secrets or your organization secrets.")
+if [ -z "${PYPI_TOKEN:-}" ]; then
+  errors+=("The PYPI_TOKEN secret has not been set. Configure it as a repository or organization Actions secret with publish access to the fireworks-ai PyPI project.")
 fi
 
 lenErrors=${#errors[@]}

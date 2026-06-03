@@ -2273,6 +2273,19 @@ class FiretitanServiceClient(ServiceClient):
         sampler_backend = self._require_sampler_backend()
         if not sampler_backend.hotload_saved_snapshot(model_path):
             raise RuntimeError(f"Hotload failed for sampler snapshot {model_path!r}")
+        handle = getattr(self, "_managed_handle", None)
+        if handle is not None:
+            handle.requires_initial_sampler_sync = False
+
+    def requires_initial_sampler_sync(self) -> bool:
+        """Return whether managed setup requires a pre-rollout sampler sync.
+
+        Managed deployment reattach changes the trainer namespace while serving
+        may still hold an old hotload snapshot. Recipes use this to trigger one
+        explicit base save+hotload before rollout.
+        """
+        handle = getattr(self, "_managed_handle", None)
+        return bool(handle is not None and getattr(handle, "requires_initial_sampler_sync", False))
 
     async def create_sampling_client_async(
         self,

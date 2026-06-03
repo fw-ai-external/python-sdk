@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     CONSOLE_URL,
-    DISCORD_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
@@ -46,6 +45,17 @@ DEPLOYMENT_DELETION_POLL_S: float = 2
 HOTLOAD_WAIT_TIMEOUT_S: int = 400
 HOTLOAD_WAIT_POLL_S: int = 5
 DEFAULT_DEPLOYMENT_DESCRIPTION = "Fireworks training deployment"
+HOTLOAD_RECOVERY_STEPS = (
+    "Use the Fireworks training cookbook skill's hotload recovery self-check. "
+    "Common recoveries are: reattach or recreate a stale deployment; for "
+    "full-parameter training, retry from a matching base checkpoint or resume "
+    "from DCP; for LoRA, fix deployment attachment rather than changing "
+    "checkpoint_type."
+)
+
+
+def _format_snapshot_identity(identity: str | None) -> str:
+    return identity if identity else "none"
 
 
 @dataclass
@@ -158,8 +168,13 @@ class DeploymentManager(_RestClient):
         self.inference_url = (inference_url or base_url).rstrip("/")
         self.hotload_api_url = hotload_api_url or base_url
         self._hotload_reset_prompt_cache_supported: bool | None = None
+        self._last_hotload_error_message: str | None = None
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``wait_for_ready`` call."""
+
+    @property
+    def last_hotload_error_message(self) -> str | None:
+        return self._last_hotload_error_message
 
     # Header that carries the optional snapshot source URI. Some serving
     # backends use it to fetch the snapshot bytes inline at hot-load time;
@@ -289,8 +304,10 @@ class DeploymentManager(_RestClient):
             extra = ""
             if resp.status_code == 400:
                 extra = (
-                    "\n  Check region, deployment shape, and model name are valid."
-                    "\n  Try --skip-shape-validation if the shape version is unsupported."
+                    "\n  Verify region, deployment_shape, base_model, and extra_args "
+                    "match the selected deployment flow."
+                    "\n  For hotload, use one documented scope: PER_TRAINER via "
+                    "hot_load_trainer_job, or PER_DEPLOYMENT via a deployment-owned bucket."
                 )
             logger.warning(
                 "\n%s",
@@ -450,8 +467,8 @@ class DeploymentManager(_RestClient):
                 raise RuntimeError(
                     format_sdk_error(
                         f"Deployment '{deployment_id}' not found",
-                        "The deployment does not exist or was deleted.",
-                        "Verify the deployment ID is correct, or use --create-deployment to create a new one.",
+                        "The control plane returned no deployment record for this deployment ID.",
+                        "Verify the deployment ID and account. Create the deployment first if this is a new run.",
                         docs_url=DOCS_SDK,
                     )
                 )
@@ -465,10 +482,9 @@ class DeploymentManager(_RestClient):
                 raise RuntimeError(
                     format_sdk_error(
                         f"Deployment '{deployment_id}' entered bad state: {state}",
-                        "The deployment failed to start or was deleted externally.",
-                        f"1. Check deployment logs in the Fireworks console: {CONSOLE_URL}\n"
-                        "  2. Try recreating with --create-deployment\n"
-                        "  3. Verify your model name and region are valid",
+                        f"The control plane reports deployment state {state}, so readiness polling stopped.",
+                        f"Check deployment events and logs in the Fireworks console: {CONSOLE_URL}\n"
+                        "  Recreate the deployment if the config is wrong or the resource was deleted.",
                         docs_url=DOCS_SDK,
                         show_support=True,
                     )
@@ -486,9 +502,8 @@ class DeploymentManager(_RestClient):
         raise TimeoutError(
             format_sdk_error(
                 f"Deployment '{deployment_id}' not ready within {timeout_s}s",
-                "The deployment is still provisioning or waiting for GPU resources.",
-                f"Increase timeout with --deployment-timeout-s (current: {timeout_s}s).\n"
-                f"  Check deployment status in the Fireworks console: {CONSOLE_URL}",
+                "The control-plane state did not reach READY and the token-in warmup probe did not return HTTP 200 before the timeout.",
+                f"Increase the deployment ready timeout (current: {timeout_s}s) and check deployment status in the Fireworks console: {CONSOLE_URL}",
                 docs_url=DOCS_SDK,
             )
         )
@@ -735,9 +750,8 @@ class DeploymentManager(_RestClient):
                     f"Hotload API error (HTTP {resp.status_code})",
                     error_msg,
                     f"{hint}\n"
-                    "  1. Verify the deployment has hotLoadBucketUrl configured\n"
-                    "  2. Ensure the base model matches between trainer and deployment\n"
-                    "  3. Check that the snapshot identity exists",
+                    "  Verify the deployment is hotload-enabled, the base model matches the deployment, "
+                    "and the snapshot identity came from save_weights_for_sampler.",
                     docs_url=DOCS_SDK,
                 ),
             )
@@ -769,6 +783,10 @@ class DeploymentManager(_RestClient):
         """Wait for hotload to complete. Returns True on success."""
         logger.info("Waiting for hotload (identity=%s)...", expected_identity)
         start = time.time()
+        self._last_hotload_error_message = None
+        last_current_identity: str | None = None
+        last_stage = "unknown"
+        last_readiness: bool | None = None
 
         while time.time() - start < timeout_seconds:
             try:
@@ -784,7 +802,8 @@ class DeploymentManager(_RestClient):
                         format_sdk_error(
                             "Unrecognized hotload status response format",
                             f"Expected 'replicas' list, got keys: {list(status.keys())}",
-                            f"This may indicate an API version mismatch. Reach out on Discord for help: {DISCORD_URL}",
+                            "The SDK hotload waiter expects the serving status endpoint to return a replicas list. "
+                            "Check the cookbook skill for the supported SDK/serving path, then retry with matching versions.",
                             docs_url=DOCS_SDK,
                             show_support=True,
                         )
@@ -800,6 +819,9 @@ class DeploymentManager(_RestClient):
                     stage = "pending"
                     readiness = False
                     loaded_adapters = []
+                last_current_identity = current_identity
+                last_stage = stage
+                last_readiness = readiness
 
                 elapsed = int(time.time() - start)
 
@@ -830,17 +852,23 @@ class DeploymentManager(_RestClient):
                         "target_snapshot_identity"
                     )
                     if error_target == expected_identity:
+                        cause = (
+                            "The deployment status reported an error for the "
+                            "requested snapshot. Expected client snapshot: "
+                            f"{expected_identity}; current deployment snapshot: "
+                            f"{_format_snapshot_identity(current_identity)}; "
+                            f"target snapshot: {error_target}; stage=error."
+                        )
+                        self._last_hotload_error_message = format_sdk_error(
+                            f"Hotload failed for snapshot '{expected_identity}'",
+                            cause,
+                            HOTLOAD_RECOVERY_STEPS,
+                            docs_url=DOCS_SDK,
+                            show_support=True,
+                        )
                         logger.warning(
                             "\n%s",
-                            format_sdk_error(
-                                f"Hotload failed for snapshot '{expected_identity}'",
-                                "The deployment reported an error loading the weight snapshot.",
-                                "1. Check that hotLoadBucketUrl is configured on the deployment\n"
-                                "  2. Verify the snapshot was saved successfully by the trainer\n"
-                                "  3. Ensure the base model matches between trainer and deployment",
-                                docs_url=DOCS_SDK,
-                                show_support=True,
-                            ),
+                            self._last_hotload_error_message,
                         )
                         return False
                     logger.info(
@@ -878,16 +906,51 @@ class DeploymentManager(_RestClient):
 
         logger.warning(
             "\n%s",
-            format_sdk_error(
-                f"Hotload did not complete within {timeout_seconds}s",
-                "The deployment is still loading the snapshot or may be unhealthy.",
-                f"1. Increase timeout with --hotload-timeout (current: {timeout_seconds}s)\n"
-                f"  2. Check deployment health in the Fireworks console: {CONSOLE_URL}\n"
-                "  3. Verify the snapshot identity is correct",
-                docs_url=DOCS_SDK,
+            self._format_hotload_timeout_error(
+                expected_identity=expected_identity,
+                timeout_seconds=timeout_seconds,
+                current_identity=last_current_identity,
+                stage=last_stage,
+                readiness=last_readiness,
             ),
         )
         return False
+
+    def _format_hotload_timeout_error(
+        self,
+        *,
+        expected_identity: str,
+        timeout_seconds: int,
+        current_identity: str | None,
+        stage: str,
+        readiness: bool | None,
+    ) -> str:
+        snapshot_state = (
+            f"Expected client snapshot: {expected_identity}; current deployment "
+            f"snapshot: {_format_snapshot_identity(current_identity)}."
+        )
+        if current_identity and current_identity != expected_identity:
+            cause = (
+                "The deployment status did not report the requested snapshot "
+                f"as loaded before the timeout. {snapshot_state}"
+            )
+        else:
+            cause = (
+                "The deployment status did not become ready for the requested "
+                f"snapshot before the timeout. {snapshot_state}"
+            )
+        if stage != "unknown" or readiness is not None:
+            cause = f"{cause} Last hotload state: stage={stage}, ready={readiness}."
+        self._last_hotload_error_message = format_sdk_error(
+            f"Hotload did not complete within {timeout_seconds}s",
+            cause,
+            f"{HOTLOAD_RECOVERY_STEPS}\n"
+            f"  If the deployment is simply slow or unhealthy, increase the "
+            f"hotload timeout (current: {timeout_seconds}s) and check "
+            f"deployment health in the Fireworks console: {CONSOLE_URL}",
+            docs_url=DOCS_SDK,
+        )
+        return self._last_hotload_error_message
 
     def hotload_and_wait(
         self,
@@ -985,10 +1048,9 @@ class DeploymentManager(_RestClient):
             "\n%s",
             format_sdk_error(
                 f"Inference deployment not ready after {max_retries} retries",
-                "The deployment is not responding to inference requests.",
-                f"1. Check the deployment state in the Fireworks console: {CONSOLE_URL}\n"
-                "  2. Verify the inference URL and model name are correct\n"
-                "  3. The deployment may be scaling up — try increasing retry count",
+                "The token-in completions warmup request did not receive HTTP 200 before retries were exhausted.",
+                f"Check the deployment state in the Fireworks console: {CONSOLE_URL}\n"
+                "  Verify the inference URL and model resource name used by the client.",
                 docs_url=DOCS_SDK,
             ),
         )

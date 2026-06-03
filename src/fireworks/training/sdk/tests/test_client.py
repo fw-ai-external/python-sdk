@@ -371,6 +371,16 @@ class TestFiretitanServiceClientManagedCompat:
         assert svc._managed_config.reference_training_shape_id is None
         assert svc._managed_config.reference_trainer_job_id is None
 
+    def test_from_firetitan_config_defaults_speculative_decoding_enabled(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_url=None,
+            base_model="accounts/acct/models/base",
+            training_shape_id="accounts/acct/trainingShapes/shape",
+        )
+
+        assert svc._managed_config.disable_speculative_decoding is False
+
     def test_from_firetitan_config_rejects_conflicting_aliases(self):
         with pytest.raises(ValueError, match="Pass only one alias"):
             FiretitanServiceClient.from_firetitan_config(
@@ -902,6 +912,27 @@ class TestFiretitanServiceClientManagedCompat:
         assert result is None
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("snapshot-1")
 
+    def test_requires_initial_sampler_sync_until_hotload(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._managed_config = None
+        svc._managed_handle = SimpleNamespace(requires_initial_sampler_sync=True)
+        sampler_backend = MagicMock()
+        sampler_backend.hotload_saved_snapshot.return_value = True
+        svc._sampler_backend = sampler_backend
+
+        assert svc.requires_initial_sampler_sync() is True
+
+        svc.hotload_sampler_snapshot("step-11-session")
+
+        assert svc.requires_initial_sampler_sync() is False
+        assert svc._managed_handle.requires_initial_sampler_sync is False
+
+    def test_requires_initial_sampler_sync_noops_without_handle(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._managed_handle = None
+
+        assert svc.requires_initial_sampler_sync() is False
+
 
 class TestLazyManagedRestClient:
     def _make_rest_client(self):
@@ -1135,6 +1166,30 @@ class TestTrainingClientSamplingHelpers:
         assert sampler_backend.hotload_saved_snapshot("snap-a") is True
         sampler_backend.remember_saved_snapshot("snap-b", checkpoint_type="delta")
         assert sampler_backend.hotload_saved_snapshot("snap-b") is True
+        assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is None
+
+    def test_tinker_sampler_backend_reset_snapshot_chain_forces_full_hotload(self):
+        deploy_mgr = MagicMock()
+        deploy_mgr.account_id = "acct"
+        deploy_mgr.hotload_and_wait.return_value = True
+
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            lora_rank=0,
+        )
+
+        sampler_backend.remember_saved_snapshot("snap-base", checkpoint_type="base")
+        assert sampler_backend.hotload_saved_snapshot("snap-base") is True
+        sampler_backend.remember_saved_snapshot("snap-delta", checkpoint_type="delta")
+        assert sampler_backend.hotload_saved_snapshot("snap-delta") is True
+        assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is not None
+
+        sampler_backend.reset_snapshot_chain()
+        sampler_backend.remember_saved_snapshot("snap-after-reattach", checkpoint_type="delta")
+        assert sampler_backend.hotload_saved_snapshot("snap-after-reattach") is True
+
         assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is None
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")

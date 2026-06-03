@@ -73,7 +73,7 @@ class TestWaitForOperation:
         with (
             patch.object(client, "_get_operation", side_effect=side_effects) as mock_get,
             patch("fireworks.training.sdk.fireworks_client.time.sleep"),
-            patch("fireworks.training.sdk.fireworks_client.time.monotonic", side_effect=[0, 1, 2]),
+            patch("fireworks.training.sdk.fireworks_client.time.monotonic", side_effect=[0, 1, 2, 3]),
         ):
             result = client._wait_for_operation(
                 operation,
@@ -106,3 +106,57 @@ class TestWaitForOperation:
         }
         with pytest.raises(RuntimeError, match="promotion failed"):
             client._wait_for_operation(operation, poll_interval_s=0)
+
+
+class TestPromoteCheckpointAsyncOptIn:
+    def test_promote_checkpoint_sends_async_promotion_field(self, client: FireworksClient):
+        resp = MagicMock()
+        resp.is_success = True
+        resp.json.return_value = {
+            "model": {
+                "name": "accounts/acct/models/out",
+                "state": "READY",
+                "kind": "HF_BASE_MODEL",
+            },
+        }
+
+        with patch.object(client, "_post", return_value=resp) as mock_post:
+            model = client.promote_checkpoint(
+                name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/cp-1",
+                output_model_id="out",
+                base_model="accounts/fireworks/models/base",
+            )
+
+        assert model["name"] == "accounts/acct/models/out"
+        body = mock_post.call_args.kwargs["json"]
+        assert body["async_promotion"] is True
+
+    def test_promote_checkpoint_retries_without_async_field_for_old_server(self, client: FireworksClient):
+        old_server_resp = MagicMock()
+        old_server_resp.is_success = False
+        old_server_resp.status_code = 400
+        old_server_resp.json.return_value = {
+            "error": {"message": "unknown field \"async_promotion\""}
+        }
+
+        sync_resp = MagicMock()
+        sync_resp.is_success = True
+        sync_resp.json.return_value = {
+            "model": {
+                "name": "accounts/acct/models/out",
+                "state": "READY",
+                "kind": "HF_BASE_MODEL",
+            },
+        }
+
+        with patch.object(client, "_post", side_effect=[old_server_resp, sync_resp]) as mock_post:
+            model = client.promote_checkpoint(
+                name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/cp-1",
+                output_model_id="out",
+                base_model="accounts/fireworks/models/base",
+            )
+
+        assert model["name"] == "accounts/acct/models/out"
+        assert mock_post.call_count == 2
+        assert mock_post.call_args_list[0].kwargs["json"]["async_promotion"] is True
+        assert "async_promotion" not in mock_post.call_args_list[1].kwargs["json"]
