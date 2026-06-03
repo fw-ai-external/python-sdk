@@ -46,7 +46,7 @@ All files in the `examples/` directory are not modified by the generator and can
 # add an example to examples/<your-example>.py
 
 #!/usr/bin/env -S rye run python
-…
+...
 ```
 
 ```sh
@@ -57,7 +57,7 @@ $ ./examples/<your-example>.py
 
 ## Using the repository from source
 
-If you’d like to use the repository from source, you can either install from git or link to a cloned repository:
+If you'd like to use the repository from source, you can either install from git or link to a cloned repository:
 
 To install via git:
 
@@ -113,9 +113,8 @@ the changes aren't made through the automated pipeline, you may want to make rel
 
 ### Publish with a GitHub workflow
 
-You can release to package managers by using [the `Publish PyPI` GitHub action](https://www.github.com/fw-ai-external/python-sdk/actions/workflows/publish-pypi.yml). This requires a setup organization or repository secret to be set up.
+You can release to package managers by using [the `Publish PyPI` GitHub action](https://www.github.com/fw-ai-external/python-sdk/actions/workflows/publish-pypi.yml). This requires `PYPI_TOKEN` to be configured as an organization or repository secret with publish access to the `fireworks-ai` PyPI project.
 
 ### Publish manually
 
-If you need to manually release a package, you can run the `bin/publish-pypi` script with a `PYPI_TOKEN` set on
-the environment.
+If you need to manually release a package, you can run the `bin/publish-pypi` script with `PYPI_TOKEN` set in the environment.

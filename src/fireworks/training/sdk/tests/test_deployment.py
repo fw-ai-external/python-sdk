@@ -580,6 +580,32 @@ class TestWaitForHotload:
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=0.01, poll_interval=0.005)
         assert result is False
 
+    def test_error_status_records_client_snapshot_state(self, mgr):
+        mgr.hotload_check_status = MagicMock(return_value={
+            "replicas": [{
+                "current_snapshot_identity": "old-snap",
+                "readiness": False,
+                "loading_state": {
+                    "stage": "error",
+                    "target_snapshot_identity": "snap-1",
+                },
+            }]
+        })
+
+        result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
+
+        assert result is False
+        assert mgr.last_hotload_error_message is not None
+        assert "reported an error for the requested snapshot" in mgr.last_hotload_error_message
+        assert "Expected client snapshot: snap-1" in mgr.last_hotload_error_message
+        assert "current deployment snapshot: old-snap" in mgr.last_hotload_error_message
+        assert "Use the Fireworks training cookbook skill's hotload recovery self-check" in mgr.last_hotload_error_message
+        assert "reattach or recreate a stale deployment" in mgr.last_hotload_error_message
+        assert "full-parameter training" in mgr.last_hotload_error_message
+        assert "for LoRA, fix deployment attachment" in mgr.last_hotload_error_message
+        assert "First search the Fireworks training cookbook skill" in mgr.last_hotload_error_message
+        assert "https://github.com/fw-ai/cookbook" in mgr.last_hotload_error_message
+
 
 # ---------------------------------------------------------------------------
 # _extract_logprobs

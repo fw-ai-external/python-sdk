@@ -197,7 +197,7 @@ class TestManagedProvisioning:
         ):
             events.append(f"deployment_start:{trainer_job_name}:{deployment_shape}")
             deployment_started.set()
-            return SimpleNamespace(deployment_id="deployment-1"), object()
+            return SimpleNamespace(deployment_id="deployment-1"), object(), False
 
         monkeypatch.setattr(
             managed_module,

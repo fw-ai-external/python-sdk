@@ -201,6 +201,8 @@ class DeploymentSampler(_RestClient):
         so the server includes complete metrics in the last chunk.
         """
         http_timeout = kwargs.pop("http_timeout", 600)
+        if kwargs.get("images"):
+            kwargs.setdefault("return_token_ids", True)
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
@@ -439,6 +441,11 @@ class DeploymentSampler(_RestClient):
         and logprob extraction are inherited from :meth:`_do_one_completion` and
         :meth:`_parse_completions_result`.
 
+        Pass ``images`` (base64 data URLs) for vision models with an unexpanded
+        token prompt (one ``<|image_pad|>`` token per image). The server expands
+        image pads; ``return_token_ids`` is set automatically so
+        :class:`SampledCompletion` uses the expanded ``prompt_token_ids``.
+
         ``list[str]`` stops are forwarded as string stop sequences. ``list[int]``
         stops are decoded with the sampler tokenizer before forwarding because
         the completions API only accepts string stop sequences.
@@ -613,9 +620,8 @@ class DeploymentSampler(_RestClient):
                     format_sdk_error(
                         "Deployment did not return raw_output token IDs",
                         f"The API response is missing completion_token_ids. Got choice keys: {list(choice.keys())}",
-                        "Ensure the deployment supports raw_output=True.\n"
-                        "  This requires a deployment running a compatible model version.\n"
-                        "  Check that the deployment base model matches your training model.",
+                        "The sampler requested raw_output=True, which is required for token-in RL rollouts. "
+                        "Use a deployment path that returns raw_output.completion_token_ids for completions.",
                         docs_url=DOCS_SDK,
                         show_support=True,
                     )
@@ -624,6 +630,15 @@ class DeploymentSampler(_RestClient):
             token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
             routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
 
+            expanded_prompt_ids = (
+                choice.get("prompt_token_ids")
+                or raw.get("prompt_token_ids")
+            )
+            if expanded_prompt_ids is not None:
+                prompt_for_full = [int(x) for x in expanded_prompt_ids]
+            else:
+                prompt_for_full = list(prompt_ids)
+
             # With echo=True the API returns P+C tokens in
             # completion_token_ids and logprobs cover all P+C positions.
             # Strip the prompt prefix (verified by actual content match)
@@ -631,25 +646,29 @@ class DeploymentSampler(_RestClient):
             # P+C-1 training-aligned entries.
             lp_is_echo = False
             if echo_mode:
-                if len(completion_ids) < len(prompt_ids) or completion_ids[: len(prompt_ids)] != list(prompt_ids):
+                if (
+                    len(completion_ids) < len(prompt_for_full)
+                    or completion_ids[: len(prompt_for_full)] != prompt_for_full
+                ):
                     raise RuntimeError(
                         format_sdk_error(
                             "Echo response format mismatch",
                             "echo=True was requested but completion_token_ids do not include the prompt prefix.",
-                            "Ensure the deployment supports token echo with raw_output=True.",
+                            "The sampler uses echo=True to align prompt and completion token logprobs. "
+                            "Use a deployment path whose raw_output token IDs include the prompt prefix when echo is enabled.",
                             docs_url=DOCS_SDK,
                             show_support=True,
                         )
                     )
 
-                completion_ids = completion_ids[len(prompt_ids) :]
+                completion_ids = completion_ids[len(prompt_for_full) :]
                 if token_logprobs is not None:
                     token_logprobs = token_logprobs[1:]
                     lp_is_echo = True
                 if routing_matrices is not None:
                     routing_matrices = routing_matrices[1:]
 
-            full_tokens = list(prompt_ids) + list(completion_ids)
+            full_tokens = prompt_for_full + list(completion_ids)
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
                 logger.debug(
                     "Completion post-filtered: %d tokens > max_seq_len %d",
@@ -662,7 +681,7 @@ class DeploymentSampler(_RestClient):
                 SampledCompletion(
                     text=text,
                     full_tokens=full_tokens,
-                    prompt_len=len(prompt_ids),
+                    prompt_len=len(prompt_for_full),
                     finish_reason=finish_reason,
                     completion_len=len(completion_ids),
                     inference_logprobs=token_logprobs,

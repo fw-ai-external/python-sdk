@@ -10,6 +10,7 @@ import requests
 from fireworks.training.sdk.errors import (
     DISCORD_URL,
     HTTP_STATUS_HINTS,
+    AGENT_DEBUG_INSTRUCTIONS,
     parse_api_error,
     format_sdk_error,
     request_with_retries,
@@ -27,6 +28,7 @@ class TestFormatSdkError:
         assert "ERROR: Job failed" in result
         assert "Cause: bad model" in result
         assert "Solution: Fix the model name" in result
+        assert f"Agent debug: {AGENT_DEBUG_INSTRUCTIONS}" in result
 
     def test_with_docs_url(self):
         result = format_sdk_error(
@@ -50,7 +52,8 @@ class TestFormatSdkError:
         assert lines[0].startswith("ERROR:")
         assert lines[1].strip().startswith("Cause:")
         assert lines[2].strip().startswith("Solution:")
-        assert lines[3].strip().startswith("Docs:")
+        assert lines[3].strip().startswith("Agent debug:")
+        assert lines[4].strip().startswith("Docs:")
 
     def test_show_support_includes_discord(self):
         result = format_sdk_error("Oops", "reason", "Try again", show_support=True)
@@ -63,8 +66,9 @@ class TestFormatSdkError:
     def test_show_support_with_docs(self):
         result = format_sdk_error("W", "C", "S", docs_url="D", show_support=True)
         lines = result.split("\n")
-        assert lines[3].strip().startswith("Docs:")
-        assert lines[4].strip().startswith("Support:")
+        assert lines[3].strip().startswith("Agent debug:")
+        assert lines[4].strip().startswith("Docs:")
+        assert lines[5].strip().startswith("Support:")
 
 
 class TestHttpStatusHints:

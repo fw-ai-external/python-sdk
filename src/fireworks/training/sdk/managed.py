@@ -107,7 +107,7 @@ class FiretitanProvisioningConfig:
     display_name: str | None = None
     purpose: str | None = None
     skip_validations: bool = False
-    disable_speculative_decoding: bool = True
+    disable_speculative_decoding: bool = False
 
     def __post_init__(self) -> None:
         active_deployment_region = self.deployment_region if self.create_deployment else None
@@ -161,6 +161,7 @@ class _ManagedTinkerHandle:
     max_context_length: int | None = None
     deployment_shape: str | None = None
     deployment: DeploymentInfo | None = None
+    requires_initial_sampler_sync: bool = False
     sampler_backend: "_TinkerSamplerBackend | None" = None
     trainer_manager: TrainerJobManager | None = None
     deployment_manager: DeploymentManager | None = None
@@ -256,6 +257,11 @@ class _TinkerSamplerBackend:
         if checkpoint_type is not None:
             self._snapshot_types[model_path] = checkpoint_type.lower()
 
+    def reset_snapshot_chain(self) -> None:
+        """Forget snapshots from a previous trainer namespace after reattach."""
+        self._snapshot_types.clear()
+        self._base_identity = None
+
     def hotload_saved_snapshot(self, model_path: str) -> bool:
         incremental = build_incremental_metadata(
             lora_rank=self.lora_rank,
@@ -294,6 +300,12 @@ class _TinkerSamplerBackend:
         return FiretitanSamplingClient(sampler)
 
 
+@dataclass(frozen=True)
+class _DeploymentAttachResult:
+    deployment: DeploymentInfo
+    reattached: bool = False
+
+
 def _build_resource_managers(
     *,
     api_key: str,
@@ -327,14 +339,15 @@ def _attach_managed_deployment(
     *,
     trainer_job_name: str,
     deployment_shape: str | None,
-) -> tuple[DeploymentInfo, "_TinkerSamplerBackend"]:
+) -> tuple[DeploymentInfo, "_TinkerSamplerBackend", bool]:
     """Create/reattach the managed deployment and build its sampler backend."""
-    deployment = _create_or_reattach_deployment(
+    attach_result = _create_or_reattach_deployment_result(
         deploy_mgr,
         config,
         trainer_job_name=trainer_job_name,
         deployment_shape=deployment_shape,
     )
+    deployment = attach_result.deployment
     sampler_backend = _TinkerSamplerBackend(
         deploy_mgr=deploy_mgr,
         deployment_id=deployment.deployment_id,
@@ -342,7 +355,9 @@ def _attach_managed_deployment(
         hotload_timeout_s=config.hotload_timeout_s,
         lora_rank=config.lora_rank,
     )
-    return deployment, sampler_backend
+    if attach_result.reattached:
+        sampler_backend.reset_snapshot_chain()
+    return deployment, sampler_backend, attach_result.reattached
 
 
 def _create_managed_tinker_client(
@@ -423,8 +438,9 @@ def _create_managed_tinker_client(
         endpoint = trainer_future.result()
         deployment = None
         sampler_backend = None
+        deployment_reattached = False
         if deployment_future is not None:
-            deployment, sampler_backend = deployment_future.result()
+            deployment, sampler_backend, deployment_reattached = deployment_future.result()
         reference_handle = None
         if reference_future is not None:
             reference_handle = reference_future.result()
@@ -450,6 +466,7 @@ def _create_managed_tinker_client(
         max_context_length=max_context_length,
         deployment_shape=deployment_shape,
         deployment=deployment,
+        requires_initial_sampler_sync=deployment_reattached,
         sampler_backend=sampler_backend,
         trainer_manager=trainer_mgr,
         deployment_manager=deploy_mgr,
@@ -600,6 +617,21 @@ def _create_or_reattach_deployment(
     trainer_job_name: str,
     deployment_shape: str | None,
 ) -> DeploymentInfo:
+    return _create_or_reattach_deployment_result(
+        deploy_mgr,
+        config,
+        trainer_job_name=trainer_job_name,
+        deployment_shape=deployment_shape,
+    ).deployment
+
+
+def _create_or_reattach_deployment_result(
+    deploy_mgr: DeploymentManager,
+    config: _ManagedTinkerConfig,
+    *,
+    trainer_job_name: str,
+    deployment_shape: str | None,
+) -> _DeploymentAttachResult:
     deployment_id = config.deployment_id or _default_deployment_id(config.base_model)
     existing = deploy_mgr.get(deployment_id) if config.deployment_id else None
     if existing and existing.state not in DEPLOYMENT_TERMINAL_STATES:
@@ -615,6 +647,8 @@ def _create_or_reattach_deployment(
                 f"deployment_shape {deployment_shape!r}. Delete the existing deployment or "
                 "request its shape; a reattach must not silently serve a different shape."
             )
+        previous_trainer_job = getattr(existing, "hot_load_trainer_job", None)
+        reattached = previous_trainer_job != trainer_job_name
         deployment = deploy_mgr.reattach_trainer(
             existing,
             base_model=config.base_model,
@@ -623,8 +657,8 @@ def _create_or_reattach_deployment(
             poll_interval_s=config.reattach_poll_interval_s,
         )
         if existing.state not in DEPLOYMENT_SERVING_STATES:
-            return deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
-        return deployment
+            deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
+        return _DeploymentAttachResult(deployment=deployment, reattached=reattached)
 
     replica_count = max(config.replica_count, 0)
     region = config.deployment_region or config.region
@@ -656,7 +690,7 @@ def _create_or_reattach_deployment(
     deployment = deploy_mgr.create_or_get(deployment_config)
     if deployment.state not in DEPLOYMENT_SERVING_STATES:
         deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
-    return deployment
+    return _DeploymentAttachResult(deployment=deployment, reattached=False)
 
 
 def _default_deployment_id(base_model: str) -> str:

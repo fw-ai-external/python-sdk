@@ -39,6 +39,7 @@ from dataclasses import field, dataclass
 from transformers import PreTrainedTokenizerBase
 
 from fireworks.training.sdk.client import FiretitanTrainingClient
+from fireworks.training.sdk.errors import DOCS_SDK, format_sdk_error
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
     HOTLOAD_TIMEOUT_S,
@@ -332,9 +333,17 @@ class WeightSyncer:
         )
         self.last_timing["hotload_time_s"] = time.time() - t0
         if not ok:
+            detail = getattr(self.deploy_mgr, "last_hotload_error_message", None)
+            if isinstance(detail, str) and detail:
+                raise RuntimeError(detail)
             raise RuntimeError(
-                f"Hotload failed for '{snapshot_name}': deployment did not accept snapshot. "
-                f"Check deployment hotLoadBucketUrl and base model match."
+                format_sdk_error(
+                    f"Hotload failed for '{snapshot_name}'",
+                    "hotload_and_wait returned False without a detailed status error.",
+                    "Use the Fireworks training cookbook skill's hotload recovery self-check. "
+                    "Verify the requested snapshot identity against deployment status, then use the documented PER_TRAINER or PER_DEPLOYMENT flow.",
+                    docs_url=DOCS_SDK,
+                )
             )
         self.base_identity = snapshot_name
         logger.info("Hotload complete: %s", snapshot_name)
