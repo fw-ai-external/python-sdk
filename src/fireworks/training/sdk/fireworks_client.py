@@ -521,11 +521,20 @@ class FireworksClient(_RestClient):
             if model is None:
                 model = result.get("model")
             if not model:
+                # The async promotion LRO can finish done=true without echoing
+                # the promoted model in its `response` payload. The model has
+                # still been created, so fetch it by name rather than failing a
+                # job whose training and promotion both actually succeeded
+                # (otherwise the recipe crashes in the finalize step even though
+                # the output model is READY on the control plane).
+                model = self._fetch_promoted_model(account_id, output_model_id)
+            if not model:
                 raise RuntimeError(
                     format_sdk_error(
                         f"Failed to promote checkpoint '{checkpoint_id}'",
                         "promotion operation completed without a model response",
-                        "The promote operation finished, but the server response did not contain the promoted model payload. "
+                        "The promote operation finished, but neither the server response nor a "
+                        "follow-up model lookup returned the promoted model payload. "
                         "Check the operation and output model in the Fireworks console.\n"
                         f"  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
@@ -559,6 +568,30 @@ class FireworksClient(_RestClient):
                 f"accounts/{account_id}/deployments/{hot_load_deployment_id}"
             )
         return path, body
+
+    def _fetch_promoted_model(self, account_id: str, output_model_id: str) -> dict | None:
+        """Best-effort GET of the promoted model resource by name.
+
+        Used as a recovery path when an async ``:promote`` operation completes
+        without a model payload in its ``response`` (the model is still
+        created). Returns the model dict, or ``None`` on any error so the
+        caller can fall through to its explicit "no model" failure rather than
+        letting a recovery read mask the original promotion outcome.
+        """
+        path = f"/v1/accounts/{account_id}/models/{output_model_id}"
+        try:
+            resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
+        except Exception as e:  # noqa: BLE001 - best-effort recovery read
+            logger.warning("Failed to fetch promoted model %r: %s", path, e)
+            return None
+        if not resp.is_success:
+            logger.warning(
+                "Promoted model fetch returned HTTP %s for %r",
+                resp.status_code,
+                path,
+            )
+            return None
+        return resp.json() or None
 
     def _resolve_promote_target(
         self,
@@ -603,7 +636,7 @@ class FireworksClient(_RestClient):
     @staticmethod
     def _log_promoted_model(result: dict) -> dict:
         """Log the promoted model's state/kind/PEFT details and return the model."""
-        model = result.get("model", {})
+        model = result.get("model") or {}
         logger.info(
             "Promoted! Model state=%s, kind=%s",
             model.get("state", "UNKNOWN"),

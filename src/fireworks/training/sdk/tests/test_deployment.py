@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import types as pytypes
 import asyncio
+import logging
 from dataclasses import replace
 from unittest.mock import MagicMock
 
@@ -452,6 +453,26 @@ class TestHotload:
         )
         payload = mgr._sync_request.call_args[1]["json"]
         assert payload["incremental_snapshot_metadata"]["previous_snapshot_identity"] == "snap-1"
+
+    def test_hotload_log_describes_non_delta_snapshot_with_context(self, mgr, caplog):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {}
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        caplog.set_level(logging.INFO, logger="fireworks.training.sdk.deployment")
+        mgr.hotload(
+            "dep-1",
+            "accounts/test/models/m",
+            "snap-123",
+        )
+
+        assert (
+            "Hotloading BASE (non-delta) snapshot 'snap-123' to deployment 'dep-1'"
+            in caplog.text
+        )
+        assert "FULL snapshot" not in caplog.text
 
     def test_hotload_retries_without_reset_prompt_cache_when_rejected(self, mgr):
         unsupported = self._response(

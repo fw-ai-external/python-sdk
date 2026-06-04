@@ -46,6 +46,9 @@ _DEPLOYMENT_ACCELERATOR_REGION_PREFIXES: tuple[tuple[str, str], ...] = (
 )
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
+_POLICY_TRAINER_MODE = "POLICY_TRAINER"
+_FORWARD_ONLY_TRAINER_MODE = "FORWARD_ONLY"
+_LORA_TRAINER_MODE = "LORA_TRAINER"
 
 
 @dataclass(frozen=True)
@@ -61,9 +64,9 @@ class FiretitanProvisioningConfig:
     tokenizer_model: str | None = None
     lora_rank: int = 0
     training_shape_id: str | None = None
-    # Optional separate forward-only reference trainer shape. When set (or when
-    # the policy is full-parameter), create_reference_client provisions a
-    # dedicated reference trainer instead of reusing the policy session.
+    # Optional separate reference trainer shape. Full-parameter references must
+    # set this or reference_trainer_job_id; LoRA without either uses the policy
+    # session as the frozen base reference.
     reference_training_shape_id: str | None = None
     # Optional existing forward-only reference trainer to reattach to. When set,
     # it disables LoRA shared-reference and is never cleaned up on close.
@@ -128,9 +131,7 @@ class FiretitanProvisioningConfig:
         if self.replica_count is None:
             object.__setattr__(self, "replica_count", 1)
         elif self.replica_count == 0:
-            logger.warning(
-                "deployment replica_count=0 is not valid for an inference deployment; using 1."
-            )
+            logger.warning("deployment replica_count=0 is not valid for an inference deployment; using 1.")
             object.__setattr__(self, "replica_count", 1)
         if self.hotload_timeout_s is None:
             object.__setattr__(self, "hotload_timeout_s", HOTLOAD_TIMEOUT_S)
@@ -392,6 +393,12 @@ def _create_managed_tinker_client(
     max_context_length = config.max_context_length
     if max_context_length is None and profile is not None:
         max_context_length = profile.max_supported_context_length
+
+    reference_config = None
+    if _should_provision_reference(config):
+        reference_config = _reference_managed_config(config, policy_lora_rank=config.lora_rank)
+        _validate_reference_training_shape(trainer_mgr, reference_config)
+
     started_trainer = _start_or_reuse_trainer(
         trainer_mgr,
         config,
@@ -399,11 +406,6 @@ def _create_managed_tinker_client(
         profile_training_shape=profile.training_shape_version if profile else None,
     )
     deployment_shape = config.deployment_shape or (profile.deployment_shape if profile else None)
-    should_provision_reference = (
-        config.reference_required
-        and not config.forward_only
-        and not _use_shared_base_reference(config, policy_lora_rank=config.lora_rank)
-    )
     with ThreadPoolExecutor(max_workers=3, thread_name_prefix="firetitan-provision") as executor:
         trainer_future = executor.submit(
             _wait_for_started_trainer,
@@ -422,11 +424,11 @@ def _create_managed_tinker_client(
             )
 
         reference_future = None
-        if should_provision_reference:
+        if reference_config is not None:
             reference_future = executor.submit(
                 _create_managed_tinker_client,
                 api_key=api_key,
-                config=_reference_managed_config(config, policy_lora_rank=config.lora_rank),
+                config=reference_config,
                 user_metadata=user_metadata,
                 base_url=base_url,
                 inference_url=inference_url,
@@ -476,18 +478,53 @@ def _create_managed_tinker_client(
     )
 
 
+def _should_provision_reference(config: _ManagedTinkerConfig) -> bool:
+    return (
+        config.reference_required
+        and not config.forward_only
+        and not _use_shared_base_reference(config, policy_lora_rank=config.lora_rank)
+    )
+
+
+def _validate_reference_training_shape(
+    trainer_mgr: TrainerJobManager,
+    reference_config: _ManagedTinkerConfig,
+) -> None:
+    """Validate a fresh separate reference trainer shape before policy create."""
+    if not reference_config.training_shape_id:
+        return
+    profile = trainer_mgr.resolve_training_profile(reference_config.training_shape_id)
+    expected = _expected_reference_trainer_mode(reference_config)
+    raw_mode = getattr(profile, "trainer_mode", "") or ""
+    actual = raw_mode or _POLICY_TRAINER_MODE
+    if actual == expected:
+        return
+    raise ValueError(
+        f"reference_training_shape_id={reference_config.training_shape_id!r} "
+        f"resolves to trainer_mode={actual!r}, "
+        f"but this run requires trainer_mode={expected!r} "
+        f"(lora_rank={reference_config.lora_rank}, forward_only={reference_config.forward_only}). "
+        "Use a training shape validated for the requested trainer mode."
+    )
+
+
+def _expected_reference_trainer_mode(reference_config: _ManagedTinkerConfig) -> str:
+    if reference_config.lora_rank > 0:
+        return _LORA_TRAINER_MODE
+    return _FORWARD_ONLY_TRAINER_MODE
+
+
 def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank: int) -> bool:
     """Whether the KL/DPO reference reuses the policy trainer session.
 
     A LoRA policy without an explicit reference shape or reference job gets its
     frozen base for free by disabling the adapter on the policy session — no
-    second trainer. Full-parameter, an explicit reference shape, or an explicit
-    reference job requires a separate forward-only reference trainer.
+    second trainer. Full-parameter references need an explicit reference shape
+    or existing reference job; an explicit LoRA reference shape also provisions
+    a separate trainer.
     """
     return (
-        config.reference_training_shape_id is None
-        and config.reference_trainer_job_id is None
-        and policy_lora_rank > 0
+        config.reference_training_shape_id is None and config.reference_trainer_job_id is None and policy_lora_rank > 0
     )
 
 
@@ -498,20 +535,26 @@ def _reference_managed_config(
 ) -> _ManagedTinkerConfig:
     """Derive the config for a separate forward-only reference trainer.
 
-    Uses ``reference_training_shape_id`` when set, otherwise the policy
-    ``training_shape_id`` (the control plane runs it forward-only). A LoRA
-    reference with an explicit shape loads the adapter on top of the base;
-    otherwise the reference forwards the frozen base directly. When
-    ``reference_trainer_job_id`` is set, the reference reattaches that existing
-    job and leaves ownership with the caller. The reference inherits the policy
-    region (``config.region``) for checkpoint colocation and never provisions a
-    deployment. Fresh SDK-created references are cleaned by default unless the
-    parent config explicitly keeps them for a later reattach phase.
+    ``reference_training_shape_id`` selects a fresh reference trainer shape;
+    ``reference_trainer_job_id`` reattaches an existing reference and leaves
+    ownership with the caller. A LoRA reference with an explicit shape loads the
+    adapter on top of the base; otherwise the reference forwards the frozen base
+    directly. The reference inherits the policy region (``config.region``) for
+    checkpoint colocation and never provisions a deployment. Fresh SDK-created
+    references are cleaned by default unless the parent config explicitly keeps
+    them for a later reattach phase.
     """
-    reference_shape = config.reference_training_shape_id or config.training_shape_id
-    reference_lora_rank = (
-        policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
-    )
+    if not config.reference_training_shape_id and not config.reference_trainer_job_id:
+        raise ValueError(
+            "Cannot provision a separate reference trainer without "
+            "reference_training_shape_id or reference_trainer_job_id. "
+            "Full-parameter reference runs cannot reuse training_shape_id as a "
+            "forward-only reference shape; provide a reference_training_shape_id "
+            "validated for FORWARD_ONLY, or pass an "
+            "existing reference_trainer_job_id."
+        )
+    reference_shape = config.reference_training_shape_id
+    reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
     return replace(
         config,
         training_shape_id=reference_shape,
@@ -523,8 +566,7 @@ def _reference_managed_config(
         reference_required=False,
         trainer_replica_count=None,
         cleanup_trainer_on_close=(
-            config.reference_trainer_job_id is None
-            and config.cleanup_reference_trainer_on_close
+            config.reference_trainer_job_id is None and config.cleanup_reference_trainer_on_close
         ),
     )
 

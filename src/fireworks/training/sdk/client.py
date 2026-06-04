@@ -1385,7 +1385,6 @@ class FiretitanTrainingClient(TrainingClient):
             request_type="CreateBaseModel",
         )
 
-
     def save_state(
         self,
         name: str,
@@ -1873,9 +1872,10 @@ class FiretitanServiceClient(ServiceClient):
     def reference_client_job_id(self) -> str:
         """Trainer job id used by the reference client.
 
-        Shared LoRA references run on the policy trainer, while full-param or
-        explicitly configured references run on a separate forward-only trainer.
-        Recipes should use this for reference reconnect metadata.
+        Shared LoRA references run on the policy trainer. Full-parameter
+        references must be explicitly configured with a separate reference shape
+        or existing reference job. Recipes should use this for reference
+        reconnect metadata.
         """
         return self.reference_job_id or self.trainer_job_id
 
@@ -1909,9 +1909,7 @@ class FiretitanServiceClient(ServiceClient):
             _warn_deprecated_override(
                 "create_training_client", "base_model", base_model, self._managed_config.base_model
             )
-            _warn_deprecated_override(
-                "create_training_client", "lora_rank", lora_rank, self._managed_config.lora_rank
-            )
+            _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, self._managed_config.lora_rank)
         managed_handle = self._ensure_managed_handle(
             user_metadata=self._user_metadata(user_metadata),
         )
@@ -2339,18 +2337,16 @@ class FiretitanServiceClient(ServiceClient):
         * LoRA policy without a ``reference_training_shape_id`` → the reference
           reuses the policy trainer session with the adapter disabled (base
           weights). No second trainer is provisioned.
-        * Full-parameter, or an explicit ``reference_training_shape_id`` → the
-          SDK provisions a separate forward-only reference trainer that it owns
-          and tears down on :meth:`close` (or early via
-          :meth:`release_references`).
+        * Full-parameter policies require ``reference_training_shape_id`` or
+          ``reference_trainer_job_id``. With a reference shape, the SDK
+          provisions a separate forward-only trainer that it owns and tears down
+          on :meth:`close` (or early via :meth:`release_references`).
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:
             from fireworks.training.sdk.managed import _use_shared_base_reference
 
-            _warn_deprecated_override(
-                "create_reference_client", "base_model", base_model, managed_config.base_model
-            )
+            _warn_deprecated_override("create_reference_client", "base_model", base_model, managed_config.base_model)
             policy_lora_rank = lora_rank or managed_config.lora_rank
             if _use_shared_base_reference(managed_config, policy_lora_rank=policy_lora_rank):
                 handle = self._ensure_managed_handle(

@@ -46,6 +46,18 @@ from fireworks.training.sdk.tinker_compat import (
     patched_tinker_service_client,
     restore_tinker_service_client,
 )
+from fireworks.training.sdk.training_spec import (
+    WSDSchedule,
+    CosineSchedule,
+    LinearSchedule,
+    LRSchedulerSpec,
+    ConstantSchedule,
+    compute_lr,
+    has_v1_scheduler_fields,
+    parse_lr_scheduler_spec,
+    default_constant_schedule,
+    normalize_lr_scheduler_spec,
+)
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 from fireworks.training.sdk.fireworks_client import (
     FireworksClient,
@@ -85,4 +97,15 @@ __all__ = [
     "FixedConcurrencyController",
     "SampledCompletion",
     "ServerMetrics",
+    # LR scheduler shared schema
+    "ConstantSchedule",
+    "LinearSchedule",
+    "CosineSchedule",
+    "WSDSchedule",
+    "LRSchedulerSpec",
+    "default_constant_schedule",
+    "parse_lr_scheduler_spec",
+    "normalize_lr_scheduler_spec",
+    "compute_lr",
+    "has_v1_scheduler_fields",
 ]
