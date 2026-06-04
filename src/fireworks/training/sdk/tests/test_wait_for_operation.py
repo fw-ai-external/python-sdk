@@ -160,3 +160,60 @@ class TestPromoteCheckpointAsyncOptIn:
         assert mock_post.call_count == 2
         assert mock_post.call_args_list[0].kwargs["json"]["async_promotion"] is True
         assert "async_promotion" not in mock_post.call_args_list[1].kwargs["json"]
+
+    def test_promote_checkpoint_fetches_model_when_async_response_empty(self, client: FireworksClient):
+        # The async promotion LRO finishes done=true but carries no model in its
+        # `response` (and the initial POST body had only the operation). The
+        # model is still created, so the SDK must fetch it by name instead of
+        # crashing (regression: AttributeError 'NoneType' has no attribute 'get').
+        op_resp = MagicMock()
+        op_resp.is_success = True
+        op_resp.json.return_value = {
+            "operation": {"name": "accounts/acct/operations/op-1", "done": True},
+        }
+
+        model_resp = MagicMock()
+        model_resp.is_success = True
+        model_resp.json.return_value = {
+            "name": "accounts/acct/models/out",
+            "state": "READY",
+            "kind": "HF_PEFT_ADDON",
+        }
+
+        with (
+            patch.object(client, "_post", return_value=op_resp),
+            patch.object(client, "_get", return_value=model_resp) as mock_get,
+        ):
+            model = client.promote_checkpoint(
+                name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/cp-1",
+                output_model_id="out",
+                base_model="accounts/fireworks/models/base",
+            )
+
+        assert model["name"] == "accounts/acct/models/out"
+        assert model["state"] == "READY"
+        assert mock_get.call_args.args[0] == "/v1/accounts/acct/models/out"
+
+    def test_promote_checkpoint_raises_clean_error_when_model_unavailable(self, client: FireworksClient):
+        # Async LRO with empty response AND the recovery model fetch fails: the
+        # SDK must raise a clear, actionable error -- never a bare AttributeError.
+        op_resp = MagicMock()
+        op_resp.is_success = True
+        op_resp.json.return_value = {
+            "operation": {"name": "accounts/acct/operations/op-1", "done": True},
+        }
+
+        missing_resp = MagicMock()
+        missing_resp.is_success = False
+        missing_resp.status_code = 404
+
+        with (
+            patch.object(client, "_post", return_value=op_resp),
+            patch.object(client, "_get", return_value=missing_resp),
+        ):
+            with pytest.raises(RuntimeError, match="without a model response"):
+                client.promote_checkpoint(
+                    name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/cp-1",
+                    output_model_id="out",
+                    base_model="accounts/fireworks/models/base",
+                )

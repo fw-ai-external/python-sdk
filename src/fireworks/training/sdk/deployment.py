@@ -697,13 +697,19 @@ class DeploymentManager(_RestClient):
         headers = self._hotload_headers(deployment_id, base_model, path=path)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        ckpt_type = "DELTA" if incremental_snapshot_metadata else "FULL"
+        ckpt_type = (
+            "DELTA" if incremental_snapshot_metadata else "BASE (non-delta)"
+        )
+        details: list[str] = []
+        if path:
+            details.append(f"source={path}")
+        detail_suffix = f" ({', '.join(details)})" if details else ""
         logger.info(
             "Hotloading %s snapshot '%s' to deployment '%s'%s",
             ckpt_type,
             snapshot_identity,
             deployment_id,
-            f" (source={path})" if path else "",
+            detail_suffix,
         )
 
         include_reset_prompt_cache = self._hotload_reset_prompt_cache_supported is not False

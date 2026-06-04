@@ -5,8 +5,8 @@ The shared-vs-separate-trainer choice for the reference model lives entirely in
 gets the same behavior:
 
 * LoRA policy without an explicit reference shape/job -> reuse the policy session.
-* Full-parameter, an explicit ``reference_training_shape_id``, or an explicit
-  ``reference_trainer_job_id`` -> a separate forward-only reference trainer.
+* Full-parameter references require an explicit ``reference_training_shape_id``
+  or ``reference_trainer_job_id`` for a separate forward-only reference trainer.
 
 These tests cover the decision predicate and the derived reference config; the
 recipe-facing wrapper is tested in the cookbook suite.
@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
+
+import pytest
 
 import fireworks.training.sdk.managed as managed_module
 from fireworks.training.sdk.managed import (
@@ -66,14 +68,10 @@ class TestUseSharedBaseReference:
 class TestReferenceManagedConfig:
     """The separate reference trainer is forward-only and deployment-free."""
 
-    def test_full_param_uses_policy_shape_forward_only_base(self):
+    def test_full_param_requires_explicit_reference_shape_or_job(self):
         config = _policy_config(reference_training_shape_id=None)
-        reference = _reference_managed_config(config, policy_lora_rank=0)
-        assert reference.training_shape_id == "ts-policy"
-        assert reference.lora_rank == 0
-        assert reference.forward_only is True
-        assert reference.create_deployment is False
-        assert reference.cleanup_trainer_on_close is True
+        with pytest.raises(ValueError, match="reference_training_shape_id"):
+            _reference_managed_config(config, policy_lora_rank=0)
 
     def test_fresh_trainer_and_no_deployment_reattach(self):
         # A fresh reference must never reattach the policy trainer or deployment.
@@ -85,12 +83,16 @@ class TestReferenceManagedConfig:
     def test_explicit_reference_job_reattaches_without_cleanup(self):
         config = _policy_config(reference_trainer_job_id="ref-job")
         reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.training_shape_id is None
         assert reference.trainer_job_id == "ref-job"
         assert reference.deployment_id is None
         assert reference.cleanup_trainer_on_close is False
 
     def test_fresh_reference_can_be_kept_for_later_reattach(self):
-        config = _policy_config(cleanup_reference_trainer_on_close=False)
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            cleanup_reference_trainer_on_close=False,
+        )
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.trainer_job_id is None
         assert reference.cleanup_trainer_on_close is False
@@ -129,10 +131,12 @@ class TestManagedProvisioning:
 
             def resolve_training_profile(self, training_shape_id):
                 events.append(f"resolve:{training_shape_id}")
+                trainer_mode = "FORWARD_ONLY" if training_shape_id == "ts-reference" else "POLICY_TRAINER"
                 return SimpleNamespace(
-                    training_shape_version="ts-policy/versions/v1",
+                    training_shape_version=f"{training_shape_id}/versions/v1",
                     deployment_shape="deployment-shape/versions/v1",
                     max_supported_context_length=32768,
+                    trainer_mode=trainer_mode,
                 )
 
             def create(self, config):
@@ -231,6 +235,88 @@ class TestManagedProvisioning:
         assert handle.trainer_endpoint.job_id == "policy-job"
         assert handle.reference_handle.trainer_endpoint.job_id == "reference-job"
         assert handle.deployment.deployment_id == "deployment-1"
+
+    def test_full_param_reference_without_shape_fails_before_creating(self, monkeypatch):
+        events: list[str] = []
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                events.append(f"resolve:{training_shape_id}")
+                return SimpleNamespace(
+                    training_shape_version=f"{training_shape_id}/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="POLICY_TRAINER",
+                )
+
+            def create(self, _config):
+                events.append("create")
+                raise AssertionError("trainer create should not run after preflight failure")
+
+        def fake_build_resource_managers(**_kwargs):
+            return FakeTrainerManager(), object()
+
+        monkeypatch.setattr(
+            managed_module,
+            "_build_resource_managers",
+            fake_build_resource_managers,
+        )
+
+        with pytest.raises(ValueError, match="reference_training_shape_id"):
+            managed_module._create_managed_tinker_client(
+                api_key="fw-key",
+                config=_policy_config(
+                    trainer_job_id=None,
+                    deployment_id=None,
+                    reference_training_shape_id=None,
+                    reference_required=True,
+                ),
+            )
+
+        assert events == ["resolve:ts-policy"]
+
+    def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):
+        events: list[str] = []
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                events.append(f"resolve:{training_shape_id}")
+                return SimpleNamespace(
+                    training_shape_version=f"{training_shape_id}/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="POLICY_TRAINER",
+                )
+
+            def create(self, _config):
+                events.append("create")
+                raise AssertionError("trainer create should not run after preflight failure")
+
+        def fake_build_resource_managers(**_kwargs):
+            return FakeTrainerManager(), object()
+
+        monkeypatch.setattr(
+            managed_module,
+            "_build_resource_managers",
+            fake_build_resource_managers,
+        )
+
+        with pytest.raises(ValueError, match="trainer_mode='FORWARD_ONLY'"):
+            managed_module._create_managed_tinker_client(
+                api_key="fw-key",
+                config=_policy_config(
+                    trainer_job_id=None,
+                    deployment_id=None,
+                    reference_training_shape_id="ts-reference",
+                    reference_required=True,
+                ),
+            )
+
+        assert events == ["resolve:ts-policy", "resolve:ts-reference"]
 
 
 class TestManagedTinkerHandleCleanup:

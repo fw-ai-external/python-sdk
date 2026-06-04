@@ -64,9 +64,10 @@ def build_incremental_metadata(
 ) -> dict[str, Any] | None:
     """Incremental hotload metadata for a ``delta`` checkpoint, else ``None``.
 
-    Without this metadata the deployment loads every snapshot as ``FULL``
-    (see :meth:`DeploymentManager.hotload`), which corrupts the delta chain.
-    LoRA never sends incremental metadata (the adapter is standalone).
+    Without this metadata the deployment loads the snapshot as non-delta
+    (see :meth:`DeploymentManager.hotload`), which corrupts the delta chain
+    for full-parameter training. LoRA never sends incremental metadata
+    because the adapter is standalone.
     """
     if lora_rank > 0:
         return None
