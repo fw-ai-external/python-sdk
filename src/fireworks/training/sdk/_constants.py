@@ -7,6 +7,22 @@ drifting between scattered literals (e.g. ``15 * 60`` vs ``600``).
 
 from __future__ import annotations
 
+from typing import Literal
+
+# -- Resource cleanup modes ---------------------------------------------------
+
+DeploymentCleanupOnClose = Literal["delete", "scale_to_zero"]
+"""Supported cleanup behavior for an SDK-managed deployment on client close."""
+
+CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE: DeploymentCleanupOnClose = "delete"
+"""Delete the SDK-created deployment when the service client closes."""
+
+CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO: DeploymentCleanupOnClose = "scale_to_zero"
+"""Scale the SDK-created deployment to zero replicas when the service client closes."""
+
+SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION = "fireworks-training-sdk/managed-rollout"
+"""Deployment annotation marking SDK-managed rollout infrastructure."""
+
 # -- Resource provisioning waits ---------------------------------------------
 
 DEFAULT_TRAINER_TIMEOUT_S: float = 3600.0

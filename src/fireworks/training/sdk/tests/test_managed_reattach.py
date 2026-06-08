@@ -17,6 +17,7 @@ from fireworks.training.sdk.managed import (
     _create_or_reattach_deployment,
     _create_or_reattach_deployment_result,
 )
+from fireworks.training.sdk._constants import SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION
 from fireworks.training.sdk.deployment import DeploymentInfo
 
 SHAPE = "accounts/acct/deploymentShapes/rft-x"
@@ -102,6 +103,9 @@ def test_managed_deployment_does_not_inherit_trainer_skip_validations():
     deployment_config = deploy_mgr.create_or_get.call_args.args[0]
     assert deployment_config.skip_shape_validation is False
     assert deployment_config.for_training is True
+    assert deployment_config.annotations == {
+        SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"
+    }
 
 
 def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():
@@ -131,6 +135,7 @@ def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():
 
     assert result.deployment is updated
     assert result.reattached is True
+    assert result.created is False
 
 
 def test_reattach_result_does_not_mark_already_attached_deployment():
@@ -154,3 +159,31 @@ def test_reattach_result_does_not_mark_already_attached_deployment():
 
     assert result.deployment is existing
     assert result.reattached is False
+    assert result.created is False
+
+
+def test_requested_missing_deployment_id_is_marked_created():
+    deploy_mgr = MagicMock()
+    created = DeploymentInfo(
+        deployment_id="requested-dep",
+        name="requested-dep",
+        state="READY",
+    )
+    deploy_mgr.get.return_value = None
+    deploy_mgr.create_or_get.return_value = created
+    config = _ManagedTinkerConfig(
+        base_model="accounts/acct/models/base",
+        deployment_id="requested-dep",
+    )
+
+    result = _create_or_reattach_deployment_result(
+        deploy_mgr,
+        config,
+        trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
+        deployment_shape=SHAPE_V1,
+    )
+
+    assert result.deployment is created
+    assert result.reattached is False
+    assert result.created is True
+    deploy_mgr.get.assert_called_once_with("requested-dep")
