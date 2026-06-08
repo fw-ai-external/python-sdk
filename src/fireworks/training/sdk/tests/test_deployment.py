@@ -9,6 +9,7 @@ import logging
 from dataclasses import replace
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from fireworks.training.sdk.deployment import (
@@ -18,7 +19,9 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     FiretitanSamplingClient,
+    FixedConcurrencyController,
     AdaptiveConcurrencyController,
+    DeploymentSamplerTimeoutError,
     _SSETruncationError,
     _deployment_hot_load_trainer_job,
 )
@@ -198,6 +201,14 @@ class TestCreateDeployment:
         body = mgr._post.call_args[1]["json"]
         assert "/deployments" in path
         assert body["description"] == "Fireworks training deployment"
+        assert body["forTraining"] is False
+        assert body["enableHotLoad"] is True
+
+    def test_create_can_mark_deployment_as_training_owned(self, deploy_config):
+        body = DeploymentManager._build_deployment_body(
+            replace(deploy_config, for_training=True)
+        )
+
         assert body["forTraining"] is True
         assert body["enableHotLoad"] is True
 
@@ -229,13 +240,6 @@ class TestCreateDeployment:
         body = mgr._post.call_args[1]["json"]
         assert "placement" not in body
 
-    def _trainer_resp(self, region):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.is_success = True
-        resp.json.return_value = {"trainingConfig": {"region": region}}
-        return resp
-
     def _create_resp(self):
         resp = MagicMock()
         resp.status_code = 200
@@ -246,8 +250,8 @@ class TestCreateDeployment:
         }
         return resp
 
-    def test_hotload_colocates_with_trainer_region_when_unset(self, mgr):
-        mgr._get = MagicMock(return_value=self._trainer_resp("US_OHIO_1"))
+    def test_hotload_trainer_job_does_not_resolve_region_client_side(self, mgr):
+        mgr._get = MagicMock(side_effect=AssertionError("trainer region should be resolved by control plane"))
         mgr._post = MagicMock(return_value=self._create_resp())
 
         mgr._create_deployment(
@@ -258,45 +262,26 @@ class TestCreateDeployment:
             )
         )
 
-        # Trainer region was resolved and applied as placement.
-        assert mgr._get.call_args[0][0] == "/v1/accounts/test-acct/rlorTrainerJobs/job-1"
-        body = mgr._post.call_args[1]["json"]
-        assert body["placement"] == {"region": "US_OHIO_1"}
-
-    def test_hotload_rejects_conflicting_region(self, mgr):
-        mgr._get = MagicMock(return_value=self._trainer_resp("US_OHIO_1"))
-        mgr._post = MagicMock(return_value=self._create_resp())
-
-        with pytest.raises(ValueError, match="colocated"):
-            mgr._create_deployment(
-                DeploymentConfig(
-                    deployment_id="dep-1",
-                    base_model="accounts/test/models/qwen3-1p7b",
-                    region="US_VIRGINIA_1",
-                    hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
-                )
-            )
-        mgr._post.assert_not_called()
-
-    def test_hotload_unresolvable_trainer_region_proceeds(self, mgr):
-        # Best-effort: if the trainer region can't be resolved, create proceeds
-        # (the control plane colocates server-side).
-        not_found = MagicMock()
-        not_found.status_code = 404
-        not_found.is_success = False
-        mgr._get = MagicMock(return_value=not_found)
-        mgr._post = MagicMock(return_value=self._create_resp())
-
-        mgr._create_deployment(
-            DeploymentConfig(
-                deployment_id="dep-1",
-                base_model="accounts/test/models/qwen3-1p7b",
-                hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
-            )
-        )
-
+        mgr._get.assert_not_called()
         body = mgr._post.call_args[1]["json"]
         assert "placement" not in body
+
+    def test_hotload_explicit_region_is_sent_for_server_validation(self, mgr):
+        mgr._get = MagicMock(side_effect=AssertionError("trainer region should be resolved by control plane"))
+        mgr._post = MagicMock(return_value=self._create_resp())
+
+        mgr._create_deployment(
+            DeploymentConfig(
+                deployment_id="dep-1",
+                base_model="accounts/test/models/qwen3-1p7b",
+                region="US_VIRGINIA_1",
+                hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            )
+        )
+
+        mgr._get.assert_not_called()
+        body = mgr._post.call_args[1]["json"]
+        assert body["placement"] == {"region": "US_VIRGINIA_1"}
 
     def test_create_includes_annotations(self, mgr):
         resp = MagicMock()
@@ -1519,4 +1504,177 @@ class TestSseTruncationRetry:
             asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
 
         assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        sampler.close()
+
+
+class TestSamplerTimeoutDiagnostics:
+    """Timeout-like transient failures get deployment sampler diagnostics."""
+
+    @staticmethod
+    def _http_status_error(status_code: int) -> httpx.HTTPStatusError:
+        request = httpx.Request(
+            "POST",
+            "https://api.example.com/inference/v1/completions",
+        )
+        response = httpx.Response(status_code, request=request)
+        return httpx.HTTPStatusError(
+            f"Server error '{status_code}'",
+            request=request,
+            response=response,
+        )
+
+    @pytest.mark.parametrize(
+        ("workload", "recipe"),
+        [
+            ("async_rl_rollout", "async_rl_loop"),
+            ("rl_rollout", "rl_loop"),
+        ],
+    )
+    def test_http_504_exhaustion_raises_sampler_timeout_diagnostic(
+        self,
+        workload,
+        recipe,
+        monkeypatch,
+        caplog,
+    ):
+        import random as _random
+
+        monkeypatch.setattr(_random, "random", lambda: 0.0)
+
+        async def _no_sleep(_s):
+            return None
+
+        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+        sampler = _make_sampler(
+            tokenizer=None,
+            model="accounts/figma/deployments/qwen3p6-27b-1780660798",
+            concurrency_controller=FixedConcurrencyController(16),
+        )
+        sampler._recent_metrics = [
+            ServerMetrics(
+                prefill_queue_duration=590.0,
+                generation_queue_duration=591.0,
+                client_ttft=599.0,
+                num_concurrent_requests=16,
+            )
+        ]
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            assert "timeout_diagnostic_context" not in kwargs
+            raise self._http_status_error(504)
+
+        sampler.async_completions_stream = _fake
+        caplog.set_level(logging.WARNING)
+
+        with pytest.raises(DeploymentSamplerTimeoutError) as exc_info:
+            asyncio.run(
+                sampler.sample_with_prompt_tokens(
+                    [1, 2, 3],
+                    max_tokens=40000,
+                    http_timeout=1200,
+                    timeout_diagnostic_context={
+                        "workload": workload,
+                        "recipe": recipe,
+                        "completions_per_prompt": 4,
+                        "max_concurrency_rollout_sample": 16,
+                        "prompt_groups_per_step": 1,
+                    },
+                )
+            )
+
+        msg = str(exc_info.value)
+        assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert "DeploymentSampler request failed after exhausting retries" in msg
+        assert "on a timeout-like error" in msg
+        assert "RL rollout context detected" in msg
+        assert "If recent queue/TTFT metrics are high" in msg
+        assert "rollout sampling may be exceeding sampler capacity" in msg
+        assert "raw_error=HTTP 504" in msg
+        assert "prompt_tokens=3" in msg
+        assert "max_tokens=40000" in msg
+        assert "http_timeout=1200s" in msg
+        assert "sampler_concurrency_window=16" in msg
+        assert f"workload={workload}" in msg
+        assert f"recipe={recipe}" in msg
+        assert "completions_per_prompt=4" in msg
+        assert "max_concurrency_rollout_sample=16" in msg
+        assert "prompt_groups_per_step=1" in msg
+        assert "recent_prefill_queue_p95=590.0s" in msg
+        assert "recent_generation_queue_p95=591.0s" in msg
+        assert "recent_client_ttft_p95=599.0s" in msg
+        assert "If they are elevated, reduce rollout concurrency" in msg
+        assert "otherwise investigate gateway, network, or client timeout limits" in msg
+        assert "DeploymentSampler request hit a timeout-like transient" in caplog.text
+        sampler.close()
+
+    def test_read_timeout_exhaustion_raises_generic_sampler_timeout_diagnostic(self, monkeypatch):
+        import random as _random
+
+        monkeypatch.setattr(_random, "random", lambda: 0.0)
+
+        async def _no_sleep(_s):
+            return None
+
+        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+        sampler = _make_sampler(tokenizer=None)
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            raise httpx.ReadTimeout("read timed out")
+
+        sampler.async_completions_stream = _fake
+
+        with pytest.raises(DeploymentSamplerTimeoutError) as exc_info:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        msg = str(exc_info.value)
+        assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert "DeploymentSampler request failed after exhausting retries" in msg
+        assert "raw_error=ReadTimeout" in msg
+        assert "Check serving queue/TTFT metrics" in msg
+        assert "gateway timeout limits" in msg
+        assert "async RL" not in msg
+        assert "max_concurrency_rollout_sample" not in msg
+        sampler.close()
+
+    @pytest.mark.parametrize("entrypoint", ["prompt_tokens", "messages"])
+    def test_parallel_n_preserves_timeout_diagnostic_context_for_each_completion(self, entrypoint):
+        context = {
+            "workload": "rl_rollout",
+            "recipe": "rl_loop",
+            "max_concurrency_rollout_sample": 16,
+        }
+        tokenizer = _make_mock_tokenizer([1, 2, 3]) if entrypoint == "messages" else None
+        sampler = _make_sampler(tokenizer=tokenizer)
+        seen_contexts: list[dict] = []
+
+        async def _fake_do_one_completion(*args, **kwargs):
+            seen_contexts.append(kwargs.pop("timeout_diagnostic_context", None))
+            return []
+
+        sampler._do_one_completion = _fake_do_one_completion
+
+        if entrypoint == "messages":
+            asyncio.run(
+                sampler.sample_with_tokens(
+                    [{"role": "user", "content": "hi"}],
+                    n=3,
+                    timeout_diagnostic_context=context,
+                )
+            )
+        else:
+            asyncio.run(
+                sampler.sample_with_prompt_tokens(
+                    [1, 2, 3],
+                    n=3,
+                    timeout_diagnostic_context=context,
+                )
+            )
+
+        assert seen_contexts == [context, context, context]
         sampler.close()

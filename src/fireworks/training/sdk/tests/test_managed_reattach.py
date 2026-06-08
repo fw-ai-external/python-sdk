@@ -101,6 +101,7 @@ def test_managed_deployment_does_not_inherit_trainer_skip_validations():
 
     deployment_config = deploy_mgr.create_or_get.call_args.args[0]
     assert deployment_config.skip_shape_validation is False
+    assert deployment_config.for_training is True
 
 
 def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():

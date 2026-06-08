@@ -24,6 +24,7 @@ from fireworks.training.sdk.client import (
     _LazyManagedRestClient,
     _BaseOnlyCreateModelRequest,
     _FireworksApiKeyAuthProvider,
+    _check_cos_similarity_matrix_single_chunk,
 )
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
@@ -741,16 +742,15 @@ class TestFiretitanServiceClientManagedCompat:
         )
         assert svc.managed_deployment_id == "resolved-deployment"
 
-    def test_managed_config_does_not_expose_parent_managed_by(self):
-        # SDK-managed cookbook jobs are root resources. They should not expose
-        # or send managedBy, which marks a trainer as child-managed.
+    def test_from_firetitan_config_accepts_managed_by(self):
         svc = FiretitanServiceClient.from_firetitan_config(
             api_key="fw-key",
             base_url=None,
             base_model="accounts/acct/models/base",
+            managed_by="parent-job",
         )
 
-        assert not hasattr(svc._managed_config, "managed_by")
+        assert svc._managed_config.managed_by == "parent-job"
 
     def test_existing_managed_deployment_is_reattached_with_patch(self):
         deploy_mgr = MagicMock()
@@ -1265,12 +1265,14 @@ class TestForwardBackwardCustomEmbedding:
             def result(self, timeout=None):
                 return self._value
 
-        async def fake_forward(data, pooling):
+        async def fake_forward(data, pooling, output="embedding"):
             captured["forward_pooling"] = pooling
+            captured["forward_output_mode"] = output
             return _ImmediateFuture(forward_output)
 
-        async def fake_backward(data, pooling):
+        async def fake_backward(data, pooling, output="embedding"):
             captured["backward_pooling"] = pooling
+            captured["backward_output_mode"] = output
             captured["backward_data"] = data
             return _ImmediateFuture(backward_output)
 
@@ -1334,10 +1336,10 @@ class TestForwardBackwardCustomEmbedding:
             def result(self, timeout=None):
                 return self._value
 
-        async def fake_forward(data, pooling):
+        async def fake_forward(data, pooling, output="embedding"):
             return _ImmediateFuture(forward_output)
 
-        async def fake_backward(data, pooling):
+        async def fake_backward(data, pooling, output="embedding"):
             captured["backward_data"] = data
             return _ImmediateFuture(backward_output)
 
@@ -1398,10 +1400,10 @@ class TestForwardBackwardCustomEmbedding:
             def result(self, timeout=None):
                 return self._value
 
-        async def fake_forward(data, pooling):
+        async def fake_forward(data, pooling, output="embedding"):
             return _ImmediateFuture(forward_output)
 
-        async def fake_backward(data, pooling):
+        async def fake_backward(data, pooling, output="embedding"):
             captured["backward_data"] = data
             return _ImmediateFuture(backward_output)
 
@@ -1515,5 +1517,119 @@ class TestLoadAdapter:
         client.holder.run_coroutine_threadsafe.assert_called_once()
         coro_arg = client.holder.run_coroutine_threadsafe.call_args.args[0]
         assert hasattr(coro_arg, "__await__")
-        # Close to avoid RuntimeWarning about un-awaited coroutine
         coro_arg.close()
+
+
+# ---------------------------------------------------------------------------
+# cos_similarity_matrix single-chunk guard
+# ---------------------------------------------------------------------------
+
+
+class TestCheckCosSimilarityMatrixSingleChunk:
+    """``output='cos_similarity_matrix'`` is fundamentally a single-HTTP-request
+    operation: the trainer builds ``S = Z @ Z.T`` over the request-local batch,
+    so any SDK-level chunking would silently drop every cross-chunk similarity
+    pair. The guard surfaces that as a loud, actionable error instead.
+
+    These tests pin the contract of the stateless helper so it can be reasoned
+    about in isolation from a real ``FiretitanTrainingClient``.
+    """
+
+    def test_single_chunk_is_allowed(self):
+        # one chunk = one HTTP request = trainer sees the entire batch → safe
+        _check_cos_similarity_matrix_single_chunk(
+            [["d0", "d1", "d2"]], output="cos_similarity_matrix",
+        )
+
+    def test_empty_chunks_list_is_allowed(self):
+        # degenerate case (no data at all) — len > 1 is the only failure mode
+        _check_cos_similarity_matrix_single_chunk([], output="cos_similarity_matrix")
+
+    def test_two_chunks_raises_with_remediation_hint(self):
+        chunks = [["d0", "d1"], ["d2", "d3", "d4"]]
+        with pytest.raises(ValueError) as exc_info:
+            _check_cos_similarity_matrix_single_chunk(
+                chunks, output="cos_similarity_matrix",
+            )
+        msg = str(exc_info.value)
+        # mentions the offending mode and the actual split sizes
+        assert "cos_similarity_matrix" in msg
+        assert "[2, 3]" in msg
+        assert "2 chunks" in msg or "split into 2" in msg
+        # points users at the two viable alternatives
+        assert "contrastive_loss" in msg
+        assert "embedding" in msg
+        # cites the cap constants so the user knows what 'too big' means
+        assert "MAX_CHUNK_LEN=1024" in msg
+        assert "MAX_CHUNK_BYTES_COUNT=5_000_000" in msg
+
+    def test_many_chunks_reports_total_size_correctly(self):
+        chunks = [list(range(1024))] * 5 + [list(range(7))]
+        with pytest.raises(ValueError) as exc_info:
+            _check_cos_similarity_matrix_single_chunk(
+                chunks, output="cos_similarity_matrix",
+            )
+        # sum of chunk sizes is reported as the offending len(data)
+        assert "len(data)=5127" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# _build_embedding_requests dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestBuildEmbeddingRequestsDispatch:
+    """``_build_embedding_requests`` is the single SDK chokepoint that decides
+    between the chunked path (``embedding``) and the forced single-request path
+    (``cos_similarity_matrix``). Test the dispatch is correct for both, without
+    needing a real trainer connection.
+    """
+
+    def _make_client(self):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client.session_id = "test1234"
+        client.holder = MagicMock()
+        return client
+
+    def test_embedding_mode_goes_through_chunked_path(self):
+        client = self._make_client()
+        # mark the two delegates so we can tell which path was taken
+        client._chunked_requests = MagicMock(return_value=[(1, ["d0"]), (2, ["d1"])])
+        client._chunked_requests_generator = MagicMock(side_effect=AssertionError(
+            "embedding mode must NOT call _chunked_requests_generator directly"))
+        client._get_request_id = MagicMock(return_value=99)
+
+        out = client._build_embedding_requests(["d0", "d1"], "embedding")
+
+        assert out == [(1, ["d0"]), (2, ["d1"])]
+        client._chunked_requests.assert_called_once_with(["d0", "d1"])
+        client._get_request_id.assert_not_called()
+
+    def test_cos_similarity_matrix_mode_forces_single_request(self):
+        client = self._make_client()
+        # natural chunking would still produce 1 chunk for small data
+        client._chunked_requests_generator = MagicMock(return_value=iter([["d0", "d1"]]))
+        client._chunked_requests = MagicMock(side_effect=AssertionError(
+            "cos_similarity_matrix mode must NOT call _chunked_requests"))
+        client._get_request_id = MagicMock(return_value=77)
+
+        out = client._build_embedding_requests(["d0", "d1"], "cos_similarity_matrix")
+
+        # exactly one request, carrying the full data (not the chunker's split)
+        assert out == [(77, ["d0", "d1"])]
+        client._get_request_id.assert_called_once()
+
+    def test_cos_similarity_matrix_mode_raises_when_would_chunk(self):
+        client = self._make_client()
+        # simulate natural chunking that would split data into 2 chunks
+        client._chunked_requests_generator = MagicMock(
+            return_value=iter([["d0", "d1"], ["d2"]])
+        )
+        client._get_request_id = MagicMock()
+
+        with pytest.raises(ValueError, match="cos_similarity_matrix"):
+            client._build_embedding_requests(
+                ["d0", "d1", "d2"], "cos_similarity_matrix",
+            )
+        # never reached request-id allocation
+        client._get_request_id.assert_not_called()

@@ -6,7 +6,8 @@ gets the same behavior:
 
 * LoRA policy without an explicit reference shape/job -> reuse the policy session.
 * Full-parameter references require an explicit ``reference_training_shape_id``
-  or ``reference_trainer_job_id`` for a separate forward-only reference trainer.
+  or ``reference_trainer_job_id`` for a separate forward-only reference trainer
+  (``LORA_TRAINER`` shape preferred over legacy ``FORWARD_ONLY``).
 
 These tests cover the decision predicate and the derived reference config; the
 recipe-facing wrapper is tested in the cookbook suite.
@@ -25,6 +26,7 @@ from fireworks.training.sdk.managed import (
     _ManagedTinkerHandle,
     _reference_managed_config,
     _use_shared_base_reference,
+    _validate_reference_training_shape,
 )
 from fireworks.training.sdk.trainer import CreatedTrainerJob, TrainerServiceEndpoint
 
@@ -121,6 +123,108 @@ class TestReferenceManagedConfig:
 
 
 class TestManagedProvisioning:
+    def test_trainer_create_keeps_region_unset_when_user_does_not_set_it(self):
+        created_configs = []
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def create(self, trainer_config):
+                created_configs.append(trainer_config)
+                return CreatedTrainerJob(
+                    job_name="accounts/acct/rlorTrainerJobs/policy-job",
+                    job_id="policy-job",
+                )
+
+        result = managed_module._start_or_reuse_trainer(
+            FakeTrainerManager(),
+            _policy_config(region=None, trainer_job_id=None),
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert result.job_id == "policy-job"
+        assert len(created_configs) == 1
+        assert created_configs[0].region is None
+        assert created_configs[0].training_shape_ref == "accounts/fireworks/trainingShapes/shape/versions/v1"
+
+    def test_trainer_create_passes_explicit_region_through(self):
+        created_configs = []
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def create(self, trainer_config):
+                created_configs.append(trainer_config)
+                return CreatedTrainerJob(
+                    job_name="accounts/acct/rlorTrainerJobs/policy-job",
+                    job_id="policy-job",
+                )
+
+        managed_module._start_or_reuse_trainer(
+            FakeTrainerManager(),
+            _policy_config(region="US_OHIO_1", trainer_job_id=None),
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert len(created_configs) == 1
+        assert created_configs[0].region == "US_OHIO_1"
+
+    def test_deployment_create_does_not_get_deployment_shape_for_region(self):
+        events: list[str] = []
+        created_configs = []
+
+        class FakeDeployManager:
+            def get(self, deployment_id):
+                events.append(f"get_deployment:{deployment_id}")
+                return None
+
+            def _get(self, path, **_kwargs):
+                raise AssertionError(f"unexpected deployment-shape GET: {path}")
+
+            def create_or_get(self, deployment_config):
+                events.append("create_or_get")
+                created_configs.append(deployment_config)
+                return SimpleNamespace(deployment_id=deployment_config.deployment_id, state="READY")
+
+        result = managed_module._create_or_reattach_deployment_result(
+            FakeDeployManager(),
+            _policy_config(region=None),
+            trainer_job_name="accounts/acct/rlorTrainerJobs/policy-job",
+            deployment_shape="accounts/fireworks/deploymentShapes/private/versions/v1",
+        )
+
+        assert result.deployment.deployment_id == "dep-1"
+        assert events == ["get_deployment:dep-1", "create_or_get"]
+        assert len(created_configs) == 1
+        assert created_configs[0].deployment_shape == "accounts/fireworks/deploymentShapes/private/versions/v1"
+        assert created_configs[0].region is None
+
+    def test_deployment_create_passes_explicit_region_through(self):
+        created_configs = []
+
+        class FakeDeployManager:
+            def get(self, deployment_id):
+                return None
+
+            def _get(self, path, **_kwargs):
+                raise AssertionError(f"unexpected deployment-shape GET: {path}")
+
+            def create_or_get(self, deployment_config):
+                created_configs.append(deployment_config)
+                return SimpleNamespace(deployment_id=deployment_config.deployment_id, state="READY")
+
+        managed_module._create_or_reattach_deployment_result(
+            FakeDeployManager(),
+            _policy_config(region="US_OHIO_1"),
+            trainer_job_name="accounts/acct/rlorTrainerJobs/policy-job",
+            deployment_shape="accounts/fireworks/deploymentShapes/private/versions/v1",
+        )
+
+        assert len(created_configs) == 1
+        assert created_configs[0].region == "US_OHIO_1"
+
     def test_policy_reference_and_deployment_provision_in_parallel(self, monkeypatch):
         events: list[str] = []
         deployment_started = threading.Event()
@@ -277,6 +381,26 @@ class TestManagedProvisioning:
 
         assert events == ["resolve:ts-policy"]
 
+    def test_full_param_reference_accepts_lora_trainer_shape(self):
+        config = _policy_config(reference_training_shape_id="ts-ref-lora")
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.lora_rank == 0
+        assert reference.forward_only is True
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                assert training_shape_id == "ts-ref-lora"
+                return SimpleNamespace(
+                    training_shape_version="ts-ref-lora/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="LORA_TRAINER",
+                )
+
+        _validate_reference_training_shape(FakeTrainerManager(), reference)
+
     def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):
         events: list[str] = []
 
@@ -305,7 +429,7 @@ class TestManagedProvisioning:
             fake_build_resource_managers,
         )
 
-        with pytest.raises(ValueError, match="trainer_mode='FORWARD_ONLY'"):
+        with pytest.raises(ValueError, match="trainer_mode in"):
             managed_module._create_managed_tinker_client(
                 api_key="fw-key",
                 config=_policy_config(

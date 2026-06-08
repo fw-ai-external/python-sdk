@@ -38,6 +38,7 @@ from fireworks.training.sdk.fireworks_client import FireworksClient
 logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
+_DISPLAY_NAME_LENGTH_LIMIT = 64
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 
 
@@ -208,6 +209,13 @@ class TrainerJobConfig:
     """Internal. Populated automatically by the Fireworks platform when needed."""
     managed_by: str | None = None
     """Internal. Populated automatically by the Fireworks platform when needed."""
+    requested_job_id: str | None = None
+    """Create the RLOR trainer with this stable ID (``rlorTrainerJobId`` query param).
+
+    Used by managed SFT so the backing trainer shares the parent SFT job ID for
+    DCP resume across Temporal workflow retries. When unset, the server assigns
+    a random ID.
+    """
 
     def validate(self) -> None:
         """Self-contained pre-flight check.  Call before ``_create()``.
@@ -230,6 +238,8 @@ class TrainerJobConfig:
                 "(multiple forward_backward calls per optim_step) and pass "
                 "grad_accumulation_normalization on the optim_step request."
             )
+        if self.display_name is not None and len(self.display_name) >= _DISPLAY_NAME_LENGTH_LIMIT:
+            errors.append("display_name must be fewer than 64 characters")
         if self.inactivity_timeout is not None:
             try:
                 _format_proto_duration(self.inactivity_timeout)
@@ -347,6 +357,9 @@ class TrainerJobManager(FireworksClient):
         else:
             query_params.append(("skipValidations", "true"))
 
+        if config.requested_job_id:
+            query_params.append(("rlorTrainerJobId", config.requested_job_id))
+
         if query_params:
             path = f"{path}?{urlencode(query_params)}"
 
@@ -416,8 +429,7 @@ class TrainerJobManager(FireworksClient):
         return payload
 
     @staticmethod
-    def _log_create_failure(resp: Any) -> None:
-        """Log a formatted hint for a failed RLOR job creation response."""
+    def _create_failure_details(resp: Any) -> tuple[str, str]:
         error_msg = parse_api_error(resp)
         hint = HTTP_STATUS_HINTS.get(resp.status_code, "")
         extra = ""
@@ -427,22 +439,44 @@ class TrainerJobManager(FireworksClient):
                 "\n  For hotload, use one documented scope: PER_TRAINER via deployment hot_load_trainer_job, "
                 "or PER_DEPLOYMENT via trainer hot_load_deployment_id."
             )
+        return error_msg, f"{hint}{extra}"
+
+    @staticmethod
+    def _log_create_failure(resp: Any) -> None:
+        """Log a formatted hint for a failed RLOR job creation response."""
+        error_msg, solution = TrainerJobManager._create_failure_details(resp)
         logger.warning(
             "\n%s",
             format_sdk_error(
                 f"RLOR job creation failed (HTTP {resp.status_code})",
                 error_msg,
-                f"{hint}{extra}",
+                solution,
                 docs_url=DOCS_SDK,
             ),
         )
 
-    def get(self, job_id: str) -> dict:
-        """Get the current state of an RLOR job. Returns raw API response dict."""
+    def try_get(self, job_id: str) -> dict[str, Any] | None:
+        """Return the RLOR job payload, or ``None`` when the job does not exist."""
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
         resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
+        if resp.status_code == 404:
+            return None
         resp.raise_for_status()
         return resp.json()
+
+    def get(self, job_id: str) -> dict:
+        """Get the current state of an RLOR job. Returns raw API response dict."""
+        job = self.try_get(job_id)
+        if job is None:
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Trainer job {job_id} was not found in this account",
+                    f"No RLOR trainer job exists at accounts/{self.account_id}/rlorTrainerJobs/{job_id}.",
+                    "Verify the job ID or create a new trainer job.",
+                    docs_url=DOCS_SDK,
+                )
+            )
+        return job
 
     def _delete_job(self, job_id: str) -> None:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"

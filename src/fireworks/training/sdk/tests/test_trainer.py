@@ -6,6 +6,7 @@ import logging
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from fireworks.training.sdk.trainer import (
@@ -77,6 +78,22 @@ class TestCreate:
         assert payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
+
+    def test_requested_job_id_query_param(self, mgr, basic_config):
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/sft-job-1"}
+        mgr._post = MagicMock(return_value=resp)
+
+        config = TrainerJobConfig(
+            base_model=basic_config.base_model,
+            requested_job_id="sft-job-1",
+        )
+        mgr._create(config)
+
+        path = mgr._post.call_args[0][0]
+        assert "rlorTrainerJobId=sft-job-1" in path
 
     def test_shape_path_omits_infra_fields(self, mgr):
         """Shape path sends only algorithm fields; infra fields are omitted."""
@@ -227,6 +244,53 @@ class TestCreate:
             "--ep=4",
             "--flag",
         ]
+
+    def test_display_name_too_long_rejected_locally(self, mgr):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            display_name="x" * 64,
+        )
+        mgr._post = MagicMock()
+
+        with pytest.raises(ValueError, match="display_name must be fewer than 64 characters"):
+            mgr._create(config)
+
+        mgr._post.assert_not_called()
+
+    def test_create_error_logs_backend_message(self, mgr, caplog):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            display_name="valid-name",
+        )
+        resp = httpx.Response(
+            400,
+            json={"message": "invalid resource: display_name must be fewer than 64 characters"},
+            request=httpx.Request(
+                "POST",
+                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
+                headers={
+                    "Authorization": "Bearer secret-token",
+                    "X-Api-Key": "secret-api-key",
+                },
+                json={"displayName": "valid-name"},
+            ),
+        )
+        mgr._post = MagicMock(return_value=resp)
+
+        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                mgr._create(config)
+
+        log_text = caplog.text
+        assert "RLOR job creation failed (HTTP 400)" in log_text
+        assert "invalid resource: display_name must be fewer than 64 characters" in log_text
+        assert "displayName" not in log_text
+        assert "Authorization" not in log_text
+        assert "X-Api-Key" not in log_text
+        assert "secret-token" not in log_text
+        assert "secret-api-key" not in log_text
+        assert exc_info.value.response is resp
+        mgr._post.assert_called_once()
 
 
 class TestPollUntilReady:

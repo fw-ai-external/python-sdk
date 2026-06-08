@@ -7,7 +7,6 @@ import logging
 import warnings
 from typing import Any
 from dataclasses import field, replace, dataclass
-from urllib.parse import urlencode
 from concurrent.futures import ThreadPoolExecutor
 
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
@@ -20,7 +19,6 @@ from fireworks.training.sdk.trainer import (
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
     HOTLOAD_TIMEOUT_S,
-    HTTP_READ_TIMEOUT_S,
     DEFAULT_TRAINER_TIMEOUT_S,
     REATTACH_SETTLE_TIMEOUT_S,
     DEPLOYMENT_READY_TIMEOUT_S,
@@ -39,16 +37,14 @@ from fireworks.training.sdk._snapshot_chain import (
 
 logger = logging.getLogger(__name__)
 
-_DEPLOYMENT_ACCELERATOR_REGION_PREFIXES: tuple[tuple[str, str], ...] = (
-    ("NVIDIA_H200", "US_VIRGINIA_1"),
-    ("NVIDIA_B200", "US_OHIO_1"),
-    ("NVIDIA_B300", "NA_BRITISHCOLUMBIA_1"),
-)
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
 _POLICY_TRAINER_MODE = "POLICY_TRAINER"
 _FORWARD_ONLY_TRAINER_MODE = "FORWARD_ONLY"
 _LORA_TRAINER_MODE = "LORA_TRAINER"
+# Rank-0 forward-only reference trainers prefer LORA_TRAINER shapes; legacy
+# FORWARD_ONLY shapes remain accepted during shape inventory consolidation.
+_REFERENCE_TRAINER_MODES_RANK0 = frozenset({_LORA_TRAINER_MODE, _FORWARD_ONLY_TRAINER_MODE})
 
 
 @dataclass(frozen=True)
@@ -82,8 +78,7 @@ class FiretitanProvisioningConfig:
     # Forward-only trainer (no optimizer state). Set by the SDK when it
     # provisions a separate reference trainer; recipes never set this.
     forward_only: bool = False
-    region: str | None = None
-    deployment_region: str | None = None
+    region: str | None = None  # Leave unset unless the caller explicitly needs placement.
     max_context_length: int | None = None
     learning_rate: float = 1e-5
     gradient_accumulation_steps: int = 1
@@ -109,25 +104,11 @@ class FiretitanProvisioningConfig:
     cleanup_deployment_on_close: str | None = None
     display_name: str | None = None
     purpose: str | None = None
+    managed_by: str | None = None
     skip_validations: bool = False
     disable_speculative_decoding: bool = False
 
     def __post_init__(self) -> None:
-        active_deployment_region = self.deployment_region if self.create_deployment else None
-        if self.region and active_deployment_region and self.region != active_deployment_region:
-            raise ValueError(
-                f"deployment_region={active_deployment_region!r} conflicts with the trainer "
-                f"region={self.region!r}: a hot-load deployment must be colocated with its "
-                "trainer. Set a single region, or leave both unset for shape/control-plane defaults."
-            )
-        if active_deployment_region and not self.region:
-            object.__setattr__(self, "region", active_deployment_region)
-            logger.info(
-                "Using region %s (from deployment_region) for both the trainer and its deployment.",
-                active_deployment_region,
-            )
-        object.__setattr__(self, "deployment_region", None)
-
         if self.replica_count is None:
             object.__setattr__(self, "replica_count", 1)
         elif self.replica_count == 0:
@@ -494,24 +475,36 @@ def _validate_reference_training_shape(
     if not reference_config.training_shape_id:
         return
     profile = trainer_mgr.resolve_training_profile(reference_config.training_shape_id)
-    expected = _expected_reference_trainer_mode(reference_config)
+    allowed_modes = _allowed_reference_trainer_modes(reference_config.lora_rank)
+    preferred_mode = _preferred_reference_trainer_mode(reference_config.lora_rank)
     raw_mode = getattr(profile, "trainer_mode", "") or ""
     actual = raw_mode or _POLICY_TRAINER_MODE
-    if actual == expected:
+    if actual in allowed_modes:
         return
+    allowed_label = ", ".join(sorted(allowed_modes))
     raise ValueError(
         f"reference_training_shape_id={reference_config.training_shape_id!r} "
         f"resolves to trainer_mode={actual!r}, "
-        f"but this run requires trainer_mode={expected!r} "
-        f"(lora_rank={reference_config.lora_rank}, forward_only={reference_config.forward_only}). "
-        "Use a training shape validated for the requested trainer mode."
+        f"but this run requires trainer_mode in {{{allowed_label}}} "
+        f"(preferred {preferred_mode!r}; "
+        f"lora_rank={reference_config.lora_rank}, forward_only={reference_config.forward_only}). "
+        "Use a training shape validated for the reference trainer mode."
     )
 
 
+def _allowed_reference_trainer_modes(lora_rank: int) -> frozenset[str]:
+    if lora_rank > 0:
+        return frozenset({_LORA_TRAINER_MODE})
+    return _REFERENCE_TRAINER_MODES_RANK0
+
+
+def _preferred_reference_trainer_mode(lora_rank: int) -> str:
+    return _LORA_TRAINER_MODE
+
+
 def _expected_reference_trainer_mode(reference_config: _ManagedTinkerConfig) -> str:
-    if reference_config.lora_rank > 0:
-        return _LORA_TRAINER_MODE
-    return _FORWARD_ONLY_TRAINER_MODE
+    """Preferred trainer mode label for reference shape validation errors."""
+    return _preferred_reference_trainer_mode(reference_config.lora_rank)
 
 
 def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank: int) -> bool:
@@ -539,18 +532,16 @@ def _reference_managed_config(
     ``reference_trainer_job_id`` reattaches an existing reference and leaves
     ownership with the caller. A LoRA reference with an explicit shape loads the
     adapter on top of the base; otherwise the reference forwards the frozen base
-    directly. The reference inherits the policy region (``config.region``) for
-    checkpoint colocation and never provisions a deployment. Fresh SDK-created
-    references are cleaned by default unless the parent config explicitly keeps
-    them for a later reattach phase.
+    directly. Fresh SDK-created references are cleaned by default unless the
+    parent config explicitly keeps them for a later reattach phase.
     """
     if not config.reference_training_shape_id and not config.reference_trainer_job_id:
         raise ValueError(
             "Cannot provision a separate reference trainer without "
             "reference_training_shape_id or reference_trainer_job_id. "
             "Full-parameter reference runs cannot reuse training_shape_id as a "
-            "forward-only reference shape; provide a reference_training_shape_id "
-            "validated for FORWARD_ONLY, or pass an "
+            "reference shape; provide a reference_training_shape_id validated "
+            "for LORA_TRAINER (preferred) or legacy FORWARD_ONLY, or pass an "
             "existing reference_trainer_job_id."
         )
     reference_shape = config.reference_training_shape_id
@@ -587,21 +578,24 @@ def _get_or_create_trainer(
     return _wait_for_started_trainer(trainer_mgr, started_trainer, config)
 
 
-def _start_or_reuse_trainer(
-    trainer_mgr: TrainerJobManager,
+_RESUMABLE_TRAINER_STATES = frozenset(
+    {
+        "JOB_STATE_FAILED",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_PAUSED",
+        "JOB_STATE_COMPLETED",
+    }
+)
+
+
+def _build_trainer_job_config(
     config: _ManagedTinkerConfig,
     *,
     max_context_length: int | None,
     profile_training_shape: str | None,
-) -> CreatedTrainerJob:
-    if config.trainer_job_id:
-        logger.info("Reusing trainer job %s", config.trainer_job_id)
-        return CreatedTrainerJob(
-            job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{config.trainer_job_id}",
-            job_id=config.trainer_job_id,
-        )
-
-    trainer_config = TrainerJobConfig(
+    requested_job_id: str | None = None,
+) -> TrainerJobConfig:
+    return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=config.lora_rank,
         max_context_length=max_context_length,
@@ -618,7 +612,42 @@ def _start_or_reuse_trainer(
         training_shape_ref=profile_training_shape,
         skip_validations=config.skip_validations,
         purpose=config.purpose,
+        managed_by=config.managed_by,
         forward_only=config.forward_only,
+        requested_job_id=requested_job_id,
+    )
+
+
+def _start_or_reuse_trainer(
+    trainer_mgr: TrainerJobManager,
+    config: _ManagedTinkerConfig,
+    *,
+    max_context_length: int | None,
+    profile_training_shape: str | None,
+) -> CreatedTrainerJob:
+    if config.trainer_job_id:
+        if trainer_mgr.try_get(config.trainer_job_id) is not None:
+            logger.info("Reusing trainer job %s", config.trainer_job_id)
+            return CreatedTrainerJob(
+                job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{config.trainer_job_id}",
+                job_id=config.trainer_job_id,
+            )
+        logger.info(
+            "Trainer job %s not found; creating with stable ID for managed SFT resume",
+            config.trainer_job_id,
+        )
+        trainer_config = _build_trainer_job_config(
+            config,
+            max_context_length=max_context_length,
+            profile_training_shape=profile_training_shape,
+            requested_job_id=config.trainer_job_id,
+        )
+        return trainer_mgr.create(trainer_config)
+
+    trainer_config = _build_trainer_job_config(
+        config,
+        max_context_length=max_context_length,
+        profile_training_shape=profile_training_shape,
     )
     return trainer_mgr.create(trainer_config)
 
@@ -628,6 +657,15 @@ def _wait_for_started_trainer(
     started_trainer: CreatedTrainerJob,
     config: _ManagedTinkerConfig,
 ) -> TrainerServiceEndpoint:
+    existing_job = trainer_mgr.try_get(started_trainer.job_id)
+    if existing_job is not None:
+        state = existing_job.get("state", "")
+        if state in _RESUMABLE_TRAINER_STATES:
+            logger.info("Resuming trainer job %s from %s", started_trainer.job_id, state)
+            return trainer_mgr.resume_and_wait(
+                started_trainer.job_id,
+                timeout_s=config.trainer_timeout_s,
+            )
     return trainer_mgr.wait_for_ready(
         started_trainer.job_id,
         job_name=started_trainer.job_name,
@@ -677,11 +715,6 @@ def _create_or_reattach_deployment_result(
     deployment_id = config.deployment_id or _default_deployment_id(config.base_model)
     existing = deploy_mgr.get(deployment_id) if config.deployment_id else None
     if existing and existing.state not in DEPLOYMENT_TERMINAL_STATES:
-        # Reconcile before mutating: a reattach reuses a warm deployment, but it
-        # must not silently serve a different shape than requested (wrong
-        # model/hardware). Fail fast on a shape conflict. The existing
-        # deployment owns its other runtime settings (replicas, extra args) by
-        # design; region is already reconciled at the cookbook boundary.
         if _deployment_shape_conflict(deployment_shape, existing.deployment_shape_version):
             raise ValueError(
                 f"Reattach target deployment {deployment_id!r} serves shape "
@@ -703,9 +736,6 @@ def _create_or_reattach_deployment_result(
         return _DeploymentAttachResult(deployment=deployment, reattached=reattached)
 
     replica_count = max(config.replica_count, 0)
-    region = config.deployment_region or config.region
-    if region is None and deployment_shape:
-        region = _infer_region_from_deployment_shape(deploy_mgr, deployment_shape)
     if not deployment_shape and not config.accelerator_type:
         raise ValueError(
             "Cannot create a managed deployment without a deployment shape: the "
@@ -715,12 +745,13 @@ def _create_or_reattach_deployment_result(
     deployment_config = DeploymentConfig(
         deployment_id=deployment_id,
         base_model=config.base_model,
+        region=config.region,
         deployment_shape=deployment_shape,
-        region=region,
         min_replica_count=replica_count,
         max_replica_count=replica_count,
         accelerator_type=config.accelerator_type,
         hot_load_trainer_job=trainer_job_name,
+        for_training=True,
         # ``skip_validations`` belongs to trainer shape creation. Deployment
         # shape validation is a separate control-plane permission and should
         # not be coupled to unvalidated training-shape tests.
@@ -739,48 +770,3 @@ def _default_deployment_id(base_model: str) -> str:
     model_short = base_model.rstrip("/").rsplit("/", 1)[-1].lower()
     safe = "".join(ch if ch.isalnum() else "-" for ch in model_short).strip("-")
     return f"{safe or 'model'}-{int(time.time())}"
-
-
-def _infer_region_from_deployment_shape(
-    deploy_mgr: DeploymentManager,
-    deployment_shape: str,
-) -> str | None:
-    """Infer a deployment region from a validated deployment-shape snapshot."""
-    try:
-        version = _get_deployment_shape_version(deploy_mgr, deployment_shape)
-    except Exception as e:
-        logger.warning("Could not inspect deployment shape %s for region inference: %s", deployment_shape, e)
-        return None
-
-    snapshot = version.get("snapshot", {}) or {}
-    accelerator = snapshot.get("acceleratorType", "")
-    for prefix, region in _DEPLOYMENT_ACCELERATOR_REGION_PREFIXES:
-        if accelerator.startswith(prefix):
-            logger.info(
-                "Inferred deployment region %s from deployment shape %s (accelerator=%s)",
-                region,
-                deployment_shape,
-                accelerator,
-            )
-            return region
-    return None
-
-
-def _get_deployment_shape_version(
-    deploy_mgr: DeploymentManager,
-    deployment_shape: str,
-) -> dict[str, Any]:
-    if "/versions/" in deployment_shape:
-        path = f"/v1/{deployment_shape}"
-    else:
-        query = urlencode({"filter": "latest_validated=true", "pageSize": 1})
-        path = f"/v1/{deployment_shape}/versions?{query}"
-    response = deploy_mgr._get(path, timeout=HTTP_READ_TIMEOUT_S)
-    response.raise_for_status()
-    data = response.json()
-    if "/versions/" in deployment_shape:
-        return data
-    versions = data.get("deploymentShapeVersions", []) or []
-    if not versions:
-        raise RuntimeError(f"No latest validated deployment-shape version was returned for {deployment_shape!r}")
-    return versions[0]
