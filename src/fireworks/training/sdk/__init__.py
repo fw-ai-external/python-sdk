@@ -40,6 +40,7 @@ from fireworks.training.sdk.deployment import (
     FiretitanSamplingClient,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
+    DeploymentSamplerTimeoutError,
 )
 from fireworks.training.sdk.tinker_compat import (
     install_tinker_service_client,
@@ -96,6 +97,7 @@ __all__ = [
     "AdaptiveConcurrencyController",
     "FixedConcurrencyController",
     "SampledCompletion",
+    "DeploymentSamplerTimeoutError",
     "ServerMetrics",
     # LR scheduler shared schema
     "ConstantSchedule",

@@ -56,6 +56,21 @@ def _parse_checkpoint_name(name: str) -> tuple[str, str, str] | None:
     return m.group(1), m.group(2), m.group(3)
 
 
+# 4-segment session-checkpoint resource name for serverless training sessions:
+# accounts/<a>/trainingSessions/<s>/checkpoints/<c>.
+_SESSION_CHECKPOINT_NAME_RE = re.compile(
+    r"^accounts/([^/]+)/trainingSessions/([^/]+)/checkpoints/([^/]+)$"
+)
+
+
+def _parse_session_checkpoint_name(name: str) -> tuple[str, str, str] | None:
+    """Parse the session-checkpoint name into (account, session, checkpoint)."""
+    m = _SESSION_CHECKPOINT_NAME_RE.match(name)
+    if not m:
+        return None
+    return m.group(1), m.group(2), m.group(3)
+
+
 def validate_output_model_id(output_model_id: str | None) -> list[str]:
     """Validate a model ID for checkpoint promotion.
 
@@ -521,20 +536,11 @@ class FireworksClient(_RestClient):
             if model is None:
                 model = result.get("model")
             if not model:
-                # The async promotion LRO can finish done=true without echoing
-                # the promoted model in its `response` payload. The model has
-                # still been created, so fetch it by name rather than failing a
-                # job whose training and promotion both actually succeeded
-                # (otherwise the recipe crashes in the finalize step even though
-                # the output model is READY on the control plane).
-                model = self._fetch_promoted_model(account_id, output_model_id)
-            if not model:
                 raise RuntimeError(
                     format_sdk_error(
                         f"Failed to promote checkpoint '{checkpoint_id}'",
                         "promotion operation completed without a model response",
-                        "The promote operation finished, but neither the server response nor a "
-                        "follow-up model lookup returned the promoted model payload. "
+                        "The promote operation finished, but the server response did not contain the promoted model payload. "
                         "Check the operation and output model in the Fireworks console.\n"
                         f"  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
@@ -568,30 +574,6 @@ class FireworksClient(_RestClient):
                 f"accounts/{account_id}/deployments/{hot_load_deployment_id}"
             )
         return path, body
-
-    def _fetch_promoted_model(self, account_id: str, output_model_id: str) -> dict | None:
-        """Best-effort GET of the promoted model resource by name.
-
-        Used as a recovery path when an async ``:promote`` operation completes
-        without a model payload in its ``response`` (the model is still
-        created). Returns the model dict, or ``None`` on any error so the
-        caller can fall through to its explicit "no model" failure rather than
-        letting a recovery read mask the original promotion outcome.
-        """
-        path = f"/v1/accounts/{account_id}/models/{output_model_id}"
-        try:
-            resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
-        except Exception as e:  # noqa: BLE001 - best-effort recovery read
-            logger.warning("Failed to fetch promoted model %r: %s", path, e)
-            return None
-        if not resp.is_success:
-            logger.warning(
-                "Promoted model fetch returned HTTP %s for %r",
-                resp.status_code,
-                path,
-            )
-            return None
-        return resp.json() or None
 
     def _resolve_promote_target(
         self,
@@ -636,7 +618,7 @@ class FireworksClient(_RestClient):
     @staticmethod
     def _log_promoted_model(result: dict) -> dict:
         """Log the promoted model's state/kind/PEFT details and return the model."""
-        model = result.get("model") or {}
+        model = result.get("model", {})
         logger.info(
             "Promoted! Model state=%s, kind=%s",
             model.get("state", "UNKNOWN"),
@@ -651,6 +633,129 @@ class FireworksClient(_RestClient):
                 peft.get("targetModules"),
             )
         return model
+
+    def promote_session_checkpoint(
+        self,
+        name: str,
+        output_model_id: str,
+        base_model: str,
+    ) -> dict:
+        """Promote a serverless training-session checkpoint to a Fireworks model.
+
+        The serverless analog of :meth:`promote_checkpoint`. Calls the
+        session-scoped ``:promote`` endpoint, which finds the session's bound
+        pooled trainer, locates the named sampler checkpoint under the
+        session-namespaced GCS prefix, and registers a model via the same
+        control-plane primitive as job-scoped promotion (so the resulting
+        Model is indistinguishable downstream).
+
+        Args:
+            name: Full session-checkpoint resource name
+                ``accounts/<a>/trainingSessions/<s>/checkpoints/<c>`` — pass
+                directly from :meth:`list_training_session_checkpoints` output.
+            output_model_id: Desired model ID (1-63 chars, lowercase a-z,
+                0-9, or hyphen).
+            base_model: Base model resource name for metadata inheritance
+                (e.g. ``accounts/fireworks/models/qwen3-8b``).
+
+        Returns:
+            Model dict from the API response.
+        """
+        parsed = _parse_session_checkpoint_name(name)
+        if parsed is None:
+            raise ValueError(
+                f"Invalid session checkpoint name {name!r}. Expected 4 segments: "
+                "accounts/<account>/trainingSessions/<session>/checkpoints/<id>."
+            )
+        account_id, _session_id, checkpoint_id = parsed
+
+        if not base_model:
+            raise ValueError("base_model is required")
+        errors = validate_output_model_id(output_model_id)
+        if errors:
+            raise ValueError("\n\n".join(errors))
+
+        output_model = f"accounts/{account_id}/models/{output_model_id}"
+        path = f"/v1/{name}:promote"
+        logger.info("Promoting session checkpoint '%s' -> model '%s'", name, output_model)
+        # Mirrors PromoteTrainingSessionCheckpointRequest: only output_model +
+        # base_model (no trainer_job_id / hot_load_deployment_id — the gateway
+        # resolves the bucket from the session's bound trainer).
+        body = {"output_model": output_model, "base_model": base_model}
+        resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
+        if not resp.is_success:
+            error_msg = parse_api_error(resp)
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to promote session checkpoint '{checkpoint_id}'",
+                    error_msg,
+                    f"Check that the checkpoint is valid and base_model is correct.\n"
+                    f"  Console: {CONSOLE_URL}",
+                    docs_url=DOCS_SDK,
+                )
+            )
+        return self._log_promoted_model(resp.json())
+
+    def list_training_session_checkpoints(
+        self,
+        name: str,
+        *,
+        page_size: int = 200,
+    ) -> list[dict]:
+        """List checkpoints for a serverless training session (scan-on-read).
+
+        The serverless analog of :meth:`list_checkpoints`. Calls the
+        session-scoped ``ListTrainingSessionCheckpoints`` endpoint, which
+        scans the bound pooled trainer's session-namespaced GCS prefix and
+        returns sampler/DCP checkpoints with promotability metadata.
+
+        Args:
+            name: Training-session resource name
+                ``accounts/<a>/trainingSessions/<s>``.
+            page_size: Maximum rows per HTTP request; auto-paginates through
+                ``nextPageToken`` and returns the full list.
+
+        Returns:
+            List of checkpoint dicts. Each carries at least ``name`` (full
+            4-segment ``.../checkpoints/<c>``), ``promotable`` (bool — filter
+            on this for :meth:`promote_session_checkpoint`), ``checkpointType``,
+            and ``createTime``. Server order is oldest ``createTime`` first;
+            re-sort client-side for newest-first.
+        """
+        base_path = f"/v1/{name}/checkpoints"
+
+        rows: list[dict] = []
+        page_token: str | None = None
+        while True:
+            query: dict[str, str] = {"pageSize": str(page_size)}
+            if page_token:
+                query["pageToken"] = page_token
+            path = f"{base_path}?{urlencode(query)}"
+            resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
+            if not resp.is_success:
+                error_msg = parse_api_error(resp)
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to list checkpoints for training session '{name}' "
+                        f"(HTTP {resp.status_code})",
+                        error_msg,
+                        "Verify the session name and that your API key resolves to "
+                        "the account that owns it.",
+                        docs_url=DOCS_SDK,
+                    )
+                )
+            body = resp.json() or {}
+            page = (
+                body.get("trainingSessionCheckpoints")
+                or body.get("training_session_checkpoints")
+                or body.get("checkpoints")
+                or []
+            )
+            rows.extend(page)
+            page_token = body.get("nextPageToken") or body.get("next_page_token")
+            if not page_token:
+                break
+        return rows
 
     # -- Checkpoint listing -----------------------------------------------------
 

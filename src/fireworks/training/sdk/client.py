@@ -644,6 +644,30 @@ def _dump_tinker_model(obj: Any) -> Any:
     return obj
 
 
+def _serialize_input_for_extra_body(fb_input: Any) -> dict:
+    """Convert a tinker public ``ForwardBackwardInput`` (or ``ForwardInput`` —
+    same shape) to a JSON-safe dict suitable for ``extra_body`` override.
+
+    tinker 0.22+ split public types (Datum, ModelInput, ForwardBackwardInput,
+    EncodedTextChunk, ...) into plain dataclasses with internal pydantic mirrors.
+    ``dataclasses.asdict`` can't recurse through the mixed dataclass/pydantic/
+    typed-dict tree, but tinker's own ``to_pydantic_input`` does the full
+    conversion and the result is a normal pydantic BaseModel that ``model_dump``
+    knows how to JSON-encode.
+
+    This is a temporary hack so PR #28663's three new embedding APIs work
+    against tinker 0.22.2; a proper fix at ``_dump_tinker_model`` should land
+    in a follow-up PR.
+    """
+    from tinker._compat import model_dump as _tinker_model_dump
+    from tinker.lib._pydantic_conv import to_pydantic_input
+    return _tinker_model_dump(
+        to_pydantic_input(fb_input),
+        mode="json",
+        exclude_none=True,
+    )
+
+
 def _text_token_count(datum: types.Datum) -> int:
     raw_datum = _dump_tinker_model(datum)
     model_input = raw_datum.get("model_input", {})
@@ -670,6 +694,43 @@ def _pool_embedding_tensor(
     if pooling == "last":
         return token_embeddings[-1]
     raise ValueError(f"Unsupported pooling={pooling!r}; expected 'mean' or 'last'")
+
+
+def _check_cos_similarity_matrix_single_chunk(
+    chunks: list, *, output: str,
+) -> None:
+    """Guard ``cos_similarity_matrix`` against silent batch-splitting.
+
+    The trainer builds ``S = Z @ Z.T`` over the per-HTTP-request batch
+    (``B_local``), so if the SDK split ``data`` across multiple chunks each
+    chunk would only see its own datums and every cross-chunk similarity
+    would be dropped — a client ``loss_fn`` that stacks the returned rows
+    into a single ``[N, N]`` matrix would then be wrong without any error.
+
+    This function is called with the *natural* chunking the SDK would
+    otherwise produce (``MAX_CHUNK_LEN = 1024`` and
+    ``MAX_CHUNK_BYTES_COUNT = 5_000_000``). If that produces more than one
+    chunk, we raise with a clear remediation hint instead of issuing
+    multiple sub-batch similarity matrices.
+
+    Stateless on purpose: takes the already-computed chunk list so it can
+    be unit-tested without standing up a real ``FiretitanTrainingClient``.
+    """
+    if len(chunks) > 1:
+        sizes = [len(c) for c in chunks]
+        raise ValueError(
+            f"output={output!r} requires the entire batch to fit in a single "
+            f"HTTP request because the trainer computes the similarity matrix "
+            f"S = Z @ Z.T over the per-request batch — splitting across "
+            f"chunks would silently drop every cross-chunk pair. "
+            f"len(data)={sum(sizes)} would otherwise be split into "
+            f"{len(chunks)} chunks of sizes {sizes} "
+            f"(SDK caps: MAX_CHUNK_LEN=1024, MAX_CHUNK_BYTES_COUNT=5_000_000). "
+            f"Options: (a) reduce len(data) so it fits in one chunk; "
+            f"(b) switch to output='contrastive_loss' (server-side InfoNCE, "
+            f"no client-side matrix assembly); or (c) switch to "
+            f"output='embedding' (per-datum and therefore chunk-safe)."
+        )
 
 
 # -- SaveSamplerResult ---------------------------------------------------------
@@ -898,23 +959,22 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
+        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ):
+        fwd_input = types.ForwardBackwardInput(
+            data=data,
+            loss_fn="cross_entropy",
+            loss_fn_config=None,
+        )
         request = types.ForwardRequest(
-            forward_input=types.ForwardBackwardInput(
-                data=data,
-                loss_fn="cross_entropy",
-                loss_fn_config=None,
-            ),
+            forward_input=fwd_input,
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        extra_body = {
-            "forward_input": {
-                "data": [_dump_tinker_model(datum) for datum in data],
-                "loss_fn": "cross_entropy",
-                "loss_fn_config": {"output": "embedding", "pooling": pooling},
-            }
-        }
+        # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+        fwd_input_dict = _serialize_input_for_extra_body(fwd_input)
+        fwd_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
+        extra_body = {"forward_input": fwd_input_dict}
         with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
             return await client.training.forward(
                 request=request,
@@ -926,35 +986,53 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
+        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ):
+        fb_input = types.ForwardBackwardInput(
+            data=data,
+            loss_fn="cross_entropy",
+            loss_fn_config=None,
+        )
         request = types.ForwardBackwardRequest(
-            forward_backward_input=types.ForwardBackwardInput(
-                data=data,
-                loss_fn="cross_entropy",
-                loss_fn_config=None,
-            ),
+            forward_backward_input=fb_input,
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        extra_body = {
-            "forward_backward_input": {
-                "data": [_dump_tinker_model(datum) for datum in data],
-                "loss_fn": "cross_entropy",
-                "loss_fn_config": {"output": "embedding", "pooling": pooling},
-            }
-        }
+        # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+        fb_input_dict = _serialize_input_for_extra_body(fb_input)
+        fb_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
+        extra_body = {"forward_backward_input": fb_input_dict}
         with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
             return await client.training.forward_backward(
                 request=request,
                 extra_body=extra_body,
             )
 
+    def _build_embedding_requests(
+        self,
+        data: list[types.Datum],
+        output: Literal["embedding", "cos_similarity_matrix"],
+    ) -> list[tuple[int, list[types.Datum]]]:
+        # ``embedding`` is per-datum and chunk-safe — split via the inherited
+        # chunked-requests helper to respect MAX_CHUNK_LEN / MAX_CHUNK_BYTES.
+        # ``cos_similarity_matrix`` is fundamentally single-request: the trainer
+        # builds ``S = Z @ Z.T`` over the per-request (B_local) batch, so any
+        # split would silently drop every cross-chunk similarity. Pre-check the
+        # natural chunking and refuse if it would split, then send as one HTTP
+        # request with the full batch.
+        if output != "cos_similarity_matrix":
+            return self._chunked_requests(data)
+        natural_chunks = list(self._chunked_requests_generator(data))
+        _check_cos_similarity_matrix_single_chunk(natural_chunks, output=output)
+        return [(self._get_request_id(), data)]
+
     async def _forward_embedding_async(
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
+        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        requests = self._chunked_requests(data)
+        requests = self._build_embedding_requests(data, output)
         futures = []
         start_time = time.time()
         for request_id, chunk in requests:
@@ -964,6 +1042,7 @@ class FiretitanTrainingClient(TrainingClient):
                     request_id,
                     chunk,
                     pooling,
+                    output,
                 )
             futures.append(
                 _APIFuture(
@@ -981,8 +1060,9 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
+        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        requests = self._chunked_requests(data)
+        requests = self._build_embedding_requests(data, output)
         futures = []
         start_time = time.time()
         for request_id, chunk in requests:
@@ -992,6 +1072,7 @@ class FiretitanTrainingClient(TrainingClient):
                     request_id,
                     chunk,
                     pooling,
+                    output,
                 )
             futures.append(
                 _APIFuture(
@@ -1011,7 +1092,7 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: Callable,
         *,
         loss_type_input: Literal["logprobs"] = "logprobs",
-        output: Literal["logprobs", "embedding"] = "logprobs",
+        output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         if output == "logprobs":
@@ -1020,10 +1101,14 @@ class FiretitanTrainingClient(TrainingClient):
                 loss_fn,
                 loss_type_input=loss_type_input,
             )
-        if output != "embedding":
-            raise ValueError(f"Unsupported output={output!r}; expected 'logprobs' or 'embedding'")
+        if output not in ("embedding", "cos_similarity_matrix"):
+            raise ValueError(
+                f"Unsupported output={output!r}; expected 'logprobs', 'embedding', or 'cos_similarity_matrix'"
+            )
         if loss_type_input != "logprobs":
-            raise ValueError("Set output='embedding' instead of loss_type_input for embedding custom loss.")
+            raise ValueError(
+                f"Set output='{output}' instead of loss_type_input for embedding/cos_similarity_matrix custom loss."
+            )
         if pooling not in ("mean", "last"):
             raise ValueError(f"Unsupported pooling={pooling!r}; expected 'mean' or 'last'")
 
@@ -1032,18 +1117,28 @@ class FiretitanTrainingClient(TrainingClient):
         except ImportError as err:
             raise ImportError("PyTorch is not installed. Cannot run custom forward_backward.") from err
 
-        forward_future = await self._forward_embedding_async(data, pooling)
+        # For cos_similarity_matrix mode, the trainer returns rows of a [B, B] similarity
+        # matrix (each datum's "embedding" field has length B = the batch size,
+        # NOT the hidden dim D). Functionally identical client-side handling:
+        # the user's loss_fn stacks the per-datum tensors back into a [B, B]
+        # matrix and computes its loss against that. Backward gives each row a
+        # gradient of length B, which we ship back as embedding_grads (the
+        # trainer interprets these as rows of dL/dS in cos_similarity_matrix mode).
+        forward_future = await self._forward_embedding_async(data, pooling, output=output)
         forward_result = await forward_future.result_async()
 
         embeddings = []
         for datum, out in zip(data, forward_result.loss_fn_outputs, strict=True):
             if "embedding" not in out:
-                raise ValueError("Embedding response missing 'embedding' tensor")
+                raise ValueError(f"{output} response missing 'embedding' tensor")
             embedding_data = out["embedding"]
             embedding = torch.tensor(embedding_data.data, dtype=torch.float32)
             if embedding_data.shape is not None:
                 embedding = embedding.reshape(embedding_data.shape)
-            embedding = _pool_embedding_tensor(embedding, datum, pooling)
+            if output == "embedding":
+                # Only pool further for legacy "embedding" mode — cos_similarity_matrix
+                # rows are already 1-D and should pass through untouched.
+                embedding = _pool_embedding_tensor(embedding, datum, pooling)
             embeddings.append(embedding.clone().detach().requires_grad_(True))
 
         loss, metrics = loss_fn(data, embeddings)
@@ -1067,7 +1162,9 @@ class FiretitanTrainingClient(TrainingClient):
                 )
             )
 
-        backward_future = await self._forward_backward_embedding_async(backward_data, pooling)
+        backward_future = await self._forward_backward_embedding_async(
+            backward_data, pooling, output=output,
+        )
 
         def add_custom_metrics(
             output_value: types.ForwardBackwardOutput,
@@ -1083,7 +1180,7 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: Callable,
         *,
         loss_type_input: Literal["logprobs"] = "logprobs",
-        output: Literal["logprobs", "embedding"] = "logprobs",
+        output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         if output == "logprobs":
@@ -1099,6 +1196,126 @@ class FiretitanTrainingClient(TrainingClient):
                 loss_type_input=loss_type_input,
                 output=output,
                 pooling=pooling,
+            )
+        ).result()
+
+    async def forward_backward_contrastive_async(
+        self,
+        data: list[types.Datum],
+        *,
+        num_queries: int,
+        temperature: float,
+        pooling: Literal["mean", "last"] = "last",
+        num_extra_negatives: int = 0,
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Server-side bidirectional InfoNCE contrastive loss.
+
+        Single round trip: client sends ``data`` only (no embeddings, no
+        gradients), trainer runs forward + pool + L2-normalize + sim
+        matrix + cross-entropy + backward, returns scalar loss + metrics.
+        ~3-5× faster per step than the embedding-output flow because we
+        eliminate both the per-call embedding payload AND one HTTP round
+        trip per step.
+
+        Two batch layouts (selected by ``num_extra_negatives``):
+
+        - **Standard** (``num_extra_negatives == 0``, the default):
+          ``data == [Q_0..Q_{B-1}, D_0..D_{B-1}]`` where ``B == num_queries``.
+          ``D_i`` is the positive for ``Q_i``; the other ``B-1`` D's act as
+          in-batch random negatives.
+
+        - **Hard-negative mode** (``num_extra_negatives == K_total > 0``):
+          ``data == [Q_0..Q_{B-1}, D_0..D_{B-1}, EN_0..EN_{K_total-1}]``.
+          The ``K_total`` extras are unpaired hard negatives that compete
+          against the ``B`` positives only in the query→doc direction of
+          the bidirectional loss (the doc→query side still sees only the
+          ``B`` paired positives — extras have no query to attract).
+
+        Args:
+            data: tokenized Datum objects in the layout above.
+            num_queries: how many of those datums are queries (``B``).
+            temperature: scale for the cosine sim matrix (typical: 0.01-0.05).
+            pooling: how to pool last-layer hidden states ("mean" or "last").
+            num_extra_negatives: number of tail items that are unpaired hard
+                negatives (default ``0``, fully backward-compatible).
+
+        Returns:
+            APIFuture whose result carries a ``metrics`` dict with at least
+            ``loss``.
+        """
+        expected_len = 2 * num_queries + num_extra_negatives
+        if len(data) != expected_len:
+            raise ValueError(
+                f"forward_backward_contrastive expects len(data) == "
+                f"2*num_queries + num_extra_negatives = "
+                f"2*{num_queries} + {num_extra_negatives} = {expected_len}; "
+                f"got len(data)={len(data)}."
+            )
+        if num_extra_negatives < 0:
+            raise ValueError(
+                f"num_extra_negatives must be >= 0, got {num_extra_negatives}"
+            )
+
+        request_id = self._get_request_id()
+        loss_fn_config = {
+            "output": "contrastive_loss",
+            "num_queries": num_queries,
+            "temperature": temperature,
+            "pooling": pooling,
+            "num_extra_negatives": num_extra_negatives,
+        }
+
+        async def _send():
+            fb_input = types.ForwardBackwardInput(
+                data=data,
+                loss_fn="cross_entropy",
+                loss_fn_config=None,
+            )
+            request = types.ForwardBackwardRequest(
+                forward_backward_input=fb_input,
+                model_id=self._guaranteed_model_id(),
+                seq_id=request_id + 1,
+            )
+            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+            fb_input_dict = _serialize_input_for_extra_body(fb_input)
+            fb_input_dict["loss_fn_config"] = loss_fn_config
+            extra_body = {"forward_backward_input": fb_input_dict}
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                return await client.training.forward_backward(
+                    request=request,
+                    extra_body=extra_body,
+                )
+
+        start = time.time()
+        async with self._take_turn(request_id):
+            untyped_future = await self.holder.execute_with_retries(_send)
+
+        return _APIFuture(
+            types.ForwardBackwardOutput,
+            self.holder,
+            untyped_future,
+            request_start_time=start,
+            request_type="ForwardBackward",
+            queue_state_observer=self._queue_state_logger,
+        )
+
+    def forward_backward_contrastive(
+        self,
+        data: list[types.Datum],
+        *,
+        num_queries: int,
+        temperature: float,
+        pooling: Literal["mean", "last"] = "last",
+        num_extra_negatives: int = 0,
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Sync wrapper for forward_backward_contrastive_async — see that docstring."""
+        return self.holder.run_coroutine_threadsafe(
+            self.forward_backward_contrastive_async(
+                data,
+                num_queries=num_queries,
+                temperature=temperature,
+                pooling=pooling,
+                num_extra_negatives=num_extra_negatives,
             )
         ).result()
 
@@ -2338,9 +2555,10 @@ class FiretitanServiceClient(ServiceClient):
           reuses the policy trainer session with the adapter disabled (base
           weights). No second trainer is provisioned.
         * Full-parameter policies require ``reference_training_shape_id`` or
-          ``reference_trainer_job_id``. With a reference shape, the SDK
-          provisions a separate forward-only trainer that it owns and tears down
-          on :meth:`close` (or early via :meth:`release_references`).
+          ``reference_trainer_job_id``. With a reference shape (``LORA_TRAINER``
+          preferred, legacy ``FORWARD_ONLY`` accepted), the SDK provisions a
+          separate forward-only trainer that it owns and tears down on
+          :meth:`close` (or early via :meth:`release_references`).
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:

@@ -113,6 +113,13 @@ class DeploymentConfig:
     extra_args: list[str] | None = None
     extra_values: dict[str, str] | None = None
     annotations: dict[str, str] | None = None
+    for_training: bool = False
+    """Whether this deployment is SDK-managed training infrastructure.
+
+    Leave false for user-owned deployments that should outlive the trainer.
+    SDK-managed rollout deployments set this to true so server-side trainer
+    cleanup can reclaim them if the client disappears before close().
+    """
 
 
 class DeploymentManager(_RestClient):
@@ -219,25 +226,6 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
         return resp.json()
 
-    def _get_trainer_region(self, trainer_job: str) -> str | None:
-        """Resolve a trainer job's training region for hot-load colocation.
-
-        ``trainer_job`` is a full resource name
-        (``accounts/{account}/rlorTrainerJobs/{job}``). Returns the region
-        string (e.g. ``US_OHIO_1``) or ``None`` when it can't be resolved.
-        Best-effort: any failure returns ``None`` so deployment creation still
-        proceeds and the control plane colocates server-side.
-        """
-        path = f"/v1/{trainer_job.lstrip('/')}"
-        try:
-            resp = self._get(path)
-        except Exception:
-            return None
-        if not resp.is_success:
-            return None
-        region = resp.json().get("trainingConfig", {}).get("region")
-        return region or None
-
     def _delete_deployment(self, deployment_id: str, ignore_checks: bool = True, hard: bool = True) -> None:
         path = f"/v1/accounts/{self.account_id}/deployments/{deployment_id}"
         params = []
@@ -257,36 +245,7 @@ class DeploymentManager(_RestClient):
         if config.disable_speculative_decoding:
             path = f"{path}&disableSpeculativeDecoding=true"
 
-        # Colocation: a hot-load deployment must live in the same region as its
-        # trainer (the trainer writes checkpoints to region-local fast storage,
-        # and cross-region hot-load silently falls back / fails). When a
-        # hot_load_trainer_job is set we resolve the trainer's region and either
-        # inherit it (region unset) or reject an explicit conflict, so SDK
-        # callers get colocation without copying cookbook orchestration. The
-        # control plane enforces the same invariant server-side; this is a
-        # best-effort, friendlier client-side guard.
-        region = config.region
-        if config.hot_load_trainer_job:
-            trainer_region = self._get_trainer_region(config.hot_load_trainer_job)
-            if trainer_region:
-                if config.region and config.region != trainer_region:
-                    raise ValueError(
-                        f"hot_load_trainer_job {config.hot_load_trainer_job} is in region "
-                        f"{trainer_region}, but the deployment requests region {config.region}; "
-                        "hot-load requires the deployment to be colocated with the trainer. "
-                        "Leave region unset to inherit the trainer's region."
-                    )
-                if not config.region:
-                    logger.info(
-                        "Colocating hot-load deployment with trainer %s in region %s",
-                        config.hot_load_trainer_job,
-                        trainer_region,
-                    )
-                    # Resolved region flows through a local into the request body;
-                    # the caller's DeploymentConfig is not mutated.
-                    region = trainer_region
-
-        body = self._build_deployment_body(config, region=region)
+        body = self._build_deployment_body(config)
 
         logger.info("Creating deployment: %s", config.deployment_id)
         resp = self._post(path, json=body)
@@ -325,11 +284,9 @@ class DeploymentManager(_RestClient):
     def _build_deployment_body(config: DeploymentConfig, *, region: str | None = None) -> dict[str, Any]:
         """Assemble the deployment creation request body from the config.
 
-        ``region`` is the resolved placement region (falling back to
-        ``config.region``); the caller passes the colocation-resolved value so
-        this method never has to mutate the config. The accelerator type is
-        omitted when a deployment shape is set — the shape owns the hardware
-        selection.
+        ``region`` is an optional explicit placement override; otherwise the
+        body uses ``config.region`` if set. The accelerator type is omitted when
+        a deployment shape is set — the shape owns the hardware selection.
         """
         region = region or config.region
         body: dict[str, Any] = {
@@ -338,7 +295,7 @@ class DeploymentManager(_RestClient):
             "minReplicaCount": config.min_replica_count,
             "maxReplicaCount": config.max_replica_count,
             "enableHotLoad": config.enable_hot_load,
-            "forTraining": config.enable_hot_load,
+            "forTraining": config.for_training,
         }
         if region:
             body["placement"] = {"region": region}
@@ -1080,6 +1037,7 @@ from fireworks.training.sdk.sampling import (  # noqa: F401,E402
     DeploymentSampler,
     SampledCompletion,
     FiretitanSamplingClient,
+    DeploymentSamplerTimeoutError,
 )
 from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
     FixedConcurrencyController,

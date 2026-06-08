@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.77 (2026-06-06)
+
+Full Changelog: [v1.2.0-alpha.76...v1.2.0-alpha.77](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.76...v1.2.0-alpha.77)
+
+### Features
+* **serverless:** sft_loop serverless mode + SDK session-checkpoint promote (#28596) ([470c845](https://github.com/fw-ai-external/python-sdk/commit/470c845b1a04cb52a8b01fd3a62a22856abacc70))
+
 ## 1.2.0-alpha.76 (2026-06-04)
 
 Full Changelog: [v1.2.0-alpha.75...v1.2.0-alpha.76](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.75...v1.2.0-alpha.76)

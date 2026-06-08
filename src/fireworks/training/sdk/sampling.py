@@ -9,6 +9,7 @@ import asyncio
 import logging
 import warnings
 import threading
+from math import ceil
 from typing import TYPE_CHECKING, Any, List
 from dataclasses import dataclass
 from concurrent.futures import Future as ConcurrentFuture
@@ -110,6 +111,10 @@ class SampledCompletion:
     """True when echo=True was used: inference_logprobs has P+C-1 entries
     (training-aligned).  False: completion-only."""
     routing_matrices: List[str] | None = None
+
+
+class DeploymentSamplerTimeoutError(RuntimeError):
+    """Raised when deployment sampling repeatedly times out against inference."""
 
 
 class DeploymentSampler(_RestClient):
@@ -528,8 +533,15 @@ class DeploymentSampler(_RestClient):
         httpx.PoolTimeout,
     )
 
+    _RETRY_TIMEOUT_STATUS_CODES = (408, 504)
+    _RL_TIMEOUT_WORKLOADS = ("async_rl_rollout", "rl_rollout")
+
     async def _backoff_after_transient(
-        self, label: str, attempt: int, current_backoff: float
+        self,
+        label: str,
+        attempt: int,
+        current_backoff: float,
+        diagnostic: str | None = None,
     ) -> float:
         """Sleep with jittered exponential backoff and return the next backoff.
 
@@ -537,12 +549,154 @@ class DeploymentSampler(_RestClient):
         just emits the per-attempt log line and sleeps.
         """
         jittered = current_backoff * (0.5 + random.random())
-        logger.warning(
-            "Transient %s (attempt %d/%d); retrying after %.1fs.",
-            label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
-        )
+        if diagnostic:
+            logger.warning(
+                "%s Transient %s (attempt %d/%d); retrying after %.1fs.",
+                diagnostic, label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
+            )
+        else:
+            logger.warning(
+                "Transient %s (attempt %d/%d); retrying after %.1fs.",
+                label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
+            )
         await asyncio.sleep(jittered)
         return min(current_backoff * 2, self._RETRY_MAX_BACKOFF_S)
+
+    def _is_timeout_like_transient(self, transient: BaseException) -> bool:
+        if isinstance(transient, httpx.TimeoutException):
+            return True
+        if isinstance(transient, httpx.HTTPStatusError):
+            return transient.response.status_code in self._RETRY_TIMEOUT_STATUS_CODES
+        return False
+
+    @staticmethod
+    def _p95(values: list[float]) -> float | None:
+        if not values:
+            return None
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, ceil(0.95 * len(ordered)) - 1)
+        return ordered[index]
+
+    @staticmethod
+    def _format_seconds(value: float | None) -> str | None:
+        if value is None:
+            return None
+        return f"{value:.1f}s"
+
+    def _recent_metrics_diagnostic(self) -> list[str]:
+        recent = self._recent_metrics[-32:]
+        if not recent:
+            return []
+
+        fields: list[str] = []
+        prefill_p95 = self._p95([
+            m.prefill_queue_duration for m in recent
+            if m.prefill_queue_duration is not None
+        ])
+        generation_p95 = self._p95([
+            m.generation_queue_duration for m in recent
+            if m.generation_queue_duration is not None
+        ])
+        ttft_p95 = self._p95([
+            m.client_ttft for m in recent
+            if m.client_ttft is not None
+        ])
+        concurrent = [
+            m.num_concurrent_requests for m in recent
+            if m.num_concurrent_requests is not None
+        ]
+
+        for name, value in (
+            ("recent_prefill_queue_p95", prefill_p95),
+            ("recent_generation_queue_p95", generation_p95),
+            ("recent_client_ttft_p95", ttft_p95),
+        ):
+            formatted = self._format_seconds(value)
+            if formatted:
+                fields.append(f"{name}={formatted}")
+        if concurrent:
+            fields.append(f"recent_concurrent_requests_max={max(concurrent)}")
+        return fields
+
+    @staticmethod
+    def _format_timeout_diagnostic_context(context: Any) -> list[str]:
+        if not isinstance(context, dict):
+            return []
+        fields: list[str] = []
+        for key in sorted(context):
+            value = context[key]
+            if value is None:
+                continue
+            fields.append(f"{key}={value}")
+        return fields
+
+    def _timeout_diagnostic(
+        self,
+        label: str,
+        prompt_ids: list[int],
+        max_tokens: int,
+        kwargs: dict[str, Any],
+        diagnostic_context: Any,
+        *,
+        exhausted: bool,
+    ) -> str:
+        http_timeout = kwargs.get("http_timeout", 600)
+        is_rl_rollout = (
+            isinstance(diagnostic_context, dict)
+            and diagnostic_context.get("workload") in self._RL_TIMEOUT_WORKLOADS
+        )
+        if exhausted:
+            summary = (
+                "DeploymentSampler request failed after exhausting retries "
+                "on a timeout-like error."
+            )
+        else:
+            summary = (
+                "DeploymentSampler request hit a timeout-like transient."
+            )
+        fields = [
+            summary,
+            f"raw_error={label}",
+            f"model={self.model}",
+            f"prompt_tokens={len(prompt_ids)}",
+            f"max_tokens={max_tokens}",
+            f"http_timeout={http_timeout}s",
+        ]
+        if not exhausted:
+            if is_rl_rollout and isinstance(diagnostic_context, dict):
+                max_concurrency = diagnostic_context.get("max_concurrency_rollout_sample")
+                if max_concurrency is not None:
+                    fields.append(f"max_concurrency_rollout_sample={max_concurrency}")
+                fields.append(
+                    "If this repeats and serving queue/TTFT metrics are high, "
+                    "reduce rollout concurrency/completion tokens or increase sampler capacity."
+                )
+            return " ".join(fields)
+
+        if is_rl_rollout:
+            fields.append(
+                "RL rollout context detected. If recent queue/TTFT metrics "
+                "are high, rollout sampling may be exceeding sampler capacity."
+            )
+
+        window_size = getattr(self._concurrency_controller, "window_size", None)
+        if window_size is not None:
+            fields.append(f"sampler_concurrency_window={window_size}")
+        fields.extend(self._format_timeout_diagnostic_context(diagnostic_context))
+        fields.extend(self._recent_metrics_diagnostic())
+        if is_rl_rollout:
+            fields.append(
+                "Check recent queue/TTFT metrics. If they are elevated, reduce "
+                "rollout concurrency and/or max_completion_tokens, "
+                "or increase sampler capacity; otherwise investigate gateway, "
+                "network, or client timeout limits."
+            )
+        else:
+            fields.append(
+                "Check serving queue/TTFT metrics, gateway timeout limits, "
+                "network stability, and request shape before changing capacity."
+            )
+        return " ".join(fields)
 
     async def _do_one_completion(
         self,
@@ -556,6 +710,7 @@ class DeploymentSampler(_RestClient):
         **kwargs: Any,
     ) -> List[SampledCompletion]:
         backoff = self._RETRY_BASE_BACKOFF_S
+        diagnostic_context = kwargs.pop("timeout_diagnostic_context", None)
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             await self._acquire_concurrency()
             server_metrics: ServerMetrics | None = None
@@ -591,8 +746,33 @@ class DeploymentSampler(_RestClient):
                     echo_mode,
                 )
             if attempt == self._RETRY_MAX_ATTEMPTS:
+                if self._is_timeout_like_transient(transient):
+                    raise DeploymentSamplerTimeoutError(
+                        self._timeout_diagnostic(
+                            label,
+                            prompt_ids,
+                            max_tokens,
+                            kwargs,
+                            diagnostic_context,
+                            exhausted=True,
+                        )
+                    ) from transient
                 raise transient
-            backoff = await self._backoff_after_transient(label, attempt, backoff)
+            diagnostic = (
+                self._timeout_diagnostic(
+                    label,
+                    prompt_ids,
+                    max_tokens,
+                    kwargs,
+                    diagnostic_context,
+                    exhausted=False,
+                )
+                if self._is_timeout_like_transient(transient)
+                else None
+            )
+            backoff = await self._backoff_after_transient(
+                label, attempt, backoff, diagnostic=diagnostic
+            )
 
         # Range above guarantees the last attempt either returns or re-raises.
         # This line is here only to satisfy the type checker's flow analysis.
