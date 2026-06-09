@@ -307,10 +307,10 @@ class TestFormatCompat:
         reference = tinker_types.SampleResponse(
             sequences=[
                 tinker_types.SampledSequence(
-                    stop_reason="stop", tokens=[40, 50], logprobs=[-0.3, -0.4]
+                    stop_reason="stop", _tokens_list=[40, 50], _logprobs_list=[-0.3, -0.4]
                 )
             ],
-            prompt_logprobs=None,
+            _prompt_logprobs_list=None,
         )
 
         problems = SamplingFormatComparator.diff(reference, actual)
@@ -338,10 +338,10 @@ class TestFormatCompat:
         reference = tinker_types.SampleResponse(
             sequences=[
                 tinker_types.SampledSequence(
-                    stop_reason="length", tokens=[40, 50], logprobs=[-0.3, -0.4]
+                    stop_reason="length", _tokens_list=[40, 50], _logprobs_list=[-0.3, -0.4]
                 )
             ],
-            prompt_logprobs=[None, -0.1, -0.2],
+            _prompt_logprobs_list=[None, -0.1, -0.2],
         )
         problems = SamplingFormatComparator.diff(reference, actual)
         assert not problems, "prompt_logprobs shape mismatch:\n  " + "\n  ".join(problems)
