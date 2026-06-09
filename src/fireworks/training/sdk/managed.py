@@ -22,6 +22,10 @@ from fireworks.training.sdk._constants import (
     DEFAULT_TRAINER_TIMEOUT_S,
     REATTACH_SETTLE_TIMEOUT_S,
     DEPLOYMENT_READY_TIMEOUT_S,
+    CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+    CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+    SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION,
+    DeploymentCleanupOnClose,
 )
 from fireworks.training.sdk.deployment import (
     DEFAULT_DELTA_COMPRESSION,
@@ -101,7 +105,7 @@ class FiretitanProvisioningConfig:
     reattach_settle_timeout_s: float = REATTACH_SETTLE_TIMEOUT_S
     reattach_poll_interval_s: float = POLL_INTERVAL_S
     cleanup_trainer_on_close: bool = False
-    cleanup_deployment_on_close: str | None = None
+    cleanup_deployment_on_close: DeploymentCleanupOnClose | None = None
     display_name: str | None = None
     purpose: str | None = None
     managed_by: str | None = None
@@ -149,7 +153,7 @@ class _ManagedTinkerHandle:
     deployment_manager: DeploymentManager | None = None
     reference_handle: "_ManagedTinkerHandle | None" = None
     cleanup_trainer_on_close: bool = False
-    cleanup_deployment_on_close: str | None = None
+    cleanup_deployment_on_close: DeploymentCleanupOnClose | None = None
     _closed: bool = False
 
     def close(self) -> None:
@@ -191,12 +195,18 @@ class _ManagedTinkerHandle:
                 )
 
         if self.cleanup_deployment_on_close and self.deployment and self.deployment_manager:
-            if self.cleanup_deployment_on_close == "scale_to_zero":
+            if self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO:
                 self.deployment_manager.scale_to_zero(self.deployment.deployment_id)
-            elif self.cleanup_deployment_on_close == "delete":
+            elif self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE:
                 self.deployment_manager.delete(self.deployment.deployment_id)
             else:
-                raise ValueError("cleanup_deployment_on_close must be None, 'delete', or 'scale_to_zero'")
+                allowed = ", ".join(
+                    [
+                        CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+                        CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+                    ]
+                )
+                raise ValueError(f"cleanup_deployment_on_close must be None or one of: {allowed}")
 
         if self.cleanup_trainer_on_close and self.trainer_manager:
             self.trainer_manager.delete(self.trainer_endpoint.job_id)
@@ -206,6 +216,12 @@ class _ManagedTinkerHandle:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+@dataclass(frozen=True)
+class _StartedTrainer:
+    job: CreatedTrainerJob
+    created: bool
 
 
 @dataclass
@@ -286,6 +302,7 @@ class _TinkerSamplerBackend:
 class _DeploymentAttachResult:
     deployment: DeploymentInfo
     reattached: bool = False
+    created: bool = False
 
 
 def _build_resource_managers(
@@ -321,7 +338,7 @@ def _attach_managed_deployment(
     *,
     trainer_job_name: str,
     deployment_shape: str | None,
-) -> tuple[DeploymentInfo, "_TinkerSamplerBackend", bool]:
+) -> tuple[DeploymentInfo, "_TinkerSamplerBackend", bool, bool]:
     """Create/reattach the managed deployment and build its sampler backend."""
     attach_result = _create_or_reattach_deployment_result(
         deploy_mgr,
@@ -339,7 +356,7 @@ def _attach_managed_deployment(
     )
     if attach_result.reattached:
         sampler_backend.reset_snapshot_chain()
-    return deployment, sampler_backend, attach_result.reattached
+    return deployment, sampler_backend, attach_result.reattached, attach_result.created
 
 
 def _create_managed_tinker_client(
@@ -391,7 +408,7 @@ def _create_managed_tinker_client(
         trainer_future = executor.submit(
             _wait_for_started_trainer,
             trainer_mgr,
-            started_trainer,
+            started_trainer.job,
             config,
         )
         deployment_future = None
@@ -400,7 +417,7 @@ def _create_managed_tinker_client(
                 _attach_managed_deployment,
                 deploy_mgr,
                 config,
-                trainer_job_name=started_trainer.job_name,
+                trainer_job_name=started_trainer.job.job_name,
                 deployment_shape=deployment_shape,
             )
 
@@ -422,8 +439,14 @@ def _create_managed_tinker_client(
         deployment = None
         sampler_backend = None
         deployment_reattached = False
+        deployment_created = False
         if deployment_future is not None:
-            deployment, sampler_backend, deployment_reattached = deployment_future.result()
+            (
+                deployment,
+                sampler_backend,
+                deployment_reattached,
+                deployment_created,
+            ) = deployment_future.result()
         reference_handle = None
         if reference_future is not None:
             reference_handle = reference_future.result()
@@ -454,8 +477,10 @@ def _create_managed_tinker_client(
         trainer_manager=trainer_mgr,
         deployment_manager=deploy_mgr,
         reference_handle=reference_handle,
-        cleanup_trainer_on_close=config.cleanup_trainer_on_close,
-        cleanup_deployment_on_close=config.cleanup_deployment_on_close,
+        cleanup_trainer_on_close=config.cleanup_trainer_on_close and started_trainer.created,
+        cleanup_deployment_on_close=(
+            config.cleanup_deployment_on_close if deployment_created else None
+        ),
     )
 
 
@@ -556,9 +581,7 @@ def _reference_managed_config(
         forward_only=True,
         reference_required=False,
         trainer_replica_count=None,
-        cleanup_trainer_on_close=(
-            config.reference_trainer_job_id is None and config.cleanup_reference_trainer_on_close
-        ),
+        cleanup_trainer_on_close=config.cleanup_reference_trainer_on_close,
     )
 
 
@@ -575,7 +598,7 @@ def _get_or_create_trainer(
         max_context_length=max_context_length,
         profile_training_shape=profile_training_shape,
     )
-    return _wait_for_started_trainer(trainer_mgr, started_trainer, config)
+    return _wait_for_started_trainer(trainer_mgr, started_trainer.job, config)
 
 
 _RESUMABLE_TRAINER_STATES = frozenset(
@@ -624,13 +647,16 @@ def _start_or_reuse_trainer(
     *,
     max_context_length: int | None,
     profile_training_shape: str | None,
-) -> CreatedTrainerJob:
+) -> _StartedTrainer:
     if config.trainer_job_id:
         if trainer_mgr.try_get(config.trainer_job_id) is not None:
             logger.info("Reusing trainer job %s", config.trainer_job_id)
-            return CreatedTrainerJob(
-                job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{config.trainer_job_id}",
-                job_id=config.trainer_job_id,
+            return _StartedTrainer(
+                job=CreatedTrainerJob(
+                    job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{config.trainer_job_id}",
+                    job_id=config.trainer_job_id,
+                ),
+                created=False,
             )
         logger.info(
             "Trainer job %s not found; creating with stable ID for managed SFT resume",
@@ -642,14 +668,14 @@ def _start_or_reuse_trainer(
             profile_training_shape=profile_training_shape,
             requested_job_id=config.trainer_job_id,
         )
-        return trainer_mgr.create(trainer_config)
+        return _StartedTrainer(job=trainer_mgr.create(trainer_config), created=True)
 
     trainer_config = _build_trainer_job_config(
         config,
         max_context_length=max_context_length,
         profile_training_shape=profile_training_shape,
     )
-    return trainer_mgr.create(trainer_config)
+    return _StartedTrainer(job=trainer_mgr.create(trainer_config), created=True)
 
 
 def _wait_for_started_trainer(
@@ -733,7 +759,7 @@ def _create_or_reattach_deployment_result(
         )
         if existing.state not in DEPLOYMENT_SERVING_STATES:
             deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
-        return _DeploymentAttachResult(deployment=deployment, reattached=reattached)
+        return _DeploymentAttachResult(deployment=deployment, reattached=reattached, created=False)
 
     replica_count = max(config.replica_count, 0)
     if not deployment_shape and not config.accelerator_type:
@@ -759,11 +785,12 @@ def _create_or_reattach_deployment_result(
         disable_speculative_decoding=config.disable_speculative_decoding,
         extra_args=config.deployment_extra_args,
         extra_values=config.deployment_extra_values,
+        annotations={SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"},
     )
     deployment = deploy_mgr.create_or_get(deployment_config)
     if deployment.state not in DEPLOYMENT_SERVING_STATES:
         deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
-    return _DeploymentAttachResult(deployment=deployment, reattached=False)
+    return _DeploymentAttachResult(deployment=deployment, reattached=False, created=True)
 
 
 def _default_deployment_id(base_model: str) -> str:

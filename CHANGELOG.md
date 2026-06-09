@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.78 (2026-06-08)
+
+Full Changelog: [v1.2.0-alpha.77...v1.2.0-alpha.78](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.77...v1.2.0-alpha.78)
+
+### Bug Fixes
+* **rlor:** centralize rollout cleanup mode (#29102) ([d34d224](https://github.com/fw-ai-external/python-sdk/commit/d34d22425c5f84c1068a57786ea66b5605156dc9))
+
 ## 1.2.0-alpha.77 (2026-06-06)
 
 Full Changelog: [v1.2.0-alpha.76...v1.2.0-alpha.77](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.76...v1.2.0-alpha.77)

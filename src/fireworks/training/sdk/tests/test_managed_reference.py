@@ -82,13 +82,13 @@ class TestReferenceManagedConfig:
         assert reference.trainer_job_id is None
         assert reference.deployment_id is None
 
-    def test_explicit_reference_job_reattaches_without_cleanup(self):
+    def test_explicit_reference_job_carries_cleanup_policy_to_handle(self):
         config = _policy_config(reference_trainer_job_id="ref-job")
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.training_shape_id is None
         assert reference.trainer_job_id == "ref-job"
         assert reference.deployment_id is None
-        assert reference.cleanup_trainer_on_close is False
+        assert reference.cleanup_trainer_on_close is True
 
     def test_fresh_reference_can_be_kept_for_later_reattach(self):
         config = _policy_config(
@@ -143,7 +143,8 @@ class TestManagedProvisioning:
             profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
         )
 
-        assert result.job_id == "policy-job"
+        assert result.job.job_id == "policy-job"
+        assert result.created is True
         assert len(created_configs) == 1
         assert created_configs[0].region is None
         assert created_configs[0].training_shape_ref == "accounts/fireworks/trainingShapes/shape/versions/v1"
@@ -257,6 +258,9 @@ class TestManagedProvisioning:
                     job_id="policy-job",
                 )
 
+            def try_get(self, job_id):
+                return None
+
             def wait_for_ready(self, job_id, *, job_name, timeout_s):
                 if job_id == "reference-job":
                     events.append("reference_wait")
@@ -305,7 +309,7 @@ class TestManagedProvisioning:
         ):
             events.append(f"deployment_start:{trainer_job_name}:{deployment_shape}")
             deployment_started.set()
-            return SimpleNamespace(deployment_id="deployment-1"), object(), False
+            return SimpleNamespace(deployment_id="deployment-1"), object(), False, True
 
         monkeypatch.setattr(
             managed_module,

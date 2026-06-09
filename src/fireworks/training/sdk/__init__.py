@@ -28,6 +28,11 @@ from fireworks.training.sdk.trainer import (
     TrainerJobManager,
     TrainerServiceEndpoint,
 )
+from fireworks.training.sdk._constants import (
+    CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+    CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+    DeploymentCleanupOnClose,
+)
 from fireworks.training.sdk.deployment import (
     DEFAULT_CHECKSUM_FORMAT,
     DEFAULT_DELTA_COMPRESSION,
@@ -70,6 +75,9 @@ __all__ = [
     # Training (tinker protocol)
     "FiretitanServiceClient",
     "FiretitanTrainingClient",
+    "CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE",
+    "CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO",
+    "DeploymentCleanupOnClose",
     "FiretitanProvisioningConfig",
     "GradAccNormalization",
     "SaveSamplerResult",
