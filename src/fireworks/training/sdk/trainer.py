@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import time
+import uuid
 import logging
 from typing import Any
 from datetime import timedelta
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
+_AUTO_TRAINER_JOB_ID_PREFIX = "training-api-service"
 
 
 def _format_proto_duration(value: timedelta | str) -> str:
@@ -63,6 +65,17 @@ def _format_proto_duration(value: timedelta | str) -> str:
         return value
 
     raise TypeError("must be datetime.timedelta or protobuf JSON duration string")
+
+
+def _new_trainer_job_id() -> str:
+    """Return a client-generated trainer ID for retry-safe create requests."""
+    return f"{_AUTO_TRAINER_JOB_ID_PREFIX}-{uuid.uuid4().hex[:8]}"
+
+
+def _ensure_requested_job_id(config: TrainerJobConfig) -> str:
+    if not config.requested_job_id:
+        config.requested_job_id = _new_trainer_job_id()
+    return config.requested_job_id
 
 
 def _extract_job_status_message(job: dict[str, Any]) -> str:
@@ -213,8 +226,9 @@ class TrainerJobConfig:
     """Create the RLOR trainer with this stable ID (``rlorTrainerJobId`` query param).
 
     Used by managed SFT so the backing trainer shares the parent SFT job ID for
-    DCP resume across Temporal workflow retries. When unset, the server assigns
-    a random ID.
+    DCP resume across Temporal workflow retries. When unset, the SDK generates
+    a client-side ID before POSTing so HTTP retries for the same create request
+    are idempotent.
     """
 
     def validate(self) -> None:
@@ -336,6 +350,7 @@ class TrainerJobManager(FireworksClient):
         if config.training_shape_ref:
             self._validate_shape_ref(config.training_shape_ref)
 
+        requested_job_id = _ensure_requested_job_id(config)
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
         if config.hot_load_deployment_id:
@@ -357,16 +372,28 @@ class TrainerJobManager(FireworksClient):
         else:
             query_params.append(("skipValidations", "true"))
 
-        if config.requested_job_id:
-            query_params.append(("rlorTrainerJobId", config.requested_job_id))
+        query_params.append(("rlorTrainerJobId", requested_job_id))
 
         if query_params:
             path = f"{path}?{urlencode(query_params)}"
 
         payload = self._build_trainer_create_payload(config)
 
-        logger.info("Creating RLOR job: POST %s (model=%s) (payload=%s)", f"{self.base_url}{path}", config.base_model, payload)
+        logger.info(
+            "Creating RLOR job: POST %s (model=%s) (payload=%s)",
+            f"{self.base_url}{path}",
+            config.base_model,
+            payload,
+        )
         resp = self._post(path, json=payload, timeout=HTTP_WRITE_TIMEOUT_S)
+        if resp.status_code == 409:
+            logger.info(
+                "RLOR job %s already exists (409 Conflict), fetching existing trainer job",
+                requested_job_id,
+            )
+            existing = self.try_get(requested_job_id)
+            if existing:
+                return existing
         if not resp.is_success:
             self._log_create_failure(resp)
         resp.raise_for_status()
