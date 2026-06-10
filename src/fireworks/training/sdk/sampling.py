@@ -1042,14 +1042,14 @@ class FiretitanSamplingClient:
             sequences.append(
                 types.SampledSequence(
                     stop_reason=self._stop_reason(completion.finish_reason),
-                    tokens=completion_tokens,
-                    logprobs=completion_logprobs,
+                    _tokens_list=completion_tokens,
+                    _logprobs_list=completion_logprobs,
                 )
             )
 
         return types.SampleResponse(
             sequences=sequences,
-            prompt_logprobs=prompt_logprobs if include_prompt_logprobs else None,
+            _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
         )
 
     def sample(
