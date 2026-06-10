@@ -20,7 +20,8 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 
 Fireworks-specific additions:
 
-- `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support.
+- `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`.
+- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save.
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
 - automatic model-input patch for router replay (`_tinker_r3_patch.py`)
