@@ -1,32 +1,11 @@
 # Changelog
 
-## 1.2.0-alpha.80 (2026-06-12)
-
-Full Changelog: [v1.2.0-alpha.79...v1.2.0-alpha.80](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.79...v1.2.0-alpha.80)
-
-### Features
-* **rlor:** merged-base LoRA save + reject ineffective warm_start_from LoRA (#28107) ([8b73705](https://github.com/fw-ai-external/python-sdk/commit/8b7370528a6bba132581268044b71b29d8b36233))
-
-### Bug Fixes
-* **training-sdk:** report probed deployments as ready (#29687) ([d766124](https://github.com/fw-ai-external/python-sdk/commit/d766124cfaa180f85fca6dac446473b9289292c6))
-
-## 1.2.0-alpha.79 (2026-06-09)
-
-Full Changelog: [v1.2.0-alpha.78...v1.2.0-alpha.79](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.78...v1.2.0-alpha.79)
-
-## 1.2.0-alpha.78 (2026-06-08)
-
-Full Changelog: [v1.2.0-alpha.77...v1.2.0-alpha.78](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.77...v1.2.0-alpha.78)
-
-### Bug Fixes
-* **rlor:** centralize rollout cleanup mode (#29102) ([d34d224](https://github.com/fw-ai-external/python-sdk/commit/d34d22425c5f84c1068a57786ea66b5605156dc9))
-
 ## 1.2.0-alpha.77 (2026-06-06)
 
 Full Changelog: [v1.2.0-alpha.76...v1.2.0-alpha.77](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.76...v1.2.0-alpha.77)
 
 ### Features
-* **serverless:** sft_loop serverless mode + SDK session-checkpoint promote (#28596) ([470c845](https://github.com/fw-ai-external/python-sdk/commit/470c845b1a04cb52a8b01fd3a62a22856abacc70))
+* **serverless:** sft_loop serverless mode + SDK session-checkpoint promote ([470c845](https://github.com/fw-ai-external/python-sdk/commit/470c845b1a04cb52a8b01fd3a62a22856abacc70))
 
 ## 1.2.0-alpha.76 (2026-06-04)
 
@@ -45,7 +24,7 @@ Full Changelog: [v1.2.0-alpha.73...v1.2.0-alpha.74](https://github.com/fw-ai-ext
 Full Changelog: [v1.2.0-alpha.73...v1.2.0-alpha.73](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.73...v1.2.0-alpha.73)
 
 ### Bug Fixes
-* **training-sdk:** keep forward-only reference trainer single-replica under HSDP (#28043) ([24eef8e](https://github.com/fw-ai-external/python-sdk/commit/24eef8ee7665f84d91b4408a8d56eb1664607e97))
+* **training-sdk:** keep forward-only reference trainer single-replica under HSDP ([24eef8e](https://github.com/fw-ai-external/python-sdk/commit/24eef8ee7665f84d91b4408a8d56eb1664607e97))
 
 ## 1.2.0-alpha.72 (2026-05-21)
 

@@ -655,9 +655,8 @@ def _serialize_input_for_extra_body(fb_input: Any) -> dict:
     conversion and the result is a normal pydantic BaseModel that ``model_dump``
     knows how to JSON-encode.
 
-    This is a temporary hack so PR #28663's three new embedding APIs work
-    against tinker 0.22.2; a proper fix at ``_dump_tinker_model`` should land
-    in a follow-up PR.
+    This is a temporary hack so the embedding APIs work against tinker 0.22.2;
+    a proper fix at ``_dump_tinker_model`` should land in a follow-up PR.
     """
     from tinker._compat import model_dump as _tinker_model_dump
     from tinker.lib._pydantic_conv import to_pydantic_input
