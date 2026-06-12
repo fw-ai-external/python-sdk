@@ -7,6 +7,7 @@ import types as pytypes
 import asyncio
 import logging
 from dataclasses import replace
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import MagicMock
 
 import httpx
@@ -74,6 +75,10 @@ def _make_sampler(**kwargs):
     return DeploymentSampler(**defaults)
 
 
+def _query_params(path: str) -> dict[str, list[str]]:
+    return parse_qs(urlparse(path).query)
+
+
 def _mock_async_completions_stream(sampler, return_value):
     """Patch async_completions_stream to return a value without hitting the network."""
     async def _fake(*args, **kwargs):
@@ -112,16 +117,27 @@ class _FakeSamplingParams:
 
 
 class _FakeSampledSequence:
-    def __init__(self, stop_reason, tokens, logprobs=None):
+    def __init__(
+        self,
+        stop_reason,
+        tokens=None,
+        logprobs=None,
+        _tokens_list=None,
+        _logprobs_list=None,
+    ):
         self.stop_reason = stop_reason
-        self.tokens = tokens
-        self.logprobs = logprobs
+        self.tokens = tokens if tokens is not None else _tokens_list
+        self.logprobs = logprobs if logprobs is not None else _logprobs_list
 
 
 class _FakeSampleResponse:
-    def __init__(self, sequences, prompt_logprobs=None):
+    def __init__(self, sequences, prompt_logprobs=None, _prompt_logprobs_list=None):
         self.sequences = sequences
-        self.prompt_logprobs = prompt_logprobs
+        self.prompt_logprobs = (
+            prompt_logprobs
+            if prompt_logprobs is not None
+            else _prompt_logprobs_list
+        )
 
 
 @pytest.fixture
@@ -179,6 +195,19 @@ class TestParseDeploymentInfo:
         data = {"name": "accounts/a/deployments/d", "state": "CREATING"}
         info = mgr._parse_deployment_info("d", data)
         assert info.deployment_shape_version is None
+
+    def test_state_override_preserves_other_metadata(self, mgr):
+        data = {
+            "name": "accounts/a/deployments/d",
+            "state": "CREATING",
+            "deploymentShape": "accounts/a/deploymentShapes/s/versions/v",
+        }
+
+        info = mgr._parse_deployment_info("d", data, state="READY")
+
+        assert info.state == "READY"
+        assert info.name == "accounts/a/deployments/d"
+        assert info.deployment_shape_version == "accounts/a/deploymentShapes/s/versions/v"
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +343,113 @@ class TestCreateDeployment:
         # raising; mock that follow-up GET so it doesn't hit the network.
         mgr._get_deployment = MagicMock(return_value={"name": "dep-1", "state": "READY"})
         mgr._create_deployment(deploy_config)
+
+    def test_create_or_get_retry_reuses_deployment_id_after_conflict(
+        self, mgr, deploy_config, monkeypatch
+    ):
+        """E2E-style retry stack test: same SDK call, same deployment ID."""
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if (
+                request.method == "GET"
+                and request.url.path == "/v1/accounts/test-acct/deployments/dep-1"
+            ):
+                get_count = sum(req.method == "GET" for req in requests)
+                if get_count == 1:
+                    return httpx.Response(
+                        404, json={"error": "not found"}, request=request
+                    )
+                return httpx.Response(
+                    200,
+                    json={
+                        "name": "accounts/test-acct/deployments/dep-1",
+                        "state": "READY",
+                    },
+                    request=request,
+                )
+            if (
+                request.method == "POST"
+                and request.url.path == "/v1/accounts/test-acct/deployments"
+            ):
+                post_count = sum(req.method == "POST" for req in requests)
+                if post_count == 1:
+                    return httpx.Response(
+                        503,
+                        json={"error": {"message": "transient"}},
+                        request=request,
+                    )
+                return httpx.Response(
+                    409,
+                    json={"error": {"message": "deployment ID already exists"}},
+                    request=request,
+                )
+            return httpx.Response(404, json={"error": "not found"}, request=request)
+
+        monkeypatch.setattr(
+            "fireworks.training.sdk.errors._backoff_delay",
+            lambda *_args, **_kwargs: 0.0,
+        )
+        monkeypatch.setattr(
+            "fireworks.training.sdk.errors.time.sleep", lambda _delay: None
+        )
+        mgr._sync_client.close()
+        mgr._sync_client = httpx.Client(transport=httpx.MockTransport(handler))
+
+        result = mgr.create_or_get(deploy_config)
+
+        post_requests = [req for req in requests if req.method == "POST"]
+        get_requests = [req for req in requests if req.method == "GET"]
+        post_deployment_ids = [
+            _query_params(str(req.url))["deploymentId"][0] for req in post_requests
+        ]
+
+        assert result == DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            inference_model="accounts/test-acct/deployments/dep-1",
+        )
+        assert post_deployment_ids == ["dep-1", "dep-1"]
+        assert [req.url.path for req in get_requests] == [
+            "/v1/accounts/test-acct/deployments/dep-1",
+            "/v1/accounts/test-acct/deployments/dep-1",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Deployment readiness
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForReady:
+    def test_serving_creating_deployment_returns_ready_state(self, mgr):
+        mgr._get_deployment = MagicMock(
+            return_value={
+                "name": "accounts/test-acct/deployments/dep-1",
+                "state": "CREATING",
+                "deploymentShape": "accounts/test-acct/deploymentShapes/s/versions/v",
+            }
+        )
+        mgr._probe_inference = MagicMock(return_value=True)
+
+        result = mgr.wait_for_ready(
+            "dep-1",
+            timeout_s=1,
+            poll_interval_s=0.01,
+        )
+
+        assert result.state == "READY"
+        assert result.deployment_id == "dep-1"
+        assert result.name == "accounts/test-acct/deployments/dep-1"
+        assert (
+            result.deployment_shape_version
+            == "accounts/test-acct/deploymentShapes/s/versions/v"
+        )
+        mgr._probe_inference.assert_called_once_with(
+            "accounts/test-acct/deployments/dep-1"
+        )
 
 
 # ---------------------------------------------------------------------------

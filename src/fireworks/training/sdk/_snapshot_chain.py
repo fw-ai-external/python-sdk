@@ -19,7 +19,14 @@ from typing import Any, Literal
 
 from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
 
-SamplerCheckpointType = Literal["base", "delta"]
+SamplerCheckpointType = Literal["base", "delta", "merged_base"]
+
+# ``merged_base`` is a LoRA-only export: the trainer folds the active LoRA
+# adapter into the base weights and saves a full base checkpoint (no adapter
+# metadata), which the server classifies as ``INFERENCE_BASE`` / ``HF_BASE_MODEL``.
+# Like ``base`` it is a standalone full checkpoint, so it never participates in
+# the delta chain or carries incremental hotload metadata.
+_VALID_CHECKPOINT_TYPES = ("base", "delta", "merged_base")
 
 
 def normalize_checkpoint_type(checkpoint_type: str | None) -> SamplerCheckpointType | None:
@@ -27,9 +34,9 @@ def normalize_checkpoint_type(checkpoint_type: str | None) -> SamplerCheckpointT
     if checkpoint_type is None:
         return None
     normalized = checkpoint_type.lower()
-    if normalized in ("base", "delta"):
+    if normalized in _VALID_CHECKPOINT_TYPES:
         return normalized  # type: ignore[return-value]
-    raise ValueError("checkpoint_type must be either 'base' or 'delta'")
+    raise ValueError(f"checkpoint_type must be one of {_VALID_CHECKPOINT_TYPES}")
 
 
 def resolve_next_checkpoint_type(
@@ -41,9 +48,10 @@ def resolve_next_checkpoint_type(
 ) -> SamplerCheckpointType:
     """Decide the checkpoint type for the next sampler save.
 
-    An explicit override wins. LoRA always saves ``base`` (adapters are
-    standalone). Full-parameter saves ``first_checkpoint_type`` until a base
-    exists, then ``delta``.
+    An explicit override wins (including ``"merged_base"`` to fold a LoRA
+    adapter into the base on save). LoRA otherwise always saves ``base``
+    (adapters are standalone). Full-parameter saves ``first_checkpoint_type``
+    until a base exists, then ``delta``.
     """
     override = normalize_checkpoint_type(explicit)
     if override is not None:
@@ -67,7 +75,8 @@ def build_incremental_metadata(
     Without this metadata the deployment loads the snapshot as non-delta
     (see :meth:`DeploymentManager.hotload`), which corrupts the delta chain
     for full-parameter training. LoRA never sends incremental metadata
-    because the adapter is standalone.
+    because the adapter is standalone. ``base`` and ``merged_base`` are full
+    standalone checkpoints and likewise carry no incremental metadata.
     """
     if lora_rank > 0:
         return None

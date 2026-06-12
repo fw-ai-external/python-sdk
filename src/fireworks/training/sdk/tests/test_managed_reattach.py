@@ -108,6 +108,52 @@ def test_managed_deployment_does_not_inherit_trainer_skip_validations():
     }
 
 
+def test_generated_deployment_id_is_stored_for_retry(monkeypatch):
+    monkeypatch.setattr("fireworks.training.sdk.managed.time.time", lambda: 1234)
+    trainer_job_name = "accounts/acct/rlorTrainerJobs/job-1"
+    deploy_mgr = MagicMock()
+    created = DeploymentInfo(
+        deployment_id="base-1234",
+        name="base-1234",
+        state="READY",
+        hot_load_trainer_job=trainer_job_name,
+    )
+    deploy_mgr.create_or_get.return_value = created
+    config = _ManagedTinkerConfig(
+        base_model="accounts/acct/models/base",
+        deployment_id=None,
+    )
+
+    result = _create_or_reattach_deployment_result(
+        deploy_mgr,
+        config,
+        trainer_job_name=trainer_job_name,
+        deployment_shape=SHAPE_V1,
+    )
+
+    assert result.deployment is created
+    assert config.deployment_id == "base-1234"
+    deploy_mgr.get.assert_not_called()
+    deployment_config = deploy_mgr.create_or_get.call_args.args[0]
+    assert deployment_config.deployment_id == "base-1234"
+
+    retry_mgr = MagicMock()
+    retry_mgr.get.return_value = created
+    retry_mgr.reattach_trainer.return_value = created
+
+    retry = _create_or_reattach_deployment_result(
+        retry_mgr,
+        config,
+        trainer_job_name=trainer_job_name,
+        deployment_shape=SHAPE_V1,
+    )
+
+    assert retry.deployment is created
+    assert retry.created is False
+    retry_mgr.get.assert_called_once_with("base-1234")
+    retry_mgr.create_or_get.assert_not_called()
+
+
 def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():
     deploy_mgr = MagicMock()
     existing = DeploymentInfo(

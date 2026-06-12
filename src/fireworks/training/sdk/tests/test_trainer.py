@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
 import logging
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -16,6 +18,10 @@ from fireworks.training.sdk.trainer import (
     TrainerServiceEndpoint,
 )
 from fireworks.training.sdk.fireworks_client import TrainingShapeProfile
+
+
+def _query_params(path: str) -> dict[str, list[str]]:
+    return parse_qs(urlparse(path).query)
 
 
 @pytest.fixture
@@ -79,6 +85,50 @@ class TestCreate:
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
+    def test_auto_requested_job_id_query_param_when_unset(self, mgr, basic_config):
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
+        mgr._post = MagicMock(return_value=resp)
+
+        with patch(
+            "fireworks.training.sdk.trainer.uuid.uuid4",
+            return_value=uuid.UUID("12345678-1234-5678-1234-567812345678"),
+        ):
+            mgr._create(basic_config)
+
+        path = mgr._post.call_args[0][0]
+        assert basic_config.requested_job_id == "training-api-service-12345678"
+        assert _query_params(path)["rlorTrainerJobId"] == [basic_config.requested_job_id]
+
+    def test_auto_requested_job_id_reused_for_same_config(self, mgr, basic_config):
+        first = MagicMock()
+        first.is_success = True
+        first.status_code = 200
+        first.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
+        second = MagicMock()
+        second.is_success = True
+        second.status_code = 200
+        second.json.return_value = {"name": "accounts/test/rlorTrainerJobs/job-1"}
+        mgr._post = MagicMock(side_effect=[first, second])
+
+        with patch(
+            "fireworks.training.sdk.trainer.uuid.uuid4",
+            side_effect=[
+                uuid.UUID("12345678-1234-5678-1234-567812345678"),
+                uuid.UUID("87654321-4321-8765-4321-876543218765"),
+            ],
+        ):
+            mgr._create(basic_config)
+            mgr._create(basic_config)
+
+        paths = [call.args[0] for call in mgr._post.call_args_list]
+        assert [_query_params(path)["rlorTrainerJobId"][0] for path in paths] == [
+            "training-api-service-12345678",
+            "training-api-service-12345678",
+        ]
+
     def test_requested_job_id_query_param(self, mgr, basic_config):
         resp = MagicMock()
         resp.is_success = True
@@ -94,6 +144,100 @@ class TestCreate:
 
         path = mgr._post.call_args[0][0]
         assert "rlorTrainerJobId=sft-job-1" in path
+
+    def test_create_409_returns_existing_requested_job(self, mgr, basic_config):
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 409
+        resp.json.return_value = {"error": "already exists"}
+        resp.raise_for_status = MagicMock()
+        mgr._post = MagicMock(return_value=resp)
+        existing = {"name": "accounts/test/rlorTrainerJobs/sft-job-1"}
+        mgr.try_get = MagicMock(return_value=existing)
+
+        config = TrainerJobConfig(
+            base_model=basic_config.base_model,
+            requested_job_id="sft-job-1",
+        )
+        result = mgr._create(config)
+
+        assert result is existing
+        mgr.try_get.assert_called_once_with("sft-job-1")
+        resp.raise_for_status.assert_not_called()
+
+    def test_create_retry_reuses_auto_job_id_after_conflict(
+        self, mgr, basic_config, monkeypatch
+    ):
+        """E2E-style retry stack test: same SDK call, same generated job ID."""
+        generated_job_id = "training-api-service-12345678"
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if (
+                request.method == "POST"
+                and request.url.path == "/v1/accounts/test-account/rlorTrainerJobs"
+            ):
+                post_count = sum(req.method == "POST" for req in requests)
+                if post_count == 1:
+                    return httpx.Response(
+                        503,
+                        json={"error": {"message": "transient"}},
+                        request=request,
+                    )
+                return httpx.Response(
+                    409,
+                    json={"error": {"message": "rlor trainer job ID already exists"}},
+                    request=request,
+                )
+            if (
+                request.method == "GET"
+                and request.url.path
+                == f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
+            ):
+                return httpx.Response(
+                    200,
+                    json={
+                        "name": (
+                            "accounts/test-account/rlorTrainerJobs/"
+                            f"{generated_job_id}"
+                        )
+                    },
+                    request=request,
+                )
+            return httpx.Response(404, json={"error": "not found"}, request=request)
+
+        monkeypatch.setattr(
+            "fireworks.training.sdk.errors._backoff_delay",
+            lambda *_args, **_kwargs: 0.0,
+        )
+        monkeypatch.setattr(
+            "fireworks.training.sdk.errors.time.sleep", lambda _delay: None
+        )
+        mgr._sync_client.close()
+        mgr._sync_client = httpx.Client(transport=httpx.MockTransport(handler))
+
+        with patch(
+            "fireworks.training.sdk.trainer.uuid.uuid4",
+            return_value=uuid.UUID("12345678-1234-5678-1234-567812345678"),
+        ):
+            result = mgr.create(basic_config)
+
+        post_requests = [req for req in requests if req.method == "POST"]
+        get_requests = [req for req in requests if req.method == "GET"]
+        post_job_ids = [
+            _query_params(str(req.url))["rlorTrainerJobId"][0] for req in post_requests
+        ]
+
+        assert result == CreatedTrainerJob(
+            job_name=f"accounts/test-account/rlorTrainerJobs/{generated_job_id}",
+            job_id=generated_job_id,
+        )
+        assert basic_config.requested_job_id == generated_job_id
+        assert post_job_ids == [generated_job_id, generated_job_id]
+        assert [req.url.path for req in get_requests] == [
+            f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
+        ]
 
     def test_shape_path_omits_infra_fields(self, mgr):
         """Shape path sends only algorithm fields; infra fields are omitted."""

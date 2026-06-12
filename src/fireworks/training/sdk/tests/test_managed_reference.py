@@ -172,6 +172,52 @@ class TestManagedProvisioning:
         assert len(created_configs) == 1
         assert created_configs[0].region == "US_OHIO_1"
 
+    def test_generated_trainer_job_id_is_stored_for_retry(self, monkeypatch):
+        created_configs = []
+        config = _policy_config(trainer_job_id=None)
+        monkeypatch.setattr(managed_module, "_new_trainer_job_id", lambda: "trn-auto")
+
+        class FirstTrainerManager:
+            account_id = "acct"
+
+            def create(self, trainer_config):
+                created_configs.append(trainer_config)
+                return CreatedTrainerJob(
+                    job_name="accounts/acct/rlorTrainerJobs/trn-auto",
+                    job_id="trn-auto",
+                )
+
+        first = managed_module._start_or_reuse_trainer(
+            FirstTrainerManager(),
+            config,
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert first.job.job_id == "trn-auto"
+        assert config.trainer_job_id == "trn-auto"
+        assert created_configs[0].requested_job_id == "trn-auto"
+
+        class RetryTrainerManager:
+            account_id = "acct"
+
+            def try_get(self, job_id):
+                assert job_id == "trn-auto"
+                return {"state": "JOB_STATE_RUNNING"}
+
+            def create(self, _trainer_config):
+                raise AssertionError("retry should reuse the stored trainer id")
+
+        retry = managed_module._start_or_reuse_trainer(
+            RetryTrainerManager(),
+            config,
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert retry.job.job_id == "trn-auto"
+        assert retry.created is False
+
     def test_deployment_create_does_not_get_deployment_shape_for_region(self):
         events: list[str] = []
         created_configs = []

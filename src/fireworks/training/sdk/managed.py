@@ -15,6 +15,7 @@ from fireworks.training.sdk.trainer import (
     CreatedTrainerJob,
     TrainerJobManager,
     TrainerServiceEndpoint,
+    _new_trainer_job_id,
 )
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
@@ -648,25 +649,30 @@ def _start_or_reuse_trainer(
     max_context_length: int | None,
     profile_training_shape: str | None,
 ) -> _StartedTrainer:
-    if config.trainer_job_id:
-        if trainer_mgr.try_get(config.trainer_job_id) is not None:
-            logger.info("Reusing trainer job %s", config.trainer_job_id)
+    explicit_trainer_job_id = config.trainer_job_id is not None
+    trainer_job_id = config.trainer_job_id or _new_trainer_job_id()
+    if not explicit_trainer_job_id:
+        object.__setattr__(config, "trainer_job_id", trainer_job_id)
+
+    if explicit_trainer_job_id:
+        if trainer_mgr.try_get(trainer_job_id) is not None:
+            logger.info("Reusing trainer job %s", trainer_job_id)
             return _StartedTrainer(
                 job=CreatedTrainerJob(
-                    job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{config.trainer_job_id}",
-                    job_id=config.trainer_job_id,
+                    job_name=f"accounts/{trainer_mgr.account_id}/rlorTrainerJobs/{trainer_job_id}",
+                    job_id=trainer_job_id,
                 ),
                 created=False,
             )
         logger.info(
             "Trainer job %s not found; creating with stable ID for managed SFT resume",
-            config.trainer_job_id,
+            trainer_job_id,
         )
         trainer_config = _build_trainer_job_config(
             config,
             max_context_length=max_context_length,
             profile_training_shape=profile_training_shape,
-            requested_job_id=config.trainer_job_id,
+            requested_job_id=trainer_job_id,
         )
         return _StartedTrainer(job=trainer_mgr.create(trainer_config), created=True)
 
@@ -674,6 +680,7 @@ def _start_or_reuse_trainer(
         config,
         max_context_length=max_context_length,
         profile_training_shape=profile_training_shape,
+        requested_job_id=trainer_job_id,
     )
     return _StartedTrainer(job=trainer_mgr.create(trainer_config), created=True)
 
@@ -738,8 +745,12 @@ def _create_or_reattach_deployment_result(
     trainer_job_name: str,
     deployment_shape: str | None,
 ) -> _DeploymentAttachResult:
+    explicit_deployment_id = config.deployment_id is not None
     deployment_id = config.deployment_id or _default_deployment_id(config.base_model)
-    existing = deploy_mgr.get(deployment_id) if config.deployment_id else None
+    if not explicit_deployment_id:
+        object.__setattr__(config, "deployment_id", deployment_id)
+
+    existing = deploy_mgr.get(deployment_id) if explicit_deployment_id else None
     if existing and existing.state not in DEPLOYMENT_TERMINAL_STATES:
         if _deployment_shape_conflict(deployment_shape, existing.deployment_shape_version):
             raise ValueError(

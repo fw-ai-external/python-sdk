@@ -1407,9 +1407,14 @@ class FiretitanTrainingClient(TrainingClient):
 
         Passes the resolved ``checkpoint_type`` via the tinker SDK's
         ``extra_body`` parameter, which merges it into the HTTP request JSON
-        body. Full-parameter training saves a base checkpoint first and deltas
+        body.         Full-parameter training saves a base checkpoint first and deltas
         after that by default. LoRA training always saves base checkpoints.
         Callers can override with ``checkpoint_type="base"`` or ``"delta"``.
+        LoRA sessions may also pass ``checkpoint_type="merged_base"`` to fold the
+        active adapter into the base weights and export a full base checkpoint
+        (no adapter metadata), which promotes to an ``HF_BASE_MODEL``. Load the
+        adapter first via :meth:`load_adapter`; saving from a fresh LoRA session
+        would export base-identical weights.
 
         Returns:
             :class:`SaveSamplerResult` with the public snapshot identity in both
