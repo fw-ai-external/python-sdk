@@ -321,11 +321,17 @@ class DeploymentManager(_RestClient):
             body["annotations"] = config.annotations
         return body
 
-    def _parse_deployment_info(self, deployment_id: str, data: dict) -> DeploymentInfo:
+    def _parse_deployment_info(
+        self,
+        deployment_id: str,
+        data: dict,
+        *,
+        state: str | None = None,
+    ) -> DeploymentInfo:
         return DeploymentInfo(
             deployment_id=deployment_id,
             name=data.get("name", ""),
-            state=data.get("state", "UNKNOWN"),
+            state=state if state is not None else data.get("state", "UNKNOWN"),
             hot_load_bucket_url=data.get("hotLoadBucketUrl"),
             hot_load_trainer_job=data.get("hotLoadTrainerJob") or data.get("hot_load_trainer_job"),
             deployment_shape_version=data.get("deploymentShape") or data.get("deployment_shape"),
@@ -453,7 +459,7 @@ class DeploymentManager(_RestClient):
                     deployment_id,
                 )
                 self.boot_time_s = time.time() - start
-                return self._parse_deployment_info(deployment_id, data)
+                return self._parse_deployment_info(deployment_id, data, state="READY")
             logger.info("[%ds] Deployment %s: %s", elapsed, deployment_id, state)
             time.sleep(poll_interval_s)
         raise TimeoutError(

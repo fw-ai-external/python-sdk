@@ -117,16 +117,27 @@ class _FakeSamplingParams:
 
 
 class _FakeSampledSequence:
-    def __init__(self, stop_reason, tokens, logprobs=None):
+    def __init__(
+        self,
+        stop_reason,
+        tokens=None,
+        logprobs=None,
+        _tokens_list=None,
+        _logprobs_list=None,
+    ):
         self.stop_reason = stop_reason
-        self.tokens = tokens
-        self.logprobs = logprobs
+        self.tokens = tokens if tokens is not None else _tokens_list
+        self.logprobs = logprobs if logprobs is not None else _logprobs_list
 
 
 class _FakeSampleResponse:
-    def __init__(self, sequences, prompt_logprobs=None):
+    def __init__(self, sequences, prompt_logprobs=None, _prompt_logprobs_list=None):
         self.sequences = sequences
-        self.prompt_logprobs = prompt_logprobs
+        self.prompt_logprobs = (
+            prompt_logprobs
+            if prompt_logprobs is not None
+            else _prompt_logprobs_list
+        )
 
 
 @pytest.fixture
@@ -184,6 +195,19 @@ class TestParseDeploymentInfo:
         data = {"name": "accounts/a/deployments/d", "state": "CREATING"}
         info = mgr._parse_deployment_info("d", data)
         assert info.deployment_shape_version is None
+
+    def test_state_override_preserves_other_metadata(self, mgr):
+        data = {
+            "name": "accounts/a/deployments/d",
+            "state": "CREATING",
+            "deploymentShape": "accounts/a/deploymentShapes/s/versions/v",
+        }
+
+        info = mgr._parse_deployment_info("d", data, state="READY")
+
+        assert info.state == "READY"
+        assert info.name == "accounts/a/deployments/d"
+        assert info.deployment_shape_version == "accounts/a/deploymentShapes/s/versions/v"
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +416,40 @@ class TestCreateDeployment:
             "/v1/accounts/test-acct/deployments/dep-1",
             "/v1/accounts/test-acct/deployments/dep-1",
         ]
+
+
+# ---------------------------------------------------------------------------
+# Deployment readiness
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForReady:
+    def test_serving_creating_deployment_returns_ready_state(self, mgr):
+        mgr._get_deployment = MagicMock(
+            return_value={
+                "name": "accounts/test-acct/deployments/dep-1",
+                "state": "CREATING",
+                "deploymentShape": "accounts/test-acct/deploymentShapes/s/versions/v",
+            }
+        )
+        mgr._probe_inference = MagicMock(return_value=True)
+
+        result = mgr.wait_for_ready(
+            "dep-1",
+            timeout_s=1,
+            poll_interval_s=0.01,
+        )
+
+        assert result.state == "READY"
+        assert result.deployment_id == "dep-1"
+        assert result.name == "accounts/test-acct/deployments/dep-1"
+        assert (
+            result.deployment_shape_version
+            == "accounts/test-acct/deploymentShapes/s/versions/v"
+        )
+        mgr._probe_inference.assert_called_once_with(
+            "accounts/test-acct/deployments/dep-1"
+        )
 
 
 # ---------------------------------------------------------------------------
