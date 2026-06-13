@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.0-alpha.81"
+version = "1.2.0-alpha.77"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"

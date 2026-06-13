@@ -42,6 +42,12 @@ from tinker.lib.public_interfaces.training_client import (
     combine_fwd_bwd_output_results,
 )
 
+# Explicitly apply the tinker-type patches this module depends on, rather than
+# relying on the package ``__init__`` side effect. ``create_training_client``
+# constructs ``types.LoraConfig(alpha=...)``, and the ``alpha`` field only
+# exists after ``_tinker_lora_alpha_patch`` runs; importing it here guarantees
+# the field is present whenever this module is loaded (the patch is idempotent).
+import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
 from fireworks.training.sdk.deployment import DeploymentSampler, FiretitanSamplingClient
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
@@ -77,6 +83,12 @@ class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
     base_only: bool = True
 
 
+# Default LoRA alpha. Tinker pins alpha to this value regardless of rank; the
+# FireTitan backend would otherwise default to 2 * rank, so we send it
+# explicitly to keep the alpha/rank scale consistent across stacks.
+DEFAULT_LORA_ALPHA = 32
+
+
 class _TrainingKey(NamedTuple):
     base_model: str
     lora_rank: int
@@ -84,6 +96,7 @@ class _TrainingKey(NamedTuple):
     train_mlp: bool
     train_attn: bool
     train_unembed: bool
+    lora_alpha: int | None
 
 
 class _MappedAPIFuture(APIFuture[T]):
@@ -2123,9 +2136,15 @@ class FiretitanServiceClient(ServiceClient):
         train_mlp: bool = True,
         train_attn: bool = True,
         train_unembed: bool = True,
+        lora_alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
     ) -> FiretitanTrainingClient:
-        """Create a FiretitanTrainingClient (full-param or LoRA)."""
+        """Create a FiretitanTrainingClient (full-param or LoRA).
+
+        ``lora_alpha`` defaults to ``DEFAULT_LORA_ALPHA`` (32) and is ignored for
+        full-parameter training (``lora_rank == 0``). Pass ``None`` to let the
+        backend choose its own default (``2 * lora_rank``).
+        """
         if self._managed_config is not None:
             _warn_deprecated_override(
                 "create_training_client", "base_model", base_model, self._managed_config.base_model
@@ -2137,7 +2156,10 @@ class FiretitanServiceClient(ServiceClient):
         if managed_handle is not None:
             return managed_handle.training_client
 
-        config_key = _TrainingKey(base_model, lora_rank, seed, train_mlp, train_attn, train_unembed)
+        effective_alpha = lora_alpha if lora_rank > 0 else None
+        config_key = _TrainingKey(
+            base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha
+        )
         if config_key in self._created_training_configs:
             raise ValueError(
                 f"A training client for '{base_model}' (lora_rank={lora_rank}) "
@@ -2150,6 +2172,7 @@ class FiretitanServiceClient(ServiceClient):
 
         lora_config = types.LoraConfig(
             rank=lora_rank,
+            alpha=effective_alpha,
             seed=seed,
             train_mlp=train_mlp,
             train_attn=train_attn,
@@ -2197,9 +2220,14 @@ class FiretitanServiceClient(ServiceClient):
         train_mlp: bool = True,
         train_attn: bool = True,
         train_unembed: bool = True,
+        alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
     ) -> FiretitanTrainingClient:
-        """Tinker-compatible LoRA factory name."""
+        """Tinker-compatible LoRA factory name.
+
+        ``alpha`` defaults to ``DEFAULT_LORA_ALPHA`` (32); pass ``None`` to let
+        the backend pick its own default (``2 * rank``).
+        """
         return self.create_training_client(
             base_model=base_model,
             lora_rank=rank,
@@ -2207,6 +2235,7 @@ class FiretitanServiceClient(ServiceClient):
             train_mlp=train_mlp,
             train_attn=train_attn,
             train_unembed=train_unembed,
+            lora_alpha=alpha,
             user_metadata=user_metadata,
         )
 
@@ -2218,6 +2247,7 @@ class FiretitanServiceClient(ServiceClient):
         train_mlp: bool = True,
         train_attn: bool = True,
         train_unembed: bool = True,
+        alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
     ) -> FiretitanTrainingClient:
         return await asyncio.to_thread(
@@ -2228,6 +2258,7 @@ class FiretitanServiceClient(ServiceClient):
             train_mlp=train_mlp,
             train_attn=train_attn,
             train_unembed=train_unembed,
+            alpha=alpha,
             user_metadata=user_metadata,
         )
 
