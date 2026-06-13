@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.0-alpha.81 (2026-06-13)
+
+Full Changelog: [v1.2.0-alpha.80...v1.2.0-alpha.81](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.80...v1.2.0-alpha.81)
+
+### Bug Fixes
+* **training-sdk:** full-distribution RL rollouts + default LoRA alpha=32 ([8e3df52](https://github.com/fw-ai-external/python-sdk/commit/8e3df5251312c9cf9d337985ee73e584e59b56aa))
+
+## 1.2.0-alpha.80 (2026-06-12)
+
+Full Changelog: [v1.2.0-alpha.79...v1.2.0-alpha.80](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.79...v1.2.0-alpha.80)
+
+### Features
+* **rlor:** merged-base LoRA save + reject ineffective warm_start_from LoRA ([8b73705](https://github.com/fw-ai-external/python-sdk/commit/8b7370528a6bba132581268044b71b29d8b36233))
+
+### Bug Fixes
+* **training-sdk:** report probed deployments as ready ([d766124](https://github.com/fw-ai-external/python-sdk/commit/d766124cfaa180f85fca6dac446473b9289292c6))
+
+## 1.2.0-alpha.79 (2026-06-09)
+
+Full Changelog: [v1.2.0-alpha.78...v1.2.0-alpha.79](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.78...v1.2.0-alpha.79)
+
+## 1.2.0-alpha.78 (2026-06-08)
+
+Full Changelog: [v1.2.0-alpha.77...v1.2.0-alpha.78](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.77...v1.2.0-alpha.78)
+
+### Bug Fixes
+* **rlor:** centralize rollout cleanup mode ([d34d224](https://github.com/fw-ai-external/python-sdk/commit/d34d22425c5f84c1068a57786ea66b5605156dc9))
+
 ## 1.2.0-alpha.77 (2026-06-06)
 
 Full Changelog: [v1.2.0-alpha.76...v1.2.0-alpha.77](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.76...v1.2.0-alpha.77)
