@@ -48,8 +48,13 @@ class TestDpoJobs:
             },
             display_name="displayName",
             loss_config={
+                "dpo": {
+                    "beta": 0.25,
+                    "ref_cache_batch_size": 1,
+                    "ref_cache_concurrency": 16,
+                },
                 "kl_beta": 0,
-                "method": "METHOD_UNSPECIFIED",
+                "method": "DPO",
             },
             training_config={
                 "base_model": "baseModel",
@@ -425,8 +430,13 @@ class TestAsyncDpoJobs:
             },
             display_name="displayName",
             loss_config={
+                "dpo": {
+                    "beta": 0.25,
+                    "ref_cache_batch_size": 1,
+                    "ref_cache_concurrency": 16,
+                },
                 "kl_beta": 0,
-                "method": "METHOD_UNSPECIFIED",
+                "method": "DPO",
             },
             training_config={
                 "base_model": "baseModel",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing_extensions import Literal, Annotated, TypedDict
 
 from ..._utils import PropertyInfo
+from .dpo_config import DpoConfig
 
 __all__ = ["ReinforcementLearningLossConfig"]
 
@@ -15,6 +16,9 @@ class ReinforcementLearningLossConfig(TypedDict, total=False):
     RFT / RL trainers).
     For preference jobs (DPO API), the default loss method is GRPO when METHOD_UNSPECIFIED.
     """
+
+    dpo: DpoConfig
+    """DPO-specific configuration. Intended for METHOD=DPO."""
 
     kl_beta: Annotated[float, PropertyInfo(alias="klBeta")]
     """

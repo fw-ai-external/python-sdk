@@ -3,6 +3,7 @@
 from .choice import Choice as Choice
 from .status import Status as Status
 from .log_probs import LogProbs as LogProbs
+from .dpo_config import DpoConfig as DpoConfig
 from .raw_output import RawOutput as RawOutput
 from .usage_info import UsageInfo as UsageInfo
 from .chat_message import ChatMessage as ChatMessage
