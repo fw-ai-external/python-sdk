@@ -218,6 +218,13 @@ class DeploymentSampler(_RestClient):
             "perf_metrics_in_response": True,
             **kwargs,
         }
+        # Default to full-distribution sampling for on-policy RL rollouts.
+        # Without this the serving stack falls back to the model's
+        # generation_config.json sampling defaults (e.g. Qwen3.5 ships
+        # top_k=20/top_p=0.95), which silently truncate rollouts and bias the
+        # policy-gradient estimator. Explicit caller kwargs still win.
+        payload.setdefault("top_p", 1.0)
+        payload.setdefault("top_k", 0)
         url = f"{self.base_url}/inference/v1/completions"
         headers = self._inference_headers()
         client = self._get_async_client()
