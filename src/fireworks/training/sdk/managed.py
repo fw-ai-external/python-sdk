@@ -9,7 +9,11 @@ from typing import Any
 from dataclasses import field, replace, dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
+from fireworks.training.sdk.client import (
+    DEFAULT_LORA_ALPHA,
+    FiretitanServiceClient,
+    FiretitanTrainingClient,
+)
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
@@ -64,6 +68,7 @@ class FiretitanProvisioningConfig:
     base_model: str
     tokenizer_model: str | None = None
     lora_rank: int = 0
+    lora_alpha: int | None = None
     training_shape_id: str | None = None
     # Optional separate reference trainer shape. Full-parameter references must
     # set this or reference_trainer_job_id; LoRA without either uses the policy
@@ -453,11 +458,16 @@ def _create_managed_tinker_client(
             reference_handle = reference_future.result()
 
     service_client = FiretitanServiceClient(base_url=endpoint.base_url, api_key=api_key)
-    training_client = service_client.create_training_client(
-        base_model=config.base_model,
-        lora_rank=config.lora_rank,
-        user_metadata=user_metadata,
-    )
+    create_model_kwargs: dict[str, Any] = {
+        "base_model": config.base_model,
+        "lora_rank": config.lora_rank,
+        "user_metadata": user_metadata,
+    }
+    if config.lora_rank > 0:
+        create_model_kwargs["lora_alpha"] = (
+            config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
+        )
+    training_client = service_client.create_training_client(**create_model_kwargs)
     # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
     training_client._tokenizer_model = config.tokenizer_model
 
