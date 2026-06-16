@@ -85,6 +85,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -264,6 +265,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -434,6 +439,14 @@ class CompletionsResource(SyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -489,6 +502,11 @@ class CompletionsResource(SyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -584,6 +602,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -768,6 +787,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -938,6 +961,14 @@ class CompletionsResource(SyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -987,6 +1018,11 @@ class CompletionsResource(SyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -1082,6 +1118,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1266,6 +1303,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -1436,6 +1477,14 @@ class CompletionsResource(SyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -1485,6 +1534,11 @@ class CompletionsResource(SyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -1579,6 +1633,7 @@ class CompletionsResource(SyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1638,6 +1693,7 @@ class CompletionsResource(SyncAPIResource):
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
                     "safe_tokenization": safe_tokenization,
+                    "sampling_mask": sampling_mask,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,
@@ -1723,6 +1779,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1902,6 +1959,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2072,6 +2133,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -2127,6 +2196,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -2222,6 +2296,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2406,6 +2481,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2576,6 +2655,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -2625,6 +2712,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -2720,6 +2812,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2904,6 +2997,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -3074,6 +3171,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
               custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
               not applied when safe_tokenization is enabled.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. The field is ommitted if the number of unmasked
+              tokens exceeds 1000.
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -3123,6 +3228,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 `{ "type": "function", "name": "my_function" }` or
                 `{ "type": "function", "function": { "name": "my_function" } }` for OpenAI
                 compatibility.
+              - To restrict tool calls to a subset of the provided tools while keeping the
+                full tool list in the prompt (preserving prompt cache hits), pass
+                `{ "type": "allowed_tools", "allowed_tools": { "mode": "auto"|"required", "tools": [{ "type": "function", "function": { "name": "..." } }] } }`.
+                Equivalent OpenAI Responses-style flat form is also accepted:
+                `{ "type": "allowed_tools", "mode": "...", "tools": [...] }`.
 
           tools: A list of tools the model may call. Currently, only functions are supported as a
               tool.
@@ -3217,6 +3327,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
         safe_tokenization: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -3276,6 +3387,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
                     "safe_tokenization": safe_tokenization,
+                    "sampling_mask": sampling_mask,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,

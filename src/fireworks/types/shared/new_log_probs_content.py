@@ -1,6 +1,6 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import List, Optional
+from typing import List, Union, Optional
 
 from ..._models import BaseModel
 from .new_log_probs_content_top_log_probs import NewLogProbsContentTopLogProbs
@@ -24,5 +24,9 @@ class NewLogProbsContent(BaseModel):
     last_activation: Optional[str] = None
 
     routing_matrix: Optional[str] = None
+
+    sampling_mask: Union[List[int], str, None] = None
+
+    sampling_mask_count: Optional[int] = None
 
     top_logprobs: Optional[List[NewLogProbsContentTopLogProbs]] = None

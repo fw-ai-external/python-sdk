@@ -79,6 +79,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -265,6 +266,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -413,6 +418,14 @@ class CompletionsResource(SyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -539,6 +552,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -730,6 +744,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -878,6 +896,14 @@ class CompletionsResource(SyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -998,6 +1024,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1189,6 +1216,10 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -1337,6 +1368,14 @@ class CompletionsResource(SyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -1456,6 +1495,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1509,6 +1549,7 @@ class CompletionsResource(SyncAPIResource):
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
+                    "sampling_mask": sampling_mask,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,
@@ -1588,6 +1629,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1774,6 +1816,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -1922,6 +1968,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -2048,6 +2102,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2239,6 +2294,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2387,6 +2446,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -2507,6 +2574,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2698,6 +2766,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
+              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+                that served the request. Changes when the pod template (image, args, env,
+                resources, mounted ConfigMap references, etc.) changes, so during a partial
+                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2846,6 +2918,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
+          sampling_mask: Opt-in sampling mask metadata for generated tokens. When set to `"count"`, each
+              generated token in the new logprobs format includes the number of token logits
+              still eligible for sampling after filters such as top_p and top_k are applied.
+              `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
+              `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
+              buffer of active token IDs. Non-zero payloads are omitted for positions with
+              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+
           seed: Random seed for deterministic sampling.
 
           service_tier: The service tier to use for the request. Specifies the processing type used for
@@ -2965,6 +3045,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]] | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -3018,6 +3099,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
+                    "sampling_mask": sampling_mask,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,

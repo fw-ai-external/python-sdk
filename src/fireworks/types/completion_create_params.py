@@ -224,6 +224,10 @@ class CompletionCreateParamsBase(TypedDict, total=False):
       completed requests)
     - `speculation-acceptance`: Speculation acceptance rates by position
     - `backend-host`: Hostname of the backend server
+    - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
+      that served the request. Changes when the pod template (image, args, env,
+      resources, mounted ConfigMap references, etc.) changes, so during a partial
+      rollout different replicas will report different values.
     - `num-concurrent-requests`: Number of concurrent requests
     - `deployment`: Deployment name
     - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -396,6 +400,18 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     return_token_ids: Optional[bool]
     """Return token IDs alongside text to avoid retokenization drift."""
 
+    sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]]
+    """Opt-in sampling mask metadata for generated tokens.
+
+    When set to `"count"`, each generated token in the new logprobs format includes
+    the number of token logits still eligible for sampling after filters such as
+    top_p and top_k are applied. `"non_zero_list"` additionally returns active token
+    IDs in `sampling_mask`; `"non_zero_buffer"` additionally returns a
+    base64-encoded little-endian uint32 buffer of active token IDs. Non-zero
+    payloads are omitted for positions with more active tokens than
+    FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+    """
+
     seed: Optional[int]
     """Random seed for deterministic sampling."""
 
@@ -505,18 +521,61 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
 class PredictionPredictedOutputContentUnionMember1ImageURL(TypedDict, total=False):
     url: Required[str]
+    """Image link or base64 data URI.
+
+    `mm_file://{file_id}` is also accepted for assets uploaded via the Files API.
+    """
 
     detail: Optional[str]
+    """Detail level for image understanding.
+
+    One of `low` / `default` / `high` (model-specific defaults table). Used to pick
+    a default `max_long_side_pixel` when that field is absent.
+    """
+
+    max_long_side_pixel: Optional[int]
+    """Per-image cap on the long side after resizing.
+
+    When omitted, the model derives a default from `detail`. Currently honored by
+    MiniMax M3 VL preprocessing; other VL models ignore this field. See the M3 VL
+    preprocessing spec (2026-05-29) for the full 3-step resize semantics (long-side
+    cap → short-side floor at 112 px → hard total-pixel cap).
+    """
 
 
 class PredictionPredictedOutputContentUnionMember1VideoURL(TypedDict, total=False):
     url: Required[str]
+    """Video link or base64 data URI.
+
+    `mm_file://{file_id}` is accepted for assets uploaded via the Files API
+    (recommended for files > 50 MB).
+    """
 
     detail: Optional[str]
+    """Detail level for video understanding. One of `low` / `default` / `high`."""
+
+    fps: Optional[float]
+    """
+    Frame sampling rate, in [0.2, 5] Hz for MiniMax M3 VL (was [0.5, 2] in the
+    pre-2026-05-29 spec). Higher values are more sensitive to motion at the cost of
+    more tokens; lower values are cheaper but less responsive to fast scene changes.
+    Equivalent to `sample_fps` on non-M3 video models.
+    """
 
     max_frames: Optional[int]
 
+    max_long_side_pixel: Optional[int]
+    """Per-frame cap on the long side after resizing.
+
+    When omitted, the model derives a default from `detail`. Currently honored by
+    MiniMax M3 VL preprocessing; other VL models ignore this field.
+    """
+
     sample_fps: Optional[float]
+    """Frame sampling rate (Kimi K2.5 VL legacy name).
+
+    For MiniMax M3 VL prefer the canonical `fps` field.
+    """
 
     spatial_limit: Optional[int]
 

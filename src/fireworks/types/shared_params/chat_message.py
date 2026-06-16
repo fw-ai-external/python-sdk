@@ -12,18 +12,61 @@ __all__ = ["ChatMessage", "ContentUnionMember1", "ContentUnionMember1ImageURL", 
 
 class ContentUnionMember1ImageURL(TypedDict, total=False):
     url: Required[str]
+    """Image link or base64 data URI.
+
+    `mm_file://{file_id}` is also accepted for assets uploaded via the Files API.
+    """
 
     detail: Optional[str]
+    """Detail level for image understanding.
+
+    One of `low` / `default` / `high` (model-specific defaults table). Used to pick
+    a default `max_long_side_pixel` when that field is absent.
+    """
+
+    max_long_side_pixel: Optional[int]
+    """Per-image cap on the long side after resizing.
+
+    When omitted, the model derives a default from `detail`. Currently honored by
+    MiniMax M3 VL preprocessing; other VL models ignore this field. See the M3 VL
+    preprocessing spec (2026-05-29) for the full 3-step resize semantics (long-side
+    cap → short-side floor at 112 px → hard total-pixel cap).
+    """
 
 
 class ContentUnionMember1VideoURL(TypedDict, total=False):
     url: Required[str]
+    """Video link or base64 data URI.
+
+    `mm_file://{file_id}` is accepted for assets uploaded via the Files API
+    (recommended for files > 50 MB).
+    """
 
     detail: Optional[str]
+    """Detail level for video understanding. One of `low` / `default` / `high`."""
+
+    fps: Optional[float]
+    """
+    Frame sampling rate, in [0.2, 5] Hz for MiniMax M3 VL (was [0.5, 2] in the
+    pre-2026-05-29 spec). Higher values are more sensitive to motion at the cost of
+    more tokens; lower values are cheaper but less responsive to fast scene changes.
+    Equivalent to `sample_fps` on non-M3 video models.
+    """
 
     max_frames: Optional[int]
 
+    max_long_side_pixel: Optional[int]
+    """Per-frame cap on the long side after resizing.
+
+    When omitted, the model derives a default from `detail`. Currently honored by
+    MiniMax M3 VL preprocessing; other VL models ignore this field.
+    """
+
     sample_fps: Optional[float]
+    """Frame sampling rate (Kimi K2.5 VL legacy name).
+
+    For MiniMax M3 VL prefer the canonical `fps` field.
+    """
 
     spatial_limit: Optional[int]
 
