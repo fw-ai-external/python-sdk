@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.82 (2026-06-16)
+
+Full Changelog: [v1.2.0-alpha.81...v1.2.0-alpha.82](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.81...v1.2.0-alpha.82)
+
+### Features
+* **cookbook/rl:** expose lora_alpha in rl_loop and managed provisioning ([5a67b14](https://github.com/fw-ai-external/python-sdk/commit/5a67b142660deec1bb8050131d3d2c106a48306c))
+
 ## 1.2.0-alpha.81 (2026-06-13)
 
 Full Changelog: [v1.2.0-alpha.80...v1.2.0-alpha.81](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.80...v1.2.0-alpha.81)

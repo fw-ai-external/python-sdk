@@ -6,6 +6,7 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from ..._models import BaseModel
+from .dpo_config import DpoConfig
 
 __all__ = ["ReinforcementLearningLossConfig"]
 
@@ -16,6 +17,9 @@ class ReinforcementLearningLossConfig(BaseModel):
     RFT / RL trainers).
     For preference jobs (DPO API), the default loss method is GRPO when METHOD_UNSPECIFIED.
     """
+
+    dpo: Optional[DpoConfig] = None
+    """DPO-specific configuration. Intended for METHOD=DPO."""
 
     kl_beta: Optional[float] = FieldInfo(alias="klBeta", default=None)
     """

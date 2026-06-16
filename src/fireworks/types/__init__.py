@@ -9,6 +9,7 @@ from .shared import (
     Choice as Choice,
     Status as Status,
     LogProbs as LogProbs,
+    DpoConfig as DpoConfig,
     RawOutput as RawOutput,
     UsageInfo as UsageInfo,
     ChatMessage as ChatMessage,

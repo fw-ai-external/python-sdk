@@ -1,6 +1,7 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
 from .status import Status as Status
+from .dpo_config import DpoConfig as DpoConfig
 from .chat_message import ChatMessage as ChatMessage
 from .wandb_config import WandbConfig as WandbConfig
 from .training_config import TrainingConfig as TrainingConfig
