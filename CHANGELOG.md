@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.83 (2026-06-18)
+
+Full Changelog: [v1.2.0-alpha.82...v1.2.0-alpha.83](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.82...v1.2.0-alpha.83)
+
+### Chores
+* **public-repos:** make SDK pyproject the version source ([c349c92](https://github.com/fw-ai-external/python-sdk/commit/c349c926f6c473e30e4ea83fff787cafe3096ee9))
+
 ## 1.2.0-alpha.82 (2026-06-16)
 
 Full Changelog: [v1.2.0-alpha.81...v1.2.0-alpha.82](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.81...v1.2.0-alpha.82)
