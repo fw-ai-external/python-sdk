@@ -507,6 +507,29 @@ def _warn_deprecated_override(method: str, field: str, passed: Any, configured: 
         )
 
 
+def _is_serverless_session_id(session_id: Any) -> bool:
+    """True for a CP-minted serverless training session id (``ts-<hex>``).
+
+    The serverless gateway mints these at ``create_session``; managed / dedicated
+    direct trainers use a different id shape, so the CP training-session resource
+    name only applies to ``ts-`` sessions.
+    """
+    return isinstance(session_id, str) and session_id.startswith("ts-")
+
+
+def _run_id_from_model_id(model_id: Any) -> str | None:
+    """The CP run id from a run-scoped ``model_id`` (``{run_id}:train:{seq}``).
+
+    The control plane owns ``run_id`` (``run-<hex>``); the trainer owns the
+    ``:train:<seq>`` suffix. Returns None for non-run-scoped ids (base-only
+    reference models, managed / dedicated trainers).
+    """
+    if not isinstance(model_id, str):
+        return None
+    run_id, sep, _ = model_id.partition(":train:")
+    return run_id if sep and run_id.startswith("run-") else None
+
+
 def _create_base_only_training_client(
     holder: Any,
     base_model: str,
@@ -541,6 +564,8 @@ def _create_base_only_training_client(
 
     model_id = holder.run_coroutine_threadsafe(_create()).result()
     logger.info("Created base-only model %s (reference)", model_id)
+    # Base-only reference models are not run-scoped (model_id is a base id), so
+    # they have no run_name; the owning session lives on the service client.
     return FiretitanTrainingClient(
         holder=holder,
         model_seq_id=model_seq_id,
@@ -786,6 +811,10 @@ class FiretitanTrainingClient(TrainingClient):
       - list_checkpoints(): DCP checkpoint listing from the trainer
       - Checkpoint name reuse detection (warns on duplicate names within a session)
       - Session-scoped snapshot name qualification (prevents Alluxio cache staleness)
+      - run_id / run_name: the CP serverless training run this model is
+        (``run-<hex>`` / ``accounts/<a>/trainingRuns/<run_id>``), parsed from
+        ``model_id``; what run-based routing and checkpoints key on. None for
+        non-run-scoped models. The owning *session* lives on the service client.
 
     A unique ``session_id`` is generated on creation.  All sampler snapshot
     names are automatically suffixed with it in
@@ -817,8 +846,17 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         lora_rank: int = 0,
         first_sampler_checkpoint_type: SamplerCheckpointType = "base",
+        run_name: str | None = None,
     ):
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
+        # Full CP resource name of the serverless training run this model is, i.e.
+        # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
+        # derived from ``model_id`` ("{run_id}:train:{seq}"). Both are None for
+        # non-serverless / non-run-scoped models (managed, dedicated, base-only).
+        # The owning *session* lives on the FiretitanServiceClient, not here — one
+        # session holds many runs (1:N). Distinct from ``self.session_id`` below,
+        # a local id used only to disambiguate sampler snapshot names.
+        self.run_name: str | None = run_name
         # Track checkpoint names to detect reuse within a session.
         # Sampler and state names are tracked separately because the same name
         # (e.g., "step-4") is intentionally used for both — they are different
@@ -835,6 +873,13 @@ class FiretitanTrainingClient(TrainingClient):
         # so that GCS paths are unique even when the deployment_id is reused.
         self.session_id: str = generate_session_id()
         logger.info("FiretitanTrainingClient session_id: %s", self.session_id)
+
+    @property
+    def run_id(self) -> str | None:
+        """The CP serverless training run id (``run-<hex>``) this model is, parsed
+        from ``model_id`` (``{run_id}:train:{seq}``). None for non-run-scoped
+        models (managed / dedicated / base-only)."""
+        return _run_id_from_model_id(self.model_id)
 
     def _attach_sampler_backend(self, backend: Any) -> "FiretitanTrainingClient":
         """Attach SDK-owned sampler backend state to this training client."""
@@ -1815,6 +1860,82 @@ class FiretitanServiceClient(ServiceClient):
             )
         return super().create_rest_client()
 
+    def _current_session_id(self) -> Any:
+        """The serverless session id this service is bound to, or None (managed /
+        dedicated services have no holder; an unconnected service has no session
+        yet)."""
+        if not hasattr(self, "holder"):
+            return None
+        return self.holder.get_session_id()
+
+    @property
+    def training_session_id(self) -> str | None:
+        """The CP serverless training session id (``ts-<hex>``) this service owns,
+        or None for non-serverless services / before the session is created.
+
+        One service owns one session; the many models created on it are separate
+        runs (see ``FiretitanTrainingClient.run_id``).
+        """
+        session_id = self._current_session_id()
+        return session_id if _is_serverless_session_id(session_id) else None
+
+    @property
+    def training_session_name(self) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingSessions/<ts-id>``) of the
+        session this service owns, for CP ops (GetTrainingSession, checkpoint
+        list/promote, DeleteTrainingSession). None for non-serverless services."""
+        return self._serverless_training_session_name(self._current_session_id())
+
+    def _resolved_account_id(self) -> str | None:
+        """The Fireworks account id, resolved once and cached, or ``None`` if it
+        can't be resolved without an extra control-plane round-trip.
+
+        The durable handles are the ids (``training_session_id`` / ``run_id``),
+        which are always available with no I/O; the account is needed only to
+        *qualify* them into full resource names, so this is best-effort and
+        degrades to ``None`` rather than failing the caller. Resolved via a
+        Fireworks REST client; cached across calls.
+        """
+        cached = getattr(self, "_cp_account_id", "unset")
+        if cached != "unset":
+            return cached
+        # Resolve into a local and publish the cache exactly once, with the final
+        # value — never an in-progress None. Otherwise a concurrent caller could
+        # observe the transient None (a terminal value here), skip its own lookup,
+        # and bake run_name=None into a client created mid-resolution. Worst case
+        # two threads both resolve (idempotent, same answer); never a premature None.
+        account: str | None = None
+        api_key = getattr(self, "_fireworks_api_key", None)
+        if api_key:
+            try:
+                from fireworks.training.sdk.fireworks_client import FireworksClient
+
+                base_url = getattr(self, "_managed_base_url", None) or "https://api.fireworks.ai"
+                account = FireworksClient(api_key=api_key, base_url=base_url).account_id
+            except Exception:
+                account = None
+        self._cp_account_id = account
+        return account
+
+    def _serverless_training_session_name(self, session_id: Any) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingSessions/<ts-id>``) for a
+        serverless training session, or ``None`` for non-serverless ids / when the
+        account can't be resolved (use ``training_session_id`` + your account)."""
+        if not _is_serverless_session_id(session_id):
+            return None
+        account = self._resolved_account_id()
+        return f"accounts/{account}/trainingSessions/{session_id}" if account else None
+
+    def _serverless_run_name(self, model_id: Any) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingRuns/<run_id>``) for a
+        run-scoped model, or ``None`` for non-run-scoped ids (base-only) / when the
+        account can't be resolved (use ``run_id`` + your account)."""
+        run_id = _run_id_from_model_id(model_id)
+        if run_id is None:
+            return None
+        account = self._resolved_account_id()
+        return f"accounts/{account}/trainingRuns/{run_id}" if account else None
+
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
         if managed_config is None:
@@ -2210,6 +2331,7 @@ class FiretitanServiceClient(ServiceClient):
             model_seq_id=model_seq_id,
             model_id=model_id,
             lora_rank=lora_rank,
+            run_name=self._serverless_run_name(model_id),
         )
 
     def create_lora_training_client(

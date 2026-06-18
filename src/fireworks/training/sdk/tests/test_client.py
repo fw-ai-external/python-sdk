@@ -20,8 +20,10 @@ from fireworks.training.sdk.client import (
     FiretitanServiceClient,
     FiretitanTrainingClient,
     generate_session_id,
+    _run_id_from_model_id,
     qualify_snapshot_name,
     _LazyManagedRestClient,
+    _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
     _FireworksApiKeyAuthProvider,
     _check_cos_similarity_matrix_single_chunk,
@@ -1633,3 +1635,118 @@ class TestBuildEmbeddingRequestsDispatch:
             )
         # never reached request-id allocation
         client._get_request_id.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Serverless identity surfacing: session on the service, run on the client
+# ---------------------------------------------------------------------------
+
+
+class TestServerlessSessionId:
+    def test_ts_prefixed_is_serverless(self):
+        assert _is_serverless_session_id("ts-0123456789abcdef")
+
+    def test_non_ts_is_not_serverless(self):
+        # The legacy tinker short id and the run id are not CP session ids.
+        assert not _is_serverless_session_id("0400ab94")
+        assert not _is_serverless_session_id("run-deadbeef:train:0")
+
+    def test_none_and_empty_are_not_serverless(self):
+        assert not _is_serverless_session_id(None)
+        assert not _is_serverless_session_id("")
+
+
+class TestRunIdFromModelId:
+    def test_parses_run_scoped_model_id(self):
+        assert _run_id_from_model_id("run-ceb524:train:0") == "run-ceb524"
+        assert _run_id_from_model_id("run-abc:train:5") == "run-abc"
+
+    def test_none_for_non_run_scoped(self):
+        assert _run_id_from_model_id("base-xyz") is None  # base-only reference
+        assert _run_id_from_model_id("ts-abc") is None
+        assert _run_id_from_model_id("model-without-suffix") is None
+
+    def test_none_for_non_str(self):
+        assert _run_id_from_model_id(None) is None
+
+
+def _service(account_id: str | None = "pyroworks-dev", session_id: str = "ts-abc123"):
+    # Bypass __init__: exercise the serverless identity surface. We pre-cache the
+    # resolved account so the name builders don't do a real whoami in the test;
+    # account resolution itself is covered separately.
+    svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+    svc.holder = SimpleNamespace(get_session_id=lambda: session_id)
+    svc._cp_account_id = account_id
+    return svc
+
+
+class TestServiceTrainingSession:
+    """The session is owned by the service (one session : many runs)."""
+
+    def test_session_id_and_name(self):
+        svc = _service()
+        assert svc.training_session_id == "ts-abc123"
+        assert svc.training_session_name == "accounts/pyroworks-dev/trainingSessions/ts-abc123"
+
+    def test_none_for_non_serverless_session(self):
+        svc = _service(session_id="0400ab94")
+        assert svc.training_session_id is None
+        assert svc.training_session_name is None
+
+
+class TestServerlessRunName:
+    """The run is owned by each training client; the service builds its name."""
+
+    def test_builds_full_run_resource_name(self):
+        svc = _service()
+        assert (
+            svc._serverless_run_name("run-ceb524:train:0")
+            == "accounts/pyroworks-dev/trainingRuns/run-ceb524"
+        )
+
+    def test_none_for_base_only_model(self):
+        svc = _service()
+        assert svc._serverless_run_name("base-xyz") is None
+
+
+class TestAccountResolutionBestEffort:
+    """The ids are the durable handles; names degrade to None when the account
+    can't be resolved — they never fail the caller."""
+
+    def test_no_api_key_degrades_to_none(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._fireworks_api_key = None  # nothing to resolve the account with
+        assert svc._resolved_account_id() is None
+        assert svc.training_session_id == "ts-abc123"  # id still surfaced
+        assert svc.training_session_name is None  # name degrades, no crash
+        assert svc._serverless_run_name("run-x:train:0") is None
+
+    def test_account_cached(self):
+        svc = _service()  # pre-cached account
+        assert svc._resolved_account_id() == "pyroworks-dev"
+        assert svc._resolved_account_id() == "pyroworks-dev"
+
+    def test_no_in_progress_none_published(self):
+        # Regression: the cache must never hold a transient None *during*
+        # resolution. A concurrent reader must see "unset" (and resolve too) or
+        # the final value — never a premature None baked into a mid-flight client.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        seen = {}
+
+        class _FakeFireworksClient:
+            def __init__(self, **kwargs):
+                pass
+
+            @property
+            def account_id(self):
+                # at the moment of the whoami the cache must still be unset
+                seen["mid"] = getattr(svc, "_cp_account_id", "unset")
+                return "pyroworks-dev"
+
+        with patch(
+            "fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient
+        ):
+            assert svc._resolved_account_id() == "pyroworks-dev"
+        assert seen["mid"] == "unset"  # no premature None observed mid-resolution
