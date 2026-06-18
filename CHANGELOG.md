@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.84 (2026-06-18)
+
+Full Changelog: [v1.2.0-alpha.83...v1.2.0-alpha.84](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.83...v1.2.0-alpha.84)
+
+### Features
+* **training-sdk:** surface serverless session (on the service) + run (on the training client) ([ad77c33](https://github.com/fw-ai-external/python-sdk/commit/ad77c335a21b79e76e4f59a7f8d5d20c621d45b4))
+
 ## 1.2.0-alpha.83 (2026-06-18)
 
 Full Changelog: [v1.2.0-alpha.82...v1.2.0-alpha.83](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.82...v1.2.0-alpha.83)
