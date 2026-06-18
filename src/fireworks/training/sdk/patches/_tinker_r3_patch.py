@@ -17,10 +17,46 @@ from fireworks.training.sdk.patches._model_utils import rebuild_model
 logger = logging.getLogger(__name__)
 
 
+def _rebuild_wire_models() -> None:
+    """Refresh Tinker's internal request serializers.
+
+    Tinker 0.22 writes REST bodies through ``tinker.types._pydantic_types``
+    mirrors. Rebuilding only the public request chain leaves those cached
+    serializers stale, which silently drops dynamically-added ModelInput fields
+    such as ``routing_matrices`` at the JSON boundary.
+    """
+    try:
+        from tinker.types._pydantic_types.datum import Datum as PydanticDatum
+        from tinker.types._pydantic_types.model_input import (
+            ModelInput as PydanticModelInput,
+        )
+        from tinker.types._pydantic_types.forward_request import (
+            ForwardRequest as PydanticForwardRequest,
+        )
+        from tinker.types._pydantic_types.forward_backward_input import (
+            ForwardBackwardInput as PydanticForwardBackwardInput,
+        )
+        from tinker.types._pydantic_types.forward_backward_request import (
+            ForwardBackwardRequest as PydanticForwardBackwardRequest,
+        )
+    except ImportError:
+        return
+
+    for model in (
+        PydanticModelInput,
+        PydanticDatum,
+        PydanticForwardBackwardInput,
+        PydanticForwardRequest,
+        PydanticForwardBackwardRequest,
+    ):
+        rebuild_model(model)
+
+
 def _apply_r3_patch() -> None:
     from tinker.types.model_input import ModelInput
 
     if "routing_matrices" in ModelInput.model_fields:
+        _rebuild_wire_models()
         return
 
     ModelInput.model_fields["routing_matrices"] = FieldInfo(
@@ -38,6 +74,7 @@ def _apply_r3_patch() -> None:
     rebuild_model(ForwardBackwardInput)
     rebuild_model(ForwardRequest)
     rebuild_model(ForwardBackwardRequest)
+    _rebuild_wire_models()
 
     from tinker.types.encoded_text_chunk import EncodedTextChunk
 

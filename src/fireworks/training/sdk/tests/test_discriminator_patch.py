@@ -118,3 +118,60 @@ class TestDiscriminatorPatch:
             result = mi.model_dump(mode="json")
 
         assert result["routing_matrices"] == ["rm1"]
+
+    def test_r3_patch_preserves_routing_matrices_in_wire_requests(self):
+        """R3 matrices must survive Tinker's dataclass-to-wire conversion."""
+        import tinker
+        from tinker._compat import model_dump
+        from tinker.types.model_input import ModelInput
+        from tinker.lib._pydantic_conv import to_pydantic_request
+        from tinker.types.forward_request import ForwardRequest
+        from tinker.types.forward_backward_input import ForwardBackwardInput
+        from tinker.types.forward_backward_request import ForwardBackwardRequest
+
+        datum = tinker.Datum(
+            model_input=ModelInput.from_ints(
+                [1, 2, 3],
+                routing_matrices=["", "rm1", "rm2"],
+            ),
+            loss_fn_inputs={
+                "target_tokens": tinker.TensorData(
+                    data=[2, 3, 4],
+                    dtype="int64",
+                    shape=[3],
+                ),
+            },
+        )
+        fb_input = ForwardBackwardInput(data=[datum], loss_fn="cross_entropy")
+
+        forward_body = model_dump(
+            to_pydantic_request(
+                ForwardRequest(
+                    forward_input=fb_input,
+                    model_id="model",
+                    seq_id=1,
+                )
+            ),
+            exclude_unset=False,
+            exclude_none=True,
+            mode="json",
+        )
+        assert forward_body["forward_input"]["data"][0]["model_input"][
+            "routing_matrices"
+        ] == ["", "rm1", "rm2"]
+
+        forward_backward_body = model_dump(
+            to_pydantic_request(
+                ForwardBackwardRequest(
+                    forward_backward_input=fb_input,
+                    model_id="model",
+                    seq_id=2,
+                )
+            ),
+            exclude_unset=False,
+            exclude_none=True,
+            mode="json",
+        )
+        assert forward_backward_body["forward_backward_input"]["data"][0][
+            "model_input"
+        ]["routing_matrices"] == ["", "rm1", "rm2"]
