@@ -33,6 +33,8 @@ from fireworks.training.sdk.managed import (
     _TinkerSamplerBackend,
     _create_or_reattach_deployment,
 )
+from fireworks.training.sdk._constants import CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO
+from fireworks.training.sdk.deployment import DeploymentConfig
 
 # ---------------------------------------------------------------------------
 # generate_session_id
@@ -303,6 +305,54 @@ class TestForwardBackward:
         assert client.holder._client_config.parallel_fwdbwd_chunks is False
 
 
+class _FakeInferenceDeploymentManager:
+    account_id = "acct"
+    api_key = "fw-key"
+    inference_url = "https://inference.test"
+
+    def __init__(self, existing=None, wait_error=None, scale_error=None, delete_error=None):
+        self.existing = existing
+        self.wait_error = wait_error
+        self.scale_error = scale_error
+        self.delete_error = delete_error
+        self.created_config = None
+        self.waited = []
+        self.scaled_to_zero = []
+        self.deleted = []
+
+    def get(self, deployment_id):
+        self.get_id = deployment_id
+        return self.existing
+
+    def create_or_get(self, config):
+        self.created_config = config
+        return SimpleNamespace(
+            deployment_id=config.deployment_id,
+            state="CREATING",
+            inference_model=None,
+        )
+
+    def wait_for_ready(self, deployment_id, timeout_s):
+        self.waited.append((deployment_id, timeout_s))
+        if self.wait_error is not None:
+            raise self.wait_error
+        return SimpleNamespace(
+            deployment_id=deployment_id,
+            state="READY",
+            inference_model=f"accounts/acct/deployments/{deployment_id}",
+        )
+
+    def scale_to_zero(self, deployment_id):
+        self.scaled_to_zero.append(deployment_id)
+        if self.scale_error is not None:
+            raise self.scale_error
+
+    def delete(self, deployment_id):
+        self.deleted.append(deployment_id)
+        if self.delete_error is not None:
+            raise self.delete_error
+
+
 class TestFiretitanServiceClientManagedCompat:
     def _make_service(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
@@ -314,6 +364,29 @@ class TestFiretitanServiceClientManagedCompat:
         svc.create_training_client = MagicMock(return_value="training-client")
         return svc
 
+    def _make_managed_service(self, deploy_mgr, *, region="US_OHIO_1"):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            deployment_shape=None,
+            region=region,
+        )
+        svc._managed_handle = SimpleNamespace(
+            deployment_manager=deploy_mgr,
+            deployment_shape="accounts/acct/deploymentShapes/student/versions/v1",
+            close=MagicMock(),
+        )
+        svc._fireworks_api_key = "fw-key"
+        svc._managed_base_url = "https://api.fireworks.ai"
+        svc._managed_inference_url = None
+        svc._managed_hotload_api_url = None
+        svc._managed_additional_headers = None
+        svc._managed_verify_ssl = None
+        svc._owned_reference_handles = []
+        svc._owned_inference_deployments = []
+        svc._reference_handle = None
+        return svc
+
     def test_reference_auto_full_param_uses_base_client(self):
         svc = self._make_service()
         svc.create_base_training_client = MagicMock(return_value="base-client")
@@ -322,6 +395,123 @@ class TestFiretitanServiceClientManagedCompat:
 
         assert result == "base-client"
         svc.create_base_training_client.assert_called_once()
+
+    def test_create_inference_deployment_sampler_reuses_managed_region_and_shape(self):
+        deploy_mgr = _FakeInferenceDeploymentManager()
+        svc = self._make_managed_service(deploy_mgr)
+
+        result = svc.create_inference_deployment_sampler(
+            DeploymentConfig(
+                deployment_id="teacher-unit",
+                base_model="accounts/acct/models/base",
+                min_replica_count=2,
+                max_replica_count=2,
+                hot_load_bucket_type=None,
+                enable_hot_load=False,
+            ),
+            timeout_s=123,
+            cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+            tokenizer="tokenizer",
+        )
+
+        assert deploy_mgr.created_config is not None
+        assert deploy_mgr.created_config.deployment_id == "teacher-unit"
+        assert deploy_mgr.created_config.base_model == "accounts/acct/models/base"
+        assert deploy_mgr.created_config.deployment_shape == "accounts/acct/deploymentShapes/student/versions/v1"
+        assert deploy_mgr.created_config.region == "US_OHIO_1"
+        assert deploy_mgr.created_config.enable_hot_load is False
+        assert deploy_mgr.created_config.hot_load_bucket_type is None
+        assert deploy_mgr.created_config.min_replica_count == 2
+        assert deploy_mgr.created_config.max_replica_count == 2
+        assert deploy_mgr.waited == [("teacher-unit", 123)]
+        assert result.model == "accounts/acct/deployments/teacher-unit"
+        assert result.base_url == "https://inference.test"
+        assert result.tokenizer == "tokenizer"
+
+        svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-unit"]
+        assert deploy_mgr.deleted == []
+        svc._managed_handle.close.assert_called_once()
+
+    def test_create_inference_deployment_sampler_reuses_existing_without_cleanup(self):
+        existing = SimpleNamespace(
+            deployment_id="teacher-existing",
+            state="READY",
+            inference_model="accounts/acct/deployments/teacher-existing",
+        )
+        deploy_mgr = _FakeInferenceDeploymentManager(existing=existing)
+        svc = self._make_managed_service(deploy_mgr)
+
+        result = svc.create_inference_deployment_sampler(
+            DeploymentConfig(
+                deployment_id="teacher-existing",
+                base_model="accounts/acct/models/base",
+            ),
+            cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+        )
+
+        assert deploy_mgr.created_config is None
+        assert result.model == "accounts/acct/deployments/teacher-existing"
+        svc.close()
+        assert deploy_mgr.scaled_to_zero == []
+
+    def test_create_inference_deployment_sampler_tracks_cleanup_before_ready(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(wait_error=TimeoutError("not ready"))
+        svc = self._make_managed_service(deploy_mgr)
+
+        with pytest.raises(TimeoutError, match="not ready"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-timeout",
+                    base_model="accounts/acct/models/base",
+                ),
+                cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+            )
+
+        svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-timeout"]
+
+    def test_close_still_closes_managed_handle_when_inference_cleanup_fails(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(scale_error=RuntimeError("cleanup failed"))
+        svc = self._make_managed_service(deploy_mgr)
+        svc._owned_inference_deployments = [
+            (deploy_mgr, "teacher-unit", CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO)
+        ]
+
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-unit"]
+        assert svc._owned_inference_deployments == []
+        svc._managed_handle.close.assert_called_once()
+
+    def test_create_inference_deployment_sampler_rejects_region_conflict(self):
+        svc = self._make_managed_service(_FakeInferenceDeploymentManager(), region="US_OHIO_1")
+
+        with pytest.raises(ValueError, match="region conflicts"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-unit",
+                    base_model="accounts/acct/models/base",
+                    region="US_VIRGINIA_1",
+                )
+            )
+
+    def test_create_inference_deployment_sampler_rejects_terminal_existing_deployment(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(
+            existing=SimpleNamespace(deployment_id="teacher-failed", state="FAILED")
+        )
+        svc = self._make_managed_service(deploy_mgr)
+
+        with pytest.raises(RuntimeError, match="terminal state"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-failed",
+                    base_model="accounts/acct/models/base",
+                )
+            )
 
     def test_reference_auto_lora_uses_base_client(self):
         svc = self._make_service()

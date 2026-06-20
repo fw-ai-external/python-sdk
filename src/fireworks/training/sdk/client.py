@@ -25,7 +25,7 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
-from dataclasses import dataclass
+from dataclasses import replace, dataclass
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -48,7 +48,17 @@ from tinker.lib.public_interfaces.training_client import (
 # exists after ``_tinker_lora_alpha_patch`` runs; importing it here guarantees
 # the field is present whenever this module is loaded (the patch is idempotent).
 import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
-from fireworks.training.sdk.deployment import DeploymentSampler, FiretitanSamplingClient
+from fireworks.training.sdk._constants import (
+    CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+    CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+    DeploymentCleanupOnClose,
+)
+from fireworks.training.sdk.deployment import (
+    DeploymentConfig,
+    DeploymentManager,
+    DeploymentSampler,
+    FiretitanSamplingClient,
+)
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
     normalize_checkpoint_type,
@@ -69,6 +79,7 @@ class LoadAdapterResponse(BaseModel):
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
+_INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "parallel_fwdbwd_chunks": False,
     "proto_write_fwdbwd": False,
@@ -1813,6 +1824,7 @@ class FiretitanServiceClient(ServiceClient):
         # Separate forward-only reference trainers this service provisioned and
         # owns (full-param / explicit reference shape). Torn down on close().
         self._owned_reference_handles: list[Any] = []
+        self._owned_inference_deployments: list[tuple[DeploymentManager, str, DeploymentCleanupOnClose]] = []
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
         self._default_project_id: str | None = kwargs.get("project_id")
 
@@ -2203,9 +2215,50 @@ class FiretitanServiceClient(ServiceClient):
         return self._control_plane_client().promote_checkpoint(*args, **kwargs)
 
     def close(self) -> None:
-        self.release_references()
+        close_error: Exception | None = None
+
+        def record_close_error(exc: Exception) -> None:
+            nonlocal close_error
+            if close_error is None:
+                close_error = exc
+
+        try:
+            self.release_references()
+        except Exception as exc:
+            logger.warning("Reference cleanup failed: %s", exc)
+            record_close_error(exc)
+
+        try:
+            owned_inference_deployments = getattr(self, "_owned_inference_deployments", [])
+            for deploy_mgr, deployment_id, cleanup in owned_inference_deployments:
+                try:
+                    if cleanup == CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO:
+                        deploy_mgr.scale_to_zero(deployment_id)
+                    elif cleanup == CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE:
+                        deploy_mgr.delete(deployment_id)
+                    else:
+                        allowed = ", ".join(
+                            [
+                                CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+                                CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+                            ]
+                        )
+                        raise ValueError(f"cleanup_on_close must be one of: {allowed}")
+                except Exception as exc:
+                    logger.warning("Inference deployment cleanup failed for %s: %s", deployment_id, exc)
+                    record_close_error(exc)
+        finally:
+            getattr(self, "_owned_inference_deployments", []).clear()
+
         if self._managed_handle is not None:
-            self._managed_handle.close()
+            try:
+                self._managed_handle.close()
+            except Exception as exc:
+                logger.warning("Managed service cleanup failed: %s", exc)
+                record_close_error(exc)
+
+        if close_error is not None:
+            raise close_error
 
     @property
     def reference_job_id(self) -> str | None:
@@ -2658,6 +2711,134 @@ class FiretitanServiceClient(ServiceClient):
         """
         handle = getattr(self, "_managed_handle", None)
         return bool(handle is not None and getattr(handle, "requires_initial_sampler_sync", False))
+
+    def _require_fireworks_api_key(self, operation: str) -> str:
+        api_key = getattr(self, "_fireworks_api_key", None)
+        if api_key is None:
+            raise ValueError(
+                f"{operation} requires a Fireworks API key. "
+                "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
+            )
+        return api_key
+
+    def _managed_deployment_manager(self) -> DeploymentManager:
+        handle = None
+        if self._managed_config is not None:
+            handle = self._ensure_managed_handle()
+        deploy_mgr = getattr(handle, "deployment_manager", None)
+        if deploy_mgr is not None:
+            return deploy_mgr
+        return DeploymentManager(
+            api_key=self._require_fireworks_api_key("deployment management"),
+            base_url=getattr(self, "_managed_base_url", None) or DEFAULT_FIREWORKS_API_URL,
+            inference_url=getattr(self, "_managed_inference_url", None),
+            hotload_api_url=getattr(self, "_managed_hotload_api_url", None),
+            additional_headers=getattr(self, "_managed_additional_headers", None),
+            verify_ssl=getattr(self, "_managed_verify_ssl", None),
+        )
+
+    def _resolve_inference_deployment_region(self, requested_region: str | None) -> str | None:
+        managed_region = getattr(self._managed_config, "region", None) if self._managed_config is not None else None
+        if requested_region is not None and managed_region is not None and requested_region != managed_region:
+            raise ValueError(
+                "Inference deployment region conflicts with managed trainer region: "
+                f"region={requested_region!r}, managed region={managed_region!r}."
+            )
+        return requested_region or managed_region
+
+    def _resolve_inference_deployment_shape(self, config: DeploymentConfig) -> str | None:
+        if config.deployment_shape is not None:
+            return config.deployment_shape
+        managed_config = self._managed_config
+        if managed_config is not None and config.base_model == managed_config.base_model:
+            return self.deployment_shape
+        return None
+
+    def _track_inference_deployment_cleanup(
+        self,
+        deploy_mgr: DeploymentManager,
+        deployment_id: str,
+        cleanup_on_close: DeploymentCleanupOnClose | None,
+    ) -> None:
+        if cleanup_on_close is None:
+            return
+        if not hasattr(self, "_owned_inference_deployments"):
+            self._owned_inference_deployments = []
+        self._owned_inference_deployments.append((deploy_mgr, deployment_id, cleanup_on_close))
+
+    def create_deployment_sampler_for_model(
+        self,
+        model: str,
+        *,
+        tokenizer: Any | None = None,
+        concurrency_controller: Any | None = None,
+        inference_url: str | None = None,
+    ) -> DeploymentSampler:
+        """Create a FireTitan-native sampler for an existing inference model."""
+        sampler = DeploymentSampler(
+            inference_url=(
+                inference_url
+                or getattr(self, "_managed_inference_url", None)
+                or getattr(self, "_managed_base_url", None)
+                or DEFAULT_FIREWORKS_API_URL
+            ),
+            model=model,
+            api_key=self._require_fireworks_api_key("deployment sampling"),
+            tokenizer=tokenizer,
+        )
+        if concurrency_controller is not None:
+            sampler.concurrency_controller = concurrency_controller
+        return sampler
+
+    def create_inference_deployment_sampler(
+        self,
+        config: DeploymentConfig,
+        *,
+        timeout_s: float = 5400,
+        cleanup_on_close: DeploymentCleanupOnClose | None = None,
+        tokenizer: Any | None = None,
+        concurrency_controller: Any | None = None,
+    ) -> DeploymentSampler:
+        """Create or reuse an inference deployment and return a sampler for it.
+
+        Managed services reuse the canonical trainer region. If the requested
+        deployment is for the same base model as the managed student, the SDK
+        also reuses the resolved managed deployment shape unless the caller
+        passes an explicit deployment shape.
+        """
+        if config.max_replica_count <= 0:
+            raise ValueError("DeploymentConfig.max_replica_count must be positive for inference sampling.")
+        deploy_mgr = self._managed_deployment_manager()
+        deployment_shape = self._resolve_inference_deployment_shape(config)
+        region = self._resolve_inference_deployment_region(config.region)
+        resolved_config = replace(config, deployment_shape=deployment_shape, region=region)
+
+        existing = deploy_mgr.get(resolved_config.deployment_id)
+        if existing is not None:
+            state = getattr(existing, "state", None)
+            if state in _INFERENCE_DEPLOYMENT_TERMINAL_STATES:
+                raise RuntimeError(
+                    f"Inference deployment {resolved_config.deployment_id!r} is in terminal state {state!r}. "
+                    "Use a different deployment_id or restore/delete the old resource."
+                )
+            logger.info("Re-using inference deployment: %s", resolved_config.deployment_id)
+        else:
+            deploy_mgr.create_or_get(resolved_config)
+            logger.info("Requested inference deployment: %s", resolved_config.deployment_id)
+            self._track_inference_deployment_cleanup(
+                deploy_mgr,
+                resolved_config.deployment_id,
+                cleanup_on_close,
+            )
+
+        ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
+        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        return self.create_deployment_sampler_for_model(
+            model,
+            tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            inference_url=deploy_mgr.inference_url,
+        )
 
     async def create_sampling_client_async(
         self,
