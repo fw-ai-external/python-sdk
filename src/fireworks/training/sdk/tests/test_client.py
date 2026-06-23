@@ -17,6 +17,7 @@ from fireworks.training.sdk.client import (
     FIRETITAN_TINKER_CLIENT_CONFIG,
     SAMPLING_CLIENT_FROM_TRAINER_MESSAGE,
     SaveSamplerResult,
+    GradNormMetricsMode,
     FiretitanServiceClient,
     FiretitanTrainingClient,
     generate_session_id,
@@ -303,6 +304,105 @@ class TestForwardBackward:
 
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is False
+
+
+class TestOptimStep:
+    class _NoopTurn:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _ImmediateThreadFuture:
+        def __init__(self, coro):
+            self._coro = coro
+
+        def result(self):
+            return asyncio.run(self._coro)
+
+    class _ClientContext:
+        def __init__(self, training):
+            self._training = training
+
+        def __enter__(self):
+            return SimpleNamespace(training=self._training)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeAPIFuture:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __await__(self):
+            async def _result():
+                return "api-future"
+
+            return _result().__await__()
+
+    def _make_client(self, captured: dict):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client._get_request_id = MagicMock(return_value=41)
+        client._guaranteed_model_id = MagicMock(return_value="model")
+        client._queue_state_logger = None
+        client._take_turn = MagicMock(return_value=self._NoopTurn())
+
+        async def optim_step(*, request, extra_body):
+            captured["request"] = request
+            captured["extra_body"] = extra_body
+            return "raw-future"
+
+        async def execute_with_retries(send):
+            return await send()
+
+        holder = MagicMock()
+        holder.aclient.return_value = self._ClientContext(
+            SimpleNamespace(optim_step=optim_step)
+        )
+        holder.execute_with_retries.side_effect = execute_with_retries
+        holder.run_coroutine_threadsafe.side_effect = self._ImmediateThreadFuture
+        client.holder = holder
+        return client
+
+    def test_default_omits_grad_norm_metrics_mode(self):
+        captured = {}
+        client = self._make_client(captured)
+
+        with patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture):
+            result = client.optim_step(types.AdamParams()).result()
+
+        assert result == "api-future"
+        body = captured["request"].model_dump(
+            exclude_unset=False,
+            exclude_none=True,
+            mode="json",
+        )
+        assert "emit_grad_norm_metrics" not in body["adam_params"]
+        assert captured["extra_body"] == {}
+
+    def test_call_time_grad_norm_metrics_mode_overrides_adam_params(self):
+        captured = {}
+        client = self._make_client(captured)
+        adam_params = types.AdamParams(emit_grad_norm_metrics=False)
+
+        with patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture):
+            result = client.optim_step(
+                adam_params,
+                emit_grad_norm_metrics=GradNormMetricsMode.DETAILED,
+            ).result()
+
+        assert result == "api-future"
+        assert captured["request"].adam_params.emit_grad_norm_metrics == "detailed"
+
+    def test_invalid_grad_norm_metrics_mode_raises_before_dispatch(self):
+        captured = {}
+        client = self._make_client(captured)
+
+        with pytest.raises(ValueError, match="emit_grad_norm_metrics"):
+            client.optim_step(types.AdamParams(), emit_grad_norm_metrics="global")
+
+        client.holder.run_coroutine_threadsafe.assert_not_called()
 
 
 class _FakeInferenceDeploymentManager:

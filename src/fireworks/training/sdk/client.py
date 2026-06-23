@@ -3,6 +3,7 @@
 This layer extends the upstream tinker client with:
   1. FiretitanServiceClient.create_training_client() — supports lora_config=None
   2. FiretitanTrainingClient.optim_step() — adds grad_accumulation_normalization
+     and grad-norm metrics controls
   3. FiretitanTrainingClient.forward_backward() — backfills response_tokens for cross_entropy
   4. FiretitanTrainingClient.save_state() — supports blocking waits and guards unsupported overwrite
   5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
@@ -439,6 +440,17 @@ class GradAccNormalization(str, Enum):
     """No normalization -- gradients used as-is."""
 
 
+class GradNormMetricsMode(str, Enum):
+    """Trainer-side grad-norm metric emission modes for ``optim_step``."""
+
+    OFF = "off"
+    """Do not compute or emit grad-norm metrics."""
+    BASIC = "basic"
+    """Emit global/RMS grad-norm metrics only."""
+    DETAILED = "detailed"
+    """Emit global/RMS grad-norm metrics plus coarse parameter buckets."""
+
+
 def _grad_accumulation_normalization_value(
     value: GradAccNormalization | str | None,
 ) -> str | None:
@@ -451,6 +463,24 @@ def _grad_accumulation_normalization_value(
     except ValueError as exc:
         valid = ", ".join(mode.value for mode in GradAccNormalization)
         raise ValueError(f"Unknown grad_accumulation_normalization {value!r}; expected one of: {valid}") from exc
+
+
+def _grad_norm_metrics_mode_value(
+    value: GradNormMetricsMode | bool | str | None,
+) -> bool | str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, GradNormMetricsMode):
+        return value.value
+    try:
+        return GradNormMetricsMode(str(value).lower()).value
+    except ValueError as exc:
+        valid = ", ".join(mode.value for mode in GradNormMetricsMode)
+        raise ValueError(
+            f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}"
+        ) from exc
 
 
 def _pop_alias(
@@ -930,11 +960,14 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         adam_params: types.AdamParams,
         grad_accumulation_normalization: GradAccNormalization | str | None = None,
+        emit_grad_norm_metrics: GradNormMetricsMode | bool | str | None = None,
     ):
         """Update model parameters using Adam optimizer.
 
         Extends the base ``optim_step`` with ``grad_accumulation_normalization``
-        to normalize accumulated gradients before clipping and stepping.
+        to normalize accumulated gradients before clipping and stepping, and
+        with ``emit_grad_norm_metrics`` to opt in to trainer-side grad-norm
+        telemetry.
 
         The default is ``None`` (no server-side normalization). Callers whose
         loss function returns a **raw sum** (e.g. RL/GRPO) should pass
@@ -951,11 +984,22 @@ class FiretitanTrainingClient(TrainingClient):
                 (use with raw-sum losses like GRPO).
                 ``GradAccNormalization.NUM_SEQUENCES``: per-sequence mean.
                 ``GradAccNormalization.NONE``: explicit no-op (same as ``None``).
+            emit_grad_norm_metrics: Optional grad-norm telemetry mode.
+                ``None``: use ``adam_params.emit_grad_norm_metrics`` if set;
+                otherwise omit the field, which defaults to off on the trainer.
+                ``False``/``GradNormMetricsMode.OFF``: explicitly off.
+                ``True``/``GradNormMetricsMode.BASIC``: global/RMS metrics only.
+                ``GradNormMetricsMode.DETAILED``: global/RMS plus bucket metrics.
         """
         extra_body: dict = {}
         normalization_value = _grad_accumulation_normalization_value(grad_accumulation_normalization)
         if normalization_value is not None:
             extra_body["grad_accumulation_normalization"] = normalization_value
+        grad_norm_metrics_value = _grad_norm_metrics_mode_value(emit_grad_norm_metrics)
+        if grad_norm_metrics_value is not None:
+            adam_params = adam_params.model_copy(
+                update={"emit_grad_norm_metrics": grad_norm_metrics_value}
+            )
         request_id = self._get_request_id()
 
         async def _optim_step_async():
@@ -990,10 +1034,12 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         adam_params: types.AdamParams,
         grad_accumulation_normalization: GradAccNormalization | str | None = None,
+        emit_grad_norm_metrics: GradNormMetricsMode | bool | str | None = None,
     ) -> APIFuture[types.OptimStepResponse]:
         return self.optim_step(
             adam_params,
             grad_accumulation_normalization=grad_accumulation_normalization,
+            emit_grad_norm_metrics=emit_grad_norm_metrics,
         )
 
     def forward_backward(
