@@ -49,11 +49,8 @@ logger = logging.getLogger(__name__)
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
 _POLICY_TRAINER_MODE = "POLICY_TRAINER"
-_FORWARD_ONLY_TRAINER_MODE = "FORWARD_ONLY"
 _LORA_TRAINER_MODE = "LORA_TRAINER"
-# Rank-0 forward-only reference trainers prefer LORA_TRAINER shapes; legacy
-# FORWARD_ONLY shapes remain accepted during shape inventory consolidation.
-_REFERENCE_TRAINER_MODES_RANK0 = frozenset({_LORA_TRAINER_MODE, _FORWARD_ONLY_TRAINER_MODE})
+_REFERENCE_TRAINER_MODES_RANK0 = frozenset({_LORA_TRAINER_MODE})
 
 
 @dataclass(frozen=True)
@@ -70,12 +67,11 @@ class FiretitanProvisioningConfig:
     lora_rank: int = 0
     lora_alpha: int | None = None
     training_shape_id: str | None = None
-    # Optional separate reference trainer shape. Full-parameter references must
-    # set this or reference_trainer_job_id; LoRA without either uses the policy
-    # session as the frozen base reference.
+    # Optional separate reference trainer shape. Full-parameter references
+    # without this ask the backend to auto-select a LoRA-capable shape.
     reference_training_shape_id: str | None = None
-    # Optional existing forward-only reference trainer to reattach to. When set,
-    # it disables LoRA shared-reference and is never cleaned up on close.
+    # Optional existing reference trainer to reattach to. When set, it disables
+    # LoRA shared-reference and is never cleaned up on close.
     reference_trainer_job_id: str | None = None
     # SDK-owned separate references are cleaned by default. Sequential live
     # tests can keep them for later reattach and clean them explicitly.
@@ -548,9 +544,9 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
 
     A LoRA policy without an explicit reference shape or reference job gets its
     frozen base for free by disabling the adapter on the policy session — no
-    second trainer. Full-parameter references need an explicit reference shape
-    or existing reference job; an explicit LoRA reference shape also provisions
-    a separate trainer.
+    second trainer. Full-parameter references provision a separate trainer; when
+    no reference shape is pinned, backend trainer creation auto-selects a
+    LoRA-capable shape for that frozen reference runtime.
     """
     return (
         config.reference_training_shape_id is None and config.reference_trainer_job_id is None and policy_lora_rank > 0
@@ -562,24 +558,17 @@ def _reference_managed_config(
     *,
     policy_lora_rank: int,
 ) -> _ManagedTinkerConfig:
-    """Derive the config for a separate forward-only reference trainer.
+    """Derive the config for a separate frozen reference trainer.
 
     ``reference_training_shape_id`` selects a fresh reference trainer shape;
     ``reference_trainer_job_id`` reattaches an existing reference and leaves
     ownership with the caller. A LoRA reference with an explicit shape loads the
     adapter on top of the base; otherwise the reference forwards the frozen base
-    directly. Fresh SDK-created references are cleaned by default unless the
-    parent config explicitly keeps them for a later reattach phase.
+    directly. When no explicit reference shape is provided, backend trainer
+    creation auto-selects a LoRA-capable shape. Fresh SDK-created references are
+    cleaned by default unless the parent config explicitly keeps them for a
+    later reattach phase.
     """
-    if not config.reference_training_shape_id and not config.reference_trainer_job_id:
-        raise ValueError(
-            "Cannot provision a separate reference trainer without "
-            "reference_training_shape_id or reference_trainer_job_id. "
-            "Full-parameter reference runs cannot reuse training_shape_id as a "
-            "reference shape; provide a reference_training_shape_id validated "
-            "for LORA_TRAINER (preferred) or legacy FORWARD_ONLY, or pass an "
-            "existing reference_trainer_job_id."
-        )
     reference_shape = config.reference_training_shape_id
     reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
     return replace(
@@ -622,6 +611,17 @@ _RESUMABLE_TRAINER_STATES = frozenset(
 )
 
 
+def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
+    return any(
+        value not in (None, "", 0, False)
+        for value in (
+            config.accelerator_type,
+            config.accelerator_count,
+            config.node_count,
+        )
+    ) or bool(config.extra_args)
+
+
 def _build_trainer_job_config(
     config: _ManagedTinkerConfig,
     *,
@@ -629,21 +629,23 @@ def _build_trainer_job_config(
     profile_training_shape: str | None,
     requested_job_id: str | None = None,
 ) -> TrainerJobConfig:
+    auto_select_training_shape = profile_training_shape is None and not _uses_manual_training_infra(config)
     return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=config.lora_rank,
         max_context_length=max_context_length,
         learning_rate=config.learning_rate,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        node_count=config.node_count,
+        node_count=None if auto_select_training_shape else config.node_count,
         trainer_replica_count=config.trainer_replica_count,
         display_name=config.display_name,
         region=config.region,
         custom_image_tag=config.custom_image_tag,
         extra_args=config.extra_args,
-        accelerator_type=config.accelerator_type,
-        accelerator_count=config.accelerator_count,
+        accelerator_type=None if auto_select_training_shape else config.accelerator_type,
+        accelerator_count=None if auto_select_training_shape else config.accelerator_count,
         training_shape_ref=profile_training_shape,
+        auto_select_training_shape=auto_select_training_shape,
         skip_validations=config.skip_validations,
         purpose=config.purpose,
         managed_by=config.managed_by,

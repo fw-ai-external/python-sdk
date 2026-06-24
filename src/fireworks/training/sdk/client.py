@@ -1867,8 +1867,8 @@ class FiretitanServiceClient(ServiceClient):
         self._created_training_configs: set[_TrainingKey] = set()
         self._sampler_backend: Any | None = None
         self._reference_handle: Any | None = None
-        # Separate forward-only reference trainers this service provisioned and
-        # owns (full-param / explicit reference shape). Torn down on close().
+        # Separate frozen reference trainers this service provisioned and owns
+        # (full-param / explicit reference shape). Torn down on close().
         self._owned_reference_handles: list[Any] = []
         self._owned_inference_deployments: list[tuple[DeploymentManager, str, DeploymentCleanupOnClose]] = []
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
@@ -2674,7 +2674,7 @@ class FiretitanServiceClient(ServiceClient):
         The returned client runs forward passes through the frozen base model
         weights with all LoRA adapters disabled.  This is useful as a KL
         divergence reference model when training with LoRA — no separate
-        FORWARD_ONLY trainer job is needed.
+        reference-only trainer job is needed.
 
         Args:
             base_model: Model name (e.g. ``"accounts/fireworks/models/qwen3-8b"``).
@@ -2938,11 +2938,10 @@ class FiretitanServiceClient(ServiceClient):
         * LoRA policy without a ``reference_training_shape_id`` → the reference
           reuses the policy trainer session with the adapter disabled (base
           weights). No second trainer is provisioned.
-        * Full-parameter policies require ``reference_training_shape_id`` or
-          ``reference_trainer_job_id``. With a reference shape (``LORA_TRAINER``
-          preferred, legacy ``FORWARD_ONLY`` accepted), the SDK provisions a
-          separate forward-only trainer that it owns and tears down on
-          :meth:`close` (or early via :meth:`release_references`).
+        * Full-parameter policies use a separate frozen reference trainer that
+          the SDK owns and tears down on :meth:`close` (or early via
+          :meth:`release_references`). If ``reference_training_shape_id`` is not
+          set, trainer creation asks the backend to select a LoRA-capable shape.
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:
@@ -2979,7 +2978,7 @@ class FiretitanServiceClient(ServiceClient):
         policy_lora_rank: int,
         user_metadata: dict[str, str] | None,
     ) -> Any:
-        """Provision a separate forward-only reference trainer this service owns."""
+        """Provision a separate frozen reference trainer this service owns."""
         from fireworks.training.sdk.managed import (
             _reference_managed_config,
             _create_managed_tinker_client,
@@ -2991,7 +2990,7 @@ class FiretitanServiceClient(ServiceClient):
                 "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
             )
         # The reference config (the one remaining config derivation) carries the
-        # forward-only shape/lora and the policy base_model; it is the single
+        # runtime forward-only flag and the policy base_model; it is the single
         # source for provisioning. base_model here is only used to detect a
         # deprecated override (warned at the create_reference_client boundary).
         reference_config = _reference_managed_config(self._managed_config, policy_lora_rank=policy_lora_rank)

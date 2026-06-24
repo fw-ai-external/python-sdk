@@ -5,9 +5,9 @@ The shared-vs-separate-trainer choice for the reference model lives entirely in
 gets the same behavior:
 
 * LoRA policy without an explicit reference shape/job -> reuse the policy session.
-* Full-parameter references require an explicit ``reference_training_shape_id``
-  or ``reference_trainer_job_id`` for a separate forward-only reference trainer
-  (``LORA_TRAINER`` shape preferred over legacy ``FORWARD_ONLY``).
+* Full-parameter references use a separate forward-only runtime trainer. When
+  no ``reference_training_shape_id`` is pinned, trainer creation asks the
+  backend to auto-select a ``LORA_TRAINER`` shape.
 
 These tests cover the decision predicate and the derived reference config; the
 recipe-facing wrapper is tested in the cookbook suite.
@@ -68,12 +68,16 @@ class TestUseSharedBaseReference:
 
 
 class TestReferenceManagedConfig:
-    """The separate reference trainer is forward-only and deployment-free."""
+    """The separate reference trainer is forward-only at runtime and deployment-free."""
 
-    def test_full_param_requires_explicit_reference_shape_or_job(self):
+    def test_full_param_without_reference_shape_uses_backend_auto_selection(self):
         config = _policy_config(reference_training_shape_id=None)
-        with pytest.raises(ValueError, match="reference_training_shape_id"):
-            _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.training_shape_id is None
+        assert reference.trainer_job_id is None
+        assert reference.forward_only is True
+        assert reference.lora_rank == 0
+        assert reference.create_deployment is False
 
     def test_fresh_trainer_and_no_deployment_reattach(self):
         # A fresh reference must never reattach the policy trainer or deployment.
@@ -111,7 +115,7 @@ class TestReferenceManagedConfig:
         assert reference.region == "US_OHIO_1"
 
     def test_reference_drops_policy_hsdp_replicas(self):
-        # HSDP replicas are a policy-trainer knob. A forward-only reference is
+        # HSDP replicas are a policy-trainer knob. A frozen reference is
         # single-replica on its own shape and must never inherit the policy
         # trainer_replica_count (would mis-size + launch a replicated ref).
         config = _policy_config(
@@ -171,6 +175,62 @@ class TestManagedProvisioning:
 
         assert len(created_configs) == 1
         assert created_configs[0].region == "US_OHIO_1"
+
+    def test_extra_args_use_manual_trainer_path(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                training_shape_id=None,
+                extra_args=["--pp", "2"],
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is False
+        assert trainer_config.extra_args == ["--pp", "2"]
+
+    def test_empty_extra_args_keep_auto_shape_selection(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                training_shape_id=None,
+                extra_args=[],
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.extra_args == []
+
+    def test_skip_validations_keep_auto_shape_selection(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                training_shape_id=None,
+                skip_validations=True,
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.skip_validations is True
+
+    def test_custom_image_tag_keeps_auto_shape_selection(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                training_shape_id=None,
+                custom_image_tag="0.33.0",
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.custom_image_tag == "0.33.0"
 
     def test_generated_trainer_job_id_is_stored_for_retry(self, monkeypatch):
         created_configs = []
@@ -282,7 +342,7 @@ class TestManagedProvisioning:
 
             def resolve_training_profile(self, training_shape_id):
                 events.append(f"resolve:{training_shape_id}")
-                trainer_mode = "FORWARD_ONLY" if training_shape_id == "ts-reference" else "POLICY_TRAINER"
+                trainer_mode = "LORA_TRAINER" if training_shape_id == "ts-reference" else "POLICY_TRAINER"
                 return SimpleNamespace(
                     training_shape_version=f"{training_shape_id}/versions/v1",
                     deployment_shape="deployment-shape/versions/v1",
@@ -390,46 +450,25 @@ class TestManagedProvisioning:
         assert handle.reference_handle.trainer_endpoint.job_id == "reference-job"
         assert handle.deployment.deployment_id == "deployment-1"
 
-    def test_full_param_reference_without_shape_fails_before_creating(self, monkeypatch):
-        events: list[str] = []
-
-        class FakeTrainerManager:
-            account_id = "acct"
-
-            def resolve_training_profile(self, training_shape_id):
-                events.append(f"resolve:{training_shape_id}")
-                return SimpleNamespace(
-                    training_shape_version=f"{training_shape_id}/versions/v1",
-                    deployment_shape="deployment-shape/versions/v1",
-                    max_supported_context_length=32768,
-                    trainer_mode="POLICY_TRAINER",
-                )
-
-            def create(self, _config):
-                events.append("create")
-                raise AssertionError("trainer create should not run after preflight failure")
-
-        def fake_build_resource_managers(**_kwargs):
-            return FakeTrainerManager(), object()
-
-        monkeypatch.setattr(
-            managed_module,
-            "_build_resource_managers",
-            fake_build_resource_managers,
+    def test_full_param_reference_without_shape_auto_selects_at_trainer_create(self):
+        reference = _reference_managed_config(
+            _policy_config(reference_training_shape_id=None),
+            policy_lora_rank=0,
         )
 
-        with pytest.raises(ValueError, match="reference_training_shape_id"):
-            managed_module._create_managed_tinker_client(
-                api_key="fw-key",
-                config=_policy_config(
-                    trainer_job_id=None,
-                    deployment_id=None,
-                    reference_training_shape_id=None,
-                    reference_required=True,
-                ),
-            )
+        trainer_config = managed_module._build_trainer_job_config(
+            reference,
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
 
-        assert events == ["resolve:ts-policy"]
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.forward_only is True
+        assert trainer_config.max_context_length == 32768
+        assert trainer_config.node_count is None
+        assert trainer_config.accelerator_type is None
+        assert trainer_config.accelerator_count is None
 
     def test_full_param_reference_accepts_lora_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-lora")
