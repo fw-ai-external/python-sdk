@@ -2327,9 +2327,10 @@ class FiretitanServiceClient(ServiceClient):
         """Trainer job id used by the reference client.
 
         Shared LoRA references run on the policy trainer. Full-parameter
-        references must be explicitly configured with a separate reference shape
-        or existing reference job. Recipes should use this for reference
-        reconnect metadata.
+        references use a separate reference trainer, either auto-selected by the
+        backend, explicitly pinned by a LoRA-capable shape, or reattached from
+        an existing job. Recipes should use this for reference reconnect
+        metadata.
         """
         return self.reference_job_id or self.trainer_job_id
 

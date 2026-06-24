@@ -490,6 +490,27 @@ class TestManagedProvisioning:
 
         _validate_reference_training_shape(FakeTrainerManager(), reference)
 
+    def test_full_param_reference_rejects_forward_only_trainer_shape(self):
+        config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.lora_rank == 0
+        assert reference.forward_only is True
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                assert training_shape_id == "ts-ref-forward-only"
+                return SimpleNamespace(
+                    training_shape_version="ts-ref-forward-only/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="FORWARD_ONLY",
+                )
+
+        with pytest.raises(ValueError, match="trainer_mode in"):
+            _validate_reference_training_shape(FakeTrainerManager(), reference)
+
     def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):
         events: list[str] = []
 

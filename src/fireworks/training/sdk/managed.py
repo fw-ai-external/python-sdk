@@ -534,11 +534,6 @@ def _preferred_reference_trainer_mode(lora_rank: int) -> str:
     return _LORA_TRAINER_MODE
 
 
-def _expected_reference_trainer_mode(reference_config: _ManagedTinkerConfig) -> str:
-    """Preferred trainer mode label for reference shape validation errors."""
-    return _preferred_reference_trainer_mode(reference_config.lora_rank)
-
-
 def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank: int) -> bool:
     """Whether the KL/DPO reference reuses the policy trainer session.
 
