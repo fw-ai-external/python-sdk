@@ -5,6 +5,7 @@ the serverless analogs of promote_checkpoint / list_checkpoints used by the
 cookbook sft_loop serverless mode. They mock the HTTP layer so they assert the
 exact request path/body/parsing without a live gateway.
 """
+
 # Strict pyright flags the loosely-typed HTTP mocks below (untyped dict bodies,
 # fake _post/_get stubs, bare-dict method returns). Relax those report
 # categories for this mock-only unit test, mirroring
@@ -65,19 +66,37 @@ def test_promote_session_checkpoint_builds_request():
     assert model["state"] == "READY"
 
 
+def test_promote_session_checkpoint_allows_run_scoped_checkpoint_id():
+    c = _client()
+    captured: dict = {}
+
+    def fake_post(path, *, json, **_kwargs):
+        captured["path"] = path
+        captured["body"] = json
+        return _FakeResp(payload={"model": {"state": "READY", "kind": "HF_PEFT_ADDON"}})
+
+    c._post = fake_post  # type: ignore[assignment]
+    name = "accounts/acct1/trainingSessions/ts-abcdef/checkpoints/run-0123456789abcdef0123456789abcdef-step-5-1a2b3c4d"
+    c.promote_session_checkpoint(
+        name=name,
+        output_model_id="my-out",
+        base_model="accounts/fireworks/models/qwen3-8b",
+    )
+
+    assert captured["path"] == f"/v1/{name}:promote"
+
+
 @pytest.mark.parametrize(
     "bad_name",
     [
         "accounts/a/rlorTrainerJobs/j/checkpoints/c",  # job form, not a session
-        "accounts/a/trainingSessions/s",               # missing /checkpoints/<c>
-        "trainingSessions/s/checkpoints/c",            # missing account
+        "accounts/a/trainingSessions/s",  # missing /checkpoints/<c>
+        "trainingSessions/s/checkpoints/c",  # missing account
     ],
 )
 def test_promote_session_checkpoint_rejects_bad_name(bad_name):
     with pytest.raises(ValueError):
-        _client().promote_session_checkpoint(
-            name=bad_name, output_model_id="x", base_model="b"
-        )
+        _client().promote_session_checkpoint(name=bad_name, output_model_id="x", base_model="b")
 
 
 def test_promote_session_checkpoint_rejects_bad_output_model_id():
