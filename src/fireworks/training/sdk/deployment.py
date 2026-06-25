@@ -95,6 +95,14 @@ class DeploymentConfig:
     base_model: str
     description: str | None = None
     deployment_shape: str | None = None
+    expected_deployment_shape: str | None = None
+    """Optional guardrail for training-profile-derived deployments.
+
+    When set, ``deployment_shape`` must exactly match this versioned shape.
+    Use :meth:`from_training_profile` to populate both fields from the resolved
+    training profile and avoid accidentally creating a hot-load deployment from
+    an optimized inference shape.
+    """
     region: str | None = None
     min_replica_count: int = 0
     max_replica_count: int = 1
@@ -120,6 +128,44 @@ class DeploymentConfig:
     SDK-managed rollout deployments set this to true so server-side trainer
     cleanup can reclaim them if the client disappears before close().
     """
+
+    @classmethod
+    def from_training_profile(
+        cls,
+        *,
+        deployment_id: str,
+        base_model: str,
+        profile: Any,
+        **kwargs: Any,
+    ) -> "DeploymentConfig":
+        """Build a deployment config pinned to a training profile's RFT shape."""
+        deployment_shape = getattr(profile, "deployment_shape", None) or getattr(
+            profile, "deployment_shape_version", None
+        )
+        if not deployment_shape:
+            raise ValueError("training profile does not include a deployment_shape_version")
+        return cls(
+            deployment_id=deployment_id,
+            base_model=base_model,
+            deployment_shape=deployment_shape,
+            expected_deployment_shape=deployment_shape,
+            **kwargs,
+        )
+
+    def validate(self) -> None:
+        """Validate client-side invariants before sending a deployment request."""
+        expected_shape = (self.expected_deployment_shape or "").strip()
+        if not expected_shape:
+            return
+        actual_shape = (self.deployment_shape or "").strip()
+        if actual_shape == expected_shape:
+            return
+        raise ValueError(
+            "deployment_shape does not match the RFT deployment shape resolved from "
+            f"the training profile: expected {expected_shape!r}, got {actual_shape!r}. "
+            "Use DeploymentConfig.from_training_profile(...) or pass the profile's "
+            "deployment_shape_version exactly."
+        )
 
 
 class DeploymentManager(_RestClient):
@@ -239,6 +285,7 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
 
     def _create_deployment(self, config: DeploymentConfig) -> dict:
+        config.validate()
         path = f"/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
         if config.skip_shape_validation:
             path = f"{path}&skipShapeValidation=true"
@@ -288,6 +335,7 @@ class DeploymentManager(_RestClient):
         body uses ``config.region`` if set. The accelerator type is omitted when
         a deployment shape is set — the shape owns the hardware selection.
         """
+        config.validate()
         region = region or config.region
         body: dict[str, Any] = {
             "baseModel": config.base_model,

@@ -17,6 +17,7 @@ Algorithms live in ``cookbook.algorithms`` (separate from the SDK):
 import fireworks.training.sdk.patches  # noqa: F401
 from fireworks.training.sdk.client import (
     SaveSamplerResult,
+    GradNormMetricsMode,
     GradAccNormalization,
     FiretitanServiceClient,
     FiretitanTrainingClient,
@@ -80,6 +81,7 @@ __all__ = [
     "DeploymentCleanupOnClose",
     "FiretitanProvisioningConfig",
     "GradAccNormalization",
+    "GradNormMetricsMode",
     "SaveSamplerResult",
     "WeightSyncer",
     "install_tinker_service_client",

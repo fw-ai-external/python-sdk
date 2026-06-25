@@ -98,6 +98,19 @@ if profile.supports_lora:
     print(f"{profile.training_shape} supports LoRA launches")
 ```
 
+Use the same profile to create the hot-load deployment so the deployment shape
+matches the trainer's validated RFT profile:
+
+```python
+deploy_config = DeploymentConfig.from_training_profile(
+    deployment_id="my-run",
+    base_model="accounts/fireworks/models/qwen3-8b",
+    profile=profile,
+    region="US_VIRGINIA_1",
+)
+deploy = deploy_mgr.create_or_get(deploy_config)
+```
+
 ### Manual path
 
 Omit `training_shape_ref` and set all infra fields directly.

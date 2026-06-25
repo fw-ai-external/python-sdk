@@ -245,6 +245,7 @@ class TestCreate:
             base_model="accounts/test/models/m",
             training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
             region="US_OHIO_1",
+            custom_image_tag="0.33.0",
             extra_args=["--flag"],
         )
         resp = MagicMock()
@@ -262,11 +263,41 @@ class TestCreate:
         tc = payload["trainingConfig"]
         assert "acceleratorType" not in tc
         assert "acceleratorCount" not in tc
-        assert "customImageTag" not in tc
+        assert tc["customImageTag"] == "0.33.0"
         assert "maxContextLength" not in tc
         assert "nodeCount" not in payload
         assert tc["region"] == "US_OHIO_1"
         assert tc["extraArgs"] == ["--flag"]
+
+    def test_auto_shape_path_omits_manual_infra_but_sends_selector_inputs(self, mgr):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            auto_select_training_shape=True,
+            max_context_length=8192,
+            region="US_OHIO_1",
+            custom_image_tag="0.33.0",
+            forward_only=True,
+        )
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(config)
+
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
+        assert "skipValidations" not in path
+        assert "trainingShape" not in path
+        tc = payload["trainingConfig"]
+        assert tc["maxContextLength"] == 8192
+        assert tc["region"] == "US_OHIO_1"
+        assert tc["customImageTag"] == "0.33.0"
+        assert "acceleratorType" not in tc
+        assert "acceleratorCount" not in tc
+        assert "nodeCount" not in payload
+        assert payload["forwardOnly"] is True
 
     def test_manual_path_sends_all_fields(self, mgr):
         """Manual path sends all infra fields and skipValidations=true."""
@@ -869,14 +900,13 @@ class TestValidate:
         with pytest.raises(ValueError, match="accelerator_count"):
             config.validate()
 
-    def test_shape_path_rejects_custom_image_tag(self):
+    def test_shape_path_accepts_custom_image_tag_selector(self):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
             custom_image_tag="0.33.0",
         )
-        with pytest.raises(ValueError, match="custom_image_tag"):
-            config.validate()
+        config.validate()
 
     def test_shape_path_rejects_node_count(self):
         config = TrainerJobConfig(
@@ -897,8 +927,29 @@ class TestValidate:
         )
         with pytest.raises(ValueError, match="accelerator_type") as exc_info:
             config.validate()
-        assert "custom_image_tag" in str(exc_info.value)
         assert "node_count" in str(exc_info.value)
+
+    def test_auto_shape_path_rejects_infra_fields(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            auto_select_training_shape=True,
+            accelerator_count=8,
+            node_count=4,
+            custom_image_tag="0.33.0",
+        )
+        with pytest.raises(ValueError, match="accelerator_count") as exc_info:
+            config.validate()
+        assert "node_count" in str(exc_info.value)
+        assert "custom_image_tag" not in str(exc_info.value)
+
+    def test_auto_shape_path_rejects_explicit_shape_ref(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            training_shape_ref="accounts/fw/trainingShapes/ts-x/versions/1",
+            auto_select_training_shape=True,
+        )
+        with pytest.raises(ValueError, match="cannot both be set"):
+            config.validate()
 
     def test_manual_path_passes_with_all_infra(self):
         config = TrainerJobConfig(

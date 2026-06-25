@@ -38,7 +38,7 @@ from fireworks.training.sdk.fireworks_client import FireworksClient
 
 logger = logging.getLogger(__name__)
 
-_SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "custom_image_tag", "node_count")
+_SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 _AUTO_TRAINER_JOB_ID_PREFIX = "training-api-service"
@@ -119,11 +119,15 @@ class CreatedTrainerJob:
 class TrainerJobConfig:
     """Configuration for creating a trainer job.
 
-    Two launch paths:
+    Three launch paths:
 
     * **Shape path** (``training_shape_ref`` set): the backend owns all
-      infra fields (accelerator, image tag, node count).  Setting any of
+      infra fields (accelerator and node count). Setting any of
       them raises ``ValueError`` from :meth:`validate`.
+    * **Auto shape path** (``auto_select_training_shape`` set): the backend
+      selects a validated training shape from model, LoRA rank, forward-only
+      mode, region, max context length, and custom image tag. Explicit infra
+      fields are rejected.
     * **Manual path** (``training_shape_ref`` is ``None``): all fields
       are sent as-is and the server skips shape validation.
     """
@@ -175,7 +179,11 @@ class TrainerJobConfig:
     """
     region: str | None = None
     custom_image_tag: str | None = None
-    """Trainer container image tag.  Shape-owned on the shape path."""
+    """Trainer container image tag.
+
+    On the shape and auto shape paths this is a selector input, not a manual
+    infra override.
+    """
     extra_args: list[str] | None = None
     """Additional trainer arguments passed through to the backend."""
     accelerator_type: str | None = None
@@ -197,10 +205,17 @@ class TrainerJobConfig:
         config = TrainerJobConfig(..., training_shape_ref=profile.training_shape_version)
 
     When set, the config is on the **shape path** and infra fields
-    (accelerator_type, accelerator_count, custom_image_tag, node_count)
-    must not be set.
+    (accelerator_type, accelerator_count, node_count) must not be set.
     """
     forward_only: bool = False
+    auto_select_training_shape: bool = False
+    """Ask the backend to select a validated training shape.
+
+    Used by SDK-managed flows when the caller did not pin a
+    ``training_shape_ref``. Infra fields are omitted from the create request,
+    while selector fields such as ``max_context_length``, ``region``, and
+    ``custom_image_tag`` are still sent.
+    """
     inactivity_timeout: timedelta | str | None = None
     """Trainer inactivity timeout.
 
@@ -232,9 +247,11 @@ class TrainerJobConfig:
     """
 
     def validate(self) -> None:
-        """Self-contained pre-flight check.  Call before ``_create()``.
+        """Self-contained pre-flight check. Call before ``_create()``.
 
         * Shape path (``training_shape_ref`` set): rejects infra field overrides.
+        * Auto shape path (``auto_select_training_shape`` set): rejects infra
+          field overrides and lets the backend choose a validated shape.
         * Manual path: accepts all fields as-is.
         """
         errors: list[str] = []
@@ -259,14 +276,17 @@ class TrainerJobConfig:
                 _format_proto_duration(self.inactivity_timeout)
             except (TypeError, ValueError) as e:
                 errors.append(f"inactivity_timeout {e}")
-        if self.training_shape_ref:
+        shape_owned_path = bool(self.training_shape_ref or self.auto_select_training_shape)
+        if self.training_shape_ref and self.auto_select_training_shape:
+            errors.append("training_shape_ref and auto_select_training_shape cannot both be set")
+        if shape_owned_path:
             for field in _SHAPE_OWNED_FIELDS:
                 val = getattr(self, field)
                 if val is not None and val != "" and val != 0:
                     errors.append(
-                        f"{field} cannot be set when training_shape_ref is provided. "
-                        "Remove it to use the shape's value, or remove "
-                        "training_shape_ref for a manual launch."
+                        f"{field} cannot be set when training shape selection is enabled. "
+                        "Remove it to use the selected shape's value, or disable "
+                        "training shape selection for a manual launch."
                     )
         if errors:
             raise ValueError("\n".join(errors))
@@ -364,12 +384,13 @@ class TrainerJobManager(FireworksClient):
             query_params.append(("deploymentId", config.hot_load_deployment_id))
 
         is_shape_path = bool(config.training_shape_ref)
+        is_auto_shape_path = bool(config.auto_select_training_shape)
 
         if is_shape_path:
             query_params.append(("trainingShape", config.training_shape_ref))
             if config.skip_validations:
                 query_params.append(("skipValidations", "true"))
-        else:
+        elif not is_auto_shape_path:
             query_params.append(("skipValidations", "true"))
 
         query_params.append(("rlorTrainerJobId", requested_job_id))
@@ -403,6 +424,7 @@ class TrainerJobManager(FireworksClient):
     def _build_trainer_create_payload(config: TrainerJobConfig) -> dict[str, Any]:
         """Assemble the RLOR job creation request body from a trainer config."""
         is_shape_path = bool(config.training_shape_ref)
+        is_auto_shape_path = bool(config.auto_select_training_shape)
         training_config: dict[str, Any] = {
             "baseModel": config.base_model,
             "loraRank": config.lora_rank,
@@ -418,12 +440,13 @@ class TrainerJobManager(FireworksClient):
         if config.trainer_replica_count is not None:
             payload["trainerReplicaCount"] = config.trainer_replica_count
 
-        if not is_shape_path:
-            if config.max_context_length is not None:
-                training_config["maxContextLength"] = config.max_context_length
+        if config.max_context_length is not None and not is_shape_path:
+            training_config["maxContextLength"] = config.max_context_length
+        if config.custom_image_tag:
+            training_config["customImageTag"] = config.custom_image_tag
+
+        if not is_shape_path and not is_auto_shape_path:
             payload["nodeCount"] = config.node_count if config.node_count is not None else 1
-            if config.custom_image_tag:
-                training_config["customImageTag"] = config.custom_image_tag
             if config.accelerator_type:
                 training_config["acceleratorType"] = config.accelerator_type
             if config.accelerator_count:

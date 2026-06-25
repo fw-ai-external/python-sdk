@@ -3,6 +3,7 @@
 This layer extends the upstream tinker client with:
   1. FiretitanServiceClient.create_training_client() — supports lora_config=None
   2. FiretitanTrainingClient.optim_step() — adds grad_accumulation_normalization
+     and grad-norm metrics controls
   3. FiretitanTrainingClient.forward_backward() — backfills response_tokens for cross_entropy
   4. FiretitanTrainingClient.save_state() — supports blocking waits and guards unsupported overwrite
   5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
@@ -25,7 +26,7 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
-from dataclasses import dataclass
+from dataclasses import replace, dataclass
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -48,7 +49,17 @@ from tinker.lib.public_interfaces.training_client import (
 # exists after ``_tinker_lora_alpha_patch`` runs; importing it here guarantees
 # the field is present whenever this module is loaded (the patch is idempotent).
 import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
-from fireworks.training.sdk.deployment import DeploymentSampler, FiretitanSamplingClient
+from fireworks.training.sdk._constants import (
+    CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+    CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+    DeploymentCleanupOnClose,
+)
+from fireworks.training.sdk.deployment import (
+    DeploymentConfig,
+    DeploymentManager,
+    DeploymentSampler,
+    FiretitanSamplingClient,
+)
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
     normalize_checkpoint_type,
@@ -69,6 +80,7 @@ class LoadAdapterResponse(BaseModel):
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
+_INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "parallel_fwdbwd_chunks": False,
     "proto_write_fwdbwd": False,
@@ -428,6 +440,17 @@ class GradAccNormalization(str, Enum):
     """No normalization -- gradients used as-is."""
 
 
+class GradNormMetricsMode(str, Enum):
+    """Trainer-side grad-norm metric emission modes for ``optim_step``."""
+
+    OFF = "off"
+    """Do not compute or emit grad-norm metrics."""
+    BASIC = "basic"
+    """Emit global/RMS grad-norm metrics only."""
+    DETAILED = "detailed"
+    """Emit global/RMS grad-norm metrics plus coarse parameter buckets."""
+
+
 def _grad_accumulation_normalization_value(
     value: GradAccNormalization | str | None,
 ) -> str | None:
@@ -440,6 +463,24 @@ def _grad_accumulation_normalization_value(
     except ValueError as exc:
         valid = ", ".join(mode.value for mode in GradAccNormalization)
         raise ValueError(f"Unknown grad_accumulation_normalization {value!r}; expected one of: {valid}") from exc
+
+
+def _grad_norm_metrics_mode_value(
+    value: GradNormMetricsMode | bool | str | None,
+) -> bool | str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, GradNormMetricsMode):
+        return value.value
+    try:
+        return GradNormMetricsMode(str(value).lower()).value
+    except ValueError as exc:
+        valid = ", ".join(mode.value for mode in GradNormMetricsMode)
+        raise ValueError(
+            f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}"
+        ) from exc
 
 
 def _pop_alias(
@@ -507,6 +548,29 @@ def _warn_deprecated_override(method: str, field: str, passed: Any, configured: 
         )
 
 
+def _is_serverless_session_id(session_id: Any) -> bool:
+    """True for a CP-minted serverless training session id (``ts-<hex>``).
+
+    The serverless gateway mints these at ``create_session``; managed / dedicated
+    direct trainers use a different id shape, so the CP training-session resource
+    name only applies to ``ts-`` sessions.
+    """
+    return isinstance(session_id, str) and session_id.startswith("ts-")
+
+
+def _run_id_from_model_id(model_id: Any) -> str | None:
+    """The CP run id from a run-scoped ``model_id`` (``{run_id}:train:{seq}``).
+
+    The control plane owns ``run_id`` (``run-<hex>``); the trainer owns the
+    ``:train:<seq>`` suffix. Returns None for non-run-scoped ids (base-only
+    reference models, managed / dedicated trainers).
+    """
+    if not isinstance(model_id, str):
+        return None
+    run_id, sep, _ = model_id.partition(":train:")
+    return run_id if sep and run_id.startswith("run-") else None
+
+
 def _create_base_only_training_client(
     holder: Any,
     base_model: str,
@@ -541,6 +605,8 @@ def _create_base_only_training_client(
 
     model_id = holder.run_coroutine_threadsafe(_create()).result()
     logger.info("Created base-only model %s (reference)", model_id)
+    # Base-only reference models are not run-scoped (model_id is a base id), so
+    # they have no run_name; the owning session lives on the service client.
     return FiretitanTrainingClient(
         holder=holder,
         model_seq_id=model_seq_id,
@@ -786,6 +852,10 @@ class FiretitanTrainingClient(TrainingClient):
       - list_checkpoints(): DCP checkpoint listing from the trainer
       - Checkpoint name reuse detection (warns on duplicate names within a session)
       - Session-scoped snapshot name qualification (prevents Alluxio cache staleness)
+      - run_id / run_name: the CP serverless training run this model is
+        (``run-<hex>`` / ``accounts/<a>/trainingRuns/<run_id>``), parsed from
+        ``model_id``; what run-based routing and checkpoints key on. None for
+        non-run-scoped models. The owning *session* lives on the service client.
 
     A unique ``session_id`` is generated on creation.  All sampler snapshot
     names are automatically suffixed with it in
@@ -817,8 +887,17 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         lora_rank: int = 0,
         first_sampler_checkpoint_type: SamplerCheckpointType = "base",
+        run_name: str | None = None,
     ):
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
+        # Full CP resource name of the serverless training run this model is, i.e.
+        # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
+        # derived from ``model_id`` ("{run_id}:train:{seq}"). Both are None for
+        # non-serverless / non-run-scoped models (managed, dedicated, base-only).
+        # The owning *session* lives on the FiretitanServiceClient, not here — one
+        # session holds many runs (1:N). Distinct from ``self.session_id`` below,
+        # a local id used only to disambiguate sampler snapshot names.
+        self.run_name: str | None = run_name
         # Track checkpoint names to detect reuse within a session.
         # Sampler and state names are tracked separately because the same name
         # (e.g., "step-4") is intentionally used for both — they are different
@@ -835,6 +914,13 @@ class FiretitanTrainingClient(TrainingClient):
         # so that GCS paths are unique even when the deployment_id is reused.
         self.session_id: str = generate_session_id()
         logger.info("FiretitanTrainingClient session_id: %s", self.session_id)
+
+    @property
+    def run_id(self) -> str | None:
+        """The CP serverless training run id (``run-<hex>``) this model is, parsed
+        from ``model_id`` (``{run_id}:train:{seq}``). None for non-run-scoped
+        models (managed / dedicated / base-only)."""
+        return _run_id_from_model_id(self.model_id)
 
     def _attach_sampler_backend(self, backend: Any) -> "FiretitanTrainingClient":
         """Attach SDK-owned sampler backend state to this training client."""
@@ -874,11 +960,14 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         adam_params: types.AdamParams,
         grad_accumulation_normalization: GradAccNormalization | str | None = None,
+        emit_grad_norm_metrics: GradNormMetricsMode | bool | str | None = None,
     ):
         """Update model parameters using Adam optimizer.
 
         Extends the base ``optim_step`` with ``grad_accumulation_normalization``
-        to normalize accumulated gradients before clipping and stepping.
+        to normalize accumulated gradients before clipping and stepping, and
+        with ``emit_grad_norm_metrics`` to opt in to trainer-side grad-norm
+        telemetry.
 
         The default is ``None`` (no server-side normalization). Callers whose
         loss function returns a **raw sum** (e.g. RL/GRPO) should pass
@@ -895,11 +984,22 @@ class FiretitanTrainingClient(TrainingClient):
                 (use with raw-sum losses like GRPO).
                 ``GradAccNormalization.NUM_SEQUENCES``: per-sequence mean.
                 ``GradAccNormalization.NONE``: explicit no-op (same as ``None``).
+            emit_grad_norm_metrics: Optional grad-norm telemetry mode.
+                ``None``: use ``adam_params.emit_grad_norm_metrics`` if set;
+                otherwise omit the field, which defaults to off on the trainer.
+                ``False``/``GradNormMetricsMode.OFF``: explicitly off.
+                ``True``/``GradNormMetricsMode.BASIC``: global/RMS metrics only.
+                ``GradNormMetricsMode.DETAILED``: global/RMS plus bucket metrics.
         """
         extra_body: dict = {}
         normalization_value = _grad_accumulation_normalization_value(grad_accumulation_normalization)
         if normalization_value is not None:
             extra_body["grad_accumulation_normalization"] = normalization_value
+        grad_norm_metrics_value = _grad_norm_metrics_mode_value(emit_grad_norm_metrics)
+        if grad_norm_metrics_value is not None:
+            adam_params = adam_params.model_copy(
+                update={"emit_grad_norm_metrics": grad_norm_metrics_value}
+            )
         request_id = self._get_request_id()
 
         async def _optim_step_async():
@@ -934,10 +1034,12 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         adam_params: types.AdamParams,
         grad_accumulation_normalization: GradAccNormalization | str | None = None,
+        emit_grad_norm_metrics: GradNormMetricsMode | bool | str | None = None,
     ) -> APIFuture[types.OptimStepResponse]:
         return self.optim_step(
             adam_params,
             grad_accumulation_normalization=grad_accumulation_normalization,
+            emit_grad_norm_metrics=emit_grad_norm_metrics,
         )
 
     def forward_backward(
@@ -1765,9 +1867,10 @@ class FiretitanServiceClient(ServiceClient):
         self._created_training_configs: set[_TrainingKey] = set()
         self._sampler_backend: Any | None = None
         self._reference_handle: Any | None = None
-        # Separate forward-only reference trainers this service provisioned and
-        # owns (full-param / explicit reference shape). Torn down on close().
+        # Separate frozen reference trainers this service provisioned and owns
+        # (full-param / explicit reference shape). Torn down on close().
         self._owned_reference_handles: list[Any] = []
+        self._owned_inference_deployments: list[tuple[DeploymentManager, str, DeploymentCleanupOnClose]] = []
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
         self._default_project_id: str | None = kwargs.get("project_id")
 
@@ -1814,6 +1917,82 @@ class FiretitanServiceClient(ServiceClient):
                 user_metadata=self._default_user_metadata,
             )
         return super().create_rest_client()
+
+    def _current_session_id(self) -> Any:
+        """The serverless session id this service is bound to, or None (managed /
+        dedicated services have no holder; an unconnected service has no session
+        yet)."""
+        if not hasattr(self, "holder"):
+            return None
+        return self.holder.get_session_id()
+
+    @property
+    def training_session_id(self) -> str | None:
+        """The CP serverless training session id (``ts-<hex>``) this service owns,
+        or None for non-serverless services / before the session is created.
+
+        One service owns one session; the many models created on it are separate
+        runs (see ``FiretitanTrainingClient.run_id``).
+        """
+        session_id = self._current_session_id()
+        return session_id if _is_serverless_session_id(session_id) else None
+
+    @property
+    def training_session_name(self) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingSessions/<ts-id>``) of the
+        session this service owns, for CP ops (GetTrainingSession, checkpoint
+        list/promote, DeleteTrainingSession). None for non-serverless services."""
+        return self._serverless_training_session_name(self._current_session_id())
+
+    def _resolved_account_id(self) -> str | None:
+        """The Fireworks account id, resolved once and cached, or ``None`` if it
+        can't be resolved without an extra control-plane round-trip.
+
+        The durable handles are the ids (``training_session_id`` / ``run_id``),
+        which are always available with no I/O; the account is needed only to
+        *qualify* them into full resource names, so this is best-effort and
+        degrades to ``None`` rather than failing the caller. Resolved via a
+        Fireworks REST client; cached across calls.
+        """
+        cached = getattr(self, "_cp_account_id", "unset")
+        if cached != "unset":
+            return cached
+        # Resolve into a local and publish the cache exactly once, with the final
+        # value — never an in-progress None. Otherwise a concurrent caller could
+        # observe the transient None (a terminal value here), skip its own lookup,
+        # and bake run_name=None into a client created mid-resolution. Worst case
+        # two threads both resolve (idempotent, same answer); never a premature None.
+        account: str | None = None
+        api_key = getattr(self, "_fireworks_api_key", None)
+        if api_key:
+            try:
+                from fireworks.training.sdk.fireworks_client import FireworksClient
+
+                base_url = getattr(self, "_managed_base_url", None) or "https://api.fireworks.ai"
+                account = FireworksClient(api_key=api_key, base_url=base_url).account_id
+            except Exception:
+                account = None
+        self._cp_account_id = account
+        return account
+
+    def _serverless_training_session_name(self, session_id: Any) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingSessions/<ts-id>``) for a
+        serverless training session, or ``None`` for non-serverless ids / when the
+        account can't be resolved (use ``training_session_id`` + your account)."""
+        if not _is_serverless_session_id(session_id):
+            return None
+        account = self._resolved_account_id()
+        return f"accounts/{account}/trainingSessions/{session_id}" if account else None
+
+    def _serverless_run_name(self, model_id: Any) -> str | None:
+        """Full CP resource name (``accounts/<a>/trainingRuns/<run_id>``) for a
+        run-scoped model, or ``None`` for non-run-scoped ids (base-only) / when the
+        account can't be resolved (use ``run_id`` + your account)."""
+        run_id = _run_id_from_model_id(model_id)
+        if run_id is None:
+            return None
+        account = self._resolved_account_id()
+        return f"accounts/{account}/trainingRuns/{run_id}" if account else None
 
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
@@ -2082,9 +2261,50 @@ class FiretitanServiceClient(ServiceClient):
         return self._control_plane_client().promote_checkpoint(*args, **kwargs)
 
     def close(self) -> None:
-        self.release_references()
+        close_error: Exception | None = None
+
+        def record_close_error(exc: Exception) -> None:
+            nonlocal close_error
+            if close_error is None:
+                close_error = exc
+
+        try:
+            self.release_references()
+        except Exception as exc:
+            logger.warning("Reference cleanup failed: %s", exc)
+            record_close_error(exc)
+
+        try:
+            owned_inference_deployments = getattr(self, "_owned_inference_deployments", [])
+            for deploy_mgr, deployment_id, cleanup in owned_inference_deployments:
+                try:
+                    if cleanup == CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO:
+                        deploy_mgr.scale_to_zero(deployment_id)
+                    elif cleanup == CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE:
+                        deploy_mgr.delete(deployment_id)
+                    else:
+                        allowed = ", ".join(
+                            [
+                                CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+                                CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+                            ]
+                        )
+                        raise ValueError(f"cleanup_on_close must be one of: {allowed}")
+                except Exception as exc:
+                    logger.warning("Inference deployment cleanup failed for %s: %s", deployment_id, exc)
+                    record_close_error(exc)
+        finally:
+            getattr(self, "_owned_inference_deployments", []).clear()
+
         if self._managed_handle is not None:
-            self._managed_handle.close()
+            try:
+                self._managed_handle.close()
+            except Exception as exc:
+                logger.warning("Managed service cleanup failed: %s", exc)
+                record_close_error(exc)
+
+        if close_error is not None:
+            raise close_error
 
     @property
     def reference_job_id(self) -> str | None:
@@ -2107,9 +2327,10 @@ class FiretitanServiceClient(ServiceClient):
         """Trainer job id used by the reference client.
 
         Shared LoRA references run on the policy trainer. Full-parameter
-        references must be explicitly configured with a separate reference shape
-        or existing reference job. Recipes should use this for reference
-        reconnect metadata.
+        references use a separate reference trainer, either auto-selected by the
+        backend, explicitly pinned by a LoRA-capable shape, or reattached from
+        an existing job. Recipes should use this for reference reconnect
+        metadata.
         """
         return self.reference_job_id or self.trainer_job_id
 
@@ -2210,6 +2431,7 @@ class FiretitanServiceClient(ServiceClient):
             model_seq_id=model_seq_id,
             model_id=model_id,
             lora_rank=lora_rank,
+            run_name=self._serverless_run_name(model_id),
         )
 
     def create_lora_training_client(
@@ -2453,7 +2675,7 @@ class FiretitanServiceClient(ServiceClient):
         The returned client runs forward passes through the frozen base model
         weights with all LoRA adapters disabled.  This is useful as a KL
         divergence reference model when training with LoRA — no separate
-        FORWARD_ONLY trainer job is needed.
+        reference-only trainer job is needed.
 
         Args:
             base_model: Model name (e.g. ``"accounts/fireworks/models/qwen3-8b"``).
@@ -2537,6 +2759,134 @@ class FiretitanServiceClient(ServiceClient):
         handle = getattr(self, "_managed_handle", None)
         return bool(handle is not None and getattr(handle, "requires_initial_sampler_sync", False))
 
+    def _require_fireworks_api_key(self, operation: str) -> str:
+        api_key = getattr(self, "_fireworks_api_key", None)
+        if api_key is None:
+            raise ValueError(
+                f"{operation} requires a Fireworks API key. "
+                "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
+            )
+        return api_key
+
+    def _managed_deployment_manager(self) -> DeploymentManager:
+        handle = None
+        if self._managed_config is not None:
+            handle = self._ensure_managed_handle()
+        deploy_mgr = getattr(handle, "deployment_manager", None)
+        if deploy_mgr is not None:
+            return deploy_mgr
+        return DeploymentManager(
+            api_key=self._require_fireworks_api_key("deployment management"),
+            base_url=getattr(self, "_managed_base_url", None) or DEFAULT_FIREWORKS_API_URL,
+            inference_url=getattr(self, "_managed_inference_url", None),
+            hotload_api_url=getattr(self, "_managed_hotload_api_url", None),
+            additional_headers=getattr(self, "_managed_additional_headers", None),
+            verify_ssl=getattr(self, "_managed_verify_ssl", None),
+        )
+
+    def _resolve_inference_deployment_region(self, requested_region: str | None) -> str | None:
+        managed_region = getattr(self._managed_config, "region", None) if self._managed_config is not None else None
+        if requested_region is not None and managed_region is not None and requested_region != managed_region:
+            raise ValueError(
+                "Inference deployment region conflicts with managed trainer region: "
+                f"region={requested_region!r}, managed region={managed_region!r}."
+            )
+        return requested_region or managed_region
+
+    def _resolve_inference_deployment_shape(self, config: DeploymentConfig) -> str | None:
+        if config.deployment_shape is not None:
+            return config.deployment_shape
+        managed_config = self._managed_config
+        if managed_config is not None and config.base_model == managed_config.base_model:
+            return self.deployment_shape
+        return None
+
+    def _track_inference_deployment_cleanup(
+        self,
+        deploy_mgr: DeploymentManager,
+        deployment_id: str,
+        cleanup_on_close: DeploymentCleanupOnClose | None,
+    ) -> None:
+        if cleanup_on_close is None:
+            return
+        if not hasattr(self, "_owned_inference_deployments"):
+            self._owned_inference_deployments = []
+        self._owned_inference_deployments.append((deploy_mgr, deployment_id, cleanup_on_close))
+
+    def create_deployment_sampler_for_model(
+        self,
+        model: str,
+        *,
+        tokenizer: Any | None = None,
+        concurrency_controller: Any | None = None,
+        inference_url: str | None = None,
+    ) -> DeploymentSampler:
+        """Create a FireTitan-native sampler for an existing inference model."""
+        sampler = DeploymentSampler(
+            inference_url=(
+                inference_url
+                or getattr(self, "_managed_inference_url", None)
+                or getattr(self, "_managed_base_url", None)
+                or DEFAULT_FIREWORKS_API_URL
+            ),
+            model=model,
+            api_key=self._require_fireworks_api_key("deployment sampling"),
+            tokenizer=tokenizer,
+        )
+        if concurrency_controller is not None:
+            sampler.concurrency_controller = concurrency_controller
+        return sampler
+
+    def create_inference_deployment_sampler(
+        self,
+        config: DeploymentConfig,
+        *,
+        timeout_s: float = 5400,
+        cleanup_on_close: DeploymentCleanupOnClose | None = None,
+        tokenizer: Any | None = None,
+        concurrency_controller: Any | None = None,
+    ) -> DeploymentSampler:
+        """Create or reuse an inference deployment and return a sampler for it.
+
+        Managed services reuse the canonical trainer region. If the requested
+        deployment is for the same base model as the managed student, the SDK
+        also reuses the resolved managed deployment shape unless the caller
+        passes an explicit deployment shape.
+        """
+        if config.max_replica_count <= 0:
+            raise ValueError("DeploymentConfig.max_replica_count must be positive for inference sampling.")
+        deploy_mgr = self._managed_deployment_manager()
+        deployment_shape = self._resolve_inference_deployment_shape(config)
+        region = self._resolve_inference_deployment_region(config.region)
+        resolved_config = replace(config, deployment_shape=deployment_shape, region=region)
+
+        existing = deploy_mgr.get(resolved_config.deployment_id)
+        if existing is not None:
+            state = getattr(existing, "state", None)
+            if state in _INFERENCE_DEPLOYMENT_TERMINAL_STATES:
+                raise RuntimeError(
+                    f"Inference deployment {resolved_config.deployment_id!r} is in terminal state {state!r}. "
+                    "Use a different deployment_id or restore/delete the old resource."
+                )
+            logger.info("Re-using inference deployment: %s", resolved_config.deployment_id)
+        else:
+            deploy_mgr.create_or_get(resolved_config)
+            logger.info("Requested inference deployment: %s", resolved_config.deployment_id)
+            self._track_inference_deployment_cleanup(
+                deploy_mgr,
+                resolved_config.deployment_id,
+                cleanup_on_close,
+            )
+
+        ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
+        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        return self.create_deployment_sampler_for_model(
+            model,
+            tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            inference_url=deploy_mgr.inference_url,
+        )
+
     async def create_sampling_client_async(
         self,
         model_path=None,
@@ -2589,11 +2939,10 @@ class FiretitanServiceClient(ServiceClient):
         * LoRA policy without a ``reference_training_shape_id`` → the reference
           reuses the policy trainer session with the adapter disabled (base
           weights). No second trainer is provisioned.
-        * Full-parameter policies require ``reference_training_shape_id`` or
-          ``reference_trainer_job_id``. With a reference shape (``LORA_TRAINER``
-          preferred, legacy ``FORWARD_ONLY`` accepted), the SDK provisions a
-          separate forward-only trainer that it owns and tears down on
-          :meth:`close` (or early via :meth:`release_references`).
+        * Full-parameter policies use a separate frozen reference trainer that
+          the SDK owns and tears down on :meth:`close` (or early via
+          :meth:`release_references`). If ``reference_training_shape_id`` is not
+          set, trainer creation asks the backend to select a LoRA-capable shape.
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:
@@ -2630,7 +2979,7 @@ class FiretitanServiceClient(ServiceClient):
         policy_lora_rank: int,
         user_metadata: dict[str, str] | None,
     ) -> Any:
-        """Provision a separate forward-only reference trainer this service owns."""
+        """Provision a separate frozen reference trainer this service owns."""
         from fireworks.training.sdk.managed import (
             _reference_managed_config,
             _create_managed_tinker_client,
@@ -2642,7 +2991,7 @@ class FiretitanServiceClient(ServiceClient):
                 "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
             )
         # The reference config (the one remaining config derivation) carries the
-        # forward-only shape/lora and the policy base_model; it is the single
+        # runtime forward-only flag and the policy base_model; it is the single
         # source for provisioning. base_model here is only used to detect a
         # deprecated override (warned at the create_reference_client boundary).
         reference_config = _reference_managed_config(self._managed_config, policy_lora_rank=policy_lora_rank)

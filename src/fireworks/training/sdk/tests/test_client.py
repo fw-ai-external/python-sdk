@@ -17,11 +17,14 @@ from fireworks.training.sdk.client import (
     FIRETITAN_TINKER_CLIENT_CONFIG,
     SAMPLING_CLIENT_FROM_TRAINER_MESSAGE,
     SaveSamplerResult,
+    GradNormMetricsMode,
     FiretitanServiceClient,
     FiretitanTrainingClient,
     generate_session_id,
+    _run_id_from_model_id,
     qualify_snapshot_name,
     _LazyManagedRestClient,
+    _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
     _FireworksApiKeyAuthProvider,
     _check_cos_similarity_matrix_single_chunk,
@@ -31,6 +34,8 @@ from fireworks.training.sdk.managed import (
     _TinkerSamplerBackend,
     _create_or_reattach_deployment,
 )
+from fireworks.training.sdk._constants import CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO
+from fireworks.training.sdk.deployment import DeploymentConfig
 
 # ---------------------------------------------------------------------------
 # generate_session_id
@@ -301,6 +306,153 @@ class TestForwardBackward:
         assert client.holder._client_config.parallel_fwdbwd_chunks is False
 
 
+class TestOptimStep:
+    class _NoopTurn:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _ImmediateThreadFuture:
+        def __init__(self, coro):
+            self._coro = coro
+
+        def result(self):
+            return asyncio.run(self._coro)
+
+    class _ClientContext:
+        def __init__(self, training):
+            self._training = training
+
+        def __enter__(self):
+            return SimpleNamespace(training=self._training)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeAPIFuture:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __await__(self):
+            async def _result():
+                return "api-future"
+
+            return _result().__await__()
+
+    def _make_client(self, captured: dict):
+        client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client._get_request_id = MagicMock(return_value=41)
+        client._guaranteed_model_id = MagicMock(return_value="model")
+        client._queue_state_logger = None
+        client._take_turn = MagicMock(return_value=self._NoopTurn())
+
+        async def optim_step(*, request, extra_body):
+            captured["request"] = request
+            captured["extra_body"] = extra_body
+            return "raw-future"
+
+        async def execute_with_retries(send):
+            return await send()
+
+        holder = MagicMock()
+        holder.aclient.return_value = self._ClientContext(
+            SimpleNamespace(optim_step=optim_step)
+        )
+        holder.execute_with_retries.side_effect = execute_with_retries
+        holder.run_coroutine_threadsafe.side_effect = self._ImmediateThreadFuture
+        client.holder = holder
+        return client
+
+    def test_default_omits_grad_norm_metrics_mode(self):
+        captured = {}
+        client = self._make_client(captured)
+
+        with patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture):
+            result = client.optim_step(types.AdamParams()).result()
+
+        assert result == "api-future"
+        body = captured["request"].model_dump(
+            exclude_unset=False,
+            exclude_none=True,
+            mode="json",
+        )
+        assert "emit_grad_norm_metrics" not in body["adam_params"]
+        assert captured["extra_body"] == {}
+
+    def test_call_time_grad_norm_metrics_mode_overrides_adam_params(self):
+        captured = {}
+        client = self._make_client(captured)
+        adam_params = types.AdamParams(emit_grad_norm_metrics=False)
+
+        with patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture):
+            result = client.optim_step(
+                adam_params,
+                emit_grad_norm_metrics=GradNormMetricsMode.DETAILED,
+            ).result()
+
+        assert result == "api-future"
+        assert captured["request"].adam_params.emit_grad_norm_metrics == "detailed"
+
+    def test_invalid_grad_norm_metrics_mode_raises_before_dispatch(self):
+        captured = {}
+        client = self._make_client(captured)
+
+        with pytest.raises(ValueError, match="emit_grad_norm_metrics"):
+            client.optim_step(types.AdamParams(), emit_grad_norm_metrics="global")
+
+        client.holder.run_coroutine_threadsafe.assert_not_called()
+
+
+class _FakeInferenceDeploymentManager:
+    account_id = "acct"
+    api_key = "fw-key"
+    inference_url = "https://inference.test"
+
+    def __init__(self, existing=None, wait_error=None, scale_error=None, delete_error=None):
+        self.existing = existing
+        self.wait_error = wait_error
+        self.scale_error = scale_error
+        self.delete_error = delete_error
+        self.created_config = None
+        self.waited = []
+        self.scaled_to_zero = []
+        self.deleted = []
+
+    def get(self, deployment_id):
+        self.get_id = deployment_id
+        return self.existing
+
+    def create_or_get(self, config):
+        self.created_config = config
+        return SimpleNamespace(
+            deployment_id=config.deployment_id,
+            state="CREATING",
+            inference_model=None,
+        )
+
+    def wait_for_ready(self, deployment_id, timeout_s):
+        self.waited.append((deployment_id, timeout_s))
+        if self.wait_error is not None:
+            raise self.wait_error
+        return SimpleNamespace(
+            deployment_id=deployment_id,
+            state="READY",
+            inference_model=f"accounts/acct/deployments/{deployment_id}",
+        )
+
+    def scale_to_zero(self, deployment_id):
+        self.scaled_to_zero.append(deployment_id)
+        if self.scale_error is not None:
+            raise self.scale_error
+
+    def delete(self, deployment_id):
+        self.deleted.append(deployment_id)
+        if self.delete_error is not None:
+            raise self.delete_error
+
+
 class TestFiretitanServiceClientManagedCompat:
     def _make_service(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
@@ -312,6 +464,29 @@ class TestFiretitanServiceClientManagedCompat:
         svc.create_training_client = MagicMock(return_value="training-client")
         return svc
 
+    def _make_managed_service(self, deploy_mgr, *, region="US_OHIO_1"):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            deployment_shape=None,
+            region=region,
+        )
+        svc._managed_handle = SimpleNamespace(
+            deployment_manager=deploy_mgr,
+            deployment_shape="accounts/acct/deploymentShapes/student/versions/v1",
+            close=MagicMock(),
+        )
+        svc._fireworks_api_key = "fw-key"
+        svc._managed_base_url = "https://api.fireworks.ai"
+        svc._managed_inference_url = None
+        svc._managed_hotload_api_url = None
+        svc._managed_additional_headers = None
+        svc._managed_verify_ssl = None
+        svc._owned_reference_handles = []
+        svc._owned_inference_deployments = []
+        svc._reference_handle = None
+        return svc
+
     def test_reference_auto_full_param_uses_base_client(self):
         svc = self._make_service()
         svc.create_base_training_client = MagicMock(return_value="base-client")
@@ -320,6 +495,123 @@ class TestFiretitanServiceClientManagedCompat:
 
         assert result == "base-client"
         svc.create_base_training_client.assert_called_once()
+
+    def test_create_inference_deployment_sampler_reuses_managed_region_and_shape(self):
+        deploy_mgr = _FakeInferenceDeploymentManager()
+        svc = self._make_managed_service(deploy_mgr)
+
+        result = svc.create_inference_deployment_sampler(
+            DeploymentConfig(
+                deployment_id="teacher-unit",
+                base_model="accounts/acct/models/base",
+                min_replica_count=2,
+                max_replica_count=2,
+                hot_load_bucket_type=None,
+                enable_hot_load=False,
+            ),
+            timeout_s=123,
+            cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+            tokenizer="tokenizer",
+        )
+
+        assert deploy_mgr.created_config is not None
+        assert deploy_mgr.created_config.deployment_id == "teacher-unit"
+        assert deploy_mgr.created_config.base_model == "accounts/acct/models/base"
+        assert deploy_mgr.created_config.deployment_shape == "accounts/acct/deploymentShapes/student/versions/v1"
+        assert deploy_mgr.created_config.region == "US_OHIO_1"
+        assert deploy_mgr.created_config.enable_hot_load is False
+        assert deploy_mgr.created_config.hot_load_bucket_type is None
+        assert deploy_mgr.created_config.min_replica_count == 2
+        assert deploy_mgr.created_config.max_replica_count == 2
+        assert deploy_mgr.waited == [("teacher-unit", 123)]
+        assert result.model == "accounts/acct/deployments/teacher-unit"
+        assert result.base_url == "https://inference.test"
+        assert result.tokenizer == "tokenizer"
+
+        svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-unit"]
+        assert deploy_mgr.deleted == []
+        svc._managed_handle.close.assert_called_once()
+
+    def test_create_inference_deployment_sampler_reuses_existing_without_cleanup(self):
+        existing = SimpleNamespace(
+            deployment_id="teacher-existing",
+            state="READY",
+            inference_model="accounts/acct/deployments/teacher-existing",
+        )
+        deploy_mgr = _FakeInferenceDeploymentManager(existing=existing)
+        svc = self._make_managed_service(deploy_mgr)
+
+        result = svc.create_inference_deployment_sampler(
+            DeploymentConfig(
+                deployment_id="teacher-existing",
+                base_model="accounts/acct/models/base",
+            ),
+            cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+        )
+
+        assert deploy_mgr.created_config is None
+        assert result.model == "accounts/acct/deployments/teacher-existing"
+        svc.close()
+        assert deploy_mgr.scaled_to_zero == []
+
+    def test_create_inference_deployment_sampler_tracks_cleanup_before_ready(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(wait_error=TimeoutError("not ready"))
+        svc = self._make_managed_service(deploy_mgr)
+
+        with pytest.raises(TimeoutError, match="not ready"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-timeout",
+                    base_model="accounts/acct/models/base",
+                ),
+                cleanup_on_close=CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+            )
+
+        svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-timeout"]
+
+    def test_close_still_closes_managed_handle_when_inference_cleanup_fails(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(scale_error=RuntimeError("cleanup failed"))
+        svc = self._make_managed_service(deploy_mgr)
+        svc._owned_inference_deployments = [
+            (deploy_mgr, "teacher-unit", CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO)
+        ]
+
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            svc.close()
+
+        assert deploy_mgr.scaled_to_zero == ["teacher-unit"]
+        assert svc._owned_inference_deployments == []
+        svc._managed_handle.close.assert_called_once()
+
+    def test_create_inference_deployment_sampler_rejects_region_conflict(self):
+        svc = self._make_managed_service(_FakeInferenceDeploymentManager(), region="US_OHIO_1")
+
+        with pytest.raises(ValueError, match="region conflicts"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-unit",
+                    base_model="accounts/acct/models/base",
+                    region="US_VIRGINIA_1",
+                )
+            )
+
+    def test_create_inference_deployment_sampler_rejects_terminal_existing_deployment(self):
+        deploy_mgr = _FakeInferenceDeploymentManager(
+            existing=SimpleNamespace(deployment_id="teacher-failed", state="FAILED")
+        )
+        svc = self._make_managed_service(deploy_mgr)
+
+        with pytest.raises(RuntimeError, match="terminal state"):
+            svc.create_inference_deployment_sampler(
+                DeploymentConfig(
+                    deployment_id="teacher-failed",
+                    base_model="accounts/acct/models/base",
+                )
+            )
 
     def test_reference_auto_lora_uses_base_client(self):
         svc = self._make_service()
@@ -1633,3 +1925,118 @@ class TestBuildEmbeddingRequestsDispatch:
             )
         # never reached request-id allocation
         client._get_request_id.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Serverless identity surfacing: session on the service, run on the client
+# ---------------------------------------------------------------------------
+
+
+class TestServerlessSessionId:
+    def test_ts_prefixed_is_serverless(self):
+        assert _is_serverless_session_id("ts-0123456789abcdef")
+
+    def test_non_ts_is_not_serverless(self):
+        # The legacy tinker short id and the run id are not CP session ids.
+        assert not _is_serverless_session_id("0400ab94")
+        assert not _is_serverless_session_id("run-deadbeef:train:0")
+
+    def test_none_and_empty_are_not_serverless(self):
+        assert not _is_serverless_session_id(None)
+        assert not _is_serverless_session_id("")
+
+
+class TestRunIdFromModelId:
+    def test_parses_run_scoped_model_id(self):
+        assert _run_id_from_model_id("run-ceb524:train:0") == "run-ceb524"
+        assert _run_id_from_model_id("run-abc:train:5") == "run-abc"
+
+    def test_none_for_non_run_scoped(self):
+        assert _run_id_from_model_id("base-xyz") is None  # base-only reference
+        assert _run_id_from_model_id("ts-abc") is None
+        assert _run_id_from_model_id("model-without-suffix") is None
+
+    def test_none_for_non_str(self):
+        assert _run_id_from_model_id(None) is None
+
+
+def _service(account_id: str | None = "pyroworks-dev", session_id: str = "ts-abc123"):
+    # Bypass __init__: exercise the serverless identity surface. We pre-cache the
+    # resolved account so the name builders don't do a real whoami in the test;
+    # account resolution itself is covered separately.
+    svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+    svc.holder = SimpleNamespace(get_session_id=lambda: session_id)
+    svc._cp_account_id = account_id
+    return svc
+
+
+class TestServiceTrainingSession:
+    """The session is owned by the service (one session : many runs)."""
+
+    def test_session_id_and_name(self):
+        svc = _service()
+        assert svc.training_session_id == "ts-abc123"
+        assert svc.training_session_name == "accounts/pyroworks-dev/trainingSessions/ts-abc123"
+
+    def test_none_for_non_serverless_session(self):
+        svc = _service(session_id="0400ab94")
+        assert svc.training_session_id is None
+        assert svc.training_session_name is None
+
+
+class TestServerlessRunName:
+    """The run is owned by each training client; the service builds its name."""
+
+    def test_builds_full_run_resource_name(self):
+        svc = _service()
+        assert (
+            svc._serverless_run_name("run-ceb524:train:0")
+            == "accounts/pyroworks-dev/trainingRuns/run-ceb524"
+        )
+
+    def test_none_for_base_only_model(self):
+        svc = _service()
+        assert svc._serverless_run_name("base-xyz") is None
+
+
+class TestAccountResolutionBestEffort:
+    """The ids are the durable handles; names degrade to None when the account
+    can't be resolved — they never fail the caller."""
+
+    def test_no_api_key_degrades_to_none(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._fireworks_api_key = None  # nothing to resolve the account with
+        assert svc._resolved_account_id() is None
+        assert svc.training_session_id == "ts-abc123"  # id still surfaced
+        assert svc.training_session_name is None  # name degrades, no crash
+        assert svc._serverless_run_name("run-x:train:0") is None
+
+    def test_account_cached(self):
+        svc = _service()  # pre-cached account
+        assert svc._resolved_account_id() == "pyroworks-dev"
+        assert svc._resolved_account_id() == "pyroworks-dev"
+
+    def test_no_in_progress_none_published(self):
+        # Regression: the cache must never hold a transient None *during*
+        # resolution. A concurrent reader must see "unset" (and resolve too) or
+        # the final value — never a premature None baked into a mid-flight client.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        seen = {}
+
+        class _FakeFireworksClient:
+            def __init__(self, **kwargs):
+                pass
+
+            @property
+            def account_id(self):
+                # at the moment of the whoami the cache must still be unset
+                seen["mid"] = getattr(svc, "_cp_account_id", "unset")
+                return "pyroworks-dev"
+
+        with patch(
+            "fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient
+        ):
+            assert svc._resolved_account_id() == "pyroworks-dev"
+        assert seen["mid"] == "unset"  # no premature None observed mid-resolution

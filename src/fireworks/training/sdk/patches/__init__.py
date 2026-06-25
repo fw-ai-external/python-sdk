@@ -8,3 +8,4 @@ import fireworks.training.sdk.patches._tinker_r3_patch  # noqa: F401
 import fireworks.training.sdk.patches._discriminator_patch  # noqa: F401
 import fireworks.training.sdk.patches._builtin_loss_fn_patch  # noqa: F401
 import fireworks.training.sdk.patches._tinker_lora_alpha_patch  # noqa: F401
+import fireworks.training.sdk.patches._tinker_grad_norm_metrics_patch  # noqa: F401
