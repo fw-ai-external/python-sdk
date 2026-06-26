@@ -98,6 +98,23 @@ def _extract_job_status_message(job: dict[str, Any]) -> str:
     return ""
 
 
+def _extract_job_training_config(job: dict[str, Any]) -> dict[str, Any] | None:
+    training_config = job.get("trainingConfig")
+    if not isinstance(training_config, dict):
+        return None
+    return training_config
+
+
+def _extract_job_max_context_length(job: dict[str, Any]) -> int | None:
+    training_config = _extract_job_training_config(job)
+    if training_config is None:
+        return None
+    max_context_length = training_config.get("maxContextLength")
+    if isinstance(max_context_length, int) and not isinstance(max_context_length, bool) and max_context_length > 0:
+        return max_context_length
+    return None
+
+
 @dataclass
 class TrainerServiceEndpoint:
     """Info returned after creating/connecting to a service-mode trainer job."""
@@ -105,6 +122,7 @@ class TrainerServiceEndpoint:
     job_name: str
     job_id: str
     base_url: str
+    max_context_length: int | None = None
 
 
 @dataclass
@@ -624,7 +642,12 @@ class TrainerJobManager(FireworksClient):
                     job_id,
                     state,
                 )
-                return TrainerServiceEndpoint(job_name=job_name, job_id=job_id, base_url=base_url)
+                return TrainerServiceEndpoint(
+                    job_name=job_name,
+                    job_id=job_id,
+                    base_url=base_url,
+                    max_context_length=_extract_job_max_context_length(job),
+                )
 
             log_signature = (state, status_message, service_ready)
             should_log = (

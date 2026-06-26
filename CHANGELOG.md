@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.85 (2026-06-26)
+
+Full Changelog: [v1.2.0-alpha.84...v1.2.0-alpha.85](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.84...v1.2.0-alpha.85)
+
+### Bug Fixes
+* **training:** propagate auto-shape max context metadata ([15d0a4d](https://github.com/fw-ai-external/python-sdk/commit/15d0a4d7fab551f43b26a422cb80f3306a6ca5d3))
+
 ## 1.2.0-alpha.84 (2026-06-24)
 
 Full Changelog: [v1.2.0-alpha.83...v1.2.0-alpha.84](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.83...v1.2.0-alpha.84)

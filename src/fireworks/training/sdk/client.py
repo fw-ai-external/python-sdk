@@ -515,11 +515,11 @@ def _managed_config_from_kwargs(kwargs: dict[str, Any]):
     for optional_ref_field in ("reference_training_shape_id", "reference_trainer_job_id"):
         if kwargs.get(optional_ref_field) == "":
             kwargs[optional_ref_field] = None
-    for accel_field in ("accelerator_type", "accelerator_count"):
-        if kwargs.pop(accel_field, None) is not None:
+    for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
+        if kwargs.pop(infra_field, None) is not None:
             warnings.warn(
-                f"{accel_field!r} is deprecated and ignored: trainer accelerator "
-                "type/count are configured by the training shape. Use "
+                f"{infra_field!r} is deprecated and ignored: trainer infrastructure "
+                "is configured by the training shape. Use "
                 "'trainer_replica_count' for data-parallel scaling.",
                 DeprecationWarning,
                 stacklevel=3,

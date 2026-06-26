@@ -123,16 +123,16 @@ class FiretitanProvisioningConfig:
         if self.hotload_timeout_s is None:
             object.__setattr__(self, "hotload_timeout_s", HOTLOAD_TIMEOUT_S)
 
-        for accel_field in ("accelerator_type", "accelerator_count"):
-            if getattr(self, accel_field) is not None:
+        for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
+            if getattr(self, infra_field) is not None:
                 warnings.warn(
-                    f"{accel_field!r} is deprecated and ignored: trainer accelerator "
-                    "type/count are configured by the training shape. Use "
+                    f"{infra_field!r} is deprecated and ignored: trainer infrastructure "
+                    "is configured by the training shape. Use "
                     "'trainer_replica_count' for data-parallel scaling.",
                     DeprecationWarning,
                     stacklevel=3,
                 )
-                object.__setattr__(self, accel_field, None)
+                object.__setattr__(self, infra_field, None)
 
 
 _ManagedTinkerConfig = FiretitanProvisioningConfig
@@ -453,6 +453,10 @@ def _create_managed_tinker_client(
         if reference_future is not None:
             reference_handle = reference_future.result()
 
+    resolved_max_context_length = max_context_length
+    if resolved_max_context_length is None:
+        resolved_max_context_length = endpoint.max_context_length
+
     service_client = FiretitanServiceClient(base_url=endpoint.base_url, api_key=api_key)
     create_model_kwargs: dict[str, Any] = {
         "base_model": config.base_model,
@@ -476,7 +480,7 @@ def _create_managed_tinker_client(
         training_client=training_client,
         trainer_endpoint=endpoint,
         training_profile=profile,
-        max_context_length=max_context_length,
+        max_context_length=resolved_max_context_length,
         deployment_shape=deployment_shape,
         deployment=deployment,
         requires_initial_sampler_sync=deployment_reattached,
@@ -612,7 +616,6 @@ def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
         for value in (
             config.accelerator_type,
             config.accelerator_count,
-            config.node_count,
         )
     ) or bool(config.extra_args)
 
