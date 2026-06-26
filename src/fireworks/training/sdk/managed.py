@@ -453,6 +453,10 @@ def _create_managed_tinker_client(
         if reference_future is not None:
             reference_handle = reference_future.result()
 
+    resolved_max_context_length = max_context_length
+    if resolved_max_context_length is None:
+        resolved_max_context_length = endpoint.max_context_length
+
     service_client = FiretitanServiceClient(base_url=endpoint.base_url, api_key=api_key)
     create_model_kwargs: dict[str, Any] = {
         "base_model": config.base_model,
@@ -476,7 +480,7 @@ def _create_managed_tinker_client(
         training_client=training_client,
         trainer_endpoint=endpoint,
         training_profile=profile,
-        max_context_length=max_context_length,
+        max_context_length=resolved_max_context_length,
         deployment_shape=deployment_shape,
         deployment=deployment,
         requires_initial_sampler_sync=deployment_reattached,

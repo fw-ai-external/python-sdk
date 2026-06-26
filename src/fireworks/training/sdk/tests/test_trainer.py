@@ -494,11 +494,15 @@ class TestPollUntilReady:
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
             "directRouteHandle": "https://trainer.internal:8080",
+            "trainingConfig": {
+                "maxContextLength": 32768,
+            },
         }
         result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
         assert isinstance(result, TrainerServiceEndpoint)
         assert result.job_id == "job-1"
         assert result.base_url == "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
+        assert result.max_context_length == 32768
 
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):

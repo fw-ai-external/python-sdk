@@ -506,6 +506,67 @@ class TestManagedProvisioning:
         assert trainer_config.accelerator_type is None
         assert trainer_config.accelerator_count is None
 
+    def test_auto_shape_resolved_max_context_flows_to_handle(self, monkeypatch):
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def create(self, trainer_config):
+                assert trainer_config.training_shape_ref is None
+                assert trainer_config.auto_select_training_shape is True
+                assert trainer_config.max_context_length is None
+                return CreatedTrainerJob(
+                    job_name="accounts/acct/rlorTrainerJobs/policy-job",
+                    job_id="policy-job",
+                )
+
+            def try_get(self, job_id):
+                assert job_id == "policy-job"
+                return None
+
+            def wait_for_ready(self, job_id, *, job_name, timeout_s):
+                return TrainerServiceEndpoint(
+                    job_name=job_name,
+                    job_id=job_id,
+                    base_url="https://trainer.test",
+                    max_context_length=32768,
+                )
+
+        class FakeTrainingClient:
+            pass
+
+        class FakeServiceClient:
+            def __init__(self, *, base_url, api_key):
+                assert base_url == "https://trainer.test"
+                assert api_key == "fw-key"
+
+            def create_training_client(self, *, base_model, lora_rank, user_metadata):
+                assert base_model == BASE_MODEL
+                assert lora_rank == 0
+                return FakeTrainingClient()
+
+        def fake_build_resource_managers(**_kwargs):
+            return FakeTrainerManager(), object()
+
+        monkeypatch.setattr(
+            managed_module,
+            "_build_resource_managers",
+            fake_build_resource_managers,
+        )
+        monkeypatch.setattr(managed_module, "FiretitanServiceClient", FakeServiceClient)
+
+        handle = managed_module._create_managed_tinker_client(
+            api_key="fw-key",
+            config=_policy_config(
+                training_shape_id=None,
+                trainer_job_id=None,
+                create_deployment=False,
+                max_context_length=None,
+            ),
+        )
+
+        assert handle.trainer_endpoint.max_context_length == 32768
+        assert handle.max_context_length == 32768
+
     def test_full_param_reference_accepts_lora_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-lora")
         reference = _reference_managed_config(config, policy_lora_rank=0)
