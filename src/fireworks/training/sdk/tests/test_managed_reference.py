@@ -470,6 +470,42 @@ class TestManagedProvisioning:
         assert trainer_config.accelerator_type is None
         assert trainer_config.accelerator_count is None
 
+    def test_legacy_node_count_default_does_not_disable_auto_shape_selection(self):
+        with pytest.warns(DeprecationWarning, match="node_count"):
+            config = _ManagedTinkerConfig(
+                base_model=BASE_MODEL,
+                node_count=1,
+            )
+
+        trainer_config = managed_module._build_trainer_job_config(
+            config,
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert config.node_count is None
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.node_count is None
+        assert trainer_config.accelerator_type is None
+        assert trainer_config.accelerator_count is None
+
+    def test_stale_node_count_on_config_does_not_disable_auto_shape_selection(self):
+        config = _ManagedTinkerConfig(base_model=BASE_MODEL)
+        object.__setattr__(config, "node_count", 1)
+
+        trainer_config = managed_module._build_trainer_job_config(
+            config,
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.training_shape_ref is None
+        assert trainer_config.auto_select_training_shape is True
+        assert trainer_config.node_count is None
+        assert trainer_config.accelerator_type is None
+        assert trainer_config.accelerator_count is None
+
     def test_full_param_reference_accepts_lora_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-lora")
         reference = _reference_managed_config(config, policy_lora_rank=0)

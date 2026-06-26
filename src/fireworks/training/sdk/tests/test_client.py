@@ -770,6 +770,7 @@ class TestFiretitanServiceClientManagedCompat:
                 training_shape_id="accounts/acct/trainingShapes/shape",
                 accelerator_type="NVIDIA_H200",
                 accelerator_count=8,
+                node_count=1,
                 replica_count=2,
                 trainer_replica_count=3,
             )
@@ -777,11 +778,13 @@ class TestFiretitanServiceClientManagedCompat:
         messages = " ".join(str(w.message) for w in record)
         assert "accelerator_type" in messages
         assert "accelerator_count" in messages
+        assert "node_count" in messages
         # Accelerator fields are dropped (owned by the training shape). The two
         # scaling knobs survive and map to different resources: replica_count
         # scales the deployment, trainer_replica_count scales the trainer.
         assert svc._managed_config.accelerator_type is None
         assert svc._managed_config.accelerator_count is None
+        assert svc._managed_config.node_count is None
         assert svc._managed_config.replica_count == 2
         assert svc._managed_config.trainer_replica_count == 3
 

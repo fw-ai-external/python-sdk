@@ -1,17 +1,5 @@
 # Changelog
 
-## 1.2.0-alpha.84 (2026-06-24)
-
-Full Changelog: [v1.2.0-alpha.83...v1.2.0-alpha.84](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.83...v1.2.0-alpha.84)
-
-### Features
-* **training-sdk:** surface serverless session (on the service) + run (on the training client) ([ad77c33](https://github.com/fw-ai-external/python-sdk/commit/ad77c335a21b79e76e4f59a7f8d5d20c621d45b4))
-
-### Bug Fixes
-* **sdk:** guard training deployment shapes ([4b3ebbb](https://github.com/fw-ai-external/python-sdk/commit/4b3ebbb5c3171aa74a96c53ac953787dc7e1c74c))
-* **training:** list and promote serverless session checkpoints by run ([aefd3a8](https://github.com/fw-ai-external/python-sdk/commit/aefd3a82620dfd3c2ff3211b59bdab0dd9cb8c72))
-* **training:** require LoRA reference shapes ([88a96e3](https://github.com/fw-ai-external/python-sdk/commit/88a96e3fa07dbf97a2f9e4c071173efef3ce681c))
-
 ## 1.2.0-alpha.83 (2026-06-18)
 
 Full Changelog: [v1.2.0-alpha.82...v1.2.0-alpha.83](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.82...v1.2.0-alpha.83)
