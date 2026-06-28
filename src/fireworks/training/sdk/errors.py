@@ -12,6 +12,7 @@ Provides:
 from __future__ import annotations
 
 import time
+import random
 import asyncio
 import logging
 from typing import Any, Tuple, Callable, Awaitable
@@ -92,13 +93,79 @@ def _is_retryable_status_code(status_code: int) -> bool:
     return status_code in RETRYABLE_STATUS_CODES
 
 
-def _backoff_delay(attempt: int, start_time: float, max_wait_time: float) -> float | None:
-    """Return delay in seconds, or None if budget exhausted."""
+def _backoff_delay(
+    attempt: int,
+    start_time: float,
+    max_wait_time: float,
+    retry_after: float | None = None,
+) -> float | None:
+    """Return delay in seconds (with jitter), or None if the budget is exhausted.
+
+    When the server supplies a ``Retry-After`` we honor it as the base delay;
+    otherwise we use capped exponential backoff. Equal jitter (50-100% of the
+    base) is applied so that many concurrent jobs don't retry in lockstep and
+    stampede the API (the synchronized-retry-storm seen in the 2026-06-28
+    trainer-create 429 incident).
+    """
     elapsed = time.time() - start_time
     if elapsed >= max_wait_time:
         return None
-    delay = min(2 ** attempt, 30)
-    return min(delay, start_time + max_wait_time - time.time())
+    if retry_after is not None and retry_after >= 0:
+        base = float(retry_after)
+    else:
+        base = float(min(2 ** attempt, 30))
+    base = max(base, 0.0)
+    delay = base * 0.5 + base * 0.5 * random.random()  # equal jitter: 50-100% of base
+    remaining = start_time + max_wait_time - time.time()
+    if remaining <= 0:
+        return None
+    return min(delay, remaining)
+
+
+def _retry_after_seconds(resp) -> float | None:
+    """Parse a ``Retry-After`` header (delay-seconds or HTTP-date), if present."""
+    headers = getattr(resp, "headers", None) or {}
+    try:
+        val = headers.get("Retry-After") or headers.get("retry-after")
+    except Exception:
+        return None
+    if not val:
+        return None
+    try:
+        return max(0.0, float(val))
+    except (TypeError, ValueError):
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+        from datetime import datetime, timezone
+
+        dt = parsedate_to_datetime(val)
+        if dt is not None:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return max(0.0, (dt - datetime.now(timezone.utc)).total_seconds())
+    except Exception:
+        return None
+    return None
+
+
+def _is_nonretryable_quota_429(resp) -> bool:
+    """True for a 429 with no ``Retry-After`` whose body indicates quota exhaustion.
+
+    Training GPU quota does not free within the retry budget (~5 min), so
+    retrying a quota 429 just produces a futile request storm and the same
+    failure. We surface it immediately instead. A 429 that carries an explicit
+    ``Retry-After`` is treated as transient (rate limit) and still retried.
+    """
+    if getattr(resp, "status_code", None) != 429:
+        return False
+    if _retry_after_seconds(resp) is not None:
+        return False
+    try:
+        msg = parse_api_error(resp).lower()
+    except Exception:
+        return False
+    return "quota" in msg or "resource_exhausted" in msg or "resource exhausted" in msg
 
 
 def request_with_retries(
@@ -128,7 +195,12 @@ def request_with_retries(
             raise
 
         if _is_retryable_status_code(resp.status_code):
-            delay = _backoff_delay(attempt, start, max_wait_time)
+            if _is_nonretryable_quota_429(resp):
+                # Quota exhaustion is not transient on this horizon; surface it
+                # to the caller instead of retrying futilely.
+                return resp
+            retry_after = _retry_after_seconds(resp)
+            delay = _backoff_delay(attempt, start, max_wait_time, retry_after=retry_after)
             if delay is not None:
                 attempt += 1
                 logger.debug("HTTP %d (attempt %d), retrying in %.1fs", resp.status_code, attempt, delay)
@@ -160,7 +232,10 @@ async def async_request_with_retries(
             raise
 
         if _is_retryable_status_code(resp.status_code):
-            delay = _backoff_delay(attempt, start, max_wait_time)
+            if _is_nonretryable_quota_429(resp):
+                return resp
+            retry_after = _retry_after_seconds(resp)
+            delay = _backoff_delay(attempt, start, max_wait_time, retry_after=retry_after)
             if delay is not None:
                 attempt += 1
                 logger.debug("HTTP %d (attempt %d), retrying in %.1fs", resp.status_code, attempt, delay)

@@ -435,7 +435,21 @@ class TrainerJobManager(FireworksClient):
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
-        resp.raise_for_status()
+            # Raise the parsed gateway reason (quota exceeded / invalid
+            # accelerator-region / "Only superuser can skip validations" / …)
+            # so the job's status_message is self-describing, instead of a bare
+            # httpx ``raise_for_status`` that drops the response body and makes
+            # a customer config/quota error look like an opaque backend failure.
+            error_msg, solution = self._create_failure_details(resp)
+            raise RuntimeError(
+                format_sdk_error(
+                    f"RLOR job creation failed (HTTP {resp.status_code})",
+                    error_msg,
+                    solution,
+                    docs_url=DOCS_SDK,
+                    show_support=resp.status_code >= 500,
+                )
+            )
         return resp.json()
 
     @staticmethod
@@ -628,6 +642,30 @@ class TrainerJobManager(FireworksClient):
                         f"  Console: {CONSOLE_URL}",
                         docs_url=DOCS_SDK,
                         show_support=True,
+                    )
+                )
+
+            # Other terminal states must short-circuit too: otherwise a job that
+            # was cancelled/deleted/completed before becoming ready keeps getting
+            # polled until the full timeout and then surfaces a misleading
+            # "did not become ready within {timeout}s" (the 2026-06-28 readiness-
+            # timeout incident). Raise immediately with the job's own detail.
+            if state in (
+                "JOB_STATE_CANCELLED",
+                "JOB_STATE_DELETING",
+                "JOB_STATE_DELETED",
+                "JOB_STATE_COMPLETED",
+            ):
+                msg = status_message or state
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Trainer job {job_id} entered terminal state {state} before becoming ready",
+                        msg,
+                        "The trainer was cancelled, deleted, or completed before it reached a healthy "
+                        "serving state -- usually external cancellation, preemption, or never being "
+                        "scheduled (e.g. insufficient capacity). Check trainer status and events in the "
+                        f"Fireworks console.\n  Console: {CONSOLE_URL}",
+                        docs_url=DOCS_SDK,
                     )
                 )
 

@@ -2176,9 +2176,19 @@ class FiretitanServiceClient(ServiceClient):
         # reads None). Mirror managed_trainer_job_id's handle-first lookup.
         if self._managed_handle is not None and self._managed_handle.max_context_length is not None:
             return self._managed_handle.max_context_length
-        if self._managed_config is None:
-            return None
-        return self._managed_config.max_context_length
+        if self._managed_config is not None and self._managed_config.max_context_length is not None:
+            return self._managed_config.max_context_length
+        # Defensive fallback: under backend auto-shape selection the resolved
+        # max context length is computed on the child trainer job and may not be
+        # surfaced onto the handle/config, leaving this None and hard-failing in
+        # _require_managed_value even though the training shape itself carries a
+        # valid limit (the 2026-06-28 SDK-managed max-context incident). Fall
+        # back to the shape profile's max_supported_context_length when present.
+        profile = self.managed_training_profile
+        shape_max = getattr(profile, "max_supported_context_length", None)
+        if shape_max:
+            return shape_max
+        return None
 
     @property
     def managed_deployment_shape(self) -> str | None:
