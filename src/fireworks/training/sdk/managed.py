@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fireworks.training.sdk.client import (
     DEFAULT_LORA_ALPHA,
     FiretitanServiceClient,
+    FiretitanSamplingClient,
     FiretitanTrainingClient,
 )
 from fireworks.training.sdk.trainer import (
@@ -38,7 +39,6 @@ from fireworks.training.sdk.deployment import (
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanSamplingClient,
 )
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
@@ -464,9 +464,7 @@ def _create_managed_tinker_client(
         "user_metadata": user_metadata,
     }
     if config.lora_rank > 0:
-        create_model_kwargs["lora_alpha"] = (
-            config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
-        )
+        create_model_kwargs["lora_alpha"] = config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
     training_client = service_client.create_training_client(**create_model_kwargs)
     # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
     training_client._tokenizer_model = config.tokenizer_model
@@ -489,9 +487,7 @@ def _create_managed_tinker_client(
         deployment_manager=deploy_mgr,
         reference_handle=reference_handle,
         cleanup_trainer_on_close=config.cleanup_trainer_on_close and started_trainer.created,
-        cleanup_deployment_on_close=(
-            config.cleanup_deployment_on_close if deployment_created else None
-        ),
+        cleanup_deployment_on_close=(config.cleanup_deployment_on_close if deployment_created else None),
     )
 
 

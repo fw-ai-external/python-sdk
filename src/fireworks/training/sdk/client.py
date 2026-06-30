@@ -28,11 +28,13 @@ from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
 from dataclasses import replace, dataclass
 from collections.abc import AsyncGenerator
+from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
-from tinker import types
+from tinker import SamplingClient, types
 from pydantic import BaseModel
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from tinker.lib.telemetry import Telemetry
 from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
@@ -58,7 +60,6 @@ from fireworks.training.sdk.deployment import (
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanSamplingClient,
 )
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
@@ -81,6 +82,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
 _INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
+SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "parallel_fwdbwd_chunks": False,
     "proto_write_fwdbwd": False,
@@ -99,6 +101,314 @@ class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
 # FireTitan backend would otherwise default to 2 * rank, so we send it
 # explicitly to keep the alpha/rank scale consistent across stacks.
 DEFAULT_LORA_ALPHA = 32
+
+
+class FiretitanSamplingClient(SamplingClient):
+    """Tinker-compatible sampling wrapper backed by a ``DeploymentSampler``.
+
+    The public surface mirrors ``tinker.lib.public_interfaces.SamplingClient``
+    for sampling from an already-running Fireworks deployment. Methods return
+    ``concurrent.futures.Future`` objects for sync callers and provide async
+    convenience methods for coroutine users.
+    """
+
+    def __init__(
+        self,
+        deployment_sampler: DeploymentSampler,
+    ):
+        self.deployment_sampler = deployment_sampler
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
+        self._loop_lock = threading.Lock()
+        self._closed = False
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        inference_url: str,
+        model: str,
+        api_key: str,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        max_concurrency: int | None = None,
+    ) -> "FiretitanSamplingClient":
+        """Build a Tinker-compatible client and the underlying sampler."""
+        sampler = DeploymentSampler(
+            inference_url=inference_url,
+            model=model,
+            api_key=api_key,
+            tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            max_concurrency=max_concurrency,
+        )
+        return cls(sampler)
+
+    @staticmethod
+    def _tinker_types():
+        return types
+
+    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
+        if self._closed:
+            raise RuntimeError("FiretitanSamplingClient is closed")
+
+        with self._loop_lock:
+            if self._loop is not None and self._loop_thread is not None and self._loop_thread.is_alive():
+                return self._loop
+
+            loop = asyncio.new_event_loop()
+            started = threading.Event()
+
+            def _run_loop() -> None:
+                asyncio.set_event_loop(loop)
+                started.set()
+                loop.run_forever()
+
+            thread = threading.Thread(
+                target=_run_loop,
+                name="fireworks-sampling-client",
+                daemon=True,
+            )
+            thread.start()
+            started.wait()
+            self._loop = loop
+            self._loop_thread = thread
+            return loop
+
+    def _submit(self, coro) -> ConcurrentFuture[Any]:
+        loop = self._ensure_loop()
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+
+    @staticmethod
+    async def _await_concurrent_future(future: ConcurrentFuture[Any]) -> Any:
+        try:
+            from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
+        except ImportError:
+            return await asyncio.wrap_future(future)
+
+        return await AwaitableConcurrentFuture(future)
+
+    @staticmethod
+    def _sampling_kwargs(sampling_params: types.SamplingParams) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+
+        top_p = getattr(sampling_params, "top_p", None)
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+
+        top_k = getattr(sampling_params, "top_k", None)
+        if top_k is not None and top_k >= 0:
+            kwargs["top_k"] = top_k
+
+        seed = getattr(sampling_params, "seed", None)
+        if seed is not None:
+            kwargs["seed"] = seed
+
+        return kwargs
+
+    @staticmethod
+    def _stop_reason(finish_reason: str) -> str:
+        return "length" if finish_reason == "length" else "stop"
+
+    @staticmethod
+    def _check_topk_prompt_logprobs_supported(topk_prompt_logprobs: int) -> None:
+        if topk_prompt_logprobs > 0:
+            raise NotImplementedError("FiretitanSamplingClient does not support topk_prompt_logprobs")
+
+    async def _sample_async_impl(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool,
+        topk_prompt_logprobs: int = 0,
+    ) -> types.SampleResponse:
+        self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
+
+        tinker_types = self._tinker_types()
+        prompt_token_ids = list(prompt.to_ints())
+        max_tokens = getattr(sampling_params, "max_tokens", None)
+        if max_tokens is None:
+            max_tokens = 1024
+        temperature = getattr(sampling_params, "temperature", 1.0)
+        stop = getattr(sampling_params, "stop", None)
+
+        kwargs = self._sampling_kwargs(sampling_params)
+        kwargs["logprobs"] = True
+        if include_prompt_logprobs:
+            kwargs["echo"] = True
+
+        completions = await self.deployment_sampler.sample_with_prompt_tokens(
+            prompt_token_ids,
+            n=num_samples,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+            **kwargs,
+        )
+
+        sequences = []
+        prompt_logprobs: list[float | None] | None = None
+        for completion in completions:
+            completion_tokens = completion.full_tokens[completion.prompt_len :]
+            completion_logprobs = completion.inference_logprobs
+            if completion.logprobs_echoed and completion_logprobs is not None:
+                prompt_logprobs = (
+                    [None] + completion_logprobs[: completion.prompt_len - 1] if completion.prompt_len else []
+                )
+                completion_logprobs = completion_logprobs[max(completion.prompt_len - 1, 0) :]
+
+            sequences.append(
+                tinker_types.SampledSequence(
+                    stop_reason=self._stop_reason(completion.finish_reason),
+                    _tokens_list=completion_tokens,
+                    _logprobs_list=completion_logprobs,
+                )
+            )
+
+        return tinker_types.SampleResponse(
+            sequences=sequences,
+            _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
+        )
+
+    def sample(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool = False,
+        topk_prompt_logprobs: int = 0,
+    ) -> ConcurrentFuture[types.SampleResponse]:
+        """Generate completions with the Tinker ``SamplingClient`` signature."""
+        self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
+        return self._submit(
+            self._sample_async_impl(
+                prompt,
+                num_samples,
+                sampling_params,
+                include_prompt_logprobs,
+                topk_prompt_logprobs,
+            )
+        )
+
+    async def sample_async(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool = False,
+        topk_prompt_logprobs: int = 0,
+    ) -> types.SampleResponse:
+        """Async version of :meth:`sample`."""
+        return await self._await_concurrent_future(
+            self.sample(
+                prompt,
+                num_samples,
+                sampling_params,
+                include_prompt_logprobs,
+                topk_prompt_logprobs,
+            )
+        )
+
+    async def _compute_logprobs_async_impl(self, prompt: types.ModelInput) -> list[float | None]:
+        tinker_types = self._tinker_types()
+        response = await self._sample_async_impl(
+            prompt,
+            num_samples=1,
+            sampling_params=tinker_types.SamplingParams(max_tokens=1, temperature=1.0, top_p=1.0),
+            include_prompt_logprobs=True,
+        )
+        return list(response.prompt_logprobs or [])
+
+    def compute_logprobs(self, prompt: types.ModelInput) -> ConcurrentFuture[list[float | None]]:
+        """Compute prompt token logprobs with the Tinker client signature.
+
+        Warning: we don't recommend using the sampling client to compute logprobs.
+        Please use ``training_client.forward()`` instead.
+        """
+        warnings.warn(
+            "We don't recommend using the sampling client to compute logprobs. "
+            "Please use training_client.forward() instead.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return self._submit(self._compute_logprobs_async_impl(prompt))
+
+    async def compute_logprobs_async(self, prompt: types.ModelInput) -> list[float | None]:
+        """Async version of :meth:`compute_logprobs`."""
+        return await self._await_concurrent_future(self.compute_logprobs(prompt))
+
+    def get_tokenizer(self) -> PreTrainedTokenizerBase:
+        """Return the tokenizer attached to the underlying deployment sampler."""
+        if self.deployment_sampler.tokenizer is None:
+            raise ValueError("DeploymentSampler was created without a tokenizer")
+        return self.deployment_sampler.tokenizer
+
+    def get_base_model(self) -> str:
+        """Return the model/deployment name used by the underlying sampler."""
+        return self.deployment_sampler.model
+
+    async def get_base_model_async(self) -> str:
+        """Async version of :meth:`get_base_model`."""
+        return self.get_base_model()
+
+    def get_telemetry(self) -> "Telemetry | None":
+        """Match Tinker's ``SamplingClient`` telemetry hook.
+
+        FireTitan's deployment sampler has no telemetry sink, so this always
+        returns ``None`` — the Tinker-shaped ``Telemetry | None`` return type is
+        preserved so callers relying on the contract keep working.
+        """
+        return None
+
+    async def _aclose_sampler(self) -> None:
+        async_client = self.deployment_sampler._async_client
+        self.deployment_sampler._async_client = None
+        if async_client is not None and not async_client.is_closed:
+            await async_client.aclose()
+        self.deployment_sampler._sync_client.close()
+
+    def close(self) -> None:
+        """Close the wrapper loop and the underlying sampler clients."""
+        if self._closed:
+            return
+        self._closed = True
+
+        loop = self._loop
+        thread = self._loop_thread
+        if loop is not None and loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self._aclose_sampler(), loop)
+            try:
+                future.result(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+            except Exception:
+                logger.debug("Failed to close FiretitanSamplingClient cleanly", exc_info=True)
+            loop.call_soon_threadsafe(loop.stop)
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+            if thread is None or not thread.is_alive():
+                loop.close()
+            else:
+                logger.debug(
+                    "Skipped closing FiretitanSamplingClient loop because the loop thread "
+                    "did not stop before the close timeout"
+                )
+        else:
+            self.deployment_sampler.close()
+
+        self._loop = None
+        self._loop_thread = None
+
+    def __enter__(self) -> "FiretitanSamplingClient":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class _TrainingKey(NamedTuple):
@@ -478,9 +788,7 @@ def _grad_norm_metrics_mode_value(
         return GradNormMetricsMode(str(value).lower()).value
     except ValueError as exc:
         valid = ", ".join(mode.value for mode in GradNormMetricsMode)
-        raise ValueError(
-            f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}"
-        ) from exc
+        raise ValueError(f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}") from exc
 
 
 def _pop_alias(
@@ -739,6 +1047,7 @@ def _serialize_input_for_extra_body(fb_input: Any) -> dict:
     """
     from tinker._compat import model_dump as _tinker_model_dump
     from tinker.lib._pydantic_conv import to_pydantic_input
+
     return _tinker_model_dump(
         to_pydantic_input(fb_input),
         mode="json",
@@ -775,7 +1084,9 @@ def _pool_embedding_tensor(
 
 
 def _check_cos_similarity_matrix_single_chunk(
-    chunks: list, *, output: str,
+    chunks: list,
+    *,
+    output: str,
 ) -> None:
     """Guard ``cos_similarity_matrix`` against silent batch-splitting.
 
@@ -997,9 +1308,7 @@ class FiretitanTrainingClient(TrainingClient):
             extra_body["grad_accumulation_normalization"] = normalization_value
         grad_norm_metrics_value = _grad_norm_metrics_mode_value(emit_grad_norm_metrics)
         if grad_norm_metrics_value is not None:
-            adam_params = adam_params.model_copy(
-                update={"emit_grad_norm_metrics": grad_norm_metrics_value}
-            )
+            adam_params = adam_params.model_copy(update={"emit_grad_norm_metrics": grad_norm_metrics_value})
         request_id = self._get_request_id()
 
         async def _optim_step_async():
@@ -1277,7 +1586,9 @@ class FiretitanTrainingClient(TrainingClient):
             )
 
         backward_future = await self._forward_backward_embedding_async(
-            backward_data, pooling, output=output,
+            backward_data,
+            pooling,
+            output=output,
         )
 
         def add_custom_metrics(
@@ -1366,9 +1677,7 @@ class FiretitanTrainingClient(TrainingClient):
                 f"got len(data)={len(data)}."
             )
         if num_extra_negatives < 0:
-            raise ValueError(
-                f"num_extra_negatives must be >= 0, got {num_extra_negatives}"
-            )
+            raise ValueError(f"num_extra_negatives must be >= 0, got {num_extra_negatives}")
 
         request_id = self._get_request_id()
         loss_fn_config = {
@@ -2378,9 +2687,7 @@ class FiretitanServiceClient(ServiceClient):
             return managed_handle.training_client
 
         effective_alpha = lora_alpha if lora_rank > 0 else None
-        config_key = _TrainingKey(
-            base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha
-        )
+        config_key = _TrainingKey(base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha)
         if config_key in self._created_training_configs:
             raise ValueError(
                 f"A training client for '{base_model}' (lora_rank={lora_rank}) "
