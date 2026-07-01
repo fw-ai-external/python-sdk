@@ -607,13 +607,18 @@ _RESUMABLE_TRAINER_STATES = frozenset(
 
 
 def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
+    # Only explicit accelerator placement overrides force the manual (shape
+    # validation skipping) create path. extra_args are runtime training flags
+    # that are forwarded on the auto-shape payload too, so they must not disable
+    # auto shape selection -- doing so sends skipValidations=true, which the
+    # server rejects with 400 for non-superuser (customer) API keys.
     return any(
         value not in (None, "", 0, False)
         for value in (
             config.accelerator_type,
             config.accelerator_count,
         )
-    ) or bool(config.extra_args)
+    )
 
 
 def _build_trainer_job_config(

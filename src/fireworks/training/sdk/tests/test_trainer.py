@@ -299,6 +299,35 @@ class TestCreate:
         assert "nodeCount" not in payload
         assert payload["forwardOnly"] is True
 
+    def test_auto_shape_path_with_extra_args_omits_skip_validations(self, mgr):
+        # Regression: managed jobs whose extra_args were populated by the
+        # control plane (e.g. the warm-start --lora-target-modules shim) must
+        # stay on the auto-shape path and not send skipValidations=true, which
+        # the server rejects with 400 for non-superuser (customer) keys.
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            auto_select_training_shape=True,
+            max_context_length=8192,
+            region="US_OHIO_1",
+            extra_args=["--lora-target-modules", "q_proj,k_proj"],
+        )
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(config)
+
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
+        assert "skipValidations" not in path
+        assert "trainingShape" not in path
+        assert payload["trainingConfig"]["extraArgs"] == [
+            "--lora-target-modules",
+            "q_proj,k_proj",
+        ]
+
     def test_manual_path_sends_all_fields(self, mgr):
         """Manual path sends all infra fields and skipValidations=true."""
         config = TrainerJobConfig(
