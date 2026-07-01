@@ -23,6 +23,8 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
     _is_retryable_status_code,
+    format_checkpoint_promotion_error,
+    format_session_checkpoint_promotion_error,
 )
 from fireworks.training.sdk._constants import (
     HTTP_READ_TIMEOUT_S,
@@ -515,16 +517,8 @@ class FireworksClient(_RestClient):
             )
             resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
         if not resp.is_success:
-            error_msg = parse_api_error(resp)
             raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to promote checkpoint '{checkpoint_id}'",
-                    error_msg,
-                    "Use a checkpoint name returned by list_checkpoints, ensure the row is promotable, "
-                    "and pass the base_model that matches the trainer.\n"
-                    f"  Console: {CONSOLE_URL}",
-                    docs_url=DOCS_SDK,
-                )
+                format_checkpoint_promotion_error(resp, checkpoint_id=checkpoint_id)
             )
 
         result = resp.json()
@@ -684,14 +678,10 @@ class FireworksClient(_RestClient):
         body = {"output_model": output_model, "base_model": base_model}
         resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
         if not resp.is_success:
-            error_msg = parse_api_error(resp)
             raise RuntimeError(
-                format_sdk_error(
-                    f"Failed to promote session checkpoint '{checkpoint_id}'",
-                    error_msg,
-                    f"Check that the checkpoint is valid and base_model is correct.\n"
-                    f"  Console: {CONSOLE_URL}",
-                    docs_url=DOCS_SDK,
+                format_session_checkpoint_promotion_error(
+                    resp,
+                    checkpoint_id=checkpoint_id,
                 )
             )
         return self._log_promoted_model(resp.json())
