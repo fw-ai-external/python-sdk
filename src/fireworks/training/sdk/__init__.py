@@ -20,6 +20,7 @@ from fireworks.training.sdk.client import (
     GradNormMetricsMode,
     GradAccNormalization,
     FiretitanServiceClient,
+    FiretitanSamplingClient,
     FiretitanTrainingClient,
 )
 from fireworks.training.sdk.managed import FiretitanProvisioningConfig
@@ -43,7 +44,6 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     SampledCompletion,
-    FiretitanSamplingClient,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,

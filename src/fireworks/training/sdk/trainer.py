@@ -42,6 +42,37 @@ _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 _AUTO_TRAINER_JOB_ID_PREFIX = "training-api-service"
+_TRAINER_TOMBSTONE_STATES = frozenset(
+    {
+        "JOB_STATE_DELETED",
+        "JOB_STATE_ARCHIVED",
+    }
+)
+
+
+def _trainer_job_state(job: dict[str, Any]) -> str:
+    return str(job.get("state") or "")
+
+
+def _is_trainer_tombstone_state(state: str) -> bool:
+    return state in _TRAINER_TOMBSTONE_STATES
+
+
+def _raise_trainer_tombstone_error(job_id: str, job: dict[str, Any]) -> None:
+    status_message = _extract_job_status_message(job)
+    detail = status_message or (
+        "Trainer job was deleted and is retained only for checkpoint recovery."
+    )
+    raise RuntimeError(
+        format_sdk_error(
+            f"Trainer job {job_id} is archived and cannot be recreated with the same ID",
+            detail,
+            "Use a new trainer job ID to provision again. The deleted row remains "
+            "available for PromoteCheckpoint during the retention window.",
+            docs_url=DOCS_SDK,
+            show_support=True,
+        )
+    )
 
 
 def _format_proto_duration(value: timedelta | str) -> str:
@@ -432,6 +463,8 @@ class TrainerJobManager(FireworksClient):
             )
             existing = self.try_get(requested_job_id)
             if existing:
+                if _is_trainer_tombstone_state(_trainer_job_state(existing)):
+                    _raise_trainer_tombstone_error(requested_job_id, existing)
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
@@ -616,6 +649,9 @@ class TrainerJobManager(FireworksClient):
             state = job.get("state", "")
             status_message = _extract_job_status_message(job)
             elapsed = int(time.time() - start)
+
+            if _is_trainer_tombstone_state(state):
+                _raise_trainer_tombstone_error(job_id, job)
 
             if state == "JOB_STATE_FAILED":
                 msg = status_message or "unknown"
