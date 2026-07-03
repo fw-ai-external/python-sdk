@@ -933,6 +933,15 @@ def _fireworks_base_url(base_url: str | None) -> str:
     return base_url or os.environ.get("FIREWORKS_BASE_URL") or DEFAULT_FIREWORKS_API_URL
 
 
+def _fireworks_api_root_url(base_url: str | None) -> str:
+    root = _fireworks_base_url(base_url).rstrip("/")
+    for suffix in ("/training/v1/serverless", "/training/v1"):
+        if root.endswith(suffix):
+            root = root[: -len(suffix)]
+            break
+    return root or DEFAULT_FIREWORKS_API_URL
+
+
 # -- Cross-job checkpoint references ------------------------------------------
 
 CROSS_JOB_CHECKPOINT_REF_PREFIX = "cross_job://"
@@ -1130,11 +1139,10 @@ class SaveSamplerResult:
     """Result of :meth:`FiretitanTrainingClient.save_weights_for_sampler_ext`.
 
     Attributes:
-        path: The snapshot name returned by the trainer (same as
-            *snapshot_name*).  Internal GCS paths are not exposed to
-            SDK users -- they are only logged server-side.
+        path: The public sampler identity returned by the trainer.  This is the
+            value to pass to ``create_sampling_client(model_path=...)``.
         snapshot_name: The actual snapshot name used (with session_id suffix).
-            Use this for ``hotload(snapshot_identity=...)`` calls.
+            This is kept for local bookkeeping and SDK-managed hotload metadata.
     """
 
     path: str
@@ -1840,9 +1848,9 @@ class FiretitanTrainingClient(TrainingClient):
         would export base-identical weights.
 
         Returns:
-            :class:`SaveSamplerResult` with the public snapshot identity in both
-            ``path`` and ``snapshot_name``.  The trainer's physical storage path
-            is intentionally not part of this SDK contract.
+            :class:`SaveSamplerResult` with the trainer-returned public sampler
+            identity in ``path`` and the requested snapshot name in
+            ``snapshot_name``.
         """
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
@@ -1878,13 +1886,17 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
             assert resp.path is not None
-            return actual_name
+            return resp.path
 
-        snapshot_name = self.holder.run_coroutine_threadsafe(_save()).result()
+        public_path = self.holder.run_coroutine_threadsafe(_save()).result()
         self._saved_sampler_names.add(actual_name)
         self._sampler_checkpoint_saved = True
-        self._record_saved_snapshot(actual_name, resolved_checkpoint_type)
-        return SaveSamplerResult(path=snapshot_name, snapshot_name=actual_name)
+        # The trainer may return a run/session-qualified public identity while
+        # legacy dedicated helpers still hotload by the actual saved name.
+        self._record_saved_snapshot(public_path, resolved_checkpoint_type)
+        if public_path != actual_name:
+            self._record_saved_snapshot(actual_name, resolved_checkpoint_type)
+        return SaveSamplerResult(path=public_path, snapshot_name=actual_name)
 
     def _record_saved_snapshot(self, snapshot_name: str, checkpoint_type: str) -> None:
         """Hand the saved snapshot type to the sampler backend.
@@ -1927,7 +1939,7 @@ class FiretitanTrainingClient(TrainingClient):
             checkpoint_type=checkpoint_type,
             ttl_seconds=ttl_seconds,
         )
-        return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.snapshot_name))
+        return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.path))
 
     async def save_weights_for_sampler_async(
         self,
@@ -2277,7 +2289,7 @@ class FiretitanServiceClient(ServiceClient):
             try:
                 from fireworks.training.sdk.fireworks_client import FireworksClient
 
-                base_url = getattr(self, "_managed_base_url", None) or "https://api.fireworks.ai"
+                base_url = _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
                 account = FireworksClient(api_key=api_key, base_url=base_url).account_id
             except Exception:
                 account = None
@@ -2302,6 +2314,16 @@ class FiretitanServiceClient(ServiceClient):
             return None
         account = self._resolved_account_id()
         return f"accounts/{account}/trainingRuns/{run_id}" if account else None
+
+    def _serverless_sampling_model_name(self, model_path: str) -> str:
+        # the model_path here is expected in the format of "account_id/run-abc.../step-1-test1234" which is returned from the trainer side
+        checkpoint = str(model_path).strip().strip("/")
+        session_id = self.training_session_id
+        account = self._resolved_account_id()
+
+        sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}/checkpoints/{checkpoint}"
+        logger.info(f"[sampler model]: {sampling_model_name}")
+        return sampling_model_name
 
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
@@ -3029,6 +3051,26 @@ class FiretitanServiceClient(ServiceClient):
 
         managed_config = self._managed_config
         if model_path is not None:
+            if self._sampler_backend is None and managed_config is None and self.training_session_id is not None:
+                if base_model is not None:
+                    logger.warning(
+                        "base_model is ignored for serverless create_sampling_client(model_path=...); "
+                        "the rollout host is bound to the training session route."
+                    )
+                serverless_base_url = self._managed_base_url
+                serverless_base_url = serverless_base_url.rstrip("/")
+                if not serverless_base_url.endswith("/training/v1/serverless"):
+                    raise ValueError(
+                        "serverless sampling requires FiretitanServiceClient base_url to end with "
+                        f"/training/v1/serverless; got {serverless_base_url!r}."
+                    )
+                return FiretitanSamplingClient.create(
+                    inference_url=serverless_base_url,
+                    model=self._serverless_sampling_model_name(model_path),
+                    api_key=self._require_fireworks_api_key("serverless sampling"),
+                    tokenizer=tokenizer,
+                    concurrency_controller=concurrency_controller,
+                )
             self.hotload_sampler_snapshot(model_path)
             return self._require_sampler_backend().get_sampling_client(tokenizer, concurrency_controller)
 
@@ -3041,8 +3083,8 @@ class FiretitanServiceClient(ServiceClient):
                 return handle.sampler_backend.get_sampling_client(tokenizer, concurrency_controller)
 
         raise NotImplementedError(
-            "create_sampling_client requires SDK-managed sampler state or deployment_sampler=.... "
-            "Base-model/serverless sampling is not supported in this path."
+            "create_sampling_client requires a serverless training session, "
+            "SDK-managed sampler state, or deployment_sampler=...."
         )
 
     def hotload_sampler_snapshot(self, model_path: str) -> None:
@@ -3133,7 +3175,7 @@ class FiretitanServiceClient(ServiceClient):
             inference_url=(
                 inference_url
                 or getattr(self, "_managed_inference_url", None)
-                or getattr(self, "_managed_base_url", None)
+                or _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
                 or DEFAULT_FIREWORKS_API_URL
             ),
             model=model,
