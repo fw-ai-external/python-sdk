@@ -26,13 +26,15 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
-from dataclasses import replace, dataclass
+from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import AsyncGenerator
+from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
-from tinker import types
+from tinker import SamplingClient, types
 from pydantic import BaseModel
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from tinker.lib.telemetry import Telemetry
 from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
 from tinker.lib.queue_state_logger import QueueStateLogger
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
@@ -58,7 +60,6 @@ from fireworks.training.sdk.deployment import (
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanSamplingClient,
 )
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
@@ -81,8 +82,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
 _INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
+SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
-    "parallel_fwdbwd_chunks": False,
+    "parallel_fwdbwd_chunks": True,
     "proto_write_fwdbwd": False,
     "proto_compress_fwdbwd": False,
     "sample_no_retries": False,
@@ -99,6 +101,314 @@ class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
 # FireTitan backend would otherwise default to 2 * rank, so we send it
 # explicitly to keep the alpha/rank scale consistent across stacks.
 DEFAULT_LORA_ALPHA = 32
+
+
+class FiretitanSamplingClient(SamplingClient):
+    """Tinker-compatible sampling wrapper backed by a ``DeploymentSampler``.
+
+    The public surface mirrors ``tinker.lib.public_interfaces.SamplingClient``
+    for sampling from an already-running Fireworks deployment. Methods return
+    ``concurrent.futures.Future`` objects for sync callers and provide async
+    convenience methods for coroutine users.
+    """
+
+    def __init__(
+        self,
+        deployment_sampler: DeploymentSampler,
+    ):
+        self.deployment_sampler = deployment_sampler
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
+        self._loop_lock = threading.Lock()
+        self._closed = False
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        inference_url: str,
+        model: str,
+        api_key: str,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        max_concurrency: int | None = None,
+    ) -> "FiretitanSamplingClient":
+        """Build a Tinker-compatible client and the underlying sampler."""
+        sampler = DeploymentSampler(
+            inference_url=inference_url,
+            model=model,
+            api_key=api_key,
+            tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            max_concurrency=max_concurrency,
+        )
+        return cls(sampler)
+
+    @staticmethod
+    def _tinker_types():
+        return types
+
+    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
+        if self._closed:
+            raise RuntimeError("FiretitanSamplingClient is closed")
+
+        with self._loop_lock:
+            if self._loop is not None and self._loop_thread is not None and self._loop_thread.is_alive():
+                return self._loop
+
+            loop = asyncio.new_event_loop()
+            started = threading.Event()
+
+            def _run_loop() -> None:
+                asyncio.set_event_loop(loop)
+                started.set()
+                loop.run_forever()
+
+            thread = threading.Thread(
+                target=_run_loop,
+                name="fireworks-sampling-client",
+                daemon=True,
+            )
+            thread.start()
+            started.wait()
+            self._loop = loop
+            self._loop_thread = thread
+            return loop
+
+    def _submit(self, coro) -> ConcurrentFuture[Any]:
+        loop = self._ensure_loop()
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+
+    @staticmethod
+    async def _await_concurrent_future(future: ConcurrentFuture[Any]) -> Any:
+        try:
+            from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
+        except ImportError:
+            return await asyncio.wrap_future(future)
+
+        return await AwaitableConcurrentFuture(future)
+
+    @staticmethod
+    def _sampling_kwargs(sampling_params: types.SamplingParams) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+
+        top_p = getattr(sampling_params, "top_p", None)
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+
+        top_k = getattr(sampling_params, "top_k", None)
+        if top_k is not None and top_k >= 0:
+            kwargs["top_k"] = top_k
+
+        seed = getattr(sampling_params, "seed", None)
+        if seed is not None:
+            kwargs["seed"] = seed
+
+        return kwargs
+
+    @staticmethod
+    def _stop_reason(finish_reason: str) -> str:
+        return "length" if finish_reason == "length" else "stop"
+
+    @staticmethod
+    def _check_topk_prompt_logprobs_supported(topk_prompt_logprobs: int) -> None:
+        if topk_prompt_logprobs > 0:
+            raise NotImplementedError("FiretitanSamplingClient does not support topk_prompt_logprobs")
+
+    async def _sample_async_impl(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool,
+        topk_prompt_logprobs: int = 0,
+    ) -> types.SampleResponse:
+        self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
+
+        tinker_types = self._tinker_types()
+        prompt_token_ids = list(prompt.to_ints())
+        max_tokens = getattr(sampling_params, "max_tokens", None)
+        if max_tokens is None:
+            max_tokens = 1024
+        temperature = getattr(sampling_params, "temperature", 1.0)
+        stop = getattr(sampling_params, "stop", None)
+
+        kwargs = self._sampling_kwargs(sampling_params)
+        kwargs["logprobs"] = True
+        if include_prompt_logprobs:
+            kwargs["echo"] = True
+
+        completions = await self.deployment_sampler.sample_with_prompt_tokens(
+            prompt_token_ids,
+            n=num_samples,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+            **kwargs,
+        )
+
+        sequences = []
+        prompt_logprobs: list[float | None] | None = None
+        for completion in completions:
+            completion_tokens = completion.full_tokens[completion.prompt_len :]
+            completion_logprobs = completion.inference_logprobs
+            if completion.logprobs_echoed and completion_logprobs is not None:
+                prompt_logprobs = (
+                    [None] + completion_logprobs[: completion.prompt_len - 1] if completion.prompt_len else []
+                )
+                completion_logprobs = completion_logprobs[max(completion.prompt_len - 1, 0) :]
+
+            sequences.append(
+                tinker_types.SampledSequence(
+                    stop_reason=self._stop_reason(completion.finish_reason),
+                    _tokens_list=completion_tokens,
+                    _logprobs_list=completion_logprobs,
+                )
+            )
+
+        return tinker_types.SampleResponse(
+            sequences=sequences,
+            _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
+        )
+
+    def sample(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool = False,
+        topk_prompt_logprobs: int = 0,
+    ) -> ConcurrentFuture[types.SampleResponse]:
+        """Generate completions with the Tinker ``SamplingClient`` signature."""
+        self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
+        return self._submit(
+            self._sample_async_impl(
+                prompt,
+                num_samples,
+                sampling_params,
+                include_prompt_logprobs,
+                topk_prompt_logprobs,
+            )
+        )
+
+    async def sample_async(
+        self,
+        prompt: types.ModelInput,
+        num_samples: int,
+        sampling_params: types.SamplingParams,
+        include_prompt_logprobs: bool = False,
+        topk_prompt_logprobs: int = 0,
+    ) -> types.SampleResponse:
+        """Async version of :meth:`sample`."""
+        return await self._await_concurrent_future(
+            self.sample(
+                prompt,
+                num_samples,
+                sampling_params,
+                include_prompt_logprobs,
+                topk_prompt_logprobs,
+            )
+        )
+
+    async def _compute_logprobs_async_impl(self, prompt: types.ModelInput) -> list[float | None]:
+        tinker_types = self._tinker_types()
+        response = await self._sample_async_impl(
+            prompt,
+            num_samples=1,
+            sampling_params=tinker_types.SamplingParams(max_tokens=1, temperature=1.0, top_p=1.0),
+            include_prompt_logprobs=True,
+        )
+        return list(response.prompt_logprobs or [])
+
+    def compute_logprobs(self, prompt: types.ModelInput) -> ConcurrentFuture[list[float | None]]:
+        """Compute prompt token logprobs with the Tinker client signature.
+
+        Warning: we don't recommend using the sampling client to compute logprobs.
+        Please use ``training_client.forward()`` instead.
+        """
+        warnings.warn(
+            "We don't recommend using the sampling client to compute logprobs. "
+            "Please use training_client.forward() instead.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return self._submit(self._compute_logprobs_async_impl(prompt))
+
+    async def compute_logprobs_async(self, prompt: types.ModelInput) -> list[float | None]:
+        """Async version of :meth:`compute_logprobs`."""
+        return await self._await_concurrent_future(self.compute_logprobs(prompt))
+
+    def get_tokenizer(self) -> PreTrainedTokenizerBase:
+        """Return the tokenizer attached to the underlying deployment sampler."""
+        if self.deployment_sampler.tokenizer is None:
+            raise ValueError("DeploymentSampler was created without a tokenizer")
+        return self.deployment_sampler.tokenizer
+
+    def get_base_model(self) -> str:
+        """Return the model/deployment name used by the underlying sampler."""
+        return self.deployment_sampler.model
+
+    async def get_base_model_async(self) -> str:
+        """Async version of :meth:`get_base_model`."""
+        return self.get_base_model()
+
+    def get_telemetry(self) -> "Telemetry | None":
+        """Match Tinker's ``SamplingClient`` telemetry hook.
+
+        FireTitan's deployment sampler has no telemetry sink, so this always
+        returns ``None`` — the Tinker-shaped ``Telemetry | None`` return type is
+        preserved so callers relying on the contract keep working.
+        """
+        return None
+
+    async def _aclose_sampler(self) -> None:
+        async_client = self.deployment_sampler._async_client
+        self.deployment_sampler._async_client = None
+        if async_client is not None and not async_client.is_closed:
+            await async_client.aclose()
+        self.deployment_sampler._sync_client.close()
+
+    def close(self) -> None:
+        """Close the wrapper loop and the underlying sampler clients."""
+        if self._closed:
+            return
+        self._closed = True
+
+        loop = self._loop
+        thread = self._loop_thread
+        if loop is not None and loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self._aclose_sampler(), loop)
+            try:
+                future.result(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+            except Exception:
+                logger.debug("Failed to close FiretitanSamplingClient cleanly", exc_info=True)
+            loop.call_soon_threadsafe(loop.stop)
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+            if thread is None or not thread.is_alive():
+                loop.close()
+            else:
+                logger.debug(
+                    "Skipped closing FiretitanSamplingClient loop because the loop thread "
+                    "did not stop before the close timeout"
+                )
+        else:
+            self.deployment_sampler.close()
+
+        self._loop = None
+        self._loop_thread = None
+
+    def __enter__(self) -> "FiretitanSamplingClient":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class _TrainingKey(NamedTuple):
@@ -478,9 +788,7 @@ def _grad_norm_metrics_mode_value(
         return GradNormMetricsMode(str(value).lower()).value
     except ValueError as exc:
         valid = ", ".join(mode.value for mode in GradNormMetricsMode)
-        raise ValueError(
-            f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}"
-        ) from exc
+        raise ValueError(f"Unknown emit_grad_norm_metrics {value!r}; expected bool or one of: {valid}") from exc
 
 
 def _pop_alias(
@@ -625,6 +933,15 @@ def _fireworks_base_url(base_url: str | None) -> str:
     return base_url or os.environ.get("FIREWORKS_BASE_URL") or DEFAULT_FIREWORKS_API_URL
 
 
+def _fireworks_api_root_url(base_url: str | None) -> str:
+    root = _fireworks_base_url(base_url).rstrip("/")
+    for suffix in ("/training/v1/serverless", "/training/v1"):
+        if root.endswith(suffix):
+            root = root[: -len(suffix)]
+            break
+    return root or DEFAULT_FIREWORKS_API_URL
+
+
 # -- Cross-job checkpoint references ------------------------------------------
 
 CROSS_JOB_CHECKPOINT_REF_PREFIX = "cross_job://"
@@ -720,6 +1037,12 @@ def _dump_tinker_model(obj: Any) -> Any:
         return obj.model_dump(exclude_unset=True, mode="json")
     if hasattr(obj, "dict"):
         return obj.dict(exclude_unset=True)
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return {field.name: _dump_tinker_model(getattr(obj, field.name)) for field in fields(obj)}
+    if isinstance(obj, dict):
+        return {key: _dump_tinker_model(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_dump_tinker_model(value) for value in obj]
     return obj
 
 
@@ -734,11 +1057,12 @@ def _serialize_input_for_extra_body(fb_input: Any) -> dict:
     conversion and the result is a normal pydantic BaseModel that ``model_dump``
     knows how to JSON-encode.
 
-    This is a temporary hack so the embedding APIs work against tinker 0.22.2;
-    a proper fix at ``_dump_tinker_model`` should land in a follow-up PR.
+    Use tinker's request-level converter so embedding APIs work across the
+    public dataclass/pydantic type split in tinker 0.22+.
     """
     from tinker._compat import model_dump as _tinker_model_dump
     from tinker.lib._pydantic_conv import to_pydantic_input
+
     return _tinker_model_dump(
         to_pydantic_input(fb_input),
         mode="json",
@@ -775,7 +1099,9 @@ def _pool_embedding_tensor(
 
 
 def _check_cos_similarity_matrix_single_chunk(
-    chunks: list, *, output: str,
+    chunks: list,
+    *,
+    output: str,
 ) -> None:
     """Guard ``cos_similarity_matrix`` against silent batch-splitting.
 
@@ -819,11 +1145,10 @@ class SaveSamplerResult:
     """Result of :meth:`FiretitanTrainingClient.save_weights_for_sampler_ext`.
 
     Attributes:
-        path: The snapshot name returned by the trainer (same as
-            *snapshot_name*).  Internal GCS paths are not exposed to
-            SDK users -- they are only logged server-side.
+        path: The public sampler identity returned by the trainer.  This is the
+            value to pass to ``create_sampling_client(model_path=...)``.
         snapshot_name: The actual snapshot name used (with session_id suffix).
-            Use this for ``hotload(snapshot_identity=...)`` calls.
+            This is kept for local bookkeeping and SDK-managed hotload metadata.
     """
 
     path: str
@@ -997,9 +1322,7 @@ class FiretitanTrainingClient(TrainingClient):
             extra_body["grad_accumulation_normalization"] = normalization_value
         grad_norm_metrics_value = _grad_norm_metrics_mode_value(emit_grad_norm_metrics)
         if grad_norm_metrics_value is not None:
-            adam_params = adam_params.model_copy(
-                update={"emit_grad_norm_metrics": grad_norm_metrics_value}
-            )
+            adam_params = adam_params.model_copy(update={"emit_grad_norm_metrics": grad_norm_metrics_value})
         request_id = self._get_request_id()
 
         async def _optim_step_async():
@@ -1057,8 +1380,6 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
                 "Use the JSON forward_backward path."
             )
-        if getattr(client_config, "parallel_fwdbwd_chunks", False):
-            client_config.parallel_fwdbwd_chunks = False
         future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future
@@ -1277,7 +1598,9 @@ class FiretitanTrainingClient(TrainingClient):
             )
 
         backward_future = await self._forward_backward_embedding_async(
-            backward_data, pooling, output=output,
+            backward_data,
+            pooling,
+            output=output,
         )
 
         def add_custom_metrics(
@@ -1366,9 +1689,7 @@ class FiretitanTrainingClient(TrainingClient):
                 f"got len(data)={len(data)}."
             )
         if num_extra_negatives < 0:
-            raise ValueError(
-                f"num_extra_negatives must be >= 0, got {num_extra_negatives}"
-            )
+            raise ValueError(f"num_extra_negatives must be >= 0, got {num_extra_negatives}")
 
         request_id = self._get_request_id()
         loss_fn_config = {
@@ -1531,9 +1852,9 @@ class FiretitanTrainingClient(TrainingClient):
         would export base-identical weights.
 
         Returns:
-            :class:`SaveSamplerResult` with the public snapshot identity in both
-            ``path`` and ``snapshot_name``.  The trainer's physical storage path
-            is intentionally not part of this SDK contract.
+            :class:`SaveSamplerResult` with the trainer-returned public sampler
+            identity in ``path`` and the requested snapshot name in
+            ``snapshot_name``.
         """
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
@@ -1569,13 +1890,17 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
             assert resp.path is not None
-            return actual_name
+            return resp.path
 
-        snapshot_name = self.holder.run_coroutine_threadsafe(_save()).result()
+        public_path = self.holder.run_coroutine_threadsafe(_save()).result()
         self._saved_sampler_names.add(actual_name)
         self._sampler_checkpoint_saved = True
-        self._record_saved_snapshot(actual_name, resolved_checkpoint_type)
-        return SaveSamplerResult(path=snapshot_name, snapshot_name=actual_name)
+        # The trainer may return a run/session-qualified public identity while
+        # legacy dedicated helpers still hotload by the actual saved name.
+        self._record_saved_snapshot(public_path, resolved_checkpoint_type)
+        if public_path != actual_name:
+            self._record_saved_snapshot(actual_name, resolved_checkpoint_type)
+        return SaveSamplerResult(path=public_path, snapshot_name=actual_name)
 
     def _record_saved_snapshot(self, snapshot_name: str, checkpoint_type: str) -> None:
         """Hand the saved snapshot type to the sampler backend.
@@ -1618,7 +1943,7 @@ class FiretitanTrainingClient(TrainingClient):
             checkpoint_type=checkpoint_type,
             ttl_seconds=ttl_seconds,
         )
-        return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.snapshot_name))
+        return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.path))
 
     async def save_weights_for_sampler_async(
         self,
@@ -1968,7 +2293,7 @@ class FiretitanServiceClient(ServiceClient):
             try:
                 from fireworks.training.sdk.fireworks_client import FireworksClient
 
-                base_url = getattr(self, "_managed_base_url", None) or "https://api.fireworks.ai"
+                base_url = _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
                 account = FireworksClient(api_key=api_key, base_url=base_url).account_id
             except Exception:
                 account = None
@@ -1993,6 +2318,16 @@ class FiretitanServiceClient(ServiceClient):
             return None
         account = self._resolved_account_id()
         return f"accounts/{account}/trainingRuns/{run_id}" if account else None
+
+    def _serverless_sampling_model_name(self, model_path: str) -> str:
+        # the model_path here is expected in the format of "account_id/run-abc.../step-1-test1234" which is returned from the trainer side
+        checkpoint = str(model_path).strip().strip("/")
+        session_id = self.training_session_id
+        account = self._resolved_account_id()
+
+        sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}/checkpoints/{checkpoint}"
+        logger.info(f"[sampler model]: {sampling_model_name}")
+        return sampling_model_name
 
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
@@ -2378,9 +2713,7 @@ class FiretitanServiceClient(ServiceClient):
             return managed_handle.training_client
 
         effective_alpha = lora_alpha if lora_rank > 0 else None
-        config_key = _TrainingKey(
-            base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha
-        )
+        config_key = _TrainingKey(base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha)
         if config_key in self._created_training_configs:
             raise ValueError(
                 f"A training client for '{base_model}' (lora_rank={lora_rank}) "
@@ -2722,6 +3055,26 @@ class FiretitanServiceClient(ServiceClient):
 
         managed_config = self._managed_config
         if model_path is not None:
+            if self._sampler_backend is None and managed_config is None and self.training_session_id is not None:
+                if base_model is not None:
+                    logger.warning(
+                        "base_model is ignored for serverless create_sampling_client(model_path=...); "
+                        "the rollout host is bound to the training session route."
+                    )
+                serverless_base_url = self._managed_base_url
+                serverless_base_url = serverless_base_url.rstrip("/")
+                if not serverless_base_url.endswith("/training/v1/serverless"):
+                    raise ValueError(
+                        "serverless sampling requires FiretitanServiceClient base_url to end with "
+                        f"/training/v1/serverless; got {serverless_base_url!r}."
+                    )
+                return FiretitanSamplingClient.create(
+                    inference_url=serverless_base_url,
+                    model=self._serverless_sampling_model_name(model_path),
+                    api_key=self._require_fireworks_api_key("serverless sampling"),
+                    tokenizer=tokenizer,
+                    concurrency_controller=concurrency_controller,
+                )
             self.hotload_sampler_snapshot(model_path)
             return self._require_sampler_backend().get_sampling_client(tokenizer, concurrency_controller)
 
@@ -2734,8 +3087,8 @@ class FiretitanServiceClient(ServiceClient):
                 return handle.sampler_backend.get_sampling_client(tokenizer, concurrency_controller)
 
         raise NotImplementedError(
-            "create_sampling_client requires SDK-managed sampler state or deployment_sampler=.... "
-            "Base-model/serverless sampling is not supported in this path."
+            "create_sampling_client requires a serverless training session, "
+            "SDK-managed sampler state, or deployment_sampler=...."
         )
 
     def hotload_sampler_snapshot(self, model_path: str) -> None:
@@ -2826,7 +3179,7 @@ class FiretitanServiceClient(ServiceClient):
             inference_url=(
                 inference_url
                 or getattr(self, "_managed_inference_url", None)
-                or getattr(self, "_managed_base_url", None)
+                or _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
                 or DEFAULT_FIREWORKS_API_URL
             ),
             model=model,

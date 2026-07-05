@@ -2,6 +2,8 @@
 
 Provides:
   - format_sdk_error(): build multi-line "what / cause / solution / docs" messages
+  - format_checkpoint_promotion_error(): format checkpoint-promotion HTTP failures
+  - format_session_checkpoint_promotion_error(): format session checkpoint promotion HTTP failures
   - parse_api_error(): extract a human-readable string from an HTTP error response
   - request_with_retries(): sync retry with exponential backoff
   - async_request_with_retries(): async retry with exponential backoff
@@ -40,7 +42,9 @@ HTTP_STATUS_HINTS: dict[int, str] = {
     409: "Resource conflict. It may already exist or be in a transitional state.",
     429: f"Rate limited. Wait and retry, or reach out on Discord: {DISCORD_URL}",
     500: f"Internal server error. Try again. If persistent, reach out on Discord: {DISCORD_URL}",
+    502: "Bad gateway. Retry after a short wait.",
     503: "Service temporarily unavailable. Retry after a short wait.",
+    504: "Gateway timeout. The request took too long upstream. Retry after a short wait.",
 }
 
 
@@ -75,6 +79,62 @@ def parse_api_error(resp) -> str:
     except Exception:
         text = getattr(resp, "text", str(resp))
         return text.strip()[:200]
+
+
+_PROMOTE_CHECKPOINT_CLIENT_ERROR_SOLUTION = (
+    "Use a checkpoint name returned by list_checkpoints, ensure the row is promotable, "
+    "and pass the base_model that matches the trainer.\n"
+    f"  Console: {CONSOLE_URL}"
+)
+
+_PROMOTE_SESSION_CHECKPOINT_CLIENT_ERROR_SOLUTION = (
+    "Use a checkpoint name returned by list_training_session_checkpoints, "
+    "ensure the row is promotable, and pass the base_model that matches "
+    "the trainer.\n"
+    f"  Console: {CONSOLE_URL}"
+)
+
+_PROMOTE_PLATFORM_ERROR_SOLUTION = (
+    "Retry checkpoint promotion. If the error persists, contact Fireworks support."
+)
+
+
+def format_checkpoint_promotion_error(
+    resp,
+    *,
+    checkpoint_id: str,
+) -> str:
+    """Build a structured error for a failed job checkpoint promotion response."""
+    return _format_promote_error(
+        resp,
+        what=f"Failed to promote checkpoint '{checkpoint_id}'",
+        client_error_solution=_PROMOTE_CHECKPOINT_CLIENT_ERROR_SOLUTION,
+    )
+
+
+def format_session_checkpoint_promotion_error(
+    resp,
+    *,
+    checkpoint_id: str,
+) -> str:
+    """Build a structured error for a failed session checkpoint promotion response."""
+    return _format_promote_error(
+        resp,
+        what=f"Failed to promote session checkpoint '{checkpoint_id}'",
+        client_error_solution=_PROMOTE_SESSION_CHECKPOINT_CLIENT_ERROR_SOLUTION,
+    )
+
+
+def _format_promote_error(resp, *, what: str, client_error_solution: str) -> str:
+    status_code = resp.status_code
+    is_platform_error = status_code >= 500
+    return format_sdk_error(
+        f"{what} (HTTP {status_code})",
+        parse_api_error(resp),
+        _PROMOTE_PLATFORM_ERROR_SOLUTION if is_platform_error else client_error_solution,
+        docs_url=DOCS_SDK,
+        show_support=is_platform_error,
+    )
 
 
 RETRYABLE_STATUS_CODES: Tuple[int, ...] = (408, 429, 500, 502, 503, 504)

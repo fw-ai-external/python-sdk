@@ -8,18 +8,14 @@ import random
 import asyncio
 import logging
 import warnings
-import threading
 from math import ceil
 from typing import TYPE_CHECKING, Any, List
 from dataclasses import dataclass
-from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
 
 if TYPE_CHECKING:
-    from tinker import types as tinker_types
     from transformers import PreTrainedTokenizerBase
-    from tinker.lib.telemetry import Telemetry
 
 from fireworks.training.sdk._sse import _SSEDecoder, _SSETruncationError
 from fireworks.training.sdk.errors import (
@@ -31,9 +27,6 @@ from fireworks.training.sdk.concurrency import FixedConcurrencyController, Adapt
 from fireworks.training.sdk._rest_client import _RestClient
 
 logger = logging.getLogger(__name__)
-
-# Grace period for the background sampler event loop/thread to shut down (seconds).
-SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
 
 # =============================================================================
 # DeploymentSampler — completions API with client-side tokenization
@@ -477,10 +470,7 @@ class DeploymentSampler(_RestClient):
                         "Tokenizer is required to convert integer stop token IDs "
                         "to string stop sequences for the completions API"
                     )
-                kwargs["stop"] = [
-                    self.tokenizer.decode([token_id], skip_special_tokens=False)
-                    for token_id in stop
-                ]
+                kwargs["stop"] = [self.tokenizer.decode([token_id], skip_special_tokens=False) for token_id in stop]
             else:
                 raise ValueError("stop must be list[str] or list[int]")
 
@@ -559,12 +549,19 @@ class DeploymentSampler(_RestClient):
         if diagnostic:
             logger.warning(
                 "%s Transient %s (attempt %d/%d); retrying after %.1fs.",
-                diagnostic, label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
+                diagnostic,
+                label,
+                attempt,
+                self._RETRY_MAX_ATTEMPTS,
+                jittered,
             )
         else:
             logger.warning(
                 "Transient %s (attempt %d/%d); retrying after %.1fs.",
-                label, attempt, self._RETRY_MAX_ATTEMPTS, jittered,
+                label,
+                attempt,
+                self._RETRY_MAX_ATTEMPTS,
+                jittered,
             )
         await asyncio.sleep(jittered)
         return min(current_backoff * 2, self._RETRY_MAX_BACKOFF_S)
@@ -596,22 +593,12 @@ class DeploymentSampler(_RestClient):
             return []
 
         fields: list[str] = []
-        prefill_p95 = self._p95([
-            m.prefill_queue_duration for m in recent
-            if m.prefill_queue_duration is not None
-        ])
-        generation_p95 = self._p95([
-            m.generation_queue_duration for m in recent
-            if m.generation_queue_duration is not None
-        ])
-        ttft_p95 = self._p95([
-            m.client_ttft for m in recent
-            if m.client_ttft is not None
-        ])
-        concurrent = [
-            m.num_concurrent_requests for m in recent
-            if m.num_concurrent_requests is not None
-        ]
+        prefill_p95 = self._p95([m.prefill_queue_duration for m in recent if m.prefill_queue_duration is not None])
+        generation_p95 = self._p95(
+            [m.generation_queue_duration for m in recent if m.generation_queue_duration is not None]
+        )
+        ttft_p95 = self._p95([m.client_ttft for m in recent if m.client_ttft is not None])
+        concurrent = [m.num_concurrent_requests for m in recent if m.num_concurrent_requests is not None]
 
         for name, value in (
             ("recent_prefill_queue_p95", prefill_p95),
@@ -649,18 +636,12 @@ class DeploymentSampler(_RestClient):
     ) -> str:
         http_timeout = kwargs.get("http_timeout", 600)
         is_rl_rollout = (
-            isinstance(diagnostic_context, dict)
-            and diagnostic_context.get("workload") in self._RL_TIMEOUT_WORKLOADS
+            isinstance(diagnostic_context, dict) and diagnostic_context.get("workload") in self._RL_TIMEOUT_WORKLOADS
         )
         if exhausted:
-            summary = (
-                "DeploymentSampler request failed after exhausting retries "
-                "on a timeout-like error."
-            )
+            summary = "DeploymentSampler request failed after exhausting retries on a timeout-like error."
         else:
-            summary = (
-                "DeploymentSampler request hit a timeout-like transient."
-            )
+            summary = "DeploymentSampler request hit a timeout-like transient."
         fields = [
             summary,
             f"raw_error={label}",
@@ -777,9 +758,7 @@ class DeploymentSampler(_RestClient):
                 if self._is_timeout_like_transient(transient)
                 else None
             )
-            backoff = await self._backoff_after_transient(
-                label, attempt, backoff, diagnostic=diagnostic
-            )
+            backoff = await self._backoff_after_transient(label, attempt, backoff, diagnostic=diagnostic)
 
         # Range above guarantees the last attempt either returns or re-raises.
         # This line is here only to satisfy the type checker's flow analysis.
@@ -817,10 +796,7 @@ class DeploymentSampler(_RestClient):
             token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
             routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
 
-            expanded_prompt_ids = (
-                choice.get("prompt_token_ids")
-                or raw.get("prompt_token_ids")
-            )
+            expanded_prompt_ids = choice.get("prompt_token_ids") or raw.get("prompt_token_ids")
             if expanded_prompt_ids is not None:
                 prompt_for_full = [int(x) for x in expanded_prompt_ids]
             else:
@@ -878,327 +854,3 @@ class DeploymentSampler(_RestClient):
             )
 
         return completions
-
-
-class FiretitanSamplingClient:
-    """Tinker-compatible sampling wrapper backed by a ``DeploymentSampler``.
-
-    The public surface mirrors ``tinker.lib.public_interfaces.SamplingClient``
-    for sampling from an already-running Fireworks deployment. Methods return
-    ``concurrent.futures.Future`` objects for sync callers and provide async
-    convenience methods for coroutine users.
-    """
-
-    def __init__(
-        self,
-        deployment_sampler: DeploymentSampler,
-    ):
-        self.deployment_sampler = deployment_sampler
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._loop_thread: threading.Thread | None = None
-        self._loop_lock = threading.Lock()
-        self._closed = False
-
-    @classmethod
-    def create(
-        cls,
-        *,
-        inference_url: str,
-        model: str,
-        api_key: str,
-        tokenizer: PreTrainedTokenizerBase | None = None,
-        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
-        max_concurrency: int | None = None,
-    ) -> "FiretitanSamplingClient":
-        """Build a Tinker-compatible client and the underlying sampler."""
-        sampler = DeploymentSampler(
-            inference_url=inference_url,
-            model=model,
-            api_key=api_key,
-            tokenizer=tokenizer,
-            concurrency_controller=concurrency_controller,
-            max_concurrency=max_concurrency,
-        )
-        return cls(sampler)
-
-    @staticmethod
-    def _tinker_types():
-        try:
-            from tinker import types
-        except ImportError as e:
-            raise ImportError(
-                "FiretitanSamplingClient requires the optional 'tinker' package. "
-                "Install fireworks-ai[training-sdk] to use this wrapper."
-            ) from e
-        return types
-
-    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
-        if self._closed:
-            raise RuntimeError("FiretitanSamplingClient is closed")
-
-        with self._loop_lock:
-            if (
-                self._loop is not None
-                and self._loop_thread is not None
-                and self._loop_thread.is_alive()
-            ):
-                return self._loop
-
-            loop = asyncio.new_event_loop()
-            started = threading.Event()
-
-            def _run_loop() -> None:
-                asyncio.set_event_loop(loop)
-                started.set()
-                loop.run_forever()
-
-            thread = threading.Thread(
-                target=_run_loop,
-                name="fireworks-sampling-client",
-                daemon=True,
-            )
-            thread.start()
-            started.wait()
-            self._loop = loop
-            self._loop_thread = thread
-            return loop
-
-    def _submit(self, coro) -> ConcurrentFuture[Any]:
-        loop = self._ensure_loop()
-        return asyncio.run_coroutine_threadsafe(coro, loop)
-
-    @staticmethod
-    async def _await_concurrent_future(future: ConcurrentFuture[Any]) -> Any:
-        try:
-            from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
-        except ImportError:
-            return await asyncio.wrap_future(future)
-
-        return await AwaitableConcurrentFuture(future)
-
-    @staticmethod
-    def _sampling_kwargs(sampling_params: "tinker_types.SamplingParams") -> dict[str, Any]:
-        kwargs: dict[str, Any] = {}
-
-        top_p = getattr(sampling_params, "top_p", None)
-        if top_p is not None:
-            kwargs["top_p"] = top_p
-
-        top_k = getattr(sampling_params, "top_k", None)
-        if top_k is not None and top_k >= 0:
-            kwargs["top_k"] = top_k
-
-        seed = getattr(sampling_params, "seed", None)
-        if seed is not None:
-            kwargs["seed"] = seed
-
-        return kwargs
-
-    @staticmethod
-    def _stop_reason(finish_reason: str) -> str:
-        return "length" if finish_reason == "length" else "stop"
-
-    async def _sample_async_impl(
-        self,
-        prompt: "tinker_types.ModelInput",
-        num_samples: int,
-        sampling_params: "tinker_types.SamplingParams",
-        include_prompt_logprobs: bool,
-        topk_prompt_logprobs: int = 0,
-    ) -> "tinker_types.SampleResponse":
-        if topk_prompt_logprobs:
-            raise NotImplementedError(
-                "FiretitanSamplingClient does not support topk_prompt_logprobs yet"
-            )
-
-        types = self._tinker_types()
-        prompt_token_ids = list(prompt.to_ints())
-        max_tokens = getattr(sampling_params, "max_tokens", None)
-        if max_tokens is None:
-            max_tokens = 1024
-        temperature = getattr(sampling_params, "temperature", 1.0)
-        stop = getattr(sampling_params, "stop", None)
-
-        kwargs = self._sampling_kwargs(sampling_params)
-        kwargs["logprobs"] = True
-        if include_prompt_logprobs:
-            kwargs["echo"] = True
-
-        completions = await self.deployment_sampler.sample_with_prompt_tokens(
-            prompt_token_ids,
-            n=num_samples,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stop=stop,
-            **kwargs,
-        )
-
-        sequences = []
-        prompt_logprobs: list[float | None] | None = None
-        for completion in completions:
-            completion_tokens = completion.full_tokens[completion.prompt_len :]
-            completion_logprobs = completion.inference_logprobs
-            if completion.logprobs_echoed and completion_logprobs is not None:
-                prompt_logprobs = (
-                    [None] + completion_logprobs[: completion.prompt_len - 1]
-                    if completion.prompt_len
-                    else []
-                )
-                completion_logprobs = completion_logprobs[max(completion.prompt_len - 1, 0) :]
-
-            sequences.append(
-                types.SampledSequence(
-                    stop_reason=self._stop_reason(completion.finish_reason),
-                    _tokens_list=completion_tokens,
-                    _logprobs_list=completion_logprobs,
-                )
-            )
-
-        return types.SampleResponse(
-            sequences=sequences,
-            _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
-        )
-
-    def sample(
-        self,
-        prompt: "tinker_types.ModelInput",
-        num_samples: int,
-        sampling_params: "tinker_types.SamplingParams",
-        include_prompt_logprobs: bool = False,
-        topk_prompt_logprobs: int = 0,
-    ) -> ConcurrentFuture["tinker_types.SampleResponse"]:
-        """Generate completions with the Tinker ``SamplingClient`` signature."""
-        return self._submit(
-            self._sample_async_impl(
-                prompt,
-                num_samples,
-                sampling_params,
-                include_prompt_logprobs,
-                topk_prompt_logprobs,
-            )
-        )
-
-    async def sample_async(
-        self,
-        prompt: "tinker_types.ModelInput",
-        num_samples: int,
-        sampling_params: "tinker_types.SamplingParams",
-        include_prompt_logprobs: bool = False,
-        topk_prompt_logprobs: int = 0,
-    ) -> "tinker_types.SampleResponse":
-        """Async version of :meth:`sample`."""
-        return await self._await_concurrent_future(
-            self.sample(
-                prompt,
-                num_samples,
-                sampling_params,
-                include_prompt_logprobs,
-                topk_prompt_logprobs,
-            )
-        )
-
-    async def _compute_logprobs_async_impl(
-        self, prompt: "tinker_types.ModelInput"
-    ) -> list[float | None]:
-        types = self._tinker_types()
-        response = await self._sample_async_impl(
-            prompt,
-            num_samples=1,
-            sampling_params=types.SamplingParams(max_tokens=1, temperature=1.0, top_p=1.0),
-            include_prompt_logprobs=True,
-        )
-        return list(response.prompt_logprobs or [])
-
-    def compute_logprobs(
-        self, prompt: "tinker_types.ModelInput"
-    ) -> ConcurrentFuture[list[float | None]]:
-        """Compute prompt token logprobs with the Tinker client signature.
-
-        Warning: we don't recommend using the sampling client to compute logprobs.
-        Please use ``training_client.forward()`` instead.
-        """
-        warnings.warn(
-            "We don't recommend using the sampling client to compute logprobs. "
-            "Please use training_client.forward() instead.",
-            UserWarning,
-            stacklevel=2,
-        )
-        return self._submit(self._compute_logprobs_async_impl(prompt))
-
-    async def compute_logprobs_async(
-        self, prompt: "tinker_types.ModelInput"
-    ) -> list[float | None]:
-        """Async version of :meth:`compute_logprobs`."""
-        return await self._await_concurrent_future(self.compute_logprobs(prompt))
-
-    def get_tokenizer(self) -> PreTrainedTokenizerBase:
-        """Return the tokenizer attached to the underlying deployment sampler."""
-        if self.deployment_sampler.tokenizer is None:
-            raise ValueError("DeploymentSampler was created without a tokenizer")
-        return self.deployment_sampler.tokenizer
-
-    def get_base_model(self) -> str:
-        """Return the model/deployment name used by the underlying sampler."""
-        return self.deployment_sampler.model
-
-    async def get_base_model_async(self) -> str:
-        """Async version of :meth:`get_base_model`."""
-        return self.get_base_model()
-
-    def get_telemetry(self) -> "Telemetry | None":
-        """Match Tinker's ``SamplingClient`` telemetry hook.
-
-        FireTitan's deployment sampler has no telemetry sink, so this always
-        returns ``None`` — the Tinker-shaped ``Telemetry | None`` return type is
-        preserved so callers relying on the contract keep working.
-        """
-        return None
-
-    async def _aclose_sampler(self) -> None:
-        async_client = self.deployment_sampler._async_client
-        self.deployment_sampler._async_client = None
-        if async_client is not None and not async_client.is_closed:
-            await async_client.aclose()
-        self.deployment_sampler._sync_client.close()
-
-    def close(self) -> None:
-        """Close the wrapper loop and the underlying sampler clients."""
-        if self._closed:
-            return
-        self._closed = True
-
-        loop = self._loop
-        thread = self._loop_thread
-        if loop is not None and loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(self._aclose_sampler(), loop)
-            try:
-                future.result(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
-            except Exception:
-                logger.debug("Failed to close FiretitanSamplingClient cleanly", exc_info=True)
-            loop.call_soon_threadsafe(loop.stop)
-            if thread is not None and thread is not threading.current_thread():
-                thread.join(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
-            if thread is None or not thread.is_alive():
-                loop.close()
-            else:
-                logger.debug(
-                    "Skipped closing FiretitanSamplingClient loop because the loop thread "
-                    "did not stop before the close timeout"
-                )
-        else:
-            self.deployment_sampler.close()
-
-        self._loop = None
-        self._loop_thread = None
-
-    def __enter__(self) -> "FiretitanSamplingClient":
-        return self
-
-    def __exit__(self, *args) -> None:
-        self.close()
-
-    def __del__(self) -> None:
-        try:
-            self.close()
-        except Exception:
-            pass

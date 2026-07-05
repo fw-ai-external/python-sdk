@@ -38,7 +38,7 @@ from dataclasses import field, dataclass
 
 from transformers import PreTrainedTokenizerBase
 
-from fireworks.training.sdk.client import FiretitanTrainingClient
+from fireworks.training.sdk.client import FiretitanSamplingClient, FiretitanTrainingClient
 from fireworks.training.sdk.errors import DOCS_SDK, format_sdk_error
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
@@ -49,7 +49,6 @@ from fireworks.training.sdk.deployment import (
     DEFAULT_DELTA_COMPRESSION,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanSamplingClient,
 )
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
@@ -112,9 +111,7 @@ class WeightSyncer:
     def _get_model(self) -> str:
         """Return the deployment model string used by completions warmup."""
         if not self._hotload_enabled:
-            raise RuntimeError(
-                "Inference warmup requires both deploy_mgr and deployment_id."
-            )
+            raise RuntimeError("Inference warmup requires both deploy_mgr and deployment_id.")
         return f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
 
     def _warmup_after_hotload(self) -> None:

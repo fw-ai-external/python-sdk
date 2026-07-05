@@ -176,7 +176,10 @@ class TestManagedProvisioning:
         assert len(created_configs) == 1
         assert created_configs[0].region == "US_OHIO_1"
 
-    def test_extra_args_use_manual_trainer_path(self):
+    def test_extra_args_keep_auto_shape_selection(self):
+        # extra_args are runtime training flags forwarded on the auto-shape
+        # payload; they must not flip the job onto the manual path (which would
+        # send skipValidations=true and 400 for non-superuser keys).
         trainer_config = managed_module._build_trainer_job_config(
             _policy_config(
                 training_shape_id=None,
@@ -187,7 +190,7 @@ class TestManagedProvisioning:
         )
 
         assert trainer_config.training_shape_ref is None
-        assert trainer_config.auto_select_training_shape is False
+        assert trainer_config.auto_select_training_shape is True
         assert trainer_config.extra_args == ["--pp", "2"]
 
     def test_empty_extra_args_keep_auto_shape_selection(self):

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.86 (2026-07-05)
+
+Full Changelog: [v1.2.0-alpha.85...v1.2.0-alpha.86](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.85...v1.2.0-alpha.86)
+
+### Bug Fixes
+* **managed:** keep auto-shape selection when trainer.extra_args is set ([a4b2a72](https://github.com/fw-ai-external/python-sdk/commit/a4b2a723644377af833372dbd91f70e677bf55fd))
+* **training-sdk:** reject tombstone trainer reattach on create/poll ([3c5ceee](https://github.com/fw-ai-external/python-sdk/commit/3c5ceee923cee3019c1567deece40c8c1a9b9a8a))
+
 ## 1.2.0-alpha.85 (2026-06-26)
 
 Full Changelog: [v1.2.0-alpha.84...v1.2.0-alpha.85](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.84...v1.2.0-alpha.85)

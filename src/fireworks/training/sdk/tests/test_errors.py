@@ -15,6 +15,8 @@ from fireworks.training.sdk.errors import (
     format_sdk_error,
     request_with_retries,
     _is_retryable_status_code,
+    format_checkpoint_promotion_error,
+    format_session_checkpoint_promotion_error,
 )
 
 # ---------------------------------------------------------------------------
@@ -82,6 +84,56 @@ class TestHttpStatusHints:
         assert "key is valid" in hint
         assert "resource" in hint
 
+    def test_502_mentions_retry(self):
+        hint = HTTP_STATUS_HINTS[502]
+        assert "Retry" in hint
+
+
+class TestFormatCheckpointPromotionError:
+    def test_502_includes_status_and_retry_guidance(self):
+        resp = MagicMock()
+        resp.status_code = 502
+        resp.json.return_value = {"error": {"message": "bad gateway"}}
+
+        result = format_checkpoint_promotion_error(
+            resp,
+            checkpoint_id="cp-1",
+        )
+
+        assert "Failed to promote checkpoint 'cp-1' (HTTP 502)" in result
+        assert "bad gateway" in result
+        assert "Retry checkpoint promotion" in result
+        assert "Use a checkpoint name returned by list_checkpoints" not in result
+        assert f"Support: {DISCORD_URL}" in result
+
+    def test_400_uses_client_error_solution(self):
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.json.return_value = {"error": {"message": "invalid base_model"}}
+
+        result = format_checkpoint_promotion_error(
+            resp,
+            checkpoint_id="cp-1",
+        )
+
+        assert "invalid base_model" in result
+        assert "Use a checkpoint name returned by list_checkpoints" in result
+        assert "Support:" not in result
+
+    def test_session_404_uses_session_checkpoint_hint(self):
+        resp = MagicMock()
+        resp.status_code = 404
+        resp.json.return_value = {"error": {"message": "session checkpoint not found"}}
+
+        result = format_session_checkpoint_promotion_error(
+            resp,
+            checkpoint_id="cp-1",
+        )
+
+        assert "session checkpoint not found" in result
+        assert "Use a checkpoint name returned by list_training_session_checkpoints" in result
+        assert "Use a checkpoint name returned by list_checkpoints" not in result
+
 
 # ---------------------------------------------------------------------------
 # parse_api_error
@@ -89,8 +141,9 @@ class TestHttpStatusHints:
 
 
 class TestParseApiError:
-    def _resp(self, *, json_body=None, text="", raises=False):
+    def _resp(self, *, json_body=None, text="", raises=False, status_code=None):
         r = MagicMock()
+        r.status_code = status_code
         r.text = text
         if raises:
             r.json.side_effect = ValueError("not json")
@@ -115,7 +168,7 @@ class TestParseApiError:
         resp = self._resp(text="  plain text error  ", raises=True)
         assert parse_api_error(resp) == "plain text error"
 
-    def test_non_json_response(self):
+    def test_non_json_response_returns_response_text(self):
         resp = self._resp(text="<html>error</html>", raises=True)
         assert parse_api_error(resp) == "<html>error</html>"
 

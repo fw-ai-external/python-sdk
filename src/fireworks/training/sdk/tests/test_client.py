@@ -294,7 +294,7 @@ class TestForwardBackward:
         mock_forward_backward.assert_not_called()
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_parallel_forward_backward_is_disabled_for_firetitan(self, mock_forward_backward):
+    def test_parallel_forward_backward_is_preserved_for_firetitan(self, mock_forward_backward):
         client = self._make_client()
         client.holder._client_config.parallel_fwdbwd_chunks = True
         future = MagicMock()
@@ -303,7 +303,7 @@ class TestForwardBackward:
         result = client.forward_backward([MagicMock()], "supervised")
 
         assert result is future
-        assert client.holder._client_config.parallel_fwdbwd_chunks is False
+        assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
 
 class TestOptimStep:
@@ -1195,6 +1195,37 @@ class TestFiretitanServiceClientManagedCompat:
         assert result == "sampling-client"
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("snapshot-1")
 
+    def test_create_sampling_client_uses_serverless_completions_route(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://dev.api.fireworks.ai/training/v1/serverless"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "pyroworks-dev"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        sampler = svc.create_sampling_client(model_path="pyroworks-dev/run-1/step-1")
+
+        assert sampler.deployment_sampler.base_url == "https://dev.api.fireworks.ai/training/v1/serverless"
+        assert (
+            sampler.deployment_sampler.model
+            == "accounts/pyroworks-dev/trainingSessions/ts-abc123/checkpoints/pyroworks-dev/run-1/step-1"
+        )
+        assert sampler.deployment_sampler.api_key == "fw_test"
+        sampler.close()
+
+    def test_create_sampling_client_rejects_non_serverless_base_url(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://dev.api.fireworks.ai/training/v1"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "pyroworks-dev"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with pytest.raises(ValueError, match="/training/v1/serverless"):
+            svc.create_sampling_client(model_path="pyroworks-dev/run-1/step-1")
+
     def test_hotload_sampler_snapshot_returns_none(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
@@ -1365,8 +1396,38 @@ class TestTrainingClientSamplingHelpers:
         ) as save_ext:
             future = client.save_weights_for_sampler("step-1", checkpoint_type="base", ttl_seconds=60)
 
-        assert future.result().path == "step-1-test1234"
+        assert future.result().path == "raw/path"
         save_ext.assert_called_once_with("step-1", checkpoint_type="base", ttl_seconds=60)
+
+    def test_save_weights_for_sampler_records_public_path_and_snapshot_alias(self):
+        client = self._make_client()
+        client.session_id = "test1234"
+        client._saved_sampler_names = set()
+        sampler_backend = MagicMock()
+        client._attach_sampler_backend(sampler_backend)
+        client._get_request_id = MagicMock(return_value=41)
+
+        public_path = "run-abc:train:0/step-1-test1234"
+
+        def run_coroutine_threadsafe(coro):
+            coro.close()
+            future = MagicMock()
+            future.result.return_value = public_path
+            return future
+
+        client.holder = SimpleNamespace(
+            run_coroutine_threadsafe=MagicMock(side_effect=run_coroutine_threadsafe)
+        )
+
+        result = client.save_weights_for_sampler_ext("step-1", checkpoint_type="delta")
+
+        assert result == SaveSamplerResult(path=public_path, snapshot_name="step-1-test1234")
+        calls = sampler_backend.remember_saved_snapshot.call_args_list
+        assert [call.args[0] for call in calls] == [public_path, "step-1-test1234"]
+        assert [call.kwargs for call in calls] == [
+            {"checkpoint_type": "delta"},
+            {"checkpoint_type": "delta"},
+        ]
 
     def test_attach_sampler_backend_returns_self(self):
         client = self._make_client()
@@ -1737,9 +1798,9 @@ class TestCreateTrainingClientDuplicate:
         svc._managed_config = None
         svc._default_user_metadata = None
         # _created_training_configs is keyed by _TrainingKey
-        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed);
+        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, lora_alpha);
         # a namedtuple compares equal to the plain tuple with the same fields.
-        svc._created_training_configs = {("model-a", 0, None, True, True, True)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
 
         with pytest.raises(ValueError, match="already exists"):
             svc.create_training_client("model-a", lora_rank=0)
@@ -1752,7 +1813,7 @@ class TestCreateTrainingClientDuplicate:
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
         svc._default_user_metadata = None
-        svc._created_training_configs = {("model-a", 0, None, True, True, True)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
         svc.holder = MagicMock()
         svc.holder.get_session_id.return_value = 1
         svc.holder.get_training_client_id.return_value = 1

@@ -160,3 +160,63 @@ class TestPromoteCheckpointAsyncOptIn:
         assert mock_post.call_count == 2
         assert mock_post.call_args_list[0].kwargs["json"]["async_promotion"] is True
         assert "async_promotion" not in mock_post.call_args_list[1].kwargs["json"]
+
+    def test_promote_checkpoint_502_blames_transient_api_failure(self, client: FireworksClient):
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 502
+        resp.json.return_value = {"error": {"message": "bad gateway"}}
+
+        with patch.object(client, "_post", return_value=resp):
+            with pytest.raises(RuntimeError) as exc_info:
+                client.promote_checkpoint(
+                    name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/cp-1",
+                    output_model_id="out",
+                    base_model="accounts/fireworks/models/base",
+                )
+
+        message = str(exc_info.value)
+        assert "Failed to promote checkpoint 'cp-1' (HTTP 502)" in message
+        assert "bad gateway" in message
+        assert "Retry checkpoint promotion" in message
+        assert "Use a checkpoint name returned by list_checkpoints" not in message
+
+    def test_promote_checkpoint_404_keeps_job_scoped_hint(self, client: FireworksClient):
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 404
+        resp.json.return_value = {"error": {"message": "checkpoint not found"}}
+
+        with patch.object(client, "_post", return_value=resp):
+            with pytest.raises(RuntimeError) as exc_info:
+                client.promote_checkpoint(
+                    name="accounts/acct/rlorTrainerJobs/job-1/checkpoints/missing",
+                    output_model_id="out",
+                    base_model="accounts/fireworks/models/base",
+                )
+
+        message = str(exc_info.value)
+        assert "Failed to promote checkpoint 'missing' (HTTP 404)" in message
+        assert "checkpoint not found" in message
+        assert "Use a checkpoint name returned by list_checkpoints" in message
+        assert "list_training_session_checkpoints" not in message
+
+    def test_promote_session_checkpoint_404_keeps_session_hint(self, client: FireworksClient):
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 404
+        resp.json.return_value = {"error": {"message": "session checkpoint not found"}}
+
+        with patch.object(client, "_post", return_value=resp):
+            with pytest.raises(RuntimeError) as exc_info:
+                client.promote_session_checkpoint(
+                    name="accounts/acct/trainingSessions/session-1/checkpoints/missing",
+                    output_model_id="out",
+                    base_model="accounts/fireworks/models/base",
+                )
+
+        message = str(exc_info.value)
+        assert "Failed to promote session checkpoint 'missing' (HTTP 404)" in message
+        assert "session checkpoint not found" in message
+        assert "Use a checkpoint name returned by list_training_session_checkpoints" in message
+        assert "Use a checkpoint name returned by list_checkpoints" not in message

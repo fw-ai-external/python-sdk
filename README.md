@@ -29,7 +29,10 @@ Training SDK calls require a training-scoped Fireworks API key. Inference-only
 keys can still work for completions, but they return HTTP 401 on trainer and
 training-shape endpoints.
 
-The training extra installs the pinned `tinker` runtime used by the SDK.
+On Python 3.11+, the training extra installs the pinned `tinker` runtime used by the SDK.
+On Python 3.9 and 3.10, the base SDK still installs, but Tinker-backed training
+dependencies are intentionally omitted because the pinned Tinker runtime no longer
+supports those Python versions.
 Cookbook packages that use recipe helpers should declare `tinker-cookbook`
 directly so SDK-only environments do not install cookbook-only dependencies.
 

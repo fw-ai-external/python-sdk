@@ -13,13 +13,13 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from fireworks.training.sdk.client import FiretitanSamplingClient
 from fireworks.training.sdk.deployment import (
     ServerMetrics,
     DeploymentInfo,
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
-    FiretitanSamplingClient,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
@@ -84,6 +84,27 @@ def _mock_async_completions_stream(sampler, return_value):
     async def _fake(*args, **kwargs):
         return return_value, ServerMetrics()
     sampler.async_completions_stream = _fake
+
+
+def _sample_with_firetitan_client(
+    sampler,
+    fake_tinker,
+    prompt_ids,
+    *,
+    num_samples=1,
+    sampling_params=None,
+    include_prompt_logprobs=False,
+):
+    client = FiretitanSamplingClient(sampler)
+    try:
+        return client.sample(
+            prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+            num_samples=num_samples,
+            sampling_params=sampling_params or fake_tinker.SamplingParams(),
+            include_prompt_logprobs=include_prompt_logprobs,
+        ).result(timeout=5)
+    finally:
+        client.close()
 
 
 class _FakeModelInput:
@@ -993,7 +1014,7 @@ class TestDefaultValues:
 
 
 class TestSampleWithPromptTokens:
-    def test_basic_sample(self):
+    def test_basic_sample(self, fake_tinker):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
 
@@ -1016,7 +1037,26 @@ class TestSampleWithPromptTokens:
         assert c.finish_reason == "stop"
         sampler.close()
 
-    def test_does_not_call_apply_chat_template(self):
+        sampler = _make_sampler(tokenizer=None)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "out",
+                "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": completion_ids},
+            }]
+        })
+        response = _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            prompt_ids,
+            sampling_params=fake_tinker.SamplingParams(max_tokens=1024),
+        )
+        assert len(response.sequences) == 1
+        assert response.sequences[0].tokens == completion_ids
+        assert response.sequences[0].stop_reason == "stop"
+        assert response.prompt_logprobs is None
+
+    def test_does_not_call_apply_chat_template(self, fake_tinker):
         tok = MagicMock()
         sampler = _make_sampler(tokenizer=tok)
         _mock_async_completions_stream(sampler, {
@@ -1031,7 +1071,23 @@ class TestSampleWithPromptTokens:
         tok.apply_chat_template.assert_not_called()
         sampler.close()
 
-    def test_stop_str_shape_preserved(self):
+        tok = MagicMock()
+        sampler = _make_sampler(tokenizer=tok)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "out", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+            }]
+        })
+        _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            [1, 2, 3],
+            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+        )
+        tok.apply_chat_template.assert_not_called()
+
+    def test_stop_str_shape_preserved(self, fake_tinker):
         sampler = _make_sampler(tokenizer=None)
         captured: dict[str, object] = {}
 
@@ -1052,7 +1108,19 @@ class TestSampleWithPromptTokens:
         assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
         sampler.close()
 
-    def test_stop_int_converted_to_strings_via_tokenizer(self):
+        sampler = _make_sampler(tokenizer=None)
+        captured = {}
+        sampler.async_completions_stream = _fake_stream
+        _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            [1, 2],
+            sampling_params=fake_tinker.SamplingParams(stop=stop_strs),
+        )
+        assert captured["stop"] == stop_strs
+        assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
+
+    def test_stop_int_converted_to_strings_via_tokenizer(self, fake_tinker):
         # The completions API takes string stop sequences, so integer stop IDs
         # are decoded to strings client-side before the request.
         sampler = _make_sampler()
@@ -1074,6 +1142,18 @@ class TestSampleWithPromptTokens:
         assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
         sampler.close()
 
+        sampler = _make_sampler()
+        captured = {}
+        sampler.async_completions_stream = _fake_stream
+        _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            [1, 2],
+            sampling_params=fake_tinker.SamplingParams(stop=[13, 42]),
+        )
+        assert captured["stop"] == ["<13>", "<42>"]
+        assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
+
     def test_max_seq_len_pre_filter(self):
         sampler = _make_sampler(tokenizer=None)
         _mock_async_completions_stream(sampler, {"choices": []})
@@ -1082,7 +1162,7 @@ class TestSampleWithPromptTokens:
         assert results == []
         sampler.close()
 
-    def test_logprobs_extracted(self):
+    def test_logprobs_extracted(self, fake_tinker):
         sampler = _make_sampler(tokenizer=None)
         _mock_async_completions_stream(sampler, {
             "choices": [{
@@ -1096,7 +1176,23 @@ class TestSampleWithPromptTokens:
         assert results[0].inference_logprobs == [-0.7]
         sampler.close()
 
-    def test_n_concurrent_calls(self):
+        sampler = _make_sampler(tokenizer=None)
+        _mock_async_completions_stream(sampler, {
+            "choices": [{
+                "text": "x", "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [99]},
+                "logprobs": {"content": [{"logprob": -0.7}]},
+            }]
+        })
+        response = _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            [1, 2],
+            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+        )
+        assert response.sequences[0].logprobs == [-0.7]
+
+    def test_n_concurrent_calls(self, fake_tinker):
         sampler = _make_sampler(tokenizer=None)
         call_count = {"n": 0}
 
@@ -1116,8 +1212,31 @@ class TestSampleWithPromptTokens:
         assert len(results) == 4
         sampler.close()
 
+        sampler = _make_sampler(tokenizer=None)
+        call_count = {"n": 0}
+        sampler.async_completions_stream = _fake_stream
+        response = _sample_with_firetitan_client(
+            sampler,
+            fake_tinker,
+            [1, 2],
+            num_samples=4,
+            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+        )
+        assert call_count["n"] == 4
+        assert len(response.sequences) == 4
+
 
 class TestFiretitanSamplingClient:
+    def test_extends_tinker_sampling_client(self):
+        tinker = pytest.importorskip("tinker")
+        sampler = _make_sampler(tokenizer=None)
+        client = FiretitanSamplingClient(sampler)
+        try:
+            assert issubclass(FiretitanSamplingClient, tinker.SamplingClient)
+            assert isinstance(client, tinker.SamplingClient)
+        finally:
+            client.close()
+
     def test_sample_returns_tinker_response(self, fake_tinker):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
@@ -1246,14 +1365,29 @@ class TestFiretitanSamplingClient:
         sampler = _make_sampler(tokenizer=None)
         client = FiretitanSamplingClient(sampler)
         try:
-            future = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints([1, 2]),
-                num_samples=1,
-                sampling_params=fake_tinker.SamplingParams(max_tokens=1),
-                topk_prompt_logprobs=1,
-            )
             with pytest.raises(NotImplementedError, match="topk_prompt_logprobs"):
-                future.result(timeout=5)
+                client.sample(
+                    prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                    num_samples=1,
+                    sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                    topk_prompt_logprobs=1,
+                )
+        finally:
+            client.close()
+
+    def test_topk_prompt_logprobs_async_is_explicitly_unsupported(self, fake_tinker):
+        sampler = _make_sampler(tokenizer=None)
+        client = FiretitanSamplingClient(sampler)
+        try:
+            with pytest.raises(NotImplementedError, match="topk_prompt_logprobs"):
+                asyncio.run(
+                    client.sample_async(
+                        prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                        num_samples=1,
+                        sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                        topk_prompt_logprobs=1,
+                    )
+                )
         finally:
             client.close()
 

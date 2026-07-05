@@ -165,6 +165,35 @@ class TestCreate:
         mgr.try_get.assert_called_once_with("sft-job-1")
         resp.raise_for_status.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "state",
+        ["JOB_STATE_DELETED", "JOB_STATE_ARCHIVED"],
+    )
+    def test_create_409_rejects_tombstone_existing_job(self, mgr, basic_config, state):
+        resp = MagicMock()
+        resp.is_success = False
+        resp.status_code = 409
+        resp.json.return_value = {"error": "already exists"}
+        resp.raise_for_status = MagicMock()
+        mgr._post = MagicMock(return_value=resp)
+        mgr.try_get = MagicMock(
+            return_value={
+                "name": "accounts/test/rlorTrainerJobs/sft-job-1",
+                "state": state,
+                "status": {"message": "Archived. Resources released; no further billing."},
+            }
+        )
+
+        config = TrainerJobConfig(
+            base_model=basic_config.base_model,
+            requested_job_id="sft-job-1",
+        )
+        with pytest.raises(RuntimeError, match="archived and cannot be recreated"):
+            mgr._create(config)
+
+        mgr.try_get.assert_called_once_with("sft-job-1")
+        resp.raise_for_status.assert_not_called()
+
     def test_create_retry_reuses_auto_job_id_after_conflict(
         self, mgr, basic_config, monkeypatch
     ):
@@ -298,6 +327,35 @@ class TestCreate:
         assert "acceleratorCount" not in tc
         assert "nodeCount" not in payload
         assert payload["forwardOnly"] is True
+
+    def test_auto_shape_path_with_extra_args_omits_skip_validations(self, mgr):
+        # Regression: managed jobs whose extra_args were populated by the
+        # control plane (e.g. the warm-start --lora-target-modules shim) must
+        # stay on the auto-shape path and not send skipValidations=true, which
+        # the server rejects with 400 for non-superuser (customer) keys.
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            auto_select_training_shape=True,
+            max_context_length=8192,
+            region="US_OHIO_1",
+            extra_args=["--lora-target-modules", "q_proj,k_proj"],
+        )
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(config)
+
+        path = mgr._post.call_args[0][0]
+        payload = mgr._post.call_args[1]["json"]
+        assert "skipValidations" not in path
+        assert "trainingShape" not in path
+        assert payload["trainingConfig"]["extraArgs"] == [
+            "--lora-target-modules",
+            "q_proj,k_proj",
+        ]
 
     def test_manual_path_sends_all_fields(self, mgr):
         """Manual path sends all infra fields and skipValidations=true."""
@@ -511,6 +569,19 @@ class TestPollUntilReady:
             "status": {"message": "GPU OOM"},
         }
         with pytest.raises(RuntimeError, match="failed"):
+            mgr._poll_until_ready("job-1", "name", timeout_s=10)
+
+    @pytest.mark.parametrize(
+        "state",
+        ["JOB_STATE_DELETED", "JOB_STATE_ARCHIVED"],
+    )
+    @patch.object(TrainerJobManager, "get")
+    def test_tombstone_raises_runtime_error(self, mock_get, mgr, state):
+        mock_get.return_value = {
+            "state": state,
+            "status": {"message": "Archived. Resources released; no further billing."},
+        }
+        with pytest.raises(RuntimeError, match="archived and cannot be recreated"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
 
     @patch("fireworks.training.sdk.trainer.time.sleep")

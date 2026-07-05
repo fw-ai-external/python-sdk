@@ -672,10 +672,7 @@ class DeploymentManager(_RestClient):
         if text:
             parts.append(text)
         message = " ".join(parts).lower()
-        return (
-            "reset_prompt_cache" in message
-            and "extra inputs are not permitted" in message
-        )
+        return "reset_prompt_cache" in message and "extra inputs are not permitted" in message
 
     def hotload(
         self,
@@ -708,9 +705,7 @@ class DeploymentManager(_RestClient):
         headers = self._hotload_headers(deployment_id, base_model, path=path)
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
-        ckpt_type = (
-            "DELTA" if incremental_snapshot_metadata else "BASE (non-delta)"
-        )
+        ckpt_type = "DELTA" if incremental_snapshot_metadata else "BASE (non-delta)"
         details: list[str] = []
         if path:
             details.append(f"source={path}")
@@ -740,14 +735,8 @@ class DeploymentManager(_RestClient):
             json=_payload(include_reset_prompt_cache),
             timeout=timeout,
         )
-        if (
-            not resp.is_success
-            and include_reset_prompt_cache
-            and self._reset_prompt_cache_unsupported(resp)
-        ):
-            logger.info(
-                "Hotload API rejected reset_prompt_cache; retrying without it"
-            )
+        if not resp.is_success and include_reset_prompt_cache and self._reset_prompt_cache_unsupported(resp):
+            logger.info("Hotload API rejected reset_prompt_cache; retrying without it")
             self._hotload_reset_prompt_cache_supported = False
             resp = self._sync_request(
                 url,
@@ -849,14 +838,10 @@ class DeploymentManager(_RestClient):
                 # a single snapshot defines the deployment's identity at a
                 # time). Both shapes are accepted.
                 multi_adapter_loaded = any(
-                    isinstance(a, dict)
-                    and a.get("identity") == expected_identity
-                    and a.get("status") == "loaded"
+                    isinstance(a, dict) and a.get("identity") == expected_identity and a.get("status") == "loaded"
                     for a in loaded_adapters
                 )
-                if readiness and (
-                    current_identity == expected_identity or multi_adapter_loaded
-                ):
+                if readiness and (current_identity == expected_identity or multi_adapter_loaded):
                     logger.info("Hotload complete: %s (took %ds)", expected_identity, elapsed)
                     return True
                 elif stage == "error":
@@ -865,9 +850,7 @@ class DeploymentManager(_RestClient):
                     # snapshot (e.g., after re-attaching to a new trainer)
                     # should be ignored — the new hotload request may not
                     # have been processed yet.
-                    error_target = replica.get("loading_state", {}).get(
-                        "target_snapshot_identity"
-                    )
+                    error_target = replica.get("loading_state", {}).get("target_snapshot_identity")
                     if error_target == expected_identity:
                         cause = (
                             "The deployment status reported an error for the "
@@ -897,17 +880,12 @@ class DeploymentManager(_RestClient):
                     )
                 else:
                     logger.info(
-                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s, "
-                        "loaded_adapters=%s (%ds)",
+                        "Hotload: stage=%s, current=%s, loading=%s, ready=%s, loaded_adapters=%s (%ds)",
                         stage,
                         current_identity,
                         expected_identity,
                         readiness,
-                        [
-                            a.get("identity")
-                            for a in loaded_adapters
-                            if isinstance(a, dict)
-                        ],
+                        [a.get("identity") for a in loaded_adapters if isinstance(a, dict)],
                         elapsed,
                     )
             except RuntimeError:
@@ -1074,8 +1052,6 @@ class DeploymentManager(_RestClient):
         return False
 
 
-
-
 # ---------------------------------------------------------------------------
 # Backwards-compatible re-exports (these classes moved to sibling modules
 # when deployment.py was split). Existing import sites continue to use
@@ -1090,7 +1066,6 @@ from fireworks.training.sdk.sampling import (  # noqa: F401,E402
     ServerMetrics,
     DeploymentSampler,
     SampledCompletion,
-    FiretitanSamplingClient,
     DeploymentSamplerTimeoutError,
 )
 from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
