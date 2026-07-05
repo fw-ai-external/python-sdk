@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.0-alpha.86"
+version = "1.2.0-alpha.83"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -48,6 +48,7 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 training-sdk = [
   "tinker==0.22.7 ; python_version >= '3.11'",
   "requests",
+  "urllib3>=1.26,<3",
 ]
 # Full: includes heavy ML deps needed by training cookbook recipes.
 # Use this for interactive/notebook workflows that run local training.
