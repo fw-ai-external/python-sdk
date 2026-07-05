@@ -26,7 +26,7 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
-from dataclasses import replace, dataclass
+from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture
 
@@ -84,7 +84,7 @@ DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
 _INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
-    "parallel_fwdbwd_chunks": False,
+    "parallel_fwdbwd_chunks": True,
     "proto_write_fwdbwd": False,
     "proto_compress_fwdbwd": False,
     "sample_no_retries": False,
@@ -1037,6 +1037,12 @@ def _dump_tinker_model(obj: Any) -> Any:
         return obj.model_dump(exclude_unset=True, mode="json")
     if hasattr(obj, "dict"):
         return obj.dict(exclude_unset=True)
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return {field.name: _dump_tinker_model(getattr(obj, field.name)) for field in fields(obj)}
+    if isinstance(obj, dict):
+        return {key: _dump_tinker_model(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_dump_tinker_model(value) for value in obj]
     return obj
 
 
@@ -1051,8 +1057,8 @@ def _serialize_input_for_extra_body(fb_input: Any) -> dict:
     conversion and the result is a normal pydantic BaseModel that ``model_dump``
     knows how to JSON-encode.
 
-    This is a temporary hack so the embedding APIs work against tinker 0.22.2;
-    a proper fix at ``_dump_tinker_model`` should land in a follow-up PR.
+    Use tinker's request-level converter so embedding APIs work across the
+    public dataclass/pydantic type split in tinker 0.22+.
     """
     from tinker._compat import model_dump as _tinker_model_dump
     from tinker.lib._pydantic_conv import to_pydantic_input
@@ -1374,8 +1380,6 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
                 "Use the JSON forward_backward path."
             )
-        if getattr(client_config, "parallel_fwdbwd_chunks", False):
-            client_config.parallel_fwdbwd_chunks = False
         future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future

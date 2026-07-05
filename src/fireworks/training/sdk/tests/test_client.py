@@ -294,7 +294,7 @@ class TestForwardBackward:
         mock_forward_backward.assert_not_called()
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_parallel_forward_backward_is_disabled_for_firetitan(self, mock_forward_backward):
+    def test_parallel_forward_backward_is_preserved_for_firetitan(self, mock_forward_backward):
         client = self._make_client()
         client.holder._client_config.parallel_fwdbwd_chunks = True
         future = MagicMock()
@@ -303,7 +303,7 @@ class TestForwardBackward:
         result = client.forward_backward([MagicMock()], "supervised")
 
         assert result is future
-        assert client.holder._client_config.parallel_fwdbwd_chunks is False
+        assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
 
 class TestOptimStep:
@@ -1798,9 +1798,9 @@ class TestCreateTrainingClientDuplicate:
         svc._managed_config = None
         svc._default_user_metadata = None
         # _created_training_configs is keyed by _TrainingKey
-        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed);
+        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, lora_alpha);
         # a namedtuple compares equal to the plain tuple with the same fields.
-        svc._created_training_configs = {("model-a", 0, None, True, True, True)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
 
         with pytest.raises(ValueError, match="already exists"):
             svc.create_training_client("model-a", lora_rank=0)
@@ -1813,7 +1813,7 @@ class TestCreateTrainingClientDuplicate:
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
         svc._default_user_metadata = None
-        svc._created_training_configs = {("model-a", 0, None, True, True, True)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
         svc.holder = MagicMock()
         svc.holder.get_session_id.return_value = 1
         svc.holder.get_training_client_id.return_value = 1
