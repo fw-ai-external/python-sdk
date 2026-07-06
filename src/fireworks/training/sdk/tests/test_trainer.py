@@ -511,8 +511,18 @@ class TestCreate:
         mgr._post = MagicMock(return_value=resp)
 
         with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
-            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            with pytest.raises(RuntimeError) as exc_info:
                 mgr._create(config)
+
+        # The raised error (not just the log) now carries the backend message,
+        # so it reaches the customer instead of httpx's bare status line.
+        err_text = str(exc_info.value)
+        assert "RLOR job creation failed (HTTP 400)" in err_text
+        assert "invalid resource: display_name must be fewer than 64 characters" in err_text
+        # Secrets from the request must not leak into the raised message.
+        assert "Authorization" not in err_text
+        assert "secret-token" not in err_text
+        assert "secret-api-key" not in err_text
 
         log_text = caplog.text
         assert "RLOR job creation failed (HTTP 400)" in log_text
@@ -522,8 +532,35 @@ class TestCreate:
         assert "X-Api-Key" not in log_text
         assert "secret-token" not in log_text
         assert "secret-api-key" not in log_text
-        assert exc_info.value.response is resp
         mgr._post.assert_called_once()
+
+    def test_create_tier_gate_raises_actionable_message(self, mgr):
+        """A B200/B300 tier gate (HTTP 403) surfaces the actionable backend
+        message in the raised error rather than a bare '403 Forbidden' line."""
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            display_name="valid-name",
+        )
+        body_message = (
+            "B200/B300 training requires a Tier 2 account or higher. "
+            "Add $50 in credits to unlock training quota automatically."
+        )
+        resp = httpx.Response(
+            403,
+            json={"message": body_message},
+            request=httpx.Request(
+                "POST",
+                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
+            ),
+        )
+        mgr._post = MagicMock(return_value=resp)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr._create(config)
+
+        err_text = str(exc_info.value)
+        assert "RLOR job creation failed (HTTP 403)" in err_text
+        assert body_message in err_text
 
 
 class TestPollUntilReady:

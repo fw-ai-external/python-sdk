@@ -36,11 +36,8 @@ from typing import Any
 
 import pytest
 
-from fireworks.training.sdk.deployment import (
-    ServerMetrics,
-    DeploymentSampler,
-    FiretitanSamplingClient,
-)
+from fireworks.training.sdk.client import FiretitanSamplingClient
+from fireworks.training.sdk.deployment import ServerMetrics, DeploymentSampler
 
 # The whole module is meaningless without the real tinker package; skip cleanly
 # (e.g. on a CI image that doesn't install the optional 'tinker' extra).
@@ -206,14 +203,27 @@ def _firetitan_with_completion(choice: dict, captured: dict | None = None) -> Fi
     return FiretitanSamplingClient(sampler)
 
 
-def _completion(completion_ids, logprobs=None, finish_reason="stop"):
+def _completion(completion_ids, logprobs=None, sampling_logprobs=None, finish_reason="stop"):
     choice: dict[str, Any] = {
         "text": "out",
         "finish_reason": finish_reason,
         "raw_output": {"completion_token_ids": completion_ids},
     }
-    if logprobs is not None:
-        choice["logprobs"] = {"content": [{"logprob": lp} for lp in logprobs]}
+    if logprobs is not None or sampling_logprobs is not None:
+        raw_logprobs = logprobs if logprobs is not None else sampling_logprobs
+        behavior_logprobs = sampling_logprobs if sampling_logprobs is not None else logprobs
+        assert raw_logprobs is not None
+        assert behavior_logprobs is not None
+        choice["logprobs"] = {
+            "content": [
+                {"logprob": raw_lp, "sampling_logprob": behavior_lp}
+                for raw_lp, behavior_lp in zip(
+                    raw_logprobs,
+                    behavior_logprobs,
+                    strict=True,
+                )
+            ]
+        }
     return choice
 
 

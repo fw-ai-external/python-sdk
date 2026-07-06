@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-alpha.87 (2026-07-06)
+
+Full Changelog: [v1.2.0-alpha.86...v1.2.0-alpha.87](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.86...v1.2.0-alpha.87)
+
+### Bug Fixes
+* **training-sdk:** declare urllib3 runtime dependency ([8c2c9d5](https://github.com/fw-ai-external/python-sdk/commit/8c2c9d593ded269a189bd1a0a7621edf2d074714))
+* **training:** return 403 for training quota errors and surface the real cause ([579b823](https://github.com/fw-ai-external/python-sdk/commit/579b8238a57082213748aa3b9e278dcdbc0190e2))
+
 ## 1.2.0-alpha.86 (2026-07-05)
 
 Full Changelog: [v1.2.0-alpha.85...v1.2.0-alpha.86](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.85...v1.2.0-alpha.86)

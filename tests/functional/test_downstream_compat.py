@@ -186,7 +186,7 @@ class TestTrainingSdkExtras:
     """Verify training-sdk extras install correctly without heavy deps."""
 
     def test_training_sdk_import(self) -> None:
-        """Training SDK should import with only tinker+requests.
+        """Training SDK should import with only lightweight runtime deps.
 
         Note: tinker transitively imports torch (via tinker.types.tensor_data),
         so torch is still required at runtime. The training-sdk extra removes
