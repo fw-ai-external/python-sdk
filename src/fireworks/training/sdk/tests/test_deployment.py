@@ -777,9 +777,27 @@ class TestWaitForHotload:
 
 class TestExtractLogprobs:
     def test_modern_structured_format(self):
-        choice = {"logprobs": {"content": [{"logprob": -0.5}, {"logprob": -1.2}]}}
+        choice = {
+            "logprobs": {
+                "content": [
+                    {"logprob": -0.5, "sampling_logprob": -0.6},
+                    {"logprob": -1.2, "sampling_logprob": -1.3},
+                ]
+            }
+        }
         lps = DeploymentSampler._extract_logprobs(choice)
         assert lps == [-0.5, -1.2]
+        sampling_lps = DeploymentSampler._extract_logprobs(
+            choice, field="sampling_logprob",
+        )
+        assert sampling_lps == [-0.6, -1.3]
+
+    def test_none_field_is_missing_unless_allowed(self):
+        choice = {"logprobs": {"content": [{"logprob": None}]}}
+        assert DeploymentSampler._extract_logprobs(choice) is None
+        assert DeploymentSampler._extract_logprobs(
+            choice, allow_none=True,
+        ) == [None]
 
     def test_none_if_absent(self):
         assert DeploymentSampler._extract_logprobs({}) is None
@@ -911,11 +929,11 @@ class TestSampleWithTokens:
                 "text": "gen", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": echoed_ids},
                 "logprobs": {"content": [
-                    {"logprob": 0.0},
-                    {"logprob": -0.1},
-                    {"logprob": -0.2},
-                    {"logprob": -0.3},
-                    {"logprob": -0.4},
+                    {"logprob": 0.0, "sampling_logprob": None},
+                    {"logprob": -0.1, "sampling_logprob": -0.11},
+                    {"logprob": -0.2, "sampling_logprob": -0.21},
+                    {"logprob": -0.3, "sampling_logprob": -0.31},
+                    {"logprob": -0.4, "sampling_logprob": -0.41},
                 ]},
             }]
         })
@@ -928,6 +946,7 @@ class TestSampleWithTokens:
         c = results[0]
         assert c.logprobs_echoed is True
         assert c.inference_logprobs == [-0.1, -0.2, -0.3, -0.4]
+        assert c.sampling_logprobs == [-0.11, -0.21, -0.31, -0.41]
         sampler.close()
 
     def test_max_seq_len_pre_filter(self):
@@ -964,7 +983,9 @@ class TestSampleWithTokens:
             "choices": [{
                 "text": "hi", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -1.5}]},
+                "logprobs": {
+                    "content": [{"logprob": -1.5, "sampling_logprob": -1.6}]
+                },
             }]
         })
 
@@ -972,6 +993,7 @@ class TestSampleWithTokens:
             messages=[{"role": "user", "content": "x"}], logprobs=True,
         ))
         assert results[0].inference_logprobs == [-1.5]
+        assert results[0].sampling_logprobs == [-1.6]
         sampler.close()
 
     def test_routing_matrices_extracted(self):
@@ -1043,6 +1065,10 @@ class TestSampleWithPromptTokens:
                 "text": "out",
                 "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": completion_ids},
+                "logprobs": {"content": [
+                    {"logprob": -0.4, "sampling_logprob": -0.41},
+                    {"logprob": -0.5, "sampling_logprob": -0.51},
+                ]},
             }]
         })
         response = _sample_with_firetitan_client(
@@ -1077,6 +1103,7 @@ class TestSampleWithPromptTokens:
             "choices": [{
                 "text": "out", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
+                "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
             }]
         })
         _sample_with_firetitan_client(
@@ -1097,6 +1124,7 @@ class TestSampleWithPromptTokens:
                 "choices": [{
                     "text": "out", "finish_reason": "stop",
                     "raw_output": {"completion_token_ids": [99]},
+                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                 }]
             }, ServerMetrics()
 
@@ -1132,6 +1160,7 @@ class TestSampleWithPromptTokens:
                 "choices": [{
                     "text": "out", "finish_reason": "stop",
                     "raw_output": {"completion_token_ids": [99]},
+                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                 }]
             }, ServerMetrics()
 
@@ -1168,12 +1197,15 @@ class TestSampleWithPromptTokens:
             "choices": [{
                 "text": "x", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -0.7}]},
+                "logprobs": {
+                    "content": [{"logprob": -0.7, "sampling_logprob": -0.8}]
+                },
             }]
         })
 
         results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2], logprobs=True))
         assert results[0].inference_logprobs == [-0.7]
+        assert results[0].sampling_logprobs == [-0.8]
         sampler.close()
 
         sampler = _make_sampler(tokenizer=None)
@@ -1181,7 +1213,7 @@ class TestSampleWithPromptTokens:
             "choices": [{
                 "text": "x", "finish_reason": "stop",
                 "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -0.7}]},
+                "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
             }]
         })
         response = _sample_with_firetitan_client(
@@ -1190,7 +1222,32 @@ class TestSampleWithPromptTokens:
             [1, 2],
             sampling_params=fake_tinker.SamplingParams(max_tokens=1),
         )
-        assert response.sequences[0].logprobs == [-0.7]
+        assert response.sequences[0].logprobs == [-0.8]
+
+    def test_sample_requires_sampling_logprobs(self, fake_tinker):
+        sampler = _make_sampler(tokenizer=None)
+
+        async def _fake_stream(*args, **kwargs):
+            return {
+                "choices": [{
+                    "text": "x",
+                    "finish_reason": "stop",
+                    "raw_output": {"completion_token_ids": [99]},
+                    "logprobs": {"content": [{"logprob": -0.7}]},
+                }]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            with pytest.raises(RuntimeError, match="sampling_logprob"):
+                client.sample(
+                    prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                    num_samples=1,
+                    sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                ).result(timeout=5)
+        finally:
+            client.close()
 
     def test_n_concurrent_calls(self, fake_tinker):
         sampler = _make_sampler(tokenizer=None)
@@ -1202,6 +1259,7 @@ class TestSampleWithPromptTokens:
                 "choices": [{
                     "text": "x", "finish_reason": "stop",
                     "raw_output": {"completion_token_ids": [99]},
+                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                 }]
             }, ServerMetrics()
 
@@ -1251,8 +1309,8 @@ class TestFiretitanSamplingClient:
                     "finish_reason": "stop",
                     "raw_output": {"completion_token_ids": completion_ids},
                     "logprobs": {"content": [
-                        {"logprob": -0.3},
-                        {"logprob": -0.4},
+                        {"logprob": -0.3, "sampling_logprob": -0.31},
+                        {"logprob": -0.4, "sampling_logprob": -0.41},
                     ]},
                 }]
             }, ServerMetrics()
@@ -1277,7 +1335,7 @@ class TestFiretitanSamplingClient:
 
         assert len(response.sequences) == 1
         assert response.sequences[0].tokens == completion_ids
-        assert response.sequences[0].logprobs == [-0.3, -0.4]
+        assert response.sequences[0].logprobs == [-0.31, -0.41]
         assert response.sequences[0].stop_reason == "stop"
         assert response.prompt_logprobs is None
         assert captured["prompt"] == prompt_ids
@@ -1303,11 +1361,11 @@ class TestFiretitanSamplingClient:
                     "finish_reason": "length",
                     "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
                     "logprobs": {"content": [
-                        {"logprob": 0.0},
-                        {"logprob": -0.1},
-                        {"logprob": -0.2},
-                        {"logprob": -0.3},
-                        {"logprob": -0.4},
+                        {"logprob": 0.0, "sampling_logprob": None},
+                        {"logprob": -0.1, "sampling_logprob": None},
+                        {"logprob": -0.2, "sampling_logprob": None},
+                        {"logprob": -0.3, "sampling_logprob": -0.33},
+                        {"logprob": -0.4, "sampling_logprob": -0.44},
                     ]},
                 }]
             }, ServerMetrics()
@@ -1327,7 +1385,7 @@ class TestFiretitanSamplingClient:
         assert captured["echo"] is True
         assert response.prompt_logprobs == [None, -0.1, -0.2]
         assert response.sequences[0].tokens == completion_ids
-        assert response.sequences[0].logprobs == [-0.3, -0.4]
+        assert response.sequences[0].logprobs == [-0.33, -0.44]
         assert response.sequences[0].stop_reason == "length"
 
     def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
@@ -1341,10 +1399,10 @@ class TestFiretitanSamplingClient:
                     "finish_reason": "length",
                     "raw_output": {"completion_token_ids": prompt_ids + [40]},
                     "logprobs": {"content": [
-                        {"logprob": 0.0},
-                        {"logprob": -0.1},
-                        {"logprob": -0.2},
-                        {"logprob": -0.3},
+                        {"logprob": 0.0, "sampling_logprob": None},
+                        {"logprob": -0.1, "sampling_logprob": None},
+                        {"logprob": -0.2, "sampling_logprob": None},
+                        {"logprob": -0.3, "sampling_logprob": -0.33},
                     ]},
                 }]
             }, ServerMetrics()

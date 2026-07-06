@@ -100,8 +100,11 @@ class SampledCompletion:
     finish_reason: str = "unknown"
     completion_len: int = 0
     inference_logprobs: List[float] | None = None
+    """Raw model logprobs from ``logprobs.content[].logprob``."""
+    sampling_logprobs: List[float | None] | None = None
+    """Behavior-policy logprobs from ``logprobs.content[].sampling_logprob``."""
     logprobs_echoed: bool = False
-    """True when echo=True was used: inference_logprobs has P+C-1 entries
+    """True when echo=True was used: logprob lists have P+C-1 entries
     (training-aligned).  False: completion-only."""
     routing_matrices: List[str] | None = None
 
@@ -341,11 +344,16 @@ class DeploymentSampler(_RestClient):
         raise RuntimeError("Exhausted hotload retries in streaming mode")
 
     @staticmethod
-    def _extract_logprobs(choice: dict[str, Any]) -> List[float] | None:
+    def _extract_logprobs(
+        choice: dict[str, Any],
+        *,
+        field: str = "logprob",
+        allow_none: bool = False,
+    ) -> List[float | None] | None:
         """Extract per-token logprobs from a completions response.
 
         Expects modern structured logprobs format:
-        ``choice.logprobs.content[].logprob``.
+        ``choice.logprobs.content[]`` with the selected logprob field.
 
         Returns:
             List of per-token logprobs, or ``None`` if absent/empty.
@@ -355,7 +363,17 @@ class DeploymentSampler(_RestClient):
             return None
         content = lp_data.get("content")
         if isinstance(content, list) and content:
-            return [tok.get("logprob", 0.0) for tok in content]
+            values: list[float | None] = []
+            for tok in content:
+                value = tok.get(field)
+                if value is None:
+                    if allow_none:
+                        values.append(None)
+                    else:
+                        return None
+                else:
+                    values.append(float(value))
+            return values
         return None
 
     @staticmethod
@@ -793,7 +811,16 @@ class DeploymentSampler(_RestClient):
                     )
                 )
 
-            token_logprobs = self._extract_logprobs(choice) if user_requested_logprobs else None
+            raw_logprobs = (
+                self._extract_logprobs(choice, field="logprob")
+                if user_requested_logprobs
+                else None
+            )
+            sampling_logprobs = (
+                self._extract_logprobs(choice, field="sampling_logprob", allow_none=True)
+                if user_requested_logprobs
+                else None
+            )
             routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
 
             expanded_prompt_ids = choice.get("prompt_token_ids") or raw.get("prompt_token_ids")
@@ -825,9 +852,15 @@ class DeploymentSampler(_RestClient):
                     )
 
                 completion_ids = completion_ids[len(prompt_for_full) :]
-                if token_logprobs is not None:
-                    token_logprobs = token_logprobs[1:]
-                    lp_is_echo = True
+                lp_is_echo = (
+                    raw_logprobs is not None
+                    or sampling_logprobs is not None
+                    or routing_matrices is not None
+                )
+                if raw_logprobs is not None:
+                    raw_logprobs = raw_logprobs[1:]
+                if sampling_logprobs is not None:
+                    sampling_logprobs = sampling_logprobs[1:]
                 if routing_matrices is not None:
                     routing_matrices = routing_matrices[1:]
 
@@ -847,7 +880,8 @@ class DeploymentSampler(_RestClient):
                     prompt_len=len(prompt_for_full),
                     finish_reason=finish_reason,
                     completion_len=len(completion_ids),
-                    inference_logprobs=token_logprobs,
+                    inference_logprobs=raw_logprobs,
+                    sampling_logprobs=sampling_logprobs,
                     logprobs_echoed=lp_is_echo,
                     routing_matrices=routing_matrices,
                 )

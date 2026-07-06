@@ -251,18 +251,52 @@ class FiretitanSamplingClient(SamplingClient):
         prompt_logprobs: list[float | None] | None = None
         for completion in completions:
             completion_tokens = completion.full_tokens[completion.prompt_len :]
-            completion_logprobs = completion.inference_logprobs
-            if completion.logprobs_echoed and completion_logprobs is not None:
-                prompt_logprobs = (
-                    [None] + completion_logprobs[: completion.prompt_len - 1] if completion.prompt_len else []
+            completion_logprobs = completion.sampling_logprobs
+            if completion_logprobs is None:
+                raise RuntimeError(
+                    "Deployment response missing logprobs.content[].sampling_logprob; "
+                    "sampled sequence logprobs must use behavior-policy logprobs."
                 )
-                completion_logprobs = completion_logprobs[max(completion.prompt_len - 1, 0) :]
+            completion_logprobs = list(completion_logprobs)
+            if completion.logprobs_echoed:
+                response_start = max(completion.prompt_len - 1, 0)
+                raw_logprobs = completion.inference_logprobs
+                if include_prompt_logprobs:
+                    if raw_logprobs is None:
+                        raise RuntimeError(
+                            "Deployment response missing logprobs.content[].logprob; "
+                            "prompt logprobs require raw model logprobs."
+                        )
+                    raw_logprobs = list(raw_logprobs)
+                    if len(raw_logprobs) < response_start:
+                        raise RuntimeError(
+                            "Deployment response returned too few raw prompt logprobs "
+                            f"({len(raw_logprobs)} < {response_start})."
+                        )
+                    prompt_logprobs = [None] + raw_logprobs[:response_start] if completion.prompt_len else []
+                if len(completion_logprobs) < response_start + len(completion_tokens):
+                    raise RuntimeError(
+                        "Deployment response returned too few sampling logprobs "
+                        f"({len(completion_logprobs)} < {response_start + len(completion_tokens)})."
+                    )
+                completion_logprobs = completion_logprobs[response_start : response_start + len(completion_tokens)]
+            if len(completion_logprobs) != len(completion_tokens):
+                raise RuntimeError(
+                    "Deployment response sampling_logprobs are not aligned with completion tokens "
+                    f"({len(completion_logprobs)} != {len(completion_tokens)})."
+                )
+            if any(lp is None for lp in completion_logprobs):
+                raise RuntimeError(
+                    "Deployment response has null logprobs.content[].sampling_logprob "
+                    "for generated tokens."
+                )
+            sampled_logprobs = [float(lp) for lp in completion_logprobs]
 
             sequences.append(
                 tinker_types.SampledSequence(
                     stop_reason=self._stop_reason(completion.finish_reason),
                     _tokens_list=completion_tokens,
-                    _logprobs_list=completion_logprobs,
+                    _logprobs_list=sampled_logprobs,
                 )
             )
 
