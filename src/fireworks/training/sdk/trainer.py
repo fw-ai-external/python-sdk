@@ -468,7 +468,14 @@ class TrainerJobManager(FireworksClient):
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
-        resp.raise_for_status()
+            # Surface the backend's response body (e.g. "B200/B300 training
+            # requires a Tier 2 account...") rather than httpx's bare status
+            # line. The orchestrator persists str(exc) as the job's failure
+            # status, so raising the parsed message is what makes the real
+            # cause reach the customer instead of "429 Too Many Requests".
+            raise RuntimeError(
+                f"RLOR job creation failed (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
         return resp.json()
 
     @staticmethod
