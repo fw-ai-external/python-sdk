@@ -6,6 +6,7 @@ import time
 import logging
 import warnings
 from typing import Any
+from datetime import timedelta
 from dataclasses import field, replace, dataclass
 from concurrent.futures import ThreadPoolExecutor
 
@@ -102,6 +103,8 @@ class FiretitanProvisioningConfig:
     trainer_replica_count: int | None = None  # data-parallel HSDP replicas for the trainer
     replica_count: int = 1  # inference deployment min/max replicas
     trainer_timeout_s: float = DEFAULT_TRAINER_TIMEOUT_S
+    inactivity_timeout: timedelta | str | None = None
+    disable_inactivity_cleanup: bool = False
     deployment_timeout_s: float = DEPLOYMENT_READY_TIMEOUT_S
     hotload_timeout_s: int = HOTLOAD_TIMEOUT_S
     reattach_settle_timeout_s: float = REATTACH_SETTLE_TIMEOUT_S
@@ -649,6 +652,8 @@ def _build_trainer_job_config(
         purpose=config.purpose,
         managed_by=config.managed_by,
         forward_only=config.forward_only,
+        inactivity_timeout=config.inactivity_timeout,
+        disable_inactivity_cleanup=config.disable_inactivity_cleanup,
         requested_job_id=requested_job_id,
     )
 

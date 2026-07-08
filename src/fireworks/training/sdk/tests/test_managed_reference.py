@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
+from datetime import timedelta
 
 import pytest
 
@@ -234,6 +235,19 @@ class TestManagedProvisioning:
         assert trainer_config.training_shape_ref is None
         assert trainer_config.auto_select_training_shape is True
         assert trainer_config.custom_image_tag == "0.33.0"
+
+    def test_inactivity_cleanup_fields_flow_to_trainer_config(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                inactivity_timeout=timedelta(hours=2),
+                disable_inactivity_cleanup=True,
+            ),
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert trainer_config.inactivity_timeout == timedelta(hours=2)
+        assert trainer_config.disable_inactivity_cleanup is True
 
     def test_generated_trainer_job_id_is_stored_for_retry(self, monkeypatch):
         created_configs = []
