@@ -168,6 +168,8 @@ class DeploymentSampler(_RestClient):
             )
             if concurrency_controller is None:
                 concurrency_controller = FixedConcurrencyController(max_concurrency)
+        elif concurrency_controller is None:
+            concurrency_controller = AdaptiveConcurrencyController()
 
         self._concurrency_controller = concurrency_controller
 

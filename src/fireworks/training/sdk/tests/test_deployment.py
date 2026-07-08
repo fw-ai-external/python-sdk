@@ -86,6 +86,28 @@ def _mock_async_completions_stream(sampler, return_value):
     sampler.async_completions_stream = _fake
 
 
+class TestDeploymentSamplerConcurrencyDefaults:
+    def test_defaults_to_adaptive_concurrency_controller(self):
+        sampler = _make_sampler()
+
+        assert isinstance(sampler._concurrency_controller, AdaptiveConcurrencyController)
+
+    def test_explicit_concurrency_controller_wins(self):
+        controller = FixedConcurrencyController(4)
+
+        sampler = _make_sampler(concurrency_controller=controller)
+
+        assert sampler._concurrency_controller is controller
+
+    def test_deprecated_max_concurrency_uses_fixed_controller(self):
+        with pytest.warns(DeprecationWarning, match="max_concurrency is deprecated"):
+            sampler = _make_sampler(max_concurrency=4)
+
+        controller = sampler._concurrency_controller
+        assert isinstance(controller, FixedConcurrencyController)
+        assert controller.window_size == 4
+
+
 def _sample_with_firetitan_client(
     sampler,
     fake_tinker,
