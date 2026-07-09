@@ -1372,18 +1372,21 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://dev.api.fireworks.ai/training/v1/serverless"
+        svc._managed_additional_headers = {"X-Debug": "1"}
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "pyroworks-dev"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
 
         sampler = svc.create_sampling_client(model_path="pyroworks-dev/run-1/step-1")
 
+        expected_model = "accounts/pyroworks-dev/trainingSessions/ts-abc123/checkpoints/pyroworks-dev/run-1/step-1"
         assert sampler.deployment_sampler.base_url == "https://dev.api.fireworks.ai/training/v1/serverless"
-        assert (
-            sampler.deployment_sampler.model
-            == "accounts/pyroworks-dev/trainingSessions/ts-abc123/checkpoints/pyroworks-dev/run-1/step-1"
-        )
+        assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
+        assert sampler.deployment_sampler.additional_headers == {
+            "X-Debug": "1",
+            "X-Session-Affinity": expected_model,
+        }
         sampler.close()
 
     def test_create_sampling_client_rejects_non_serverless_base_url(self):

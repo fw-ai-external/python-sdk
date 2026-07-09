@@ -151,8 +151,9 @@ class DeploymentSampler(_RestClient):
         tokenizer: PreTrainedTokenizerBase | None = None,
         concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
         max_concurrency: int | None = None,  # TODO: remove after deprecation period
+        additional_headers: dict[str, str] | None = None,
     ):
-        super().__init__(api_key=api_key, base_url=inference_url)
+        super().__init__(api_key=api_key, base_url=inference_url, additional_headers=additional_headers)
         self.model = model
         self.tokenizer = tokenizer
         self._recent_metrics: list[ServerMetrics] = []

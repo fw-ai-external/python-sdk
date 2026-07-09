@@ -131,6 +131,7 @@ class FiretitanSamplingClient(SamplingClient):
         tokenizer: PreTrainedTokenizerBase | None = None,
         concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
         max_concurrency: int | None = None,
+        additional_headers: dict[str, str] | None = None,
     ) -> "FiretitanSamplingClient":
         """Build a Tinker-compatible client and the underlying sampler."""
         sampler = DeploymentSampler(
@@ -140,6 +141,7 @@ class FiretitanSamplingClient(SamplingClient):
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
             max_concurrency=max_concurrency,
+            additional_headers=additional_headers,
         )
         return cls(sampler)
 
@@ -3182,12 +3184,19 @@ class FiretitanServiceClient(ServiceClient):
                         "serverless sampling requires FiretitanServiceClient base_url to end with "
                         f"/training/v1/serverless; got {serverless_base_url!r}."
                     )
+                serverless_model = self._serverless_sampling_model_name(model_path)
+                additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
+                # The gateway/rollout host use X-Session-Affinity for pod-level
+                # sticky routing. Include the session-qualified checkpoint so
+                # requests for one hotloaded adapter prefer the same replicas.
+                additional_headers["X-Session-Affinity"] = serverless_model
                 return FiretitanSamplingClient.create(
                     inference_url=serverless_base_url,
-                    model=self._serverless_sampling_model_name(model_path),
+                    model=serverless_model,
                     api_key=self._require_fireworks_api_key("serverless sampling"),
                     tokenizer=tokenizer,
                     concurrency_controller=concurrency_controller,
+                    additional_headers=additional_headers,
                 )
             self.hotload_sampler_snapshot(model_path)
             return self._require_sampler_backend().get_sampling_client(tokenizer, concurrency_controller)

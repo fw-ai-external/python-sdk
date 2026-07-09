@@ -108,6 +108,16 @@ class TestDeploymentSamplerConcurrencyDefaults:
         assert controller.window_size == 4
 
 
+class TestDeploymentSamplerHeaders:
+    def test_inference_headers_include_additional_headers(self):
+        sampler = _make_sampler(additional_headers={"X-Session-Affinity": "session-checkpoint-1"})
+
+        headers = sampler._inference_headers()
+
+        assert headers["X-Session-Affinity"] == "session-checkpoint-1"
+        assert headers["Authorization"] == "Bearer key"
+
+
 def _sample_with_firetitan_client(
     sampler,
     fake_tinker,
