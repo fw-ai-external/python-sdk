@@ -306,6 +306,192 @@ class TestForwardBackward:
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
 
+class TestParallelChunkSubmission:
+    class _ClientContext:
+        def __init__(self, training):
+            self._training = training
+
+        def __enter__(self):
+            return SimpleNamespace(training=self._training)
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _ImmediateThreadFuture:
+        def __init__(self, coro):
+            self._value = asyncio.run(coro)
+
+        def result(self, timeout=None):
+            return self._value
+
+        async def result_async(self, timeout=None):
+            return self._value
+
+        def __await__(self):
+            return self.result_async().__await__()
+
+    class _FakeAPIFuture:
+        def __init__(self, _model_cls, _holder, untyped_future, **_kwargs):
+            self._value = untyped_future
+
+        def result(self, timeout=None):
+            return self._value
+
+        async def result_async(self, timeout=None):
+            return self._value
+
+        def __await__(self):
+            return self.result_async().__await__()
+
+    class _FakeCombinedAPIFuture:
+        def __init__(self, futures, _transform, _holder):
+            self._futures = futures
+
+        def result(self, timeout=None):
+            return asyncio.run(self.result_async(timeout))
+
+        async def result_async(self, timeout=None):
+            return [await future.result_async(timeout) for future in self._futures]
+
+        def __await__(self):
+            return self.result_async().__await__()
+
+    def _datum(self, token: int = 1) -> types.Datum:
+        return types.Datum(
+            model_input=types.ModelInput.from_ints([token, token + 1]),
+            loss_fn_inputs={"target_tokens": types.TensorData(data=[token + 1], dtype="int64", shape=[1])},
+        )
+
+    def _make_client(self, *, parallel: bool, send_order: list[int]):
+        client = _bare_training_client()
+        client.model_id = "model"
+        client._queue_state_logger = None
+        client._turn_counter = 0
+        client._turn_waiters = {}
+        chunks = [[self._datum(1)], [self._datum(10)], [self._datum(20)]]
+        client._chunked_requests = MagicMock(return_value=[(0, chunks[0]), (1, chunks[1]), (2, chunks[2])])
+
+        class _Training:
+            async def forward(self, *, request):
+                send_order.append(request.seq_id)
+                await asyncio.sleep(0)
+                return request.seq_id
+
+        async def execute_with_retries(send, *args):
+            return await send(*args)
+
+        holder = MagicMock()
+        holder._client_config = SimpleNamespace(
+            parallel_fwdbwd_chunks=parallel,
+            proto_write_fwdbwd=False,
+            proto_compress_fwdbwd=False,
+            fwd_via_fwdbwd=False,
+        )
+        holder.aclient.return_value = self._ClientContext(_Training())
+        holder.execute_with_retries.side_effect = execute_with_retries
+        holder.run_coroutine_threadsafe.side_effect = self._ImmediateThreadFuture
+        client.holder = holder
+        return client
+
+    def test_forward_parallel_chunks_send_rest_before_first(self):
+        send_order: list[int] = []
+        client = self._make_client(parallel=True, send_order=send_order)
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            result = client.forward([self._datum()], "cross_entropy").result()
+
+        assert send_order == [2, 3, 1]
+        assert result == [1, 2, 3]
+
+    def test_forward_respects_serial_chunk_flag(self):
+        send_order: list[int] = []
+        client = self._make_client(parallel=False, send_order=send_order)
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            result = client.forward([self._datum()], "cross_entropy").result()
+
+        assert send_order == [1, 2, 3]
+        assert result == [1, 2, 3]
+
+    def test_embedding_custom_forward_uses_parallel_chunks(self):
+        send_order: list[int] = []
+        client = self._make_client(parallel=True, send_order=[])
+        client._build_embedding_requests = MagicMock(
+            return_value=[
+                (0, [self._datum(1)]),
+                (1, [self._datum(10)]),
+                (2, [self._datum(20)]),
+            ]
+        )
+
+        async def send_embedding(request_id, _chunk, pooling, output):
+            assert pooling == "last"
+            assert output == "embedding"
+            send_order.append(request_id + 1)
+            await asyncio.sleep(0)
+            return request_id + 1
+
+        client._send_single_forward_embedding_request = send_embedding
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            future = asyncio.run(
+                client._forward_embedding_async(
+                    [self._datum()],
+                    "last",
+                    output="embedding",
+                )
+            )
+            result = asyncio.run(future.result_async())
+
+        assert send_order == [2, 3, 1]
+        assert result == [1, 2, 3]
+
+    def test_embedding_custom_backward_uses_parallel_chunks(self):
+        send_order: list[int] = []
+        client = self._make_client(parallel=True, send_order=[])
+        client._build_embedding_requests = MagicMock(
+            return_value=[
+                (0, [self._datum(1)]),
+                (1, [self._datum(10)]),
+                (2, [self._datum(20)]),
+            ]
+        )
+
+        async def send_embedding_backward(request_id, _chunk, pooling, output):
+            assert pooling == "mean"
+            assert output == "embedding"
+            send_order.append(request_id + 1)
+            await asyncio.sleep(0)
+            return request_id + 1
+
+        client._send_single_forward_backward_embedding_request = send_embedding_backward
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            future = asyncio.run(
+                client._forward_backward_embedding_async(
+                    [self._datum()],
+                    "mean",
+                    output="embedding",
+                )
+            )
+            result = asyncio.run(future.result_async())
+
+        assert send_order == [2, 3, 1]
+        assert result == [1, 2, 3]
+
+
 class TestOptimStep:
     class _NoopTurn:
         async def __aenter__(self):
@@ -357,9 +543,7 @@ class TestOptimStep:
             return await send()
 
         holder = MagicMock()
-        holder.aclient.return_value = self._ClientContext(
-            SimpleNamespace(optim_step=optim_step)
-        )
+        holder.aclient.return_value = self._ClientContext(SimpleNamespace(optim_step=optim_step))
         holder.execute_with_retries.side_effect = execute_with_retries
         holder.run_coroutine_threadsafe.side_effect = self._ImmediateThreadFuture
         client.holder = holder
@@ -576,9 +760,7 @@ class TestFiretitanServiceClientManagedCompat:
     def test_close_still_closes_managed_handle_when_inference_cleanup_fails(self):
         deploy_mgr = _FakeInferenceDeploymentManager(scale_error=RuntimeError("cleanup failed"))
         svc = self._make_managed_service(deploy_mgr)
-        svc._owned_inference_deployments = [
-            (deploy_mgr, "teacher-unit", CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO)
-        ]
+        svc._owned_inference_deployments = [(deploy_mgr, "teacher-unit", CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO)]
 
         with pytest.raises(RuntimeError, match="cleanup failed"):
             svc.close()
@@ -891,9 +1073,7 @@ class TestFiretitanServiceClientManagedCompat:
     def test_reference_client_job_id_uses_separate_reference_trainer(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._owned_reference_handles = []
-        svc._reference_handle = SimpleNamespace(
-            trainer_endpoint=SimpleNamespace(job_id="ref-trainer-1")
-        )
+        svc._reference_handle = SimpleNamespace(trainer_endpoint=SimpleNamespace(job_id="ref-trainer-1"))
         svc._managed_handle = SimpleNamespace(
             trainer_endpoint=SimpleNamespace(job_id="trainer-1"),
         )
@@ -916,9 +1096,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._default_user_metadata = None
         svc._reference_handle = None
         svc._owned_reference_handles = []
-        svc._ensure_managed_handle = MagicMock(
-            return_value=SimpleNamespace(reference_handle=reference_handle)
-        )
+        svc._ensure_managed_handle = MagicMock(return_value=SimpleNamespace(reference_handle=reference_handle))
         svc._provision_reference_handle = MagicMock()
 
         result = svc.create_reference_client("accounts/acct/models/base", lora_rank=0)
@@ -974,9 +1152,7 @@ class TestFiretitanServiceClientManagedCompat:
             lora_rank=8,
         )
         handle = SimpleNamespace(training_client="tc", sampler_backend=None)
-        with patch(
-            "fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle
-        ):
+        with patch("fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle):
             with pytest.warns(DeprecationWarning, match="base_model.*deprecated and ignored"):
                 svc.create_training_client("accounts/acct/models/OTHER", lora_rank=8)
 
@@ -988,9 +1164,7 @@ class TestFiretitanServiceClientManagedCompat:
             lora_rank=8,
         )
         handle = SimpleNamespace(training_client="tc", sampler_backend=None)
-        with patch(
-            "fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle
-        ):
+        with patch("fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 svc.create_training_client("accounts/acct/models/base", lora_rank=8)
@@ -1009,9 +1183,7 @@ class TestFiretitanServiceClientManagedCompat:
             lora_rank=8,
         )
         handle = SimpleNamespace(training_client="tc", sampler_backend=None)
-        with patch(
-            "fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle
-        ) as create:
+        with patch("fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle) as create:
             with pytest.warns(DeprecationWarning, match="base_model.*deprecated and ignored"):
                 first = svc.create_training_client("accounts/acct/models/OTHER", lora_rank=8)
             # The canonical follow-up reuses the same handle (no raise).
@@ -1415,9 +1587,7 @@ class TestTrainingClientSamplingHelpers:
             future.result.return_value = public_path
             return future
 
-        client.holder = SimpleNamespace(
-            run_coroutine_threadsafe=MagicMock(side_effect=run_coroutine_threadsafe)
-        )
+        client.holder = SimpleNamespace(run_coroutine_threadsafe=MagicMock(side_effect=run_coroutine_threadsafe))
 
         result = client.save_weights_for_sampler_ext("step-1", checkpoint_type="delta")
 
@@ -1894,7 +2064,8 @@ class TestCheckCosSimilarityMatrixSingleChunk:
     def test_single_chunk_is_allowed(self):
         # one chunk = one HTTP request = trainer sees the entire batch → safe
         _check_cos_similarity_matrix_single_chunk(
-            [["d0", "d1", "d2"]], output="cos_similarity_matrix",
+            [["d0", "d1", "d2"]],
+            output="cos_similarity_matrix",
         )
 
     def test_empty_chunks_list_is_allowed(self):
@@ -1905,7 +2076,8 @@ class TestCheckCosSimilarityMatrixSingleChunk:
         chunks = [["d0", "d1"], ["d2", "d3", "d4"]]
         with pytest.raises(ValueError) as exc_info:
             _check_cos_similarity_matrix_single_chunk(
-                chunks, output="cos_similarity_matrix",
+                chunks,
+                output="cos_similarity_matrix",
             )
         msg = str(exc_info.value)
         # mentions the offending mode and the actual split sizes
@@ -1923,7 +2095,8 @@ class TestCheckCosSimilarityMatrixSingleChunk:
         chunks = [list(range(1024))] * 5 + [list(range(7))]
         with pytest.raises(ValueError) as exc_info:
             _check_cos_similarity_matrix_single_chunk(
-                chunks, output="cos_similarity_matrix",
+                chunks,
+                output="cos_similarity_matrix",
             )
         # sum of chunk sizes is reported as the offending len(data)
         assert "len(data)=5127" in str(exc_info.value)
@@ -1951,8 +2124,9 @@ class TestBuildEmbeddingRequestsDispatch:
         client = self._make_client()
         # mark the two delegates so we can tell which path was taken
         client._chunked_requests = MagicMock(return_value=[(1, ["d0"]), (2, ["d1"])])
-        client._chunked_requests_generator = MagicMock(side_effect=AssertionError(
-            "embedding mode must NOT call _chunked_requests_generator directly"))
+        client._chunked_requests_generator = MagicMock(
+            side_effect=AssertionError("embedding mode must NOT call _chunked_requests_generator directly")
+        )
         client._get_request_id = MagicMock(return_value=99)
 
         out = client._build_embedding_requests(["d0", "d1"], "embedding")
@@ -1965,8 +2139,9 @@ class TestBuildEmbeddingRequestsDispatch:
         client = self._make_client()
         # natural chunking would still produce 1 chunk for small data
         client._chunked_requests_generator = MagicMock(return_value=iter([["d0", "d1"]]))
-        client._chunked_requests = MagicMock(side_effect=AssertionError(
-            "cos_similarity_matrix mode must NOT call _chunked_requests"))
+        client._chunked_requests = MagicMock(
+            side_effect=AssertionError("cos_similarity_matrix mode must NOT call _chunked_requests")
+        )
         client._get_request_id = MagicMock(return_value=77)
 
         out = client._build_embedding_requests(["d0", "d1"], "cos_similarity_matrix")
@@ -1978,14 +2153,13 @@ class TestBuildEmbeddingRequestsDispatch:
     def test_cos_similarity_matrix_mode_raises_when_would_chunk(self):
         client = self._make_client()
         # simulate natural chunking that would split data into 2 chunks
-        client._chunked_requests_generator = MagicMock(
-            return_value=iter([["d0", "d1"], ["d2"]])
-        )
+        client._chunked_requests_generator = MagicMock(return_value=iter([["d0", "d1"], ["d2"]]))
         client._get_request_id = MagicMock()
 
         with pytest.raises(ValueError, match="cos_similarity_matrix"):
             client._build_embedding_requests(
-                ["d0", "d1", "d2"], "cos_similarity_matrix",
+                ["d0", "d1", "d2"],
+                "cos_similarity_matrix",
             )
         # never reached request-id allocation
         client._get_request_id.assert_not_called()
@@ -2053,10 +2227,7 @@ class TestServerlessRunName:
 
     def test_builds_full_run_resource_name(self):
         svc = _service()
-        assert (
-            svc._serverless_run_name("run-ceb524:train:0")
-            == "accounts/pyroworks-dev/trainingRuns/run-ceb524"
-        )
+        assert svc._serverless_run_name("run-ceb524:train:0") == "accounts/pyroworks-dev/trainingRuns/run-ceb524"
 
     def test_none_for_base_only_model(self):
         svc = _service()
@@ -2099,8 +2270,6 @@ class TestAccountResolutionBestEffort:
                 seen["mid"] = getattr(svc, "_cp_account_id", "unset")
                 return "pyroworks-dev"
 
-        with patch(
-            "fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient
-        ):
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient):
             assert svc._resolved_account_id() == "pyroworks-dev"
         assert seen["mid"] == "unset"  # no premature None observed mid-resolution

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0-alpha.88 (2026-07-09)
+
+Full Changelog: [v1.2.0-alpha.87...v1.2.0-alpha.88](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.87...v1.2.0-alpha.88)
+
+### Features
+* **training-sdk:** default sampler concurrency to adaptive ([53deb8e](https://github.com/fw-ai-external/python-sdk/commit/53deb8eb06a6d0dad950493e733ad987839b54d9))
+
 ## 1.2.0-alpha.87 (2026-07-06)
 
 Full Changelog: [v1.2.0-alpha.86...v1.2.0-alpha.87](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.86...v1.2.0-alpha.87)
