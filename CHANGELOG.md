@@ -1,51 +1,5 @@
 # Changelog
 
-## 1.2.0-alpha.89 (2026-07-09)
-
-Full Changelog: [v1.2.0-alpha.88...v1.2.0-alpha.89](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.88...v1.2.0-alpha.89)
-
-## 1.2.0-alpha.88 (2026-07-09)
-
-Full Changelog: [v1.2.0-alpha.87...v1.2.0-alpha.88](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.87...v1.2.0-alpha.88)
-
-### Features
-* **training-sdk:** default sampler concurrency to adaptive ([53deb8e](https://github.com/fw-ai-external/python-sdk/commit/53deb8eb06a6d0dad950493e733ad987839b54d9))
-
-## 1.2.0-alpha.87 (2026-07-06)
-
-Full Changelog: [v1.2.0-alpha.86...v1.2.0-alpha.87](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.86...v1.2.0-alpha.87)
-
-### Bug Fixes
-* **training-sdk:** declare urllib3 runtime dependency ([8c2c9d5](https://github.com/fw-ai-external/python-sdk/commit/8c2c9d593ded269a189bd1a0a7621edf2d074714))
-* **training:** return 403 for training quota errors and surface the real cause ([579b823](https://github.com/fw-ai-external/python-sdk/commit/579b8238a57082213748aa3b9e278dcdbc0190e2))
-
-## 1.2.0-alpha.86 (2026-07-05)
-
-Full Changelog: [v1.2.0-alpha.85...v1.2.0-alpha.86](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.85...v1.2.0-alpha.86)
-
-### Bug Fixes
-* **managed:** keep auto-shape selection when trainer.extra_args is set ([a4b2a72](https://github.com/fw-ai-external/python-sdk/commit/a4b2a723644377af833372dbd91f70e677bf55fd))
-* **training-sdk:** reject tombstone trainer reattach on create/poll ([3c5ceee](https://github.com/fw-ai-external/python-sdk/commit/3c5ceee923cee3019c1567deece40c8c1a9b9a8a))
-
-## 1.2.0-alpha.85 (2026-06-26)
-
-Full Changelog: [v1.2.0-alpha.84...v1.2.0-alpha.85](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.84...v1.2.0-alpha.85)
-
-### Bug Fixes
-* **training:** propagate auto-shape max context metadata ([15d0a4d](https://github.com/fw-ai-external/python-sdk/commit/15d0a4d7fab551f43b26a422cb80f3306a6ca5d3))
-
-## 1.2.0-alpha.84 (2026-06-24)
-
-Full Changelog: [v1.2.0-alpha.83...v1.2.0-alpha.84](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.83...v1.2.0-alpha.84)
-
-### Features
-* **training-sdk:** surface serverless session (on the service) + run (on the training client) ([ad77c33](https://github.com/fw-ai-external/python-sdk/commit/ad77c335a21b79e76e4f59a7f8d5d20c621d45b4))
-
-### Bug Fixes
-* **sdk:** guard training deployment shapes ([4b3ebbb](https://github.com/fw-ai-external/python-sdk/commit/4b3ebbb5c3171aa74a96c53ac953787dc7e1c74c))
-* **training:** list and promote serverless session checkpoints by run ([aefd3a8](https://github.com/fw-ai-external/python-sdk/commit/aefd3a82620dfd3c2ff3211b59bdab0dd9cb8c72))
-* **training:** require LoRA reference shapes ([88a96e3](https://github.com/fw-ai-external/python-sdk/commit/88a96e3fa07dbf97a2f9e4c071173efef3ce681c))
-
 ## 1.2.0-alpha.83 (2026-06-18)
 
 Full Changelog: [v1.2.0-alpha.82...v1.2.0-alpha.83](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.82...v1.2.0-alpha.83)

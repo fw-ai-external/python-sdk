@@ -50,8 +50,9 @@ def _make_async_client(verify: bool) -> httpx.AsyncClient:
         verify=verify,
         timeout=httpx.Timeout(connect=30.0, read=600.0, write=30.0, pool=30.0),
         limits=httpx.Limits(
-            max_connections=200,
-            max_keepalive_connections=0,  # no keep-alive: fresh connection per request (like requests.post bare)
+            max_connections=256,
+            # Keep idle connections available for async sampling bursts.
+            max_keepalive_connections=64,
         ),
     )
 
