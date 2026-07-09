@@ -1,17 +1,16 @@
-"""Firetitan Tinker SDK — thin extensions for full-param training.
+"""Fireworks Tinker SDK compatibility extensions for full-param training.
 
 This layer extends the upstream tinker client with:
-  1. FiretitanServiceClient.create_training_client() — supports lora_config=None
-  2. FiretitanTrainingClient.optim_step() — adds grad_accumulation_normalization
-     and grad-norm metrics controls
-  3. FiretitanTrainingClient.forward_backward() — backfills response_tokens for cross_entropy
-  4. FiretitanTrainingClient.save_state() — supports blocking waits and guards unsupported overwrite
-  5. FiretitanTrainingClient.save_weights_for_sampler_ext() — adds checkpoint_type
-  6. FiretitanTrainingClient.list_checkpoints() — firetitan-specific DCP checkpoint listing
-  7. FiretitanTrainingClient.load_adapter() — HF PEFT adapter warm-start (weights-only)
+  1. training-client creation with lora_config=None support
+  2. optimizer-step grad_accumulation_normalization and grad-norm metrics controls
+  3. forward() JSON chunk parallelization
+  4. forward_backward() response_tokens backfill for cross_entropy
+  5. save_state() blocking waits and unsupported-overwrite guards
+  6. save_weights_for_sampler_ext() checkpoint_type support
+  7. DCP checkpoint listing
+  8. HF PEFT adapter warm-start loading (weights-only)
 
-Most other methods (forward, forward_backward_custom, etc.) are inherited from
-tinker.
+Most other methods are inherited from tinker.
 """
 
 from __future__ import annotations
@@ -287,8 +286,7 @@ class FiretitanSamplingClient(SamplingClient):
                 )
             if any(lp is None for lp in completion_logprobs):
                 raise RuntimeError(
-                    "Deployment response has null logprobs.content[].sampling_logprob "
-                    "for generated tokens."
+                    "Deployment response has null logprobs.content[].sampling_logprob for generated tokens."
                 )
             sampled_logprobs = [float(lp) for lp in completion_logprobs]
 
@@ -1232,10 +1230,9 @@ class FiretitanTrainingClient(TrainingClient):
         ephemeral sampling session (see SAMPLING_CLIENT_FROM_TRAINER_MESSAGE)
 
     The async/sync surface is otherwise complete by inheritance: the base
-    ``forward_backward_async`` / ``save_state_async`` wrappers call our
-    overridden sync methods, so they pick up FireTitan behavior unchanged.
-    Other core methods (forward, forward_backward_custom) are inherited from
-    tinker.TrainingClient.
+    ``forward_async`` / ``forward_backward_async`` / ``save_state_async``
+    wrappers call our overridden sync methods, so they pick up wrapper
+    behavior unchanged. Other core methods are inherited from tinker.TrainingClient.
     """
 
     def __init__(
@@ -1314,6 +1311,113 @@ class FiretitanTrainingClient(TrainingClient):
             first_checkpoint_type=self._first_sampler_checkpoint_type or "base",
             explicit=checkpoint_type,
         )
+
+    def _parallel_chunks_enabled(self) -> bool:
+        holder = getattr(self, "holder", None)
+        client_config = getattr(holder, "_client_config", None)
+        return bool(getattr(client_config, "parallel_fwdbwd_chunks", False))
+
+    async def _run_chunked_requests(
+        self,
+        requests: list[tuple[int, list[types.Datum]]],
+        send_chunk: Callable[..., Any],
+        *,
+        request_type: str,
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        if not requests:
+            raise ValueError("No data provided")
+
+        parallel = self._parallel_chunks_enabled()
+        min_rid = requests[0][0]
+        max_rid = requests[-1][0] if parallel else None
+        start_time = time.time()
+
+        async def _submit_chunk(
+            request_id: int,
+            chunk: list[types.Datum],
+        ) -> APIFuture[types.ForwardBackwardOutput]:
+            turn_min = min_rid if parallel else request_id
+            turn_max = max_rid if parallel else None
+            async with self._take_turn(turn_min, turn_max):
+                untyped_future = await self.holder.execute_with_retries(
+                    send_chunk,
+                    request_id,
+                    chunk,
+                )
+                return _APIFuture(
+                    types.ForwardBackwardOutput,
+                    self.holder,
+                    untyped_future,
+                    request_start_time=start_time,
+                    request_type=request_type,
+                    queue_state_observer=self._queue_state_logger,
+                )
+
+        if parallel and len(requests) > 1:
+            rest_futures = list(
+                await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests[1:]])
+            )
+            first_request_id, first_chunk = requests[0]
+            first_future = await _submit_chunk(first_request_id, first_chunk)
+            futures = [first_future] + rest_futures
+        else:
+            futures = list(await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests]))
+
+        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+
+    async def _send_single_forward_request(
+        self,
+        request_id: int,
+        data: list[types.Datum],
+        loss_fn: types.LossFnType,
+        loss_fn_config: dict[str, float] | None,
+    ):
+        request = types.ForwardRequest(
+            forward_input=types.ForwardBackwardInput(
+                data=data,
+                loss_fn=loss_fn,
+                loss_fn_config=loss_fn_config,
+            ),
+            model_id=self._guaranteed_model_id(),
+            seq_id=request_id + 1,
+        )
+        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            return await client.training.forward(request=request)
+
+    def forward(
+        self,
+        data: list[types.Datum],
+        loss_fn: types.LossFnType,
+        loss_fn_config: dict[str, float] | None = None,
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Compute a forward pass, using Fireworks' JSON path with parallel chunks."""
+        holder = getattr(self, "holder", None)
+        client_config = getattr(holder, "_client_config", None)
+        if getattr(client_config, "fwd_via_fwdbwd", False) and getattr(
+            client_config,
+            "proto_write_fwdbwd",
+            False,
+        ):
+            raise NotImplementedError(
+                "This training client does not support Tinker's proto forward transport. Use the JSON forward path."
+            )
+
+        requests = self._chunked_requests(data)
+
+        async def _forward_async():
+            combined_future = await self._run_chunked_requests(
+                requests,
+                lambda request_id, chunk: self._send_single_forward_request(
+                    request_id,
+                    chunk,
+                    loss_fn,
+                    loss_fn_config,
+                ),
+                request_type="Forward",
+            )
+            return await combined_future
+
+        return self.holder.run_coroutine_threadsafe(_forward_async())
 
     def optim_step(
         self,
@@ -1502,28 +1606,16 @@ class FiretitanTrainingClient(TrainingClient):
         output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
-        futures = []
-        start_time = time.time()
-        for request_id, chunk in requests:
-            async with self._take_turn(request_id):
-                untyped_future = await self.holder.execute_with_retries(
-                    self._send_single_forward_embedding_request,
-                    request_id,
-                    chunk,
-                    pooling,
-                    output,
-                )
-            futures.append(
-                _APIFuture(
-                    types.ForwardBackwardOutput,
-                    self.holder,
-                    untyped_future,
-                    request_start_time=start_time,
-                    request_type="Forward",
-                    queue_state_observer=self._queue_state_logger,
-                )
-            )
-        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+        return await self._run_chunked_requests(
+            requests,
+            lambda request_id, chunk: self._send_single_forward_embedding_request(
+                request_id,
+                chunk,
+                pooling,
+                output,
+            ),
+            request_type="Forward",
+        )
 
     async def _forward_backward_embedding_async(
         self,
@@ -1532,28 +1624,16 @@ class FiretitanTrainingClient(TrainingClient):
         output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
-        futures = []
-        start_time = time.time()
-        for request_id, chunk in requests:
-            async with self._take_turn(request_id):
-                untyped_future = await self.holder.execute_with_retries(
-                    self._send_single_forward_backward_embedding_request,
-                    request_id,
-                    chunk,
-                    pooling,
-                    output,
-                )
-            futures.append(
-                _APIFuture(
-                    types.ForwardBackwardOutput,
-                    self.holder,
-                    untyped_future,
-                    request_start_time=start_time,
-                    request_type="ForwardBackward",
-                    queue_state_observer=self._queue_state_logger,
-                )
-            )
-        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+        return await self._run_chunked_requests(
+            requests,
+            lambda request_id, chunk: self._send_single_forward_backward_embedding_request(
+                request_id,
+                chunk,
+                pooling,
+                output,
+            ),
+            request_type="ForwardBackward",
+        )
 
     async def forward_backward_custom_async(
         self,
