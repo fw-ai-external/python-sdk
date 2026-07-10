@@ -1974,7 +1974,7 @@ class TestSamplerTimeoutDiagnostics:
 
         sampler = _make_sampler(
             tokenizer=None,
-            model="accounts/figma/deployments/qwen3p6-27b-1780660798",
+            model="accounts/test-account/deployments/test-deployment",
             concurrency_controller=FixedConcurrencyController(16),
         )
         sampler._recent_metrics = [
