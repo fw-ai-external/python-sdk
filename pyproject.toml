@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.0-alpha.88"
+version = "1.2.0-alpha.89"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -126,6 +126,9 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fireworks"]
+exclude = [
+  "/src/fireworks/training/sdk/tests/",
+]
 
 [tool.hatch.build.targets.sdist]
 # Basically everything except hidden files/directories (such as .github, .devcontainers, .python-version, etc)

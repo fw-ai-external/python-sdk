@@ -1371,32 +1371,35 @@ class TestFiretitanServiceClientManagedCompat:
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._sampler_backend = None
         svc._managed_config = None
-        svc._managed_base_url = "https://dev.api.fireworks.ai/training/v1/serverless"
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {"X-Test-Header": "1"}
         svc._fireworks_api_key = "fw_test"
-        svc._cp_account_id = "pyroworks-dev"
+        svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
 
-        sampler = svc.create_sampling_client(model_path="pyroworks-dev/run-1/step-1")
+        sampler = svc.create_sampling_client(model_path="test-account/run-1/step-1")
 
-        assert sampler.deployment_sampler.base_url == "https://dev.api.fireworks.ai/training/v1/serverless"
-        assert (
-            sampler.deployment_sampler.model
-            == "accounts/pyroworks-dev/trainingSessions/ts-abc123/checkpoints/pyroworks-dev/run-1/step-1"
-        )
+        expected_model = "accounts/test-account/trainingSessions/ts-abc123/checkpoints/test-account/run-1/step-1"
+        assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
+        assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
+        assert sampler.deployment_sampler.additional_headers == {
+            "X-Test-Header": "1",
+            "X-Session-Affinity": expected_model,
+        }
         sampler.close()
 
     def test_create_sampling_client_rejects_non_serverless_base_url(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._sampler_backend = None
         svc._managed_config = None
-        svc._managed_base_url = "https://dev.api.fireworks.ai/training/v1"
+        svc._managed_base_url = "https://api.example.com/training/v1"
         svc._fireworks_api_key = "fw_test"
-        svc._cp_account_id = "pyroworks-dev"
+        svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
 
         with pytest.raises(ValueError, match="/training/v1/serverless"):
-            svc.create_sampling_client(model_path="pyroworks-dev/run-1/step-1")
+            svc.create_sampling_client(model_path="test-account/run-1/step-1")
 
     def test_hotload_sampler_snapshot_returns_none(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
@@ -2198,7 +2201,7 @@ class TestRunIdFromModelId:
         assert _run_id_from_model_id(None) is None
 
 
-def _service(account_id: str | None = "pyroworks-dev", session_id: str = "ts-abc123"):
+def _service(account_id: str | None = "test-account", session_id: str = "ts-abc123"):
     # Bypass __init__: exercise the serverless identity surface. We pre-cache the
     # resolved account so the name builders don't do a real whoami in the test;
     # account resolution itself is covered separately.
@@ -2214,7 +2217,7 @@ class TestServiceTrainingSession:
     def test_session_id_and_name(self):
         svc = _service()
         assert svc.training_session_id == "ts-abc123"
-        assert svc.training_session_name == "accounts/pyroworks-dev/trainingSessions/ts-abc123"
+        assert svc.training_session_name == "accounts/test-account/trainingSessions/ts-abc123"
 
     def test_none_for_non_serverless_session(self):
         svc = _service(session_id="0400ab94")
@@ -2227,7 +2230,7 @@ class TestServerlessRunName:
 
     def test_builds_full_run_resource_name(self):
         svc = _service()
-        assert svc._serverless_run_name("run-ceb524:train:0") == "accounts/pyroworks-dev/trainingRuns/run-ceb524"
+        assert svc._serverless_run_name("run-ceb524:train:0") == "accounts/test-account/trainingRuns/run-ceb524"
 
     def test_none_for_base_only_model(self):
         svc = _service()
@@ -2249,8 +2252,8 @@ class TestAccountResolutionBestEffort:
 
     def test_account_cached(self):
         svc = _service()  # pre-cached account
-        assert svc._resolved_account_id() == "pyroworks-dev"
-        assert svc._resolved_account_id() == "pyroworks-dev"
+        assert svc._resolved_account_id() == "test-account"
+        assert svc._resolved_account_id() == "test-account"
 
     def test_no_in_progress_none_published(self):
         # Regression: the cache must never hold a transient None *during*
@@ -2268,8 +2271,8 @@ class TestAccountResolutionBestEffort:
             def account_id(self):
                 # at the moment of the whoami the cache must still be unset
                 seen["mid"] = getattr(svc, "_cp_account_id", "unset")
-                return "pyroworks-dev"
+                return "test-account"
 
         with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient):
-            assert svc._resolved_account_id() == "pyroworks-dev"
+            assert svc._resolved_account_id() == "test-account"
         assert seen["mid"] == "unset"  # no premature None observed mid-resolution

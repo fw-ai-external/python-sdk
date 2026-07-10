@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0-alpha.89 (2026-07-10)
+
+Full Changelog: [v1.2.0-alpha.88...v1.2.0-alpha.89](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.88...v1.2.0-alpha.89)
+
+### Bug Fixes
+* **training-sdk:** sanitize public package contents ([f0944c6](https://github.com/fw-ai-external/python-sdk/commit/f0944c68423e1227154bf53f52b0d31a4629d2d6))
+
+### Chores
+* **training-sdk:** raise async httpx connection limits ([a562db0](https://github.com/fw-ai-external/python-sdk/commit/a562db0fe3e62dd901c928ff1343be5436bb3d3a))
+
 ## 1.2.0-alpha.88 (2026-07-09)
 
 Full Changelog: [v1.2.0-alpha.87...v1.2.0-alpha.88](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.87...v1.2.0-alpha.88)
