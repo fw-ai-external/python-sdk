@@ -6,29 +6,49 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version to verify (for example 1.2.0)
+        type: string
+        required: true
 
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Release-triggered publish runs carry the release tag in head_branch.
+    # Manual republish runs use main, so verify those through workflow_dispatch
+    # with the required exact version input instead of guessing a version.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'release')
+    env:
+      RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.event.workflow_run.head_branch }}
     strategy:
       matrix:
         python-version: ["3.9", "3.11", "3.13"]
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Wait for PyPI propagation and install
+      - name: Resolve exact release version
+        id: release
         run: |
-          # --upgrade --pre is required: the runner toolcache ships an older
-          # fireworks-ai which would otherwise satisfy the requirement and skip
-          # the install, so the smoke test would silently exercise the stale
-          # cached version instead of the release we just published.
+          set -euo pipefail
+          version="${RELEASE_REF#v}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::Cannot determine an exact SDK version from ${RELEASE_REF}."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for PyPI propagation and install
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
           for i in $(seq 1 10); do
-            if pip install --upgrade --pre fireworks-ai 2>/dev/null; then
-              echo "Package available"
+            if pip install --upgrade "fireworks-ai==${VERSION}" 2>/dev/null; then
+              echo "Package ${VERSION} available"
               exit 0
             fi
             echo "Attempt $i: not available yet, waiting 30s..."
@@ -38,10 +58,15 @@ jobs:
           exit 1
 
       - name: Verify import and version
-        run: python -c "import fireworks; print(f'fireworks-ai {fireworks.__version__} installed successfully')"
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python -c "import fireworks; expected='${VERSION}'; assert fireworks.__version__ == expected, (fireworks.__version__, expected); print(f'fireworks-ai {expected} installed successfully')"
 
       - name: Verify training extras
         if: matrix.python-version != '3.9'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          pip install --upgrade --pre "fireworks-ai[training]"
+          pip install --upgrade "fireworks-ai[training]==${VERSION}"
           python -c "from fireworks.training import sdk; print('Training SDK OK')"

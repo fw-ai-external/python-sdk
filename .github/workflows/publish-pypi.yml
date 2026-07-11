@@ -4,6 +4,11 @@
 name: Publish PyPI
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact existing release tag to republish (for example v1.2.0)
+        type: string
+        required: true
 
   release:
     types: [published]
@@ -12,9 +17,29 @@ jobs:
   publish:
     name: publish
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify release tag matches package version
+        run: |
+          set -euo pipefail
+          version="$(python3 -c '
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              print(tomllib.load(f)["project"]["version"])
+          ')"
+          expected_tag="v${version}"
+          if [[ "${RELEASE_TAG}" != "${expected_tag}" ]]; then
+            echo "::error::Release tag ${RELEASE_TAG} does not match pyproject.toml version ${version}."
+            exit 1
+          fi
+          git rev-parse --verify "${RELEASE_TAG}^{commit}"
 
       - name: Install Rye
         run: |
@@ -25,7 +50,6 @@ jobs:
           RYE_INSTALL_OPTION: '--yes'
 
       - name: Publish to PyPI
-        run: |
-          bash ./bin/publish-pypi
+        run: bash ./bin/publish-pypi
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
