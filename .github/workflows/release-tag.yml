@@ -98,7 +98,7 @@ jobs:
           git tag -a "${TAG}" -m "${TAG}"
           git push origin "${TAG}"
 
-          # Pre-1.0 prereleases stay marked as prerelease.
+          # Versions with a prerelease suffix stay marked as prerelease.
           prerelease_flag=""
           if [[ "${VERSION}" == *-alpha.* || "${VERSION}" == *-beta.* || "${VERSION}" == *-rc.* ]]; then
             prerelease_flag="--prerelease"
