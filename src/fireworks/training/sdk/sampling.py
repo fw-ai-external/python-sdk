@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 import random
 import asyncio
 import logging
@@ -21,10 +22,22 @@ from fireworks.training.sdk._sse import _SSEDecoder, _SSETruncationError
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     format_sdk_error,
+    parse_retry_after,
     async_request_with_retries,
 )
 from fireworks.training.sdk.concurrency import FixedConcurrencyController, AdaptiveConcurrencyController
 from fireworks.training.sdk._rest_client import _RestClient
+from fireworks.training.sdk.sampling_observability import (
+    REQUEST_ID_HEADER,
+    ERROR_KIND_TIMEOUT,
+    ERROR_KIND_CONNECTION,
+    ERROR_KIND_HTTP_STATUS,
+    ERROR_KIND_SSE_TRUNCATION,
+    SamplingRequestError,
+    DeploymentSamplerTimeoutError,
+    clean_context,
+    extract_request_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +122,6 @@ class SampledCompletion:
     routing_matrices: List[str] | None = None
 
 
-class DeploymentSamplerTimeoutError(RuntimeError):
-    """Raised when deployment sampling repeatedly times out against inference."""
-
-
 class DeploymentSampler(_RestClient):
     """Wraps Fireworks deployment completions API with client-side tokenization.
 
@@ -152,12 +161,18 @@ class DeploymentSampler(_RestClient):
         concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
         max_concurrency: int | None = None,  # TODO: remove after deprecation period
         additional_headers: dict[str, str] | None = None,
+        *,
+        request_context: dict[str, Any] | None = None,
     ):
         super().__init__(api_key=api_key, base_url=inference_url, additional_headers=additional_headers)
         self.model = model
         self.tokenizer = tokenizer
         self._recent_metrics: list[ServerMetrics] = []
         self._warned_missing_sampling_logprob_fallback = False
+        # Optional non-sensitive identity (session/run/checkpoint/step) attached
+        # to the structured error so a failure is attributable. A plain dict;
+        # only recognized keys survive. Unset simply means no extra context.
+        self._request_context = request_context
 
         if max_concurrency is not None:
             warnings.warn(
@@ -188,6 +203,7 @@ class DeploymentSampler(_RestClient):
         temperature: float = 1.0,
         hotload_retry_interval: float = _HOTLOAD_RETRY_INTERVAL_S,
         hotload_max_retries: int = _HOTLOAD_MAX_RETRIES,
+        logical_request_id: str | None = None,
         **kwargs: Any,
     ) -> tuple[dict[str, Any], ServerMetrics]:
         """Streaming n=1 async completions request.
@@ -227,17 +243,29 @@ class DeploymentSampler(_RestClient):
         payload.setdefault("top_k", 0)
         url = f"{self.base_url}/inference/v1/completions"
         headers = self._inference_headers()
+        if logical_request_id:
+            # Send the SDK's stable correlation id; the gateway/fw-proxy echoes
+            # it back on the response so a failure is searchable in server logs.
+            headers = {**headers, REQUEST_ID_HEADER: logical_request_id}
         client = self._get_async_client()
         prompt_len = len(prompt)
 
         for hotload_attempt in range(hotload_max_retries + 1):
             t0 = time.time()
+            # The sampling path owns its own retry budget in
+            # ``_do_one_completion`` (attempts, jittered backoff, Retry-After,
+            # structured events). Opt this transport-level helper out of BOTH
+            # status- and exception-based retries so a single logical sampling
+            # request is not retried by two nested loops with multiplied budgets
+            # (previously up to MAX_WAIT_TIME per attempt x _RETRY_MAX_ATTEMPTS).
             resp = await async_request_with_retries(
                 client.post,
                 url,
                 headers=headers,
                 json=payload,
                 timeout=http_timeout,
+                retry_status_codes=(),
+                retry_exceptions=(),
             )
 
             if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
@@ -540,7 +568,11 @@ class DeploymentSampler(_RestClient):
     _RETRY_MAX_ATTEMPTS = 7
     _RETRY_BASE_BACKOFF_S = 2.0
     _RETRY_MAX_BACKOFF_S = 30.0
-    _RETRY_HTTP_TRANSIENT_CODES = (408, 429, 502, 503, 504)
+    # 500 is included because the transport helper (errors.py) previously
+    # retried it before this loop became the single owner of the sampling
+    # retry budget. Gateway maps upstream 583 (SERVER_OVERLOADED) -> 503 for
+    # external clients, so 503 already covers serving overload here.
+    _RETRY_HTTP_TRANSIENT_CODES = (408, 429, 500, 502, 503, 504)
     _RETRY_HTTPX_CONNECTION_EXC = (
         httpx.RemoteProtocolError,
         httpx.ReadError,
@@ -561,31 +593,30 @@ class DeploymentSampler(_RestClient):
         attempt: int,
         current_backoff: float,
         diagnostic: str | None = None,
+        retry_after_s: float | None = None,
+        logical_request_id: str | None = None,
     ) -> float:
         """Sleep with jittered exponential backoff and return the next backoff.
 
         Caller is responsible for the retryability decision; this helper
-        just emits the per-attempt log line and sleeps.
+        just emits the per-attempt log line and sleeps. The line is tagged with
+        the logical request id so a user can see which sampling call is being
+        retried (and correlate with the terminal error / server logs).
+
+        When the server sent a ``Retry-After`` (``retry_after_s``), honor it as
+        a floor on the sleep, still bounded by ``_RETRY_MAX_BACKOFF_S`` so a
+        hostile or mis-set header cannot stall a rollout indefinitely.
         """
         jittered = current_backoff * (0.5 + random.random())
+        sleep_s = jittered
+        if retry_after_s is not None:
+            sleep_s = max(jittered, min(retry_after_s, self._RETRY_MAX_BACKOFF_S))
+        tag = f"DeploymentSampler request {logical_request_id}: " if logical_request_id else ""
+        line = f"{tag}Transient {label} (attempt {attempt}/{self._RETRY_MAX_ATTEMPTS}); retrying after {sleep_s:.1f}s."
         if diagnostic:
-            logger.warning(
-                "%s Transient %s (attempt %d/%d); retrying after %.1fs.",
-                diagnostic,
-                label,
-                attempt,
-                self._RETRY_MAX_ATTEMPTS,
-                jittered,
-            )
-        else:
-            logger.warning(
-                "Transient %s (attempt %d/%d); retrying after %.1fs.",
-                label,
-                attempt,
-                self._RETRY_MAX_ATTEMPTS,
-                jittered,
-            )
-        await asyncio.sleep(jittered)
+            line = f"{line} {diagnostic}"
+        logger.warning("%s", line)
+        await asyncio.sleep(sleep_s)
         return min(current_backoff * 2, self._RETRY_MAX_BACKOFF_S)
 
     def _is_timeout_like_transient(self, transient: BaseException) -> bool:
@@ -663,7 +694,7 @@ class DeploymentSampler(_RestClient):
         if exhausted:
             summary = "DeploymentSampler request failed after exhausting retries on a timeout-like error."
         else:
-            summary = "DeploymentSampler request hit a timeout-like transient."
+            summary = "Timeout-like transient."
         fields = [
             summary,
             f"raw_error={label}",
@@ -708,6 +739,63 @@ class DeploymentSampler(_RestClient):
             )
         return " ".join(fields)
 
+    def _build_context(self, sampling_context: Any) -> dict[str, Any]:
+        """Merge sampler-static and per-call context into a small flat dict.
+
+        Only recognized, non-``None`` keys survive (session/run/checkpoint/
+        step/group/item); anything else (including payloads) is dropped.
+        """
+        merged: dict[str, Any] = {}
+        merged.update(clean_context(self._request_context))
+        merged.update(clean_context(sampling_context))
+        return merged
+
+    @staticmethod
+    def _classify_transient(transient: BaseException) -> str:
+        if isinstance(transient, _SSETruncationError):
+            return ERROR_KIND_SSE_TRUNCATION
+        if isinstance(transient, httpx.TimeoutException):
+            return ERROR_KIND_TIMEOUT
+        if isinstance(transient, httpx.HTTPStatusError):
+            if transient.response.status_code in DeploymentSampler._RETRY_TIMEOUT_STATUS_CODES:
+                return ERROR_KIND_TIMEOUT
+            return ERROR_KIND_HTTP_STATUS
+        return ERROR_KIND_CONNECTION
+
+    def _terminal_error(
+        self,
+        transient: BaseException,
+        *,
+        attempts: int,
+        final_status: int | None,
+        final_error_kind: str,
+        request_id: str | None,
+        context: dict[str, Any],
+        logical_request_id: str,
+        label: str,
+        prompt_ids: list[int],
+        max_tokens: int,
+        kwargs: dict[str, Any],
+        diagnostic_context: Any,
+    ) -> SamplingRequestError:
+        common = dict(
+            logical_request_id=logical_request_id,
+            model=self.model,
+            attempts=attempts,
+            final_status=final_status,
+            final_error_kind=final_error_kind,
+            request_id=request_id,
+            context=context,
+        )
+        if self._is_timeout_like_transient(transient):
+            # Preserve the existing rich timeout diagnostic as the message while
+            # attaching the structured attempt history.
+            message = self._timeout_diagnostic(
+                label, prompt_ids, max_tokens, kwargs, diagnostic_context, exhausted=True
+            )
+            return DeploymentSamplerTimeoutError(message, **common)
+        return SamplingRequestError(**common)
+
     async def _do_one_completion(
         self,
         prompt_ids: list[int],
@@ -721,7 +809,13 @@ class DeploymentSampler(_RestClient):
     ) -> List[SampledCompletion]:
         backoff = self._RETRY_BASE_BACKOFF_S
         diagnostic_context = kwargs.pop("timeout_diagnostic_context", None)
+        sampling_context = kwargs.pop("sampling_context", None)
         raw_logprobs_match_sampling = self._raw_logprobs_match_sampling_params(temperature, kwargs)
+        # One stable id for this logical request, constant across every retry and
+        # sent as X-Request-Id so a failure is searchable in server logs.
+        logical_request_id = uuid.uuid4().hex
+        context = self._build_context(sampling_context)
+
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             await self._acquire_concurrency()
             server_metrics: ServerMetrics | None = None
@@ -733,6 +827,7 @@ class DeploymentSampler(_RestClient):
                     max_tokens=max_tokens,
                     temperature=temperature,
                     raw_output=True,
+                    logical_request_id=logical_request_id,
                     **kwargs,
                 )
             except _SSETruncationError as e:
@@ -740,6 +835,8 @@ class DeploymentSampler(_RestClient):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
                     self._release_concurrency(server_metrics)
+                    # Non-retryable (e.g. 400/401/403/404/409/422): fail fast
+                    # with the raw HTTP error (unchanged behavior).
                     raise
                 transient, label = e, f"HTTP {e.response.status_code}"
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
@@ -757,19 +854,30 @@ class DeploymentSampler(_RestClient):
                     echo_mode,
                     raw_logprobs_match_sampling,
                 )
+
+            # Extract payload-free failure facts for this attempt.
+            response = getattr(transient, "response", None)
+            status = getattr(response, "status_code", None)
+            request_id = extract_request_id(getattr(response, "headers", None))
+            error_kind = self._classify_transient(transient)
+            retry_after_s = parse_retry_after(response) if response is not None else None
+
             if attempt == self._RETRY_MAX_ATTEMPTS:
-                if self._is_timeout_like_transient(transient):
-                    raise DeploymentSamplerTimeoutError(
-                        self._timeout_diagnostic(
-                            label,
-                            prompt_ids,
-                            max_tokens,
-                            kwargs,
-                            diagnostic_context,
-                            exhausted=True,
-                        )
-                    ) from transient
-                raise transient
+                raise self._terminal_error(
+                    transient,
+                    attempts=attempt,
+                    final_status=status,
+                    final_error_kind=error_kind,
+                    request_id=request_id,
+                    context=context,
+                    logical_request_id=logical_request_id,
+                    label=label,
+                    prompt_ids=prompt_ids,
+                    max_tokens=max_tokens,
+                    kwargs=kwargs,
+                    diagnostic_context=diagnostic_context,
+                ) from transient
+
             diagnostic = (
                 self._timeout_diagnostic(
                     label,
@@ -782,7 +890,14 @@ class DeploymentSampler(_RestClient):
                 if self._is_timeout_like_transient(transient)
                 else None
             )
-            backoff = await self._backoff_after_transient(label, attempt, backoff, diagnostic=diagnostic)
+            backoff = await self._backoff_after_transient(
+                label,
+                attempt,
+                backoff,
+                diagnostic=diagnostic,
+                retry_after_s=retry_after_s,
+                logical_request_id=logical_request_id,
+            )
 
         # Range above guarantees the last attempt either returns or re-raises.
         # This line is here only to satisfy the type checker's flow analysis.

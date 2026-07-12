@@ -1910,8 +1910,14 @@ class TestSseTruncationRetry:
         sampler.close()
 
     def test_truncation_exhausts_after_max_attempts(self, monkeypatch):
-        """After _RETRY_MAX_ATTEMPTS truncations, the error surfaces."""
+        """After _RETRY_MAX_ATTEMPTS truncations, a structured terminal error surfaces.
+
+        The terminal is now a ``SamplingRequestError`` carrying the attempt
+        history; the original ``_SSETruncationError`` is preserved as ``__cause__``.
+        """
         import random as _random
+
+        from fireworks.training.sdk.sampling import SamplingRequestError
 
         monkeypatch.setattr(_random, "random", lambda: 0.0)
         async def _no_sleep(_s):
@@ -1926,10 +1932,13 @@ class TestSseTruncationRetry:
             raise _SSETruncationError("truncated")
 
         sampler.async_completions_stream = _fake
-        with pytest.raises(_SSETruncationError):
+        with pytest.raises(SamplingRequestError) as excinfo:
             asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
 
         assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert excinfo.value.attempts == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert isinstance(excinfo.value.__cause__, _SSETruncationError)
+        assert excinfo.value.final_error_kind == "sse_truncation"
         sampler.close()
 
 
@@ -2033,7 +2042,9 @@ class TestSamplerTimeoutDiagnostics:
         assert "recent_client_ttft_p95=599.0s" in msg
         assert "If they are elevated, reduce rollout concurrency" in msg
         assert "otherwise investigate gateway, network, or client timeout limits" in msg
-        assert "DeploymentSampler request hit a timeout-like transient" in caplog.text
+        assert "Timeout-like transient" in caplog.text
+        # retry line is tagged with the logical request id so the call is identifiable
+        assert "DeploymentSampler request " in caplog.text
         sampler.close()
 
     def test_read_timeout_exhaustion_raises_generic_sampler_timeout_diagnostic(self, monkeypatch):

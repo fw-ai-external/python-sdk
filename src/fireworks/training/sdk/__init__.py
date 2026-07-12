@@ -44,6 +44,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     SampledCompletion,
+    SamplingRequestError,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
@@ -107,6 +108,7 @@ __all__ = [
     "AdaptiveConcurrencyController",
     "FixedConcurrencyController",
     "SampledCompletion",
+    "SamplingRequestError",
     "DeploymentSamplerTimeoutError",
     "ServerMetrics",
     # LR scheduler shared schema
