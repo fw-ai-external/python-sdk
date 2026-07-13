@@ -21,7 +21,6 @@ class TestCompletions:
     @parametrize
     def test_method_create_overload_1(self, client: Fireworks) -> None:
         completion = client.chat.completions.create(
-            messages=[{"role": "role"}],
             model="model",
         )
         assert_matches_type(CompletionCreateResponse, completion, path=["response"])
@@ -30,24 +29,6 @@ class TestCompletions:
     @parametrize
     def test_method_create_with_all_params_overload_1(self, client: Fireworks) -> None:
         completion = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "role",
-                    "content": "string",
-                    "reasoning_content": "reasoning_content",
-                    "tool_call_id": "tool_call_id",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "string",
-                                "name": "name",
-                            },
-                            "id": "id",
-                            "type": "type",
-                        }
-                    ],
-                }
-            ],
             model="model",
             context_length_exceeded_behavior="error",
             echo=True,
@@ -67,6 +48,24 @@ class TestCompletions:
             logprobs=0,
             max_completion_tokens=0,
             max_tokens=0,
+            messages=[
+                {
+                    "role": "role",
+                    "content": "string",
+                    "reasoning_content": "reasoning_content",
+                    "tool_call_id": "tool_call_id",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "string",
+                                "name": "name",
+                            },
+                            "id": "id",
+                            "type": "type",
+                        }
+                    ],
+                }
+            ],
             metadata={"foo": "string"},
             min_p=0,
             mirostat_lr=0,
@@ -81,6 +80,7 @@ class TestCompletions:
             presence_penalty=0,
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             prompt_cache_key="prompt_cache_key",
+            prompt_token_ids=[0],
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
@@ -89,8 +89,8 @@ class TestCompletions:
             response_format={
                 "type": "json_object",
                 "grammar": "grammar",
-                "json_schema": "string",
-                "schema": "string",
+                "json_schema": {"foo": "bar"},
+                "schema": {"foo": "bar"},
             },
             return_token_ids=True,
             safe_tokenization=True,
@@ -100,12 +100,20 @@ class TestCompletions:
             speculation="string",
             stop="string",
             stream=False,
+            stream_options={
+                "buffer_mode": "any",
+                "buffer_ms": 0,
+                "buffer_tokens": 0,
+                "include_internal_content": True,
+                "include_usage": True,
+            },
             temperature=0,
             thinking={
-                "type": "enabled",
                 "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "effort": "low",
                 "keep": "all",
+                "type": "enabled",
             },
             tool_choice="auto",
             tools=[
@@ -131,7 +139,6 @@ class TestCompletions:
     @parametrize
     def test_raw_response_create_overload_1(self, client: Fireworks) -> None:
         response = client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}],
             model="model",
         )
 
@@ -144,7 +151,6 @@ class TestCompletions:
     @parametrize
     def test_streaming_response_create_overload_1(self, client: Fireworks) -> None:
         with client.chat.completions.with_streaming_response.create(
-            messages=[{"role": "role"}],
             model="model",
         ) as response:
             assert not response.is_closed
@@ -159,7 +165,6 @@ class TestCompletions:
     @parametrize
     def test_method_create_overload_2(self, client: Fireworks) -> None:
         completion_stream = client.chat.completions.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         )
@@ -169,24 +174,6 @@ class TestCompletions:
     @parametrize
     def test_method_create_with_all_params_overload_2(self, client: Fireworks) -> None:
         completion_stream = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "role",
-                    "content": "string",
-                    "reasoning_content": "reasoning_content",
-                    "tool_call_id": "tool_call_id",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "string",
-                                "name": "name",
-                            },
-                            "id": "id",
-                            "type": "type",
-                        }
-                    ],
-                }
-            ],
             model="model",
             stream=True,
             context_length_exceeded_behavior="error",
@@ -207,6 +194,24 @@ class TestCompletions:
             logprobs=0,
             max_completion_tokens=0,
             max_tokens=0,
+            messages=[
+                {
+                    "role": "role",
+                    "content": "string",
+                    "reasoning_content": "reasoning_content",
+                    "tool_call_id": "tool_call_id",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "string",
+                                "name": "name",
+                            },
+                            "id": "id",
+                            "type": "type",
+                        }
+                    ],
+                }
+            ],
             metadata={"foo": "string"},
             min_p=0,
             mirostat_lr=0,
@@ -221,6 +226,7 @@ class TestCompletions:
             presence_penalty=0,
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             prompt_cache_key="prompt_cache_key",
+            prompt_token_ids=[0],
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
@@ -229,8 +235,8 @@ class TestCompletions:
             response_format={
                 "type": "json_object",
                 "grammar": "grammar",
-                "json_schema": "string",
-                "schema": "string",
+                "json_schema": {"foo": "bar"},
+                "schema": {"foo": "bar"},
             },
             return_token_ids=True,
             safe_tokenization=True,
@@ -239,12 +245,20 @@ class TestCompletions:
             service_tier="auto",
             speculation="string",
             stop="string",
+            stream_options={
+                "buffer_mode": "any",
+                "buffer_ms": 0,
+                "buffer_tokens": 0,
+                "include_internal_content": True,
+                "include_usage": True,
+            },
             temperature=0,
             thinking={
-                "type": "enabled",
                 "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "effort": "low",
                 "keep": "all",
+                "type": "enabled",
             },
             tool_choice="auto",
             tools=[
@@ -270,7 +284,6 @@ class TestCompletions:
     @parametrize
     def test_raw_response_create_overload_2(self, client: Fireworks) -> None:
         response = client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         )
@@ -283,7 +296,6 @@ class TestCompletions:
     @parametrize
     def test_streaming_response_create_overload_2(self, client: Fireworks) -> None:
         with client.chat.completions.with_streaming_response.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         ) as response:
@@ -305,7 +317,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_method_create_overload_1(self, async_client: AsyncFireworks) -> None:
         completion = await async_client.chat.completions.create(
-            messages=[{"role": "role"}],
             model="model",
         )
         assert_matches_type(CompletionCreateResponse, completion, path=["response"])
@@ -314,24 +325,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_method_create_with_all_params_overload_1(self, async_client: AsyncFireworks) -> None:
         completion = await async_client.chat.completions.create(
-            messages=[
-                {
-                    "role": "role",
-                    "content": "string",
-                    "reasoning_content": "reasoning_content",
-                    "tool_call_id": "tool_call_id",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "string",
-                                "name": "name",
-                            },
-                            "id": "id",
-                            "type": "type",
-                        }
-                    ],
-                }
-            ],
             model="model",
             context_length_exceeded_behavior="error",
             echo=True,
@@ -351,6 +344,24 @@ class TestAsyncCompletions:
             logprobs=0,
             max_completion_tokens=0,
             max_tokens=0,
+            messages=[
+                {
+                    "role": "role",
+                    "content": "string",
+                    "reasoning_content": "reasoning_content",
+                    "tool_call_id": "tool_call_id",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "string",
+                                "name": "name",
+                            },
+                            "id": "id",
+                            "type": "type",
+                        }
+                    ],
+                }
+            ],
             metadata={"foo": "string"},
             min_p=0,
             mirostat_lr=0,
@@ -365,6 +376,7 @@ class TestAsyncCompletions:
             presence_penalty=0,
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             prompt_cache_key="prompt_cache_key",
+            prompt_token_ids=[0],
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
@@ -373,8 +385,8 @@ class TestAsyncCompletions:
             response_format={
                 "type": "json_object",
                 "grammar": "grammar",
-                "json_schema": "string",
-                "schema": "string",
+                "json_schema": {"foo": "bar"},
+                "schema": {"foo": "bar"},
             },
             return_token_ids=True,
             safe_tokenization=True,
@@ -384,12 +396,20 @@ class TestAsyncCompletions:
             speculation="string",
             stop="string",
             stream=False,
+            stream_options={
+                "buffer_mode": "any",
+                "buffer_ms": 0,
+                "buffer_tokens": 0,
+                "include_internal_content": True,
+                "include_usage": True,
+            },
             temperature=0,
             thinking={
-                "type": "enabled",
                 "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "effort": "low",
                 "keep": "all",
+                "type": "enabled",
             },
             tool_choice="auto",
             tools=[
@@ -415,7 +435,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_raw_response_create_overload_1(self, async_client: AsyncFireworks) -> None:
         response = await async_client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}],
             model="model",
         )
 
@@ -428,7 +447,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_streaming_response_create_overload_1(self, async_client: AsyncFireworks) -> None:
         async with async_client.chat.completions.with_streaming_response.create(
-            messages=[{"role": "role"}],
             model="model",
         ) as response:
             assert not response.is_closed
@@ -443,7 +461,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_method_create_overload_2(self, async_client: AsyncFireworks) -> None:
         completion_stream = await async_client.chat.completions.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         )
@@ -453,24 +470,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_method_create_with_all_params_overload_2(self, async_client: AsyncFireworks) -> None:
         completion_stream = await async_client.chat.completions.create(
-            messages=[
-                {
-                    "role": "role",
-                    "content": "string",
-                    "reasoning_content": "reasoning_content",
-                    "tool_call_id": "tool_call_id",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "string",
-                                "name": "name",
-                            },
-                            "id": "id",
-                            "type": "type",
-                        }
-                    ],
-                }
-            ],
             model="model",
             stream=True,
             context_length_exceeded_behavior="error",
@@ -491,6 +490,24 @@ class TestAsyncCompletions:
             logprobs=0,
             max_completion_tokens=0,
             max_tokens=0,
+            messages=[
+                {
+                    "role": "role",
+                    "content": "string",
+                    "reasoning_content": "reasoning_content",
+                    "tool_call_id": "tool_call_id",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "string",
+                                "name": "name",
+                            },
+                            "id": "id",
+                            "type": "type",
+                        }
+                    ],
+                }
+            ],
             metadata={"foo": "string"},
             min_p=0,
             mirostat_lr=0,
@@ -505,6 +522,7 @@ class TestAsyncCompletions:
             presence_penalty=0,
             prompt_cache_isolation_key="prompt_cache_isolation_key",
             prompt_cache_key="prompt_cache_key",
+            prompt_token_ids=[0],
             prompt_truncate_len=0,
             raw_output=True,
             reasoning_effort="low",
@@ -513,8 +531,8 @@ class TestAsyncCompletions:
             response_format={
                 "type": "json_object",
                 "grammar": "grammar",
-                "json_schema": "string",
-                "schema": "string",
+                "json_schema": {"foo": "bar"},
+                "schema": {"foo": "bar"},
             },
             return_token_ids=True,
             safe_tokenization=True,
@@ -523,12 +541,20 @@ class TestAsyncCompletions:
             service_tier="auto",
             speculation="string",
             stop="string",
+            stream_options={
+                "buffer_mode": "any",
+                "buffer_ms": 0,
+                "buffer_tokens": 0,
+                "include_internal_content": True,
+                "include_usage": True,
+            },
             temperature=0,
             thinking={
-                "type": "enabled",
                 "budget_end_str": "budget_end_str",
                 "budget_tokens": 0,
+                "effort": "low",
                 "keep": "all",
+                "type": "enabled",
             },
             tool_choice="auto",
             tools=[
@@ -554,7 +580,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_raw_response_create_overload_2(self, async_client: AsyncFireworks) -> None:
         response = await async_client.chat.completions.with_raw_response.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         )
@@ -567,7 +592,6 @@ class TestAsyncCompletions:
     @parametrize
     async def test_streaming_response_create_overload_2(self, async_client: AsyncFireworks) -> None:
         async with async_client.chat.completions.with_streaming_response.create(
-            messages=[{"role": "role"}],
             model="model",
             stream=True,
         ) as response:

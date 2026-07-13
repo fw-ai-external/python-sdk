@@ -73,7 +73,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -85,6 +85,7 @@ class CompletionsResource(SyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -172,8 +173,10 @@ class CompletionsResource(SyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -186,12 +189,12 @@ class CompletionsResource(SyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -266,10 +269,6 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -332,10 +331,12 @@ class CompletionsResource(SyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -349,9 +350,14 @@ class CompletionsResource(SyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -376,9 +382,11 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -424,7 +432,7 @@ class CompletionsResource(SyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -442,6 +450,12 @@ class CompletionsResource(SyncAPIResource):
               [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format)
               as they become available, with the stream terminated by a `data: [DONE]`
               message.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -468,8 +482,9 @@ class CompletionsResource(SyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -480,15 +495,13 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -546,7 +559,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -557,6 +570,7 @@ class CompletionsResource(SyncAPIResource):
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -650,8 +664,10 @@ class CompletionsResource(SyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -664,12 +680,12 @@ class CompletionsResource(SyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -744,10 +760,6 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -810,10 +822,12 @@ class CompletionsResource(SyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -827,9 +841,14 @@ class CompletionsResource(SyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -854,9 +873,11 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -902,7 +923,7 @@ class CompletionsResource(SyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -914,6 +935,12 @@ class CompletionsResource(SyncAPIResource):
 
           stop: Up to 4 sequences where the API will stop generating further tokens. The
               returned text will NOT contain the stop sequence.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -940,8 +967,9 @@ class CompletionsResource(SyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -952,15 +980,13 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -1018,7 +1044,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1029,6 +1055,7 @@ class CompletionsResource(SyncAPIResource):
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1122,8 +1149,10 @@ class CompletionsResource(SyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -1136,12 +1165,12 @@ class CompletionsResource(SyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -1216,10 +1245,6 @@ class CompletionsResource(SyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -1282,10 +1307,12 @@ class CompletionsResource(SyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -1299,9 +1326,14 @@ class CompletionsResource(SyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -1326,9 +1358,11 @@ class CompletionsResource(SyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -1374,7 +1408,7 @@ class CompletionsResource(SyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -1386,6 +1420,12 @@ class CompletionsResource(SyncAPIResource):
 
           stop: Up to 4 sequences where the API will stop generating further tokens. The
               returned text will NOT contain the stop sequence.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -1412,8 +1452,9 @@ class CompletionsResource(SyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -1424,15 +1465,13 @@ class CompletionsResource(SyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -1489,7 +1528,7 @@ class CompletionsResource(SyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1501,6 +1540,7 @@ class CompletionsResource(SyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1555,6 +1595,7 @@ class CompletionsResource(SyncAPIResource):
                     "speculation": speculation,
                     "stop": stop,
                     "stream": stream,
+                    "stream_options": stream_options,
                     "temperature": temperature,
                     "thinking": thinking,
                     "top_k": top_k,
@@ -1623,7 +1664,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -1635,6 +1676,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -1722,8 +1764,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -1736,12 +1780,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -1816,10 +1860,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -1882,10 +1922,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -1899,9 +1941,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -1926,9 +1973,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -1974,7 +2023,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -1992,6 +2041,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
               [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#Event_stream_format)
               as they become available, with the stream terminated by a `data: [DONE]`
               message.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -2018,8 +2073,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -2030,15 +2086,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -2096,7 +2150,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -2107,6 +2161,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -2200,8 +2255,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -2214,12 +2271,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -2294,10 +2351,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2360,10 +2413,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -2377,9 +2432,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -2404,9 +2464,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -2452,7 +2514,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -2464,6 +2526,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           stop: Up to 4 sequences where the API will stop generating further tokens. The
               returned text will NOT contain the stop sequence.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -2490,8 +2558,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -2502,15 +2571,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -2568,7 +2635,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -2579,6 +2646,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -2672,8 +2740,10 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               eg. data:image/jpeg;base64,<base64 encoded str>
 
-              Additionally, the number of images provided should match the number of '<image>'
-              special token in the prompt
+              Additionally, the number of images provided should match the number of image
+              placeholder tokens in the prompt (string prompts: '<image>' or model-specific
+              pads such as '<|image_pad|>'; tokenized prompts: one image pad token ID per
+              image, unexpanded).
 
           logit_bias: Modify the likelihood of specified tokens appearing in the completion. Accepts a
               json object that maps tokens (specified by their token ID in the tokenizer) to
@@ -2686,12 +2756,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
               If set to `true`, log probabilities are included and the number of alternatives
               can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-              If set to an integer N (0-5), include log probabilities for up to N most likely
-              tokens per position in the legacy format.
+              If set to an integer N, include log probabilities for up to N most likely tokens
+              per position in the legacy format. N must be between 0 and the deployment's
+              `--max-logprobs` limit (5 by default).
 
               The API will always return the logprob of the sampled token, so there may be up
-              to `logprobs+1` elements in the response when an integer is used. The maximum
-              value for the integer form is 5.
+              to `logprobs+1` elements in the response when an integer is used.
 
           max_completion_tokens: Alias for max_tokens. Cannot be specified together with max_tokens.
 
@@ -2766,10 +2836,6 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 completed requests)
               - `speculation-acceptance`: Speculation acceptance rates by position
               - `backend-host`: Hostname of the backend server
-              - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-                that served the request. Changes when the pod template (image, args, env,
-                resources, mounted ConfigMap references, etc.) changes, so during a partial
-                rollout different replicas will report different values.
               - `num-concurrent-requests`: Number of concurrent requests
               - `deployment`: Deployment name
               - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -2832,10 +2898,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               **Model-specific behavior:**
 
-              - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-                `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-                output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-                and are not hard budgets.
+              - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+                conversation styles. Older chat-mode Qwen3 deployments may opt into
+                `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+                styles, use `'none'` or `false` to disable. Supports integer token limits to
+                cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+                model-specific behavior and are not hard budgets.
               - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
                 omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
                 `'high'`. `'none'` and boolean values are rejected.
@@ -2849,9 +2917,14 @@ class AsyncCompletionsResource(AsyncAPIResource):
                 to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
                 thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
                 or `false` disables thinking.
-              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-                reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-                have no additional effect.
+              - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+                Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+                integers have no additional effect.
+              - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+                `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+                `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+                omitted, the model default (`Max`) applies. `'none'` or `false` disables
+                thinking.
               - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
                 `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
                 — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -2876,9 +2949,11 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               | Model            | Default         | Supported values                             |
               | ---------------- | --------------- | -------------------------------------------- |
+              | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
               | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+              | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
               | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
               | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -2924,7 +2999,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
               `"non_zero_list"` additionally returns active token IDs in `sampling_mask`;
               `"non_zero_buffer"` additionally returns a base64-encoded little-endian uint32
               buffer of active token IDs. Non-zero payloads are omitted for positions with
-              more active tokens than FIREWORKS_SAMPLING_MASK_NON_ZERO_LIMIT (default 1000).
+              more active tokens than 1000.
 
           seed: Random seed for deterministic sampling.
 
@@ -2936,6 +3011,12 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
           stop: Up to 4 sequences where the API will stop generating further tokens. The
               returned text will NOT contain the stop sequence.
+
+          stream_options: Options for streaming responses. Only valid with `stream=true`. Fireworks
+              includes a final SSE chunk carrying usage totals by default; set
+              `include_usage=false` to opt out. The `buffer_tokens` / `buffer_ms` /
+              `buffer_mode` fields coalesce SSE chunks by token count and/or time (vLLM
+              backend; override the deployment default).
 
           temperature: What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
               make the output more random, while lower values like 0.2 will make it more
@@ -2962,8 +3043,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               - `{"type": "disabled"}` - Disable thinking (equivalent to
                 `reasoning_effort: "none"`)
 
-              **Note:** Cannot be specified together with `reasoning_effort`. If both are
-              provided, a validation error will be raised.
+              **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+              `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+              the effort level. `type=disabled` always disables thinking.
 
           top_k: Top-k sampling is another sampling method where the k most probable next tokens
               are filtered and the probability mass is redistributed among only those k next
@@ -2974,15 +3056,13 @@ class AsyncCompletionsResource(AsyncAPIResource):
 
               Example: `50`
 
-          top_logprobs: An integer between 0 and 5 specifying the number of most likely tokens to return
-              at each token position, each with an associated log probability. The minimum
-              value is 0 and the maximum value is 5.
+          top_logprobs: An integer specifying the number of most likely tokens to return at each token
+              position, each with an associated log probability. Must be between 0 and the
+              deployment's `--max-logprobs` limit (5 by default).
 
               When `logprobs` is set, `top_logprobs` can be used to modify how many top log
               probabilities are returned. If `top_logprobs` is not set, the API will return up
               to `logprobs` tokens per position.
-
-              Required range: `0 <= x <= 5`
 
           top_p: An alternative to sampling with temperature, called nucleus sampling, where the
               model considers the results of the tokens with top_p probability mass. So 0.1
@@ -3039,7 +3119,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         prompt_cache_isolation_key: Optional[str] | Omit = omit,
         prompt_cache_key: Optional[str] | Omit = omit,
         raw_output: Optional[bool] | Omit = omit,
-        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+        reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
         | Omit = omit,
         reasoning_history: Optional[Literal["disabled", "interleaved", "preserved"]] | Omit = omit,
         repetition_penalty: Optional[float] | Omit = omit,
@@ -3051,6 +3131,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         speculation: Union[str, Iterable[int], None] | Omit = omit,
         stop: Union[str, SequenceNotStr[str], None] | Omit = omit,
         stream: Optional[Literal[False]] | Literal[True] | Omit = omit,
+        stream_options: Optional[completion_create_params.StreamOptions] | Omit = omit,
         temperature: Optional[float] | Omit = omit,
         thinking: Optional[completion_create_params.Thinking] | Omit = omit,
         top_k: Optional[int] | Omit = omit,
@@ -3105,6 +3186,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "speculation": speculation,
                     "stop": stop,
                     "stream": stream,
+                    "stream_options": stream_options,
                     "temperature": temperature,
                     "thinking": thinking,
                     "top_k": top_k,

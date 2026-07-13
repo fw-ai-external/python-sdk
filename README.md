@@ -33,13 +33,13 @@ client = Fireworks(
 )
 
 completion = client.chat.completions.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 print(completion.id)
 ```
@@ -65,13 +65,13 @@ client = AsyncFireworks(
 
 async def main() -> None:
     completion = await client.chat.completions.create(
+        model="accounts/fireworks/models/kimi-k2-instruct-0905",
         messages=[
             {
                 "role": "user",
                 "content": "How do LLMs work?",
             }
         ],
-        model="accounts/fireworks/models/kimi-k2-instruct-0905",
     )
     print(completion.id)
 
@@ -107,13 +107,13 @@ async def main() -> None:
         http_client=DefaultAioHttpClient(),
     ) as client:
         completion = await client.chat.completions.create(
+            model="accounts/fireworks/models/kimi-k2-instruct-0905",
             messages=[
                 {
                     "role": "user",
                     "content": "How do LLMs work?",
                 }
             ],
-            model="accounts/fireworks/models/kimi-k2-instruct-0905",
         )
         print(completion.id)
 
@@ -131,14 +131,14 @@ from fireworks import Fireworks
 client = Fireworks()
 
 stream = client.chat.completions.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    stream=True,
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    stream=True,
 )
 for completion in stream:
     print(completion.id)
@@ -152,14 +152,14 @@ from fireworks import AsyncFireworks
 client = AsyncFireworks()
 
 stream = await client.chat.completions.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
+    stream=True,
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
-    stream=True,
 )
 async for completion in stream:
     print(completion.id)
@@ -255,7 +255,6 @@ from fireworks import Fireworks
 client = Fireworks()
 
 completion = client.chat.completions.create(
-    messages=[{"role": "role"}],
     model="model",
     response_format={"type": "json_object"},
 )
@@ -298,13 +297,13 @@ client = Fireworks()
 
 try:
     client.chat.completions.create(
+        model="accounts/fireworks/models/kimi-k2-instruct-0905",
         messages=[
             {
                 "role": "user",
                 "content": "How do LLMs work?",
             }
         ],
-        model="accounts/fireworks/models/kimi-k2-instruct-0905",
     )
 except fireworks.APIConnectionError as e:
     print("The server could not be reached")
@@ -349,13 +348,13 @@ client = Fireworks(
 
 # Or, configure per-request:
 client.with_options(max_retries=5).chat.completions.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 ```
 
@@ -380,13 +379,13 @@ client = Fireworks(
 
 # Override per-request:
 client.with_options(timeout=5.0).chat.completions.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 ```
 
@@ -429,11 +428,11 @@ from fireworks import Fireworks
 
 client = Fireworks()
 response = client.chat.completions.with_raw_response.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
     messages=[{
         "role": "user",
         "content": "How do LLMs work?",
     }],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 )
 print(response.headers.get('X-My-Header'))
 
@@ -453,13 +452,13 @@ To stream the response body, use `.with_streaming_response` instead, which requi
 
 ```python
 with client.chat.completions.with_streaming_response.create(
+    model="accounts/fireworks/models/kimi-k2-instruct-0905",
     messages=[
         {
             "role": "user",
             "content": "How do LLMs work?",
         }
     ],
-    model="accounts/fireworks/models/kimi-k2-instruct-0905",
 ) as response:
     print(response.headers.get("X-My-Header"))
 

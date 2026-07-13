@@ -20,9 +20,11 @@ __all__ = [
     "PredictionPredictedOutputContentUnionMember1ImageURL",
     "PredictionPredictedOutputContentUnionMember1VideoURL",
     "ResponseFormat",
+    "StreamOptions",
     "Thinking",
     "ThinkingThinkingConfigEnabled",
     "ThinkingThinkingConfigDisabled",
+    "ThinkingThinkingConfigAdaptive",
     "ToolChoice",
     "ToolChoiceFunctionSelection",
     "ToolChoiceFunctionSelectionFunction",
@@ -34,9 +36,6 @@ __all__ = [
 
 
 class CompletionCreateParamsBase(TypedDict, total=False):
-    messages: Required[Iterable[ChatMessage]]
-    """A list of messages comprising the conversation so far."""
-
     model: Required[str]
     """The name of the model to use.
 
@@ -128,12 +127,12 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     If set to `true`, log probabilities are included and the number of alternatives
     can be controlled via `top_logprobs` (OpenAI-compatible behavior).
 
-    If set to an integer N (0-5), include log probabilities for up to N most likely
-    tokens per position in the legacy format.
+    If set to an integer N, include log probabilities for up to N most likely tokens
+    per position in the legacy format. N must be between 0 and the deployment's
+    `--max-logprobs` limit (5 by default).
 
     The API will always return the logprob of the sampled token, so there may be up
-    to `logprobs+1` elements in the response when an integer is used. The maximum
-    value for the integer form is 5.
+    to `logprobs+1` elements in the response when an integer is used.
     """
 
     max_completion_tokens: Optional[int]
@@ -146,6 +145,13 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     length, the behavior depends on context_length_exceeded_behavior. By default,
     max_tokens will be lowered to fit in the context window instead of returning an
     error.
+    """
+
+    messages: Iterable[ChatMessage]
+    """A list of messages comprising the conversation so far.
+
+    When `prompt_token_ids` is supplied this field is ignored (the caller is taking
+    responsibility for chat-template rendering and tokenization upstream).
     """
 
     metadata: Optional[Dict[str, str]]
@@ -230,10 +236,6 @@ class CompletionCreateParamsBase(TypedDict, total=False):
       completed requests)
     - `speculation-acceptance`: Speculation acceptance rates by position
     - `backend-host`: Hostname of the backend server
-    - `pod-template-hash`: Kubernetes `pod-template-hash` label of the backend pod
-      that served the request. Changes when the pod template (image, args, env,
-      resources, mounted ConfigMap references, etc.) changes, so during a partial
-      rollout different replicas will report different values.
     - `num-concurrent-requests`: Number of concurrent requests
     - `deployment`: Deployment name
     - `tokenizer-queue-duration`: Time spent in tokenizer queue
@@ -283,6 +285,19 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     (takes priority over the 'user' field).
     """
 
+    prompt_token_ids: Optional[Iterable[int]]
+    """Pre-tokenized prompt.
+
+    When set, the server skips chat-template rendering and tokenization for the
+    input — the supplied token IDs are fed directly to generation. Generation, the
+    response formatter (incl. `--formatter-backend vllm` parsers), and tool-call
+    routing all run as usual on the model's output.
+
+    Intended for upstream gateways (e.g. dynamo) that own the tokenizer and chat
+    template, and want this server only to generate and format. Mutually exclusive
+    with `messages`: passing both is a 400.
+    """
+
     prompt_truncate_len: Optional[int]
     """The size (in tokens) to which to truncate chat prompts.
 
@@ -303,7 +318,7 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     raw_output: Optional[bool]
     """Return raw output from the model."""
 
-    reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none"], int, bool, None]
+    reasoning_effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
     """Controls reasoning behavior for supported models.
 
     When enabled, the model's reasoning appears in the `reasoning_content` field of
@@ -327,10 +342,12 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     **Model-specific behavior:**
 
-    - **Qwen3 (e.g., Qwen3-8B)**: Grammar-based reasoning. Default reasoning on. Use
-      `'none'` or `false` to disable. Supports integer token limits to cap reasoning
-      output. `'low'`, `'medium'`, and `'high'` keep their model-specific behavior
-      and are not hard budgets.
+    - **Qwen3**: Grammar-based reasoning on the reasoning-enabled `qwen3`/`qwen3p5`
+      conversation styles. Older chat-mode Qwen3 deployments may opt into
+      `qwen3-no-thinking`, which disables reasoning support. For reasoning-enabled
+      styles, use `'none'` or `false` to disable. Supports integer token limits to
+      cap reasoning output. `'low'`, `'medium'`, and `'high'` keep their
+      model-specific behavior and are not hard budgets.
     - **MiniMax M2**: Reasoning is required (always on). Defaults to `'medium'` when
       omitted. Accepts only string `reasoning_effort`: `'low'`, `'medium'`, or
       `'high'`. `'none'` and boolean values are rejected.
@@ -344,9 +361,14 @@ class CompletionCreateParamsBase(TypedDict, total=False):
       to `'max'`. `'max'` prepends a thorough-reasoning preamble; `'high'` enables
       thinking. `'low'` and `'medium'` are silently promoted to `'high'`. `'none'`
       or `false` disables thinking.
-    - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7**: Binary on/off reasoning. Default
-      reasoning on. Use `'none'` or `false` to disable; effort levels and integers
-      have no additional effect.
+    - **GLM 4.5, GLM 4.5 Air, GLM 4.6, GLM 4.7, GLM 5.1**: Binary on/off reasoning.
+      Default reasoning on. Use `'none'` or `false` to disable; effort levels and
+      integers have no additional effect.
+    - **GLM 5.2**: Two thinking tiers, `High` and `Max` (rendered as a
+      `Reasoning Effort:` system line). `'high'` selects High; `'low'` and
+      `'medium'` are collapsed to `'high'`; `'max'` and `'xhigh'` select Max; when
+      omitted, the model default (`Max`) applies. `'none'` or `false` disables
+      thinking.
     - **Harmony (OpenAI GPT-OSS 120B, GPT-OSS 20B)**: Accepts only `'low'`,
       `'medium'`, or `'high'`. Does not support `'none'`, `false`, or integer values
       — using these will return an error (e.g., "Invalid reasoning effort: none").
@@ -374,9 +396,11 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     | Model            | Default         | Supported values                             |
     | ---------------- | --------------- | -------------------------------------------- |
+    | Kimi K2.7        | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
     | Kimi K2.6        | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | Kimi K2 Instruct | `'preserved'`   | `'disabled'`, `'interleaved'`, `'preserved'` |
     | MiniMax M2       | `'interleaved'` | `'disabled'`, `'interleaved'`                |
+    | GLM-5.2          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | GLM-4.7          | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |
     | GLM-4.6          | `'interleaved'` | `'disabled'`, `'interleaved'`                |
     | Qwen 3.6         | `'preserved'`   | `'disabled'`, `'preserved'`                  |
@@ -428,10 +452,13 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     When true, special tokens in user-provided content are never interpreted as
     actual special tokens during tokenization. This prevents prompt injection via
     special token strings (e.g. <|im_start|>, <｜ User ｜>). Supported for models
-    using Jinja or HuggingFace chat templates with HuggingFace tokenizers. Returns
-    an error if the model does not support it, or if combined with
+    using Jinja or HuggingFace chat templates with HuggingFace tokenizers. Explicit
+    true returns an error if the model does not support it, or if combined with
     custom_chat_template on HuggingFace-backed models. Note: prompt_truncate_len is
-    not applied when safe_tokenization is enabled.
+    not applied when safe_tokenization is enabled. When omitted, safe tokenization
+    is enabled by default on a best-effort basis: it is applied only where the model
+    supports it and the request is text-only with no custom_chat_template and no
+    prompt_truncate_len, and otherwise falls back to normal tokenization.
     """
 
     sampling_mask: Optional[Literal["count", "non_zero_list", "non_zero_buffer"]]
@@ -441,8 +468,8 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     the number of token logits still eligible for sampling after filters such as
     top_p and top_k are applied. `"non_zero_list"` additionally returns active token
     IDs in `sampling_mask`; `"non_zero_buffer"` additionally returns a
-    base64-encoded little-endian uint32 buffer of active token IDs. The field is
-    ommitted if the number of unmasked tokens exceeds 1000.
+    base64-encoded little-endian uint32 buffer of active token IDs. Non-zero
+    payloads are omitted for positions with more active tokens than 1000.
     """
 
     seed: Optional[int]
@@ -462,6 +489,15 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     """Up to 4 sequences where the API will stop generating further tokens.
 
     The returned text will NOT contain the stop sequence.
+    """
+
+    stream_options: Optional[StreamOptions]
+    """Options for streaming responses.
+
+    Only valid with `stream=true`. Fireworks includes a final SSE chunk carrying
+    usage totals by default; set `include_usage=false` to opt out. The
+    `buffer_tokens` / `buffer_ms` / `buffer_mode` fields coalesce SSE chunks by
+    token count and/or time (vLLM backend; override the deployment default).
     """
 
     temperature: Optional[float]
@@ -494,8 +530,9 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     - `{"type": "disabled"}` - Disable thinking (equivalent to
       `reasoning_effort: "none"`)
 
-    **Note:** Cannot be specified together with `reasoning_effort`. If both are
-    provided, a validation error will be raised.
+    **Precedence with `reasoning_effort`:** `thinking.effort` (when set) overrides
+    `reasoning_effort`; otherwise, for `type=enabled`, `reasoning_effort` is used as
+    the effort level. `type=disabled` always disables thinking.
     """
 
     tool_choice: ToolChoice
@@ -542,15 +579,13 @@ class CompletionCreateParamsBase(TypedDict, total=False):
 
     top_logprobs: Optional[int]
     """
-    An integer between 0 and 5 specifying the number of most likely tokens to return
-    at each token position, each with an associated log probability. The minimum
-    value is 0 and the maximum value is 5.
+    An integer specifying the number of most likely tokens to return at each token
+    position, each with an associated log probability. Must be between 0 and the
+    deployment's `--max-logprobs` limit (5 by default).
 
     When `logprobs` is set, `top_logprobs` can be used to modify how many top log
     probabilities are returned. If `top_logprobs` is not set, the API will return up
     to `logprobs` tokens per position.
-
-    Required range: `0 <= x <= 5`
     """
 
     top_p: Optional[float]
@@ -740,15 +775,58 @@ class ResponseFormat(TypedDict, total=False):
 
     grammar: Optional[str]
 
-    json_schema: Union[str, Dict[str, object], None]
+    json_schema: Union[Dict[str, object], str, None]
 
-    schema: Union[str, Dict[str, object], None]
+    schema: Union[Dict[str, object], str, None]
+
+
+class StreamOptions(TypedDict, total=False):
+    """Options for streaming responses.
+
+    Only valid with ``stream=true``. Fireworks includes a final SSE chunk carrying usage totals by default; set ``include_usage=false`` to opt out. The ``buffer_tokens`` / ``buffer_ms`` / ``buffer_mode`` fields coalesce SSE chunks by token count and/or time (vLLM backend; override the deployment default).
+    """
+
+    buffer_mode: Optional[Literal["any", "all"]]
+    """
+    When both buffer_tokens and buffer_ms are set: 'any' flushes when either
+    threshold is reached; 'all' flushes only when both are. Overrides the deployment
+    default when set; defaults to 'any'.
+    """
+
+    buffer_ms: Optional[float]
+    """
+    Coalesce streaming SSE chunks for up to this many milliseconds before flushing a
+    merged chunk. 0 disables the time threshold. Honored only on the vLLM backend;
+    overrides the deployment default when set.
+    """
+
+    buffer_tokens: Optional[int]
+    """
+    Coalesce streaming SSE chunks until this many text deltas (~tokens) accumulate
+    before flushing a merged chunk. 0 disables the token threshold. Honored only on
+    the vLLM backend; overrides the deployment default when set.
+    """
+
+    include_internal_content: Optional[bool]
+    """
+    When true, include an `internal_content` object (currently `token_id`) inside
+    each streaming delta — equivalent to `return_token_ids`, emitted under
+    `choices[].delta.internal_content`. Omitted entirely from response chunks when
+    false.
+    """
+
+    include_usage: Optional[bool]
+    """
+    Whether to include a trailing SSE chunk with usage totals (with an empty
+    `choices` array). Unlike the OpenAI spec, Fireworks includes usage by default
+    for streaming responses; set this to `false` to opt out. When emitted, usage
+    rides a separate final chunk (before `data: [DONE]`), not the chunk carrying
+    `finish_reason`.
+    """
 
 
 class ThinkingThinkingConfigEnabled(TypedDict, total=False):
     """Configuration for enabling extended thinking (Anthropic-compatible format)."""
-
-    type: Required[Literal["enabled"]]
 
     budget_end_str: Optional[str]
     """
@@ -767,6 +845,13 @@ class ThinkingThinkingConfigEnabled(TypedDict, total=False):
     response quality. Must be >= 1024 if specified.
     """
 
+    effort: Union[Literal["low", "medium", "high", "xhigh", "max", "none", "adaptive"], int, bool, None]
+    """Reasoning effort level (Kimi/Moonshot spec).
+
+    Accepts the same values as top-level `reasoning_effort`; when set it takes
+    precedence over (overwrites) `reasoning_effort`.
+    """
+
     keep: Optional[Literal["all"]]
     """Controls whether historical reasoning content is preserved in the prompt.
 
@@ -776,6 +861,8 @@ class ThinkingThinkingConfigEnabled(TypedDict, total=False):
     `type` is `"enabled"`.
     """
 
+    type: Literal["enabled"]
+
 
 class ThinkingThinkingConfigDisabled(TypedDict, total=False):
     """Configuration for disabling extended thinking (Anthropic-compatible format)."""
@@ -783,7 +870,20 @@ class ThinkingThinkingConfigDisabled(TypedDict, total=False):
     type: Required[Literal["disabled"]]
 
 
-Thinking: TypeAlias = Union[ThinkingThinkingConfigEnabled, ThinkingThinkingConfigDisabled]
+class ThinkingThinkingConfigAdaptive(TypedDict, total=False):
+    """Configuration that lets the model decide whether to think (MiniMax M3).
+
+    Per the M3 API spec (§1.4), `{"type": "adaptive"}` is M3's default — the model
+    decides whether to emit a thinking phase. No forced first token is applied.
+    Currently accepted only by MiniMax M3; other model families reject it.
+    """
+
+    type: Required[Literal["adaptive"]]
+
+
+Thinking: TypeAlias = Union[
+    ThinkingThinkingConfigEnabled, ThinkingThinkingConfigDisabled, ThinkingThinkingConfigAdaptive
+]
 
 
 class ToolChoiceFunctionSelectionFunction(TypedDict, total=False):
@@ -797,13 +897,23 @@ class ToolChoiceFunctionSelection(TypedDict, total=False):
 
 
 class ToolChoiceAllowedToolsSelectionAllowedTools(TypedDict, total=False):
+    """OpenAI-compatible allowed_tools sub-object.
+
+    See https://platform.openai.com/docs/guides/function-calling#tool-choice
+
+    The ``tools`` list mirrors the ``tools`` list passed at the top level: each
+    entry must be ``{"type": "function", "function": {"name": "<fn>"}}``.
+    Fireworks only supports function tools today, so other ``type`` values are
+    rejected.
+    """
+
     mode: Required[Literal["auto", "required"]]
     """
     `auto` lets the model pick between generating a message and calling one of the
     allowed tools. `required` forces the model to call one of them.
     """
 
-    tools: Required[Iterable[object]]
+    tools: Required[Iterable[Dict[str, object]]]
     """A list of tool references the model is allowed to invoke.
 
     Each entry must be of the form
@@ -813,12 +923,23 @@ class ToolChoiceAllowedToolsSelectionAllowedTools(TypedDict, total=False):
 
 
 class ToolChoiceAllowedToolsSelection(TypedDict, total=False):
-    """OpenAI-compatible `tool_choice.type = "allowed_tools"` selection.
+    """OpenAI-compatible ``tool_choice.type = "allowed_tools"`` selection.
 
-    Restricts the model's tool calls to a subset of the top-level `tools` list without modifying the prompt, preserving prompt cache hits.
+    Restricts the model's tool calls to a subset of the top-level ``tools`` list
+    *without modifying the prompt*, preserving prompt cache hits. The full set
+    of tool definitions is still rendered into the prompt for the model; only
+    the grammar (and downstream parsing) is constrained to the allowed subset.
     """
 
     allowed_tools: Required[ToolChoiceAllowedToolsSelectionAllowedTools]
+    """OpenAI-compatible allowed_tools sub-object.
+
+    See https://platform.openai.com/docs/guides/function-calling#tool-choice
+
+    The `tools` list mirrors the `tools` list passed at the top level: each entry
+    must be `{"type": "function", "function": {"name": "<fn>"}}`. Fireworks only
+    supports function tools today, so other `type` values are rejected.
+    """
 
     type: Required[Literal["allowed_tools"]]
 
