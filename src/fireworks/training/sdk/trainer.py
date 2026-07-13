@@ -294,7 +294,6 @@ class TrainerJobConfig:
     a client-side ID before POSTing so HTTP retries for the same create request
     are idempotent.
     """
-
     def validate(self) -> None:
         """Self-contained pre-flight check. Call before ``_create()``.
 
@@ -497,7 +496,6 @@ class TrainerJobManager(FireworksClient):
         # Run-level HSDP knob, valid on both shape and manual paths.
         if config.trainer_replica_count is not None:
             payload["trainerReplicaCount"] = config.trainer_replica_count
-
         if config.max_context_length is not None and not is_shape_path:
             training_config["maxContextLength"] = config.max_context_length
         if config.custom_image_tag:
