@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 (2026-07-13)
+
+Full Changelog: [v1.2.0-alpha.89...v1.2.0](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.89...v1.2.0)
+
+### Features
+* **serverless-rl:** single retry owner + structured sampling error (SDK) ([7113d1a](https://github.com/fw-ai-external/python-sdk/commit/7113d1aa7f6d43e62044f64ba72de2012543d41f))
+
+## 1.2.0 (2026-07-11)
+
+Full Changelog: [v1.2.0-alpha.89...v1.2.0](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.89...v1.2.0)
+
 ## 1.2.0-alpha.89 (2026-07-10)
 
 Full Changelog: [v1.2.0-alpha.88...v1.2.0-alpha.89](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.88...v1.2.0-alpha.89)
