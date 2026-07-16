@@ -1727,6 +1727,82 @@ class TestAdaptiveConcurrencyController:
         ctrl.release(ServerMetrics(prefill_queue_duration=5.0))
         assert ctrl.window_size == 10  # unchanged until step_completed()
 
+    def test_adjustment_interval_updates_within_step(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 10
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 5
+
+        summary = ctrl.step_completed()
+        assert summary["window"] == 5
+        assert "avg_pq" not in summary
+
+    def test_adjustment_interval_does_not_shrink_below_in_flight_requests(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=4,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=1,
+        )
+
+        async def _test() -> None:
+            for _ in range(4):
+                await ctrl.acquire()
+
+            ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+            assert ctrl.window_size == 3
+            assert ctrl._semaphore._value == 0
+
+            blocked_acquire = asyncio.create_task(ctrl.acquire())
+            await asyncio.sleep(0)
+            assert not blocked_acquire.done()
+
+            ctrl.release()
+            await asyncio.wait_for(blocked_acquire, timeout=1.0)
+
+        asyncio.run(_test())
+
+    def test_adjustment_interval_counts_releases_without_metrics(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 10
+
+        ctrl.release(None)
+        assert ctrl.window_size == 5
+
+    def test_adjustment_interval_restarts_at_step_boundaries(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        ctrl.step_completed()
+        assert ctrl.window_size == 5
+
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 5
+
+    def test_adjustment_interval_must_be_non_negative(self):
+        with pytest.raises(ValueError, match="adjustment_interval must be non-negative"):
+            AdaptiveConcurrencyController(adjustment_interval=-1)
+
     def test_step_completed_decrease_on_high_pq(self):
         ctrl = AdaptiveConcurrencyController(
             initial_window=10, prefill_queue_target=0.5,
@@ -1807,6 +1883,17 @@ class TestAdaptiveConcurrencyController:
 
 
 class TestStreamingCompletions:
+    def test_concurrency_controller_can_be_replaced(self):
+        initial = AdaptiveConcurrencyController(initial_window=8)
+        replacement = AdaptiveConcurrencyController(initial_window=32)
+        sampler = _make_sampler(concurrency_controller=initial)
+
+        sampler.concurrency_controller = replacement
+
+        assert sampler.concurrency_controller is replacement
+        assert sampler._concurrency_controller is replacement
+        sampler.close()
+
     def test_streaming_with_adaptive_controller(self):
         import json as _json
         prompt_ids = [1, 2, 3]

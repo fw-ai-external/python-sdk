@@ -189,6 +189,20 @@ class DeploymentSampler(_RestClient):
 
         self._concurrency_controller = concurrency_controller
 
+    @property
+    def concurrency_controller(
+        self,
+    ) -> "AdaptiveConcurrencyController | FixedConcurrencyController | None":
+        """Concurrency controller used for subsequent sampling requests."""
+        return self._concurrency_controller
+
+    @concurrency_controller.setter
+    def concurrency_controller(
+        self,
+        controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None",
+    ) -> None:
+        self._concurrency_controller = controller
+
     def _inference_headers(self) -> dict[str, str]:
         """Headers for inference completions requests."""
         return self._headers(Authorization=f"Bearer {self.api_key}")
