@@ -1,6 +1,6 @@
 """Bound Tinker future response-body reads for Fireworks training clients.
 
-Tinker 0.22.7 passes a 45-second timeout to pyqwest, but pyqwest stops that
+Tinker 0.23.0 passes a 45-second timeout to pyqwest, but pyqwest stops that
 timer when response headers arrive. A stalled result body can therefore keep
 ``APIFuture`` blocked until an infrastructure timeout closes the connection.
 

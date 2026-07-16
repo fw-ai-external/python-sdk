@@ -1,20 +1,5 @@
 # Changelog
 
-## 1.2.0 (2026-07-16)
-
-Full Changelog: [v1.2.0-alpha.89...v1.2.0](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.89...v1.2.0)
-
-### Features
-* **serverless-rl:** single retry owner + structured sampling error (SDK) ([7113d1a](https://github.com/fw-ai-external/python-sdk/commit/7113d1aa7f6d43e62044f64ba72de2012543d41f))
-* **training-sdk:** adjust rollout concurrency within RL steps ([68595ff](https://github.com/fw-ai-external/python-sdk/commit/68595ff736f94dd93657b2c7bef9de93d82d5735))
-
-### Refactors
-* **training-sdk:** add sampling concurrency protocol ([9572c14](https://github.com/fw-ai-external/python-sdk/commit/9572c14cfc9633fdeb9fc1129539915e90097662))
-
-## 1.2.0 (2026-07-11)
-
-Full Changelog: [v1.2.0-alpha.89...v1.2.0](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.89...v1.2.0)
-
 ## 1.2.0-alpha.89 (2026-07-10)
 
 Full Changelog: [v1.2.0-alpha.88...v1.2.0-alpha.89](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.88...v1.2.0-alpha.89)
