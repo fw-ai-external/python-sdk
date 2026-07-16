@@ -42,6 +42,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
+from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
 )
@@ -292,7 +293,7 @@ class _TinkerSamplerBackend:
     def get_sampling_client(
         self,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> FiretitanSamplingClient:
         sampler = DeploymentSampler(
             inference_url=self.deploy_mgr.inference_url,

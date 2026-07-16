@@ -25,7 +25,11 @@ from fireworks.training.sdk.errors import (
     parse_retry_after,
     async_request_with_retries,
 )
-from fireworks.training.sdk.concurrency import FixedConcurrencyController, AdaptiveConcurrencyController
+from fireworks.training.sdk.concurrency import (
+    FixedConcurrencyController,
+    AdaptiveConcurrencyController,
+    SamplingConcurrencyController,
+)
 from fireworks.training.sdk._rest_client import _RestClient
 from fireworks.training.sdk.sampling_observability import (
     REQUEST_ID_HEADER,
@@ -158,7 +162,7 @@ class DeploymentSampler(_RestClient):
         model: str,
         api_key: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
-        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
         max_concurrency: int | None = None,  # TODO: remove after deprecation period
         additional_headers: dict[str, str] | None = None,
         *,
@@ -192,14 +196,14 @@ class DeploymentSampler(_RestClient):
     @property
     def concurrency_controller(
         self,
-    ) -> "AdaptiveConcurrencyController | FixedConcurrencyController | None":
+    ) -> SamplingConcurrencyController | None:
         """Concurrency controller used for subsequent sampling requests."""
         return self._concurrency_controller
 
     @concurrency_controller.setter
     def concurrency_controller(
         self,
-        controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None",
+        controller: SamplingConcurrencyController | None,
     ) -> None:
         self._concurrency_controller = controller
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from fireworks.training.sdk.sampling import ServerMetrics
@@ -12,16 +12,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@runtime_checkable
+class SamplingConcurrencyController(Protocol):
+    """Interface for controlling concurrent deployment sampling requests."""
+
+    @property
+    def window_size(self) -> int: ...
+
+    async def acquire(self) -> None: ...
+
+    def release(self, metrics: "ServerMetrics | None" = None) -> None: ...
+
+    def step_completed(self) -> dict[str, float]: ...
+
+
 # =============================================================================
 # FixedConcurrencyController — static semaphore
 # =============================================================================
 
 
-class FixedConcurrencyController:
+class FixedConcurrencyController(SamplingConcurrencyController):
     """Fixed concurrency controller backed by an asyncio.Semaphore.
 
-    Same interface as ``AdaptiveConcurrencyController`` so ``DeploymentSampler``
-    can use either interchangeably.
+    Implements ``SamplingConcurrencyController`` with a static window.
     """
 
     def __init__(self, max_concurrency: int):
@@ -47,7 +60,7 @@ class FixedConcurrencyController:
 # =============================================================================
 
 
-class AdaptiveConcurrencyController:
+class AdaptiveConcurrencyController(SamplingConcurrencyController):
     """AIMD concurrency controller with proportional increase.
 
     Uses ``prefill_queue_duration`` from server response headers as the

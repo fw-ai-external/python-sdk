@@ -60,6 +60,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
+from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
     normalize_checkpoint_type,
@@ -129,7 +130,7 @@ class FiretitanSamplingClient(SamplingClient):
         model: str,
         api_key: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
-        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
         max_concurrency: int | None = None,
         additional_headers: dict[str, str] | None = None,
     ) -> "FiretitanSamplingClient":
@@ -3199,7 +3200,7 @@ class FiretitanServiceClient(ServiceClient):
         deployment_sampler: DeploymentSampler | None = None,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> FiretitanSamplingClient:
         """Create a Tinker-shaped sampler backed by a configured deployment.
 
@@ -3342,7 +3343,7 @@ class FiretitanServiceClient(ServiceClient):
         model: str,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
         inference_url: str | None = None,
     ) -> DeploymentSampler:
         """Create a FireTitan-native sampler for an existing inference model."""
@@ -3368,7 +3369,7 @@ class FiretitanServiceClient(ServiceClient):
         timeout_s: float = 5400,
         cleanup_on_close: DeploymentCleanupOnClose | None = None,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> DeploymentSampler:
         """Create or reuse an inference deployment and return a sampler for it.
 
@@ -3431,7 +3432,7 @@ class FiretitanServiceClient(ServiceClient):
         model_path: str | None = None,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> DeploymentSampler:
         """Return the FireTitan ``DeploymentSampler`` directly (not the Tinker wrapper).
 

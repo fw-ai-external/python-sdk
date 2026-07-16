@@ -48,6 +48,7 @@ from fireworks.training.sdk.deployment import (
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
+    SamplingConcurrencyController,
 )
 from fireworks.training.sdk.tinker_compat import (
     install_tinker_service_client,
@@ -105,6 +106,7 @@ __all__ = [
     "DeploymentManager",
     "DeploymentSampler",
     "FiretitanSamplingClient",
+    "SamplingConcurrencyController",
     "AdaptiveConcurrencyController",
     "FixedConcurrencyController",
     "SampledCompletion",

@@ -1072,4 +1072,5 @@ from fireworks.training.sdk.sampling import (  # noqa: F401,E402
 from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
+    SamplingConcurrencyController,
 )

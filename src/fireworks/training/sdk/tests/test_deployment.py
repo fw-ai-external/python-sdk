@@ -23,6 +23,7 @@ from fireworks.training.sdk.deployment import (
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
+    SamplingConcurrencyController,
     _SSETruncationError,
     _deployment_hot_load_trainer_job,
 )
@@ -1704,6 +1705,10 @@ class TestServerMetrics:
 
 
 class TestAdaptiveConcurrencyController:
+    def test_controllers_implement_shared_interface(self):
+        assert isinstance(FixedConcurrencyController(4), SamplingConcurrencyController)
+        assert isinstance(AdaptiveConcurrencyController(), SamplingConcurrencyController)
+
     def test_initial_window(self):
         ctrl = AdaptiveConcurrencyController(initial_window=16)
         assert ctrl.window_size == 16
