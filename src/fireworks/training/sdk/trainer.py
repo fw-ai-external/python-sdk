@@ -33,6 +33,7 @@ from fireworks.training.sdk._constants import (
     SLOW_POLL_INTERVAL_S,
     TRAINER_READY_TIMEOUT_S,
     RESUMABLE_WAIT_TIMEOUT_S,
+    DEFAULT_TRAINER_PENDING_TIMEOUT_S,
 )
 from fireworks.training.sdk.fireworks_client import FireworksClient
 
@@ -642,18 +643,22 @@ class TrainerJobManager(FireworksClient):
         job_name: str,
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = TRAINER_READY_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         start = time.time()
+        pending_deadline = start + pending_timeout_s
+        readiness_deadline: float | None = None
         service_ready = False
         base_url = self._get_trainer_gateway_url(job_id)
         last_log_signature: tuple[str, str, bool] | None = None
         last_log_elapsed_s = -POLL_LOG_HEARTBEAT_S
 
-        while time.time() - start < timeout_s:
+        while True:
             job = self.get(job_id)
             state = job.get("state", "")
             status_message = _extract_job_status_message(job)
-            elapsed = int(time.time() - start)
+            now = time.time()
+            elapsed = int(now - start)
 
             if _is_trainer_tombstone_state(state):
                 _raise_trainer_tombstone_error(job_id, job)
@@ -676,7 +681,7 @@ class TrainerJobManager(FireworksClient):
                 service_ready = self._check_healthz(base_url)
 
             if service_ready:
-                self.boot_time_s = time.time() - start
+                self.boot_time_s = now - start
                 logger.info(
                     "[%ds] Trainer job %s: state=%s, healthz=OK -- service ready",
                     elapsed,
@@ -689,6 +694,29 @@ class TrainerJobManager(FireworksClient):
                     base_url=base_url,
                     max_context_length=_extract_job_max_context_length(job),
                 )
+
+            if state == "JOB_STATE_PENDING":
+                if now >= pending_deadline:
+                    raise TimeoutError(
+                        format_sdk_error(
+                            f"Trainer job {job_id} remained pending for capacity longer than {pending_timeout_s}s",
+                            "The job did not leave JOB_STATE_PENDING before the capacity wait timeout.",
+                            f"Increase the trainer pending timeout (current: {pending_timeout_s}s) and check job status in the Fireworks console: {CONSOLE_URL}",
+                            docs_url=DOCS_SDK,
+                        )
+                    )
+            else:
+                if readiness_deadline is None:
+                    readiness_deadline = now + timeout_s
+                elif now >= readiness_deadline:
+                    raise TimeoutError(
+                        format_sdk_error(
+                            f"Trainer job {job_id} did not become ready within {timeout_s}s after placement",
+                            "The job left JOB_STATE_PENDING but did not reach JOB_STATE_RUNNING with a healthy /api/v1/healthz response before the readiness timeout.",
+                            f"Increase the trainer ready timeout (current: {timeout_s}s) and check job status in the Fireworks console: {CONSOLE_URL}",
+                            docs_url=DOCS_SDK,
+                        )
+                    )
 
             log_signature = (state, status_message, service_ready)
             should_log = (
@@ -732,28 +760,21 @@ class TrainerJobManager(FireworksClient):
 
             time.sleep(poll_interval_s)
 
-        raise TimeoutError(
-            format_sdk_error(
-                f"Trainer job {job_id} did not become ready within {timeout_s}s",
-                "The job did not reach JOB_STATE_RUNNING with a healthy /api/v1/healthz response before the timeout.",
-                f"Increase the trainer ready timeout (current: {timeout_s}s) and check job status in the Fireworks console: {CONSOLE_URL}",
-                docs_url=DOCS_SDK,
-            )
-        )
-
     def create_and_wait(
         self,
         config: TrainerJobConfig,
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = TRAINER_READY_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
-        """Create a service-mode trainer job and wait for it to be ready."""
+        """Create a trainer and wait through capacity placement and readiness."""
         created = self.create(config)
         return self.wait_for_ready(
             created.job_id,
             job_name=created.job_name,
             poll_interval_s=poll_interval_s,
             timeout_s=timeout_s,
+            pending_timeout_s=pending_timeout_s,
         )
 
     def create(self, config: TrainerJobConfig) -> CreatedTrainerJob:
@@ -770,23 +791,32 @@ class TrainerJobManager(FireworksClient):
         job_name: str | None = None,
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = TRAINER_READY_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
-        """Wait for a trainer job to reach RUNNING state and pass health checks."""
+        """Wait separately for capacity placement, then RUNNING and healthz."""
         if job_name is None:
             job_name = f"accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
-        return self._poll_until_ready(job_id, job_name, poll_interval_s, timeout_s)
+        return self._poll_until_ready(
+            job_id,
+            job_name,
+            poll_interval_s,
+            timeout_s,
+            pending_timeout_s,
+        )
 
     def wait_for_existing(
         self,
         job_id: str,
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = TRAINER_READY_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Wait for an already-existing trainer job to reach RUNNING state."""
         return self.wait_for_ready(
             job_id,
             poll_interval_s=poll_interval_s,
             timeout_s=timeout_s,
+            pending_timeout_s=pending_timeout_s,
         )
 
     def resume_and_wait(
@@ -794,11 +824,17 @@ class TrainerJobManager(FireworksClient):
         job_id: str,
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = TRAINER_READY_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Resume a failed/cancelled/paused trainer job and wait for it to be ready."""
         self._resume(job_id)
         logger.info("Resumed trainer job: %s", job_id)
-        return self.wait_for_existing(job_id, poll_interval_s, timeout_s)
+        return self.wait_for_existing(
+            job_id,
+            poll_interval_s,
+            timeout_s,
+            pending_timeout_s,
+        )
 
     def reconnect_and_wait(
         self,
@@ -806,6 +842,7 @@ class TrainerJobManager(FireworksClient):
         poll_interval_s: float = POLL_INTERVAL_S,
         timeout_s: float = RECONNECT_TIMEOUT_S,
         max_wait_for_resumable_s: float = RESUMABLE_WAIT_TIMEOUT_S,
+        pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     ) -> TrainerServiceEndpoint:
         """Reconnect to a preempted/failed trainer job.
 
@@ -818,9 +855,10 @@ class TrainerJobManager(FireworksClient):
         Args:
             job_id: The RLOR job ID to reconnect.
             poll_interval_s: Seconds between health checks after resume.
-            timeout_s: Overall timeout for the job to become RUNNING.
+            timeout_s: Post-placement timeout for the job to become RUNNING.
             max_wait_for_resumable_s: Max seconds to wait for the job to
                 reach a resumable state (FAILED/CANCELLED/PAUSED/COMPLETED).
+            pending_timeout_s: Capacity wait budget while the job is PENDING.
         """
         start = time.time()
         while True:
@@ -842,7 +880,12 @@ class TrainerJobManager(FireworksClient):
 
             if state == "JOB_STATE_RUNNING":
                 # Already running (maybe it recovered on its own)
-                return self.wait_for_existing(job_id, poll_interval_s, timeout_s)
+                return self.wait_for_existing(
+                    job_id,
+                    poll_interval_s,
+                    timeout_s,
+                    pending_timeout_s,
+                )
 
             resumable = (
                 "JOB_STATE_FAILED",
@@ -852,7 +895,12 @@ class TrainerJobManager(FireworksClient):
             )
             if state in resumable:
                 logger.info("Reconnect: resuming job %s from %s...", job_id, state)
-                return self.resume_and_wait(job_id, poll_interval_s, timeout_s)
+                return self.resume_and_wait(
+                    job_id,
+                    poll_interval_s,
+                    timeout_s,
+                    pending_timeout_s,
+                )
 
             # Job might be in a transitional state (CREATING, DELETING, etc.)
             if time.time() - start > max_wait_for_resumable_s:

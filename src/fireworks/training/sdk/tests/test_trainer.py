@@ -17,6 +17,7 @@ from fireworks.training.sdk.trainer import (
     TrainerJobManager,
     TrainerServiceEndpoint,
 )
+from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
 from fireworks.training.sdk.fireworks_client import TrainingShapeProfile
 
 
@@ -581,6 +582,7 @@ class TestPollUntilReady:
             "accounts/test/rlorTrainerJobs/job-1",
             5.0,
             10,
+            DEFAULT_TRAINER_PENDING_TIMEOUT_S,
         )
 
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
@@ -625,17 +627,54 @@ class TestPollUntilReady:
     @patch("fireworks.training.sdk.trainer.time.time")
     @patch.object(TrainerJobManager, "get")
     def test_timeout_raises(self, mock_get, mock_time, mock_sleep, mgr):
-        call_count = 0
-
-        def fake_time():
-            nonlocal call_count
-            call_count += 1
-            return 0.0 if call_count <= 6 else 100.0
-
-        mock_time.side_effect = fake_time
+        mock_time.side_effect = [0.0, 0.0, 6.0]
         mock_get.return_value = {"state": "JOB_STATE_CREATING"}
         with pytest.raises(TimeoutError, match="not become ready"):
             mgr._poll_until_ready("job-1", "name", timeout_s=5)
+
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "get")
+    def test_pending_uses_separate_capacity_timeout(self, mock_get, mock_time, mock_sleep, mgr):
+        mock_time.side_effect = [0.0, 0.0, 6.0]
+        mock_get.return_value = {"state": "JOB_STATE_PENDING"}
+
+        with pytest.raises(TimeoutError, match="pending for capacity"):
+            mgr._poll_until_ready(
+                "job-1",
+                "name",
+                timeout_s=1,
+                pending_timeout_s=5,
+            )
+
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
+    @patch.object(TrainerJobManager, "get")
+    def test_readiness_clock_starts_after_pending(
+        self,
+        mock_get,
+        mock_healthz,
+        mock_time,
+        mock_sleep,
+        mgr,
+    ):
+        mock_get.side_effect = [
+            {"state": "JOB_STATE_PENDING"},
+            {"state": "JOB_STATE_CREATING"},
+            {"state": "JOB_STATE_RUNNING"},
+        ]
+        mock_time.side_effect = [0.0, 9.0, 9.0, 13.0]
+
+        result = mgr._poll_until_ready(
+            "job-1",
+            "name",
+            timeout_s=5,
+            pending_timeout_s=10,
+        )
+
+        assert result.job_id == "job-1"
+        assert mgr.boot_time_s == 13.0
 
     @patch("fireworks.training.sdk.trainer.time.sleep")
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
@@ -680,6 +719,7 @@ class TestCreateAndWait:
             job_name="accounts/test/rlorTrainerJobs/job-1",
             poll_interval_s=7.0,
             timeout_s=11.0,
+            pending_timeout_s=DEFAULT_TRAINER_PENDING_TIMEOUT_S,
         )
 
 

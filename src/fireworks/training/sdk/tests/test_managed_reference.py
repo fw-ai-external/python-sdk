@@ -30,6 +30,7 @@ from fireworks.training.sdk.managed import (
     _validate_reference_training_shape,
 )
 from fireworks.training.sdk.trainer import CreatedTrainerJob, TrainerServiceEndpoint
+from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
 
 BASE_MODEL = "accounts/acct/models/base"
 
@@ -384,7 +385,8 @@ class TestManagedProvisioning:
             def try_get(self, job_id):
                 return None
 
-            def wait_for_ready(self, job_id, *, job_name, timeout_s):
+            def wait_for_ready(self, job_id, *, job_name, timeout_s, pending_timeout_s):
+                assert pending_timeout_s == DEFAULT_TRAINER_PENDING_TIMEOUT_S
                 if job_id == "reference-job":
                     events.append("reference_wait")
                     return TrainerServiceEndpoint(
@@ -540,7 +542,8 @@ class TestManagedProvisioning:
                 assert job_id == "policy-job"
                 return None
 
-            def wait_for_ready(self, job_id, *, job_name, timeout_s):
+            def wait_for_ready(self, job_id, *, job_name, timeout_s, pending_timeout_s):
+                assert pending_timeout_s == DEFAULT_TRAINER_PENDING_TIMEOUT_S
                 return TrainerServiceEndpoint(
                     job_name=job_name,
                     job_id=job_id,

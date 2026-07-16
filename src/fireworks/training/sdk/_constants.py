@@ -26,10 +26,13 @@ SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION = "fireworks-training-sdk/managed-roll
 # -- Resource provisioning waits ---------------------------------------------
 
 DEFAULT_TRAINER_TIMEOUT_S: float = 3600.0
-"""Wait budget for an SDK-managed trainer to become ready."""
+"""Post-placement wait budget for an SDK-managed trainer to become ready."""
+
+DEFAULT_TRAINER_PENDING_TIMEOUT_S: float = 48 * 60 * 60
+"""Capacity-placement wait budget while a trainer remains PENDING."""
 
 TRAINER_READY_TIMEOUT_S: float = 15 * 60
-"""Wait budget for a trainer create/reconnect call to reach a ready state."""
+"""Post-placement wait budget for a low-level trainer call to reach ready."""
 
 DEPLOYMENT_READY_TIMEOUT_S: float = 5400.0
 """Wait budget for an SDK-managed deployment to become ready."""
