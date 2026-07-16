@@ -26,7 +26,7 @@ from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
 from dataclasses import fields, replace, dataclass, is_dataclass
-from collections.abc import AsyncGenerator
+from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
@@ -95,6 +95,26 @@ _TINKER_AUTH_PROVIDER_PATCH_LOCK = threading.Lock()
 
 class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
     base_only: bool = True
+
+
+class FiretitanSamplingParams(types.SamplingParams):
+    """Tinker sampling parameters with optional FireTitan response fields."""
+
+    include_routing_matrix: bool = False
+
+
+@dataclass(frozen=True)
+class FiretitanSampledSequence(types.SampledSequence):
+    """A Tinker sampled sequence with FireTitan-specific token metadata."""
+
+    routing_matrices: list[str] | None = None
+
+
+@dataclass(frozen=True)
+class FiretitanSampleResponse(types.SampleResponse):
+    """A Tinker sample response containing extended FireTitan sequences."""
+
+    sequences: Sequence[FiretitanSampledSequence]
 
 
 # Default LoRA alpha. Tinker pins alpha to this value regardless of rank; the
@@ -206,6 +226,12 @@ class FiretitanSamplingClient(SamplingClient):
         if seed is not None:
             kwargs["seed"] = seed
 
+        if (
+            isinstance(sampling_params, FiretitanSamplingParams)
+            and sampling_params.include_routing_matrix
+        ):
+            kwargs["include_routing_matrix"] = True
+
         return kwargs
 
     @staticmethod
@@ -228,6 +254,7 @@ class FiretitanSamplingClient(SamplingClient):
         self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
 
         tinker_types = self._tinker_types()
+        use_firetitan_response = isinstance(sampling_params, FiretitanSamplingParams)
         prompt_token_ids = list(prompt.to_ints())
         max_tokens = getattr(sampling_params, "max_tokens", None)
         if max_tokens is None:
@@ -254,6 +281,7 @@ class FiretitanSamplingClient(SamplingClient):
         for completion in completions:
             completion_tokens = completion.full_tokens[completion.prompt_len :]
             completion_logprobs = completion.sampling_logprobs
+            routing_matrices = completion.routing_matrices
             if completion_logprobs is None:
                 raise RuntimeError(
                     "Deployment response missing logprobs.content[].sampling_logprob; "
@@ -282,6 +310,10 @@ class FiretitanSamplingClient(SamplingClient):
                         f"({len(completion_logprobs)} < {response_start + len(completion_tokens)})."
                     )
                 completion_logprobs = completion_logprobs[response_start : response_start + len(completion_tokens)]
+                if routing_matrices is not None:
+                    routing_matrices = routing_matrices[
+                        response_start : response_start + len(completion_tokens)
+                    ]
             if len(completion_logprobs) != len(completion_tokens):
                 raise RuntimeError(
                     "Deployment response sampling_logprobs are not aligned with completion tokens "
@@ -291,16 +323,36 @@ class FiretitanSamplingClient(SamplingClient):
                 raise RuntimeError(
                     "Deployment response has null logprobs.content[].sampling_logprob for generated tokens."
                 )
+            if routing_matrices is not None and len(routing_matrices) != len(completion_tokens):
+                raise RuntimeError(
+                    "Deployment response routing matrices are not aligned with completion tokens "
+                    f"({len(routing_matrices)} != {len(completion_tokens)})."
+                )
             sampled_logprobs = [float(lp) for lp in completion_logprobs]
 
-            sequences.append(
-                tinker_types.SampledSequence(
-                    stop_reason=self._stop_reason(completion.finish_reason),
-                    _tokens_list=completion_tokens,
-                    _logprobs_list=sampled_logprobs,
+            if use_firetitan_response:
+                sequences.append(
+                    FiretitanSampledSequence(
+                        stop_reason=self._stop_reason(completion.finish_reason),
+                        _tokens_list=completion_tokens,
+                        _logprobs_list=sampled_logprobs,
+                        routing_matrices=routing_matrices,
+                    )
                 )
-            )
+            else:
+                sequences.append(
+                    tinker_types.SampledSequence(
+                        stop_reason=self._stop_reason(completion.finish_reason),
+                        _tokens_list=completion_tokens,
+                        _logprobs_list=sampled_logprobs,
+                    )
+                )
 
+        if use_firetitan_response:
+            return FiretitanSampleResponse(
+                sequences=sequences,
+                _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
+            )
         return tinker_types.SampleResponse(
             sequences=sequences,
             _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,

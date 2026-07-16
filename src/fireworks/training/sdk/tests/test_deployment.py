@@ -12,8 +12,14 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from tinker import types as tinker_types
 
-from fireworks.training.sdk.client import FiretitanSamplingClient
+from fireworks.training.sdk.client import (
+    FiretitanSampleResponse,
+    FiretitanSamplingClient,
+    FiretitanSamplingParams,
+    FiretitanSampledSequence,
+)
 from fireworks.training.sdk.deployment import (
     ServerMetrics,
     DeploymentInfo,
@@ -1446,6 +1452,57 @@ class TestFiretitanSamplingClient:
         assert captured["seed"] == 123
         assert captured["logprobs"] is True
 
+    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, fake_tinker):
+        sampler = _make_sampler()
+        captured = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [40, 50]},
+                        "logprobs": {
+                            "content": [
+                                {
+                                    "logprob": -0.3,
+                                    "sampling_logprob": -0.31,
+                                    "routing_matrix": "matrix-1",
+                                },
+                                {
+                                    "logprob": -0.4,
+                                    "sampling_logprob": -0.41,
+                                    "routing_matrix": "matrix-2",
+                                },
+                            ]
+                        },
+                    }
+                ]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            response = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints([10, 20, 30]),
+                num_samples=1,
+                sampling_params=FiretitanSamplingParams(
+                    max_tokens=2,
+                    include_routing_matrix=True,
+                ),
+            ).result(timeout=5)
+        finally:
+            client.close()
+
+        assert captured["include_routing_matrix"] is True
+        assert isinstance(response, FiretitanSampleResponse)
+        assert isinstance(response, tinker_types.SampleResponse)
+        assert isinstance(response.sequences[0], FiretitanSampledSequence)
+        assert isinstance(response.sequences[0], tinker_types.SampledSequence)
+        assert response.sequences[0].routing_matrices == ["matrix-1", "matrix-2"]
+
     def test_sample_splits_echo_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
@@ -1460,11 +1517,11 @@ class TestFiretitanSamplingClient:
                     "finish_reason": "length",
                     "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
                     "logprobs": {"content": [
-                        {"logprob": 0.0, "sampling_logprob": None},
-                        {"logprob": -0.1, "sampling_logprob": None},
-                        {"logprob": -0.2, "sampling_logprob": None},
-                        {"logprob": -0.3, "sampling_logprob": -0.33},
-                        {"logprob": -0.4, "sampling_logprob": -0.44},
+                        {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
+                        {"logprob": -0.1, "sampling_logprob": None, "routing_matrix": "prompt-1"},
+                        {"logprob": -0.2, "sampling_logprob": None, "routing_matrix": "prompt-2"},
+                        {"logprob": -0.3, "sampling_logprob": -0.33, "routing_matrix": "completion-1"},
+                        {"logprob": -0.4, "sampling_logprob": -0.44, "routing_matrix": "completion-2"},
                     ]},
                 }]
             }, ServerMetrics()
@@ -1475,7 +1532,10 @@ class TestFiretitanSamplingClient:
             response = client.sample(
                 prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
                 num_samples=1,
-                sampling_params=fake_tinker.SamplingParams(max_tokens=2),
+                sampling_params=FiretitanSamplingParams(
+                    max_tokens=2,
+                    include_routing_matrix=True,
+                ),
                 include_prompt_logprobs=True,
             ).result(timeout=5)
         finally:
@@ -1486,6 +1546,7 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].tokens == completion_ids
         assert response.sequences[0].logprobs == [-0.33, -0.44]
         assert response.sequences[0].stop_reason == "length"
+        assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
 
     def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]

@@ -20,8 +20,11 @@ from fireworks.training.sdk.client import (
     GradNormMetricsMode,
     GradAccNormalization,
     FiretitanServiceClient,
+    FiretitanSampleResponse,
     FiretitanSamplingClient,
+    FiretitanSamplingParams,
     FiretitanTrainingClient,
+    FiretitanSampledSequence,
 )
 from fireworks.training.sdk.managed import FiretitanProvisioningConfig
 from fireworks.training.sdk.trainer import (
@@ -78,6 +81,9 @@ __all__ = [
     # Training (tinker protocol)
     "FiretitanServiceClient",
     "FiretitanTrainingClient",
+    "FiretitanSamplingParams",
+    "FiretitanSampledSequence",
+    "FiretitanSampleResponse",
     "CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE",
     "CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO",
     "DeploymentCleanupOnClose",
