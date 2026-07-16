@@ -1114,6 +1114,30 @@ def _text_token_count(datum: types.Datum) -> int:
     )
 
 
+def _r3_request_issues(data: list[types.Datum]) -> list[str]:
+    """Return missing/misaligned R3 data immediately before trainer send."""
+    issues: list[str] = []
+    for datum_index, datum in enumerate(data):
+        raw_datum = _dump_tinker_model(datum)
+        routing_matrices = raw_datum.get("model_input", {}).get("routing_matrices")
+        if routing_matrices is None:
+            # No routing_matrices field means this is not an R3 datum.
+            continue
+
+        token_count = _text_token_count(datum)
+        matrix_count = len(routing_matrices)
+        if matrix_count == 0:
+            issues.append(
+                f"datum[{datum_index}] routing_matrices is empty; expected {token_count}"
+            )
+        elif matrix_count != token_count:
+            issues.append(
+                f"datum[{datum_index}] routing_matrix_count={matrix_count}; "
+                f"expected {token_count}"
+            )
+    return issues
+
+
 def _pool_embedding_tensor(
     embedding,
     datum: types.Datum,
@@ -1404,6 +1428,8 @@ class FiretitanTrainingClient(TrainingClient):
                 "This training client does not support Tinker's proto forward transport. Use the JSON forward path."
             )
 
+        self._log_r3_request_error(data, operation="forward")
+
         requests = self._chunked_requests(data)
 
         async def _forward_async():
@@ -1520,6 +1546,7 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
                 "Use the JSON forward_backward path."
             )
+        self._log_r3_request_error(data, operation="forward_backward")
         future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future
@@ -1751,6 +1778,27 @@ class FiretitanTrainingClient(TrainingClient):
                 pooling=pooling,
             )
         ).result()
+
+    def _log_r3_request_error(
+        self,
+        data: list[types.Datum],
+        *,
+        operation: str,
+    ) -> None:
+        """Log one client-side error when an R3 trainer request is invalid."""
+        if getattr(self, "_r3_request_error_logged", False):
+            return
+        issues = _r3_request_issues(data)
+        if not issues:
+            return
+
+        self._r3_request_error_logged = True
+        logger.error(
+            "R3 is enabled, but routing data is missing or misaligned before trainer request: "
+            "operation=%s; %s",
+            operation,
+            "; ".join(issues),
+        )
 
     async def forward_backward_contrastive_async(
         self,

@@ -305,6 +305,62 @@ class TestForwardBackward:
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_missing_or_misaligned_logs_one_error(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        empty = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [10, 11, 12],
+                routing_matrices=[],
+            ),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(data=[11, 12, 13], dtype="int64", shape=[3]),
+            },
+        )
+        mismatched = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [20, 21, 22],
+                routing_matrices=[matrix],
+            ),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(data=[21, 22, 23], dtype="int64", shape=[3]),
+            },
+        )
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([empty, mismatched], "supervised")
+            client.forward_backward([empty, mismatched], "supervised")
+
+        messages = [record.message for record in caplog.records if "R3 is enabled" in record.message]
+        assert len(messages) == 1
+        assert "operation=forward_backward" in messages[0]
+        assert "datum[0] routing_matrices is empty; expected 3" in messages[0]
+        assert "datum[1] routing_matrix_count=1; expected 3" in messages[0]
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_valid_or_disabled_does_not_log_error(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        valid = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [10, 11, 12],
+                routing_matrices=[matrix, matrix, matrix],
+            ),
+            loss_fn_inputs={},
+        )
+        disabled = types.Datum(
+            model_input=types.ModelInput.from_ints([20, 21, 22]),
+            loss_fn_inputs={},
+        )
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([valid, disabled], "supervised")
+
+        assert "R3 is enabled" not in caplog.text
+
 
 class TestParallelChunkSubmission:
     class _ClientContext:
