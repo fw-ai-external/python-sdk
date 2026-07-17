@@ -82,6 +82,8 @@ class DeploymentsResource(SyncAPIResource):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -108,6 +110,8 @@ class DeploymentsResource(SyncAPIResource):
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
         hot_load_trainer_job: str | Omit = omit,
+        hot_load_transition_type: Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"] | Omit = omit,
+        max_concurrency_per_replica: int | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
@@ -133,6 +137,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        preemptible: bool | Omit = omit,
         pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -222,6 +227,17 @@ class DeploymentsResource(SyncAPIResource):
           expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
               time at which this deployment will automatically be deleted.
 
+          hot_load_transition_type: Controls hot-load reload semantics for this deployment. ASYNC (default when
+              enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+              draining in-flight requests during hot load. SYNC drains in-flight requests
+              before applying the new model.
+
+          max_concurrency_per_replica: The maximum number of concurrent (in-flight) requests a single replica will
+              accept before shedding load. Requests that arrive while a replica is already at
+              this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+              admission gate for controlling tail latency. When unset (0), the platform
+              default is used.
+
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -240,6 +256,8 @@ class DeploymentsResource(SyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          preemptible: When true, this deployment runs as preemptible.
 
           pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
               deployment will use the pricing plan's billing rules instead of default billing
@@ -289,6 +307,8 @@ class DeploymentsResource(SyncAPIResource):
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
                     "hot_load_trainer_job": hot_load_trainer_job,
+                    "hot_load_transition_type": hot_load_transition_type,
+                    "max_concurrency_per_replica": max_concurrency_per_replica,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
@@ -297,6 +317,7 @@ class DeploymentsResource(SyncAPIResource):
                     "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
+                    "preemptible": preemptible,
                     "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
@@ -343,6 +364,8 @@ class DeploymentsResource(SyncAPIResource):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -369,6 +392,8 @@ class DeploymentsResource(SyncAPIResource):
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
         hot_load_trainer_job: str | Omit = omit,
+        hot_load_transition_type: Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"] | Omit = omit,
+        max_concurrency_per_replica: int | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
@@ -394,6 +419,7 @@ class DeploymentsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        preemptible: bool | Omit = omit,
         pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -468,6 +494,17 @@ class DeploymentsResource(SyncAPIResource):
           expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
               time at which this deployment will automatically be deleted.
 
+          hot_load_transition_type: Controls hot-load reload semantics for this deployment. ASYNC (default when
+              enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+              draining in-flight requests during hot load. SYNC drains in-flight requests
+              before applying the new model.
+
+          max_concurrency_per_replica: The maximum number of concurrent (in-flight) requests a single replica will
+              accept before shedding load. Requests that arrive while a replica is already at
+              this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+              admission gate for controlling tail latency. When unset (0), the platform
+              default is used.
+
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -486,6 +523,8 @@ class DeploymentsResource(SyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          preemptible: When true, this deployment runs as preemptible.
 
           pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
               deployment will use the pricing plan's billing rules instead of default billing
@@ -541,6 +580,8 @@ class DeploymentsResource(SyncAPIResource):
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
                     "hot_load_trainer_job": hot_load_trainer_job,
+                    "hot_load_transition_type": hot_load_transition_type,
+                    "max_concurrency_per_replica": max_concurrency_per_replica,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
@@ -549,6 +590,7 @@ class DeploymentsResource(SyncAPIResource):
                     "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
+                    "preemptible": preemptible,
                     "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
@@ -893,6 +935,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -919,6 +963,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
         hot_load_trainer_job: str | Omit = omit,
+        hot_load_transition_type: Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"] | Omit = omit,
+        max_concurrency_per_replica: int | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
@@ -944,6 +990,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        preemptible: bool | Omit = omit,
         pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -1033,6 +1080,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
               time at which this deployment will automatically be deleted.
 
+          hot_load_transition_type: Controls hot-load reload semantics for this deployment. ASYNC (default when
+              enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+              draining in-flight requests during hot load. SYNC drains in-flight requests
+              before applying the new model.
+
+          max_concurrency_per_replica: The maximum number of concurrent (in-flight) requests a single replica will
+              accept before shedding load. Requests that arrive while a replica is already at
+              this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+              admission gate for controlling tail latency. When unset (0), the platform
+              default is used.
+
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -1051,6 +1109,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          preemptible: When true, this deployment runs as preemptible.
 
           pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
               deployment will use the pricing plan's billing rules instead of default billing
@@ -1100,6 +1160,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
                     "hot_load_trainer_job": hot_load_trainer_job,
+                    "hot_load_transition_type": hot_load_transition_type,
+                    "max_concurrency_per_replica": max_concurrency_per_replica,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
@@ -1108,6 +1170,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
+                    "preemptible": preemptible,
                     "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },
@@ -1154,6 +1217,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
         | Omit = omit,
         active_model_version: str | Omit = omit,
@@ -1180,6 +1245,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         hot_load_bucket_type: Literal["BUCKET_TYPE_UNSPECIFIED", "MINIO", "S3", "NEBIUS", "FW_HOSTED"] | Omit = omit,
         hot_load_bucket_url: str | Omit = omit,
         hot_load_trainer_job: str | Omit = omit,
+        hot_load_transition_type: Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"] | Omit = omit,
+        max_concurrency_per_replica: int | Omit = omit,
         max_context_length: int | Omit = omit,
         max_replica_count: int | Omit = omit,
         max_with_revocable_replica_count: int | Omit = omit,
@@ -1205,6 +1272,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        preemptible: bool | Omit = omit,
         pricing_plan_id: str | Omit = omit,
         target_model_version: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -1279,6 +1347,17 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           expire_time: Deprecated: This field is deprecated and no longer causes auto-deletion. The
               time at which this deployment will automatically be deleted.
 
+          hot_load_transition_type: Controls hot-load reload semantics for this deployment. ASYNC (default when
+              enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+              draining in-flight requests during hot load. SYNC drains in-flight requests
+              before applying the new model.
+
+          max_concurrency_per_replica: The maximum number of concurrent (in-flight) requests a single replica will
+              accept before shedding load. Requests that arrive while a replica is already at
+              this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+              admission gate for controlling tail latency. When unset (0), the platform
+              default is used.
+
           max_context_length: The maximum context length supported by the model (context window). If set to 0
               or not specified, the model's default maximum context length will be used.
 
@@ -1297,6 +1376,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
               unspecified, the default is the GLOBAL multi-region.
 
           precision: The precision with which the model should be served.
+
+          preemptible: When true, this deployment runs as preemptible.
 
           pricing_plan_id: Optional pricing plan ID for custom billing configuration. If set, this
               deployment will use the pricing plan's billing rules instead of default billing
@@ -1352,6 +1433,8 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "hot_load_bucket_type": hot_load_bucket_type,
                     "hot_load_bucket_url": hot_load_bucket_url,
                     "hot_load_trainer_job": hot_load_trainer_job,
+                    "hot_load_transition_type": hot_load_transition_type,
+                    "max_concurrency_per_replica": max_concurrency_per_replica,
                     "max_context_length": max_context_length,
                     "max_replica_count": max_replica_count,
                     "max_with_revocable_replica_count": max_with_revocable_replica_count,
@@ -1360,6 +1443,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                     "num_peft_device_cached": num_peft_device_cached,
                     "placement": placement,
                     "precision": precision,
+                    "preemptible": preemptible,
                     "pricing_plan_id": pricing_plan_id,
                     "target_model_version": target_model_version,
                 },

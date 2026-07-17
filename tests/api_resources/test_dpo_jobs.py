@@ -71,6 +71,17 @@ class TestDpoJobs:
                 "lora_dropout": 0,
                 "lora_rank": 0,
                 "lora_target_modules": ["string"],
+                "lr_scheduler": {
+                    "constant": {},
+                    "cosine": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                    "linear": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                },
                 "max_context_length": 0,
                 "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
@@ -144,6 +155,7 @@ class TestDpoJobs:
         dpo_job = client.dpo_jobs.list(
             account_id="account_id",
             filter="filter",
+            include_archived=True,
             order_by="orderBy",
             page_size=0,
             page_token="pageToken",
@@ -464,6 +476,17 @@ class TestAsyncDpoJobs:
                 "lora_dropout": 0,
                 "lora_rank": 0,
                 "lora_target_modules": ["string"],
+                "lr_scheduler": {
+                    "constant": {},
+                    "cosine": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                    "linear": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                },
                 "max_context_length": 0,
                 "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
@@ -537,6 +560,7 @@ class TestAsyncDpoJobs:
         dpo_job = await async_client.dpo_jobs.list(
             account_id="account_id",
             filter="filter",
+            include_archived=True,
             order_by="orderBy",
             page_size=0,
             page_token="pageToken",

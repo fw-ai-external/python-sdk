@@ -47,6 +47,8 @@ class DeploymentUpdateParams(TypedDict, total=False):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ],
         PropertyInfo(alias="acceleratorType"),
     ]
@@ -159,6 +161,25 @@ class DeploymentUpdateParams(TypedDict, total=False):
 
     hot_load_trainer_job: Annotated[str, PropertyInfo(alias="hotLoadTrainerJob")]
 
+    hot_load_transition_type: Annotated[
+        Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"], PropertyInfo(alias="hotLoadTransitionType")
+    ]
+    """
+    Controls hot-load reload semantics for this deployment. ASYNC (default when
+    enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+    draining in-flight requests during hot load. SYNC drains in-flight requests
+    before applying the new model.
+    """
+
+    max_concurrency_per_replica: Annotated[int, PropertyInfo(alias="maxConcurrencyPerReplica")]
+    """
+    The maximum number of concurrent (in-flight) requests a single replica will
+    accept before shedding load. Requests that arrive while a replica is already at
+    this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+    admission gate for controlling tail latency. When unset (0), the platform
+    default is used.
+    """
+
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """
     The maximum context length supported by the model (context window). If set to 0
@@ -210,6 +231,9 @@ class DeploymentUpdateParams(TypedDict, total=False):
         "FP4_MX_MOE",
     ]
     """The precision with which the model should be served."""
+
+    preemptible: bool
+    """When true, this deployment runs as preemptible."""
 
     pricing_plan_id: Annotated[str, PropertyInfo(alias="pricingPlanId")]
     """

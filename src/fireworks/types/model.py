@@ -14,7 +14,105 @@ from .base_model_details import BaseModelDetails
 from .conversation_config import ConversationConfig
 from .shared.deployed_model_ref import DeployedModelRef
 
-__all__ = ["Model"]
+__all__ = ["Model", "ServerlessMode", "ServerlessModeSKUInfo", "ServerlessModeSKUInfoAmount"]
+
+
+class ServerlessModeSKUInfoAmount(BaseModel):
+    """Represents an amount of money with its currency type."""
+
+    currency_code: Optional[str] = FieldInfo(alias="currencyCode", default=None)
+    """The three-letter currency code defined in ISO 4217."""
+
+    nanos: Optional[int] = None
+    """
+    Number of nano (10^-9) units of the amount. The value must be between
+    -999,999,999 and +999,999,999 inclusive. If `units` is positive, `nanos` must be
+    positive or zero. If `units` is zero, `nanos` can be positive, zero, or
+    negative. If `units` is negative, `nanos` must be negative or zero. For example
+    $-1.75 is represented as `units`=-1 and `nanos`=-750,000,000.
+    """
+
+    units: Optional[str] = None
+    """
+    The whole units of the amount. For example if `currencyCode` is `"USD"`, then 1
+    unit is one US dollar.
+    """
+
+
+class ServerlessModeSKUInfo(BaseModel):
+    amount: Optional[ServerlessModeSKUInfoAmount] = None
+    """Represents an amount of money with its currency type."""
+
+    sku: Optional[str] = None
+
+    unit: Optional[str] = None
+
+
+class ServerlessMode(BaseModel):
+    """
+    ServerlessMode is one way a serverless base model can be invoked — standard
+    serverless (default), Priority, Fast, or Spot — together with the invocation
+    recipe customers must use for it.
+
+    It is a child resource of the base Model: the {ServerlessModeId} segment of
+    the resource name IS the mode name (default | priority | fast | spot). The
+    base model is the linking key for all of its serving modes, even when a mode
+    is served through a different resource (a Fast router, a Spot deployment).
+
+    Modes split into two classes:
+      - Alternate-resource modes (usage_identifier set) — e.g. fast resolves to a
+        router, spot to the spot deployment's own model id.
+      - Flag modes (service_tier set) — e.g. priority uses the base model id plus
+        a request-body service_tier flag.
+
+    Pricing is sourced live from Orb (keyed by the resolved model name / tier),
+    so no price is stored on the mode.
+    """
+
+    create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
+
+    name: Optional[str] = None
+    """
+    The resource name, e.g.
+    accounts/fireworks/models/kimi-k2p6/serverlessModes/fast. {AccountId} must be a
+    serverless account (fireworks, ...); {ModelId} is the base model's id;
+    {ServerlessModeId} is the mode name (default | priority | fast | spot).
+    """
+
+    service_tier: Optional[str] = FieldInfo(alias="serviceTier", default=None)
+    """
+    Invocation recipe: the service_tier request-body flag layered on top of the
+    model id (e.g. "priority"). Only the priority mode sets this today.
+    """
+
+    sku_infos: Optional[List[ServerlessModeSKUInfo]] = FieldInfo(alias="skuInfos", default=None)
+    """Per-path token pricing, sourced live from Orb on the read path.
+
+    Reuses the same SKUInfo type as Model.sku_infos (e.g. "LLM input tokens
+    (uncached)", "LLM input tokens (cached)", "LLM output tokens"; google.type.Money
+    at unit="1M tokens"). Resolved per tier (DEFAULT/PRIORITY/FAST/...). Empty on
+    the stored config; only populated by ListServerlessModels.
+
+    (api_only) keeps this derived field out of the database entirely (like
+    Model.sku_infos): it is never persisted by the admin write path and never read
+    back from storage, only computed live at read time.
+    """
+
+    updated_by: Optional[str] = FieldInfo(alias="updatedBy", default=None)
+    """The user who last mutated this mode (audit)."""
+
+    update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
+
+    usage_identifier: Optional[str] = FieldInfo(alias="usageIdentifier", default=None)
+    """
+    Invocation recipe: the value to pass as "model" in inference requests. Empty
+    means use the base model id. May reference a DIFFERENT resource than the base
+    model — a model OR a router, e.g. accounts/fireworks/routers/kimi-k2p6-fast for
+    fast.
+    """
+
+    use_cases: Optional[List[str]] = FieldInfo(alias="useCases", default=None)
+    """Curated use-case tags driving discovery filters (e.g. "coding")."""
 
 
 class Model(BaseModel):
@@ -76,6 +174,11 @@ class Model(BaseModel):
     e.g. "My Model" Must be fewer than 64 characters long.
     """
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, stamped at creation)."""
+
     fine_tuning_job: Optional[str] = FieldInfo(alias="fineTuningJob", default=None)
     """
     If the model was created from a fine-tuning job, this is the fine-tuning job
@@ -103,7 +206,6 @@ class Model(BaseModel):
             "FLUMINA_BASE_MODEL",
             "FLUMINA_ADDON",
             "DRAFT_ADDON",
-            "FIRE_AGENT",
             "LIVE_MERGE",
             "CUSTOM_MODEL",
             "EMBEDDING_MODEL",
@@ -124,7 +226,7 @@ class Model(BaseModel):
     """V2 only.
 
     Whether the model supports full-parameter reinforcement learning (lora_rank =
-    0). True when validated POLICY_TRAINER + FORWARD_ONLY training shapes exist plus
+    0). True when validated POLICY_TRAINER + LORA_TRAINER training shapes exist plus
     a deployment shape.
     """
 
@@ -138,8 +240,16 @@ class Model(BaseModel):
     rl_tunable: Optional[bool] = FieldInfo(alias="rlTunable", default=None)
     """
     Deprecated: V1 training stack only — LoRA only, limited architecture support. If
-    the model has use_training_v2=true and your account has AllowTrainingV2, use
-    rl_lora_tunable and rl_full_parameter_tunable instead.
+    the model has use_training_v2=true, use rl_lora_tunable and
+    rl_full_parameter_tunable instead.
+    """
+
+    serverless_modes: Optional[List[ServerlessMode]] = FieldInfo(alias="serverlessModes", default=None)
+    """The serverless modes this base model is available on — the serverless read
+    shape.
+
+    Populated on read (e.g. the serverless catalog read path); one entry per serving
+    mode. Empty for non-serverless models.
     """
 
     snapshot_type: Optional[Literal["FULL_SNAPSHOT", "INCREMENTAL_SNAPSHOT"]] = FieldInfo(
@@ -194,8 +304,8 @@ class Model(BaseModel):
     tunable: Optional[bool] = None
     """
     Deprecated: V1 training stack only — LoRA only, limited architecture support. If
-    the model has use_training_v2=true and your account has AllowTrainingV2, use
-    supervised_lora_tunable and supervised_full_parameter_tunable instead.
+    the model has use_training_v2=true, use supervised_lora_tunable and
+    supervised_full_parameter_tunable instead.
     """
 
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
@@ -205,4 +315,10 @@ class Model(BaseModel):
     """
     If true, the model will use the Hugging Face apply_chat_template API to apply
     the chat template.
+    """
+
+    use_training_v2: Optional[bool] = FieldInfo(alias="useTrainingV2", default=None)
+    """
+    If true, SFT jobs for this base model use service-mode (StatefulSet +
+    orchestration sidecar) instead of the legacy batch Job path.
     """

@@ -25,10 +25,15 @@ class ReplicaStats(BaseModel):
     downloading_model_replica_count: Optional[int] = FieldInfo(alias="downloadingModelReplicaCount", default=None)
     """Number of replicas downloading model weights."""
 
+    effective_replica_count: Optional[float] = FieldInfo(alias="effectiveReplicaCount", default=None)
+    """
+    The effective number of replicas currently serving traffic, including fractional
+    progress toward a replica that is not yet fully ready. Equals
+    ready_replica_count when no replica is partially ready.
+    """
+
     initializing_replica_count: Optional[int] = FieldInfo(alias="initializingReplicaCount", default=None)
     """Number of replicas initializing the model server."""
-
-    partial_replica_count: Optional[float] = FieldInfo(alias="partialReplicaCount", default=None)
 
     pending_scheduling_replica_count: Optional[int] = FieldInfo(alias="pendingSchedulingReplicaCount", default=None)
     """Number of replicas waiting to be scheduled to a node."""
@@ -62,6 +67,8 @@ class Deployment(BaseModel):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
     ] = FieldInfo(alias="acceleratorType", default=None)
     """The type of accelerator to use."""
@@ -198,6 +205,25 @@ class Deployment(BaseModel):
 
     hot_load_trainer_job: Optional[str] = FieldInfo(alias="hotLoadTrainerJob", default=None)
 
+    hot_load_transition_type: Optional[Literal["HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED", "ASYNC", "SYNC"]] = FieldInfo(
+        alias="hotLoadTransitionType", default=None
+    )
+    """
+    Controls hot-load reload semantics for this deployment. ASYNC (default when
+    enable_hot_load is set) pauses the generator/prefiller mid-flight and skips
+    draining in-flight requests during hot load. SYNC drains in-flight requests
+    before applying the new model.
+    """
+
+    max_concurrency_per_replica: Optional[int] = FieldInfo(alias="maxConcurrencyPerReplica", default=None)
+    """
+    The maximum number of concurrent (in-flight) requests a single replica will
+    accept before shedding load. Requests that arrive while a replica is already at
+    this limit are rejected early with HTTP 429 instead of queueing — a per-replica
+    admission gate for controlling tail latency. When unset (0), the platform
+    default is used.
+    """
+
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """
     The maximum context length supported by the model (context window). If set to 0
@@ -254,6 +280,9 @@ class Deployment(BaseModel):
     ] = None
     """The precision with which the model should be served."""
 
+    preemptible: Optional[bool] = None
+    """When true, this deployment runs as preemptible."""
+
     pricing_plan_id: Optional[str] = FieldInfo(alias="pricingPlanId", default=None)
     """
     Optional pricing plan ID for custom billing configuration. If set, this
@@ -285,6 +314,7 @@ class Deployment(BaseModel):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
+            "US_ARIZONA_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
@@ -297,8 +327,11 @@ class Deployment(BaseModel):
             "US_WASHINGTON_5",
             "US_MINNESOTA_1",
             "US_CALIFORNIA_2",
-            "AP_MALAYSIA_1",
-            "US_OHIO_2",
+            "NA_BRITISHCOLUMBIA_2",
+            "AP_MALAYSIA_2",
+            "US_OREGON_1",
+            "NA_BRITISHCOLUMBIA_3",
+            "AP_NEWSOUTHWALES_1",
         ]
     ] = None
     """The geographic region where the deployment is presently located.

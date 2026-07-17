@@ -39,6 +39,7 @@ class TestAPIKeys:
                 "annotations": {"foo": "string"},
                 "display_name": "displayName",
                 "expire_time": parse_datetime("2019-12-27T18:11:19.117Z"),
+                "is_firepass": True,
             },
         )
         assert_matches_type(APIKey, api_key, path=["response"])
@@ -239,6 +240,7 @@ class TestAsyncAPIKeys:
                 "annotations": {"foo": "string"},
                 "display_name": "displayName",
                 "expire_time": parse_datetime("2019-12-27T18:11:19.117Z"),
+                "is_firepass": True,
             },
         )
         assert_matches_type(APIKey, api_key, path=["response"])

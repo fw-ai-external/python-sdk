@@ -10,7 +10,16 @@ from .._models import BaseModel
 from .shared.status import Status
 from .shared.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJob", "AwsS3Config", "AzureBlobStorageConfig", "EstimatedCost", "JobProgress"]
+__all__ = [
+    "SupervisedFineTuningJob",
+    "AwsS3Config",
+    "AzureBlobStorageConfig",
+    "EstimatedCost",
+    "JobProgress",
+    "LrScheduler",
+    "LrSchedulerCosine",
+    "LrSchedulerLinear",
+]
 
 
 class AwsS3Config(BaseModel):
@@ -100,6 +109,54 @@ class JobProgress(BaseModel):
     """Total number of requests that have been processed (successfully or failed)."""
 
 
+class LrSchedulerCosine(BaseModel):
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Optional[float] = FieldInfo(alias="decayRatio", default=None)
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Optional[float] = FieldInfo(alias="minLrRatio", default=None)
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrSchedulerLinear(BaseModel):
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Optional[float] = FieldInfo(alias="decayRatio", default=None)
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Optional[float] = FieldInfo(alias="minLrRatio", default=None)
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrScheduler(BaseModel):
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs).
+    When unset, the trainer uses the legacy constant schedule.
+    """
+
+    constant: Optional[object] = None
+    """Constant learning rate held flat after warmup (legacy default). No decay knobs."""
+
+    cosine: Optional[LrSchedulerCosine] = None
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    linear: Optional[LrSchedulerLinear] = None
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
+
+
 class SupervisedFineTuningJob(BaseModel):
     dataset: str
     """The name of the dataset used for training."""
@@ -139,6 +196,11 @@ class SupervisedFineTuningJob(BaseModel):
     early_stop: Optional[bool] = FieldInfo(alias="earlyStop", default=None)
     """Deprecated: early stopping is not supported by managed training."""
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, stamped at creation)."""
+
     epochs: Optional[int] = None
     """The number of epochs to train for."""
 
@@ -162,8 +224,8 @@ class SupervisedFineTuningJob(BaseModel):
     """Whether to run the fine-tuning job in turbo mode."""
 
     jinja_template: Optional[str] = FieldInfo(alias="jinjaTemplate", default=None)
-    """Deprecated: literal Jinja templates are not supported by Training V2.
-
+    """
+    Deprecated: literal Jinja templates are not supported by Training V2.
     Conversation rendering is selected from the base model's registered renderer
     configuration instead.
     """
@@ -178,6 +240,12 @@ class SupervisedFineTuningJob(BaseModel):
 
     lora_rank: Optional[int] = FieldInfo(alias="loraRank", default=None)
     """The rank of the LoRA layers."""
+
+    lr_scheduler: Optional[LrScheduler] = FieldInfo(alias="lrScheduler", default=None)
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+    unset, the trainer uses the legacy constant schedule.
+    """
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """The maximum context length to use with the model."""
@@ -217,6 +285,9 @@ class SupervisedFineTuningJob(BaseModel):
     purpose: Optional[Literal["PURPOSE_UNSPECIFIED", "PURPOSE_PILOT"]] = None
     """Scheduling purpose for this job."""
 
+    render_samples_signed_url: Optional[str] = FieldInfo(alias="renderSamplesSignedUrl", default=None)
+    """The signed URL for orchestrator-rendered token IDs and loss masks."""
+
     state: Optional[
         Literal[
             "JOB_STATE_UNSPECIFIED",
@@ -238,6 +309,7 @@ class SupervisedFineTuningJob(BaseModel):
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
             "JOB_STATE_DELETED",
+            "JOB_STATE_ARCHIVED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
@@ -245,6 +317,10 @@ class SupervisedFineTuningJob(BaseModel):
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
     - JOB_STATE_DELETED: Job has been deleted.
+    - JOB_STATE_ARCHIVED: User-facing state for jobs whose row is retained
+      post-delete (e.g. RLOR trainers within the checkpoint retention window). The
+      internal row is still in JOB_STATE_DELETED; the gateway translates it to
+      ARCHIVED on public responses.
     """
 
     status: Optional[Status] = None

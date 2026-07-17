@@ -59,6 +59,17 @@ class TestSupervisedFineTuningJobs:
             learning_rate=0,
             learning_rate_warmup_steps=0,
             lora_rank=0,
+            lr_scheduler={
+                "constant": {},
+                "cosine": {
+                    "decay_ratio": 0,
+                    "min_lr_ratio": 0,
+                },
+                "linear": {
+                    "decay_ratio": 0,
+                    "min_lr_ratio": 0,
+                },
+            },
             max_context_length=0,
             metrics_file_signed_url="metricsFileSignedUrl",
             mtp_enabled=True,
@@ -403,6 +414,17 @@ class TestAsyncSupervisedFineTuningJobs:
             learning_rate=0,
             learning_rate_warmup_steps=0,
             lora_rank=0,
+            lr_scheduler={
+                "constant": {},
+                "cosine": {
+                    "decay_ratio": 0,
+                    "min_lr_ratio": 0,
+                },
+                "linear": {
+                    "decay_ratio": 0,
+                    "min_lr_ratio": 0,
+                },
+            },
             max_context_length=0,
             metrics_file_signed_url="metricsFileSignedUrl",
             mtp_enabled=True,

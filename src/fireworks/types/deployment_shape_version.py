@@ -1,7 +1,8 @@
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
+from typing_extensions import Literal
 
 from pydantic import Field as FieldInfo
 
@@ -12,6 +13,9 @@ __all__ = ["DeploymentShapeVersion"]
 
 
 class DeploymentShapeVersion(BaseModel):
+    capabilities: Optional[List[Literal["CAPABILITY_UNSPECIFIED", "MULTI_LORA"]]] = None
+    """The capabilities supported by this deployment shape version."""
+
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the deployment shape version.
 

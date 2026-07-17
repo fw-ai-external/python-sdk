@@ -73,7 +73,7 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     The trainer reports tracked activity, including trainer API operations and
     active-session heartbeats. If no tracked activity is observed for this duration,
     the trainer is automatically stopped. When unset or 0, defaults to 60 minutes.
-    Set disableInactivityCleanup to true to disable automatic cleanup. GPU usage
+    Set disable_inactivity_cleanup to true to disable automatic cleanup. GPU usage
     continues to accrue while the trainer is running.
     """
 
@@ -109,6 +109,13 @@ class ReinforcementFineTuningStepCreateParams(TypedDict, total=False):
     """
 
     service_mode: Annotated[bool, PropertyInfo(alias="serviceMode")]
+
+    trainer_replica_count: Annotated[int, PropertyInfo(alias="trainerReplicaCount")]
+    """Data-parallel replica count for service-mode trainers.
+
+    When unset or 0, defaults to 1. Values greater than 1 launch replicated HSDP
+    training.
+    """
 
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""

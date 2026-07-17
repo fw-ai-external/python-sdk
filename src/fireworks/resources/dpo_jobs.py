@@ -130,6 +130,7 @@ class DpoJobsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         filter: str | Omit = omit,
+        include_archived: bool | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
         page_token: str | Omit = omit,
@@ -146,6 +147,10 @@ class DpoJobsResource(SyncAPIResource):
 
         See https://google.aip.dev/160 for the
               filter syntax specification.
+
+          include_archived: If true, include archived (post-delete retention) jobs in the response. Archived
+              jobs are inert (no resources running, no further billing) but their checkpoints
+              remain promotable until the retention window expires.
 
           order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
               order is ascending. To specify a descending order for a field, append a " desc"
@@ -186,6 +191,7 @@ class DpoJobsResource(SyncAPIResource):
                 query=maybe_transform(
                     {
                         "filter": filter,
+                        "include_archived": include_archived,
                         "order_by": order_by,
                         "page_size": page_size,
                         "page_token": page_token,
@@ -471,6 +477,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         filter: str | Omit = omit,
+        include_archived: bool | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
         page_token: str | Omit = omit,
@@ -487,6 +494,10 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
         See https://google.aip.dev/160 for the
               filter syntax specification.
+
+          include_archived: If true, include archived (post-delete retention) jobs in the response. Archived
+              jobs are inert (no resources running, no further billing) but their checkpoints
+              remain promotable until the retention window expires.
 
           order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
               order is ascending. To specify a descending order for a field, append a " desc"
@@ -527,6 +538,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                 query=maybe_transform(
                     {
                         "filter": filter,
+                        "include_archived": include_archived,
                         "order_by": order_by,
                         "page_size": page_size,
                         "page_token": page_token,

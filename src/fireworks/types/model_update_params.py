@@ -69,7 +69,6 @@ class ModelUpdateParams(TypedDict, total=False):
         "FLUMINA_BASE_MODEL",
         "FLUMINA_ADDON",
         "DRAFT_ADDON",
-        "FIRE_AGENT",
         "LIVE_MERGE",
         "CUSTOM_MODEL",
         "EMBEDDING_MODEL",
@@ -111,4 +110,10 @@ class ModelUpdateParams(TypedDict, total=False):
     """
     If true, the model will use the Hugging Face apply_chat_template API to apply
     the chat template.
+    """
+
+    use_training_v2: Annotated[bool, PropertyInfo(alias="useTrainingV2")]
+    """
+    If true, SFT jobs for this base model use service-mode (StatefulSet +
+    orchestration sidecar) instead of the legacy batch Job path.
     """

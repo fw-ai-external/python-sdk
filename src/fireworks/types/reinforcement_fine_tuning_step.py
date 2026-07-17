@@ -116,6 +116,11 @@ class ReinforcementFineTuningStep(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, stamped at creation)."""
+
     eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
     """Whether to auto-carve the dataset for eval."""
 
@@ -141,7 +146,7 @@ class ReinforcementFineTuningStep(BaseModel):
     The trainer reports tracked activity, including trainer API operations and
     active-session heartbeats. If no tracked activity is observed for this duration,
     the trainer is automatically stopped. When unset or 0, defaults to 60 minutes.
-    Set disableInactivityCleanup to true to disable automatic cleanup. GPU usage
+    Set disable_inactivity_cleanup to true to disable automatic cleanup. GPU usage
     continues to accrue while the trainer is running.
     """
 
@@ -204,6 +209,7 @@ class ReinforcementFineTuningStep(BaseModel):
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
             "JOB_STATE_DELETED",
+            "JOB_STATE_ARCHIVED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
@@ -211,9 +217,20 @@ class ReinforcementFineTuningStep(BaseModel):
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
     - JOB_STATE_DELETED: Job has been deleted.
+    - JOB_STATE_ARCHIVED: User-facing state for jobs whose row is retained
+      post-delete (e.g. RLOR trainers within the checkpoint retention window). The
+      internal row is still in JOB_STATE_DELETED; the gateway translates it to
+      ARCHIVED on public responses.
     """
 
     status: Optional[Status] = None
+
+    trainer_replica_count: Optional[int] = FieldInfo(alias="trainerReplicaCount", default=None)
+    """Data-parallel replica count for service-mode trainers.
+
+    When unset or 0, defaults to 1. Values greater than 1 launch replicated HSDP
+    training.
+    """
 
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""

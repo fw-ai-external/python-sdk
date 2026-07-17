@@ -6,7 +6,11 @@ from typing_extensions import Literal
 
 import httpx
 
-from ..types import batch_inference_job_get_params, batch_inference_job_list_params, batch_inference_job_create_params
+from ..types import (
+    batch_inference_job_get_params,
+    batch_inference_job_list_params,
+    batch_inference_job_create_params,
+)
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
@@ -19,6 +23,7 @@ from .._response import (
 )
 from ..pagination import SyncCursorBatchInferenceJobs, AsyncCursorBatchInferenceJobs
 from .._base_client import AsyncPaginator, make_request_options
+from ..types.placement_param import PlacementParam
 from ..types.batch_inference_job import BatchInferenceJob
 
 __all__ = ["BatchInferenceJobsResource", "AsyncBatchInferenceJobsResource"]
@@ -53,8 +58,10 @@ class BatchInferenceJobsResource(SyncAPIResource):
         display_name: str | Omit = omit,
         inference_parameters: batch_inference_job_create_params.InferenceParameters | Omit = omit,
         input_dataset_id: str | Omit = omit,
+        max_job_duration: str | Omit = omit,
         model: str | Omit = omit,
         output_dataset_id: str | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -73,6 +80,7 @@ class BatchInferenceJobsResource(SyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        system_prompt: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -94,14 +102,33 @@ class BatchInferenceJobsResource(SyncAPIResource):
           input_dataset_id: The name of the dataset used for inference. This is required, except when
               continued_from_job_name is specified.
 
+          max_job_duration: The customer-requested wall-clock run window for the job: how long it may run
+              before it is expired. This is the single public input that controls the job's
+              lifetime. The server bounds it to [12h, 72h]; if unset it defaults to 24h. The
+              resulting concrete deadline is surfaced as expire_time (= create_time + the
+              bounded window) and the job is expired once that deadline passes. A duration
+              (relative) is used rather than an absolute timestamp because the client does not
+              know create_time at submit time. Customer-visible input.
+
           model: The name of the model to use for inference. This is required, except when
               continued_from_job_name is specified.
 
           output_dataset_id: The name of the dataset used for storing the results. This will also contain the
               error file.
 
+          placement: The desired geographic region where the batch inference job runs. Set
+              `multi_region` to limit the job to a region group (US, EUROPE, APAC, or GLOBAL).
+              If unspecified, the job runs in any supported region.
+
           precision: The precision with which the model should be served. If PRECISION_UNSPECIFIED, a
               default will be chosen based on the model.
+
+          system_prompt: Optional job-level system prompt. When set, it is injected as a leading system
+              message into every input row that does NOT already begin with a system message
+              (a row's own leading system message takes precedence). This lets callers avoid
+              repeating a large, static system prompt on every row of the input dataset,
+              shrinking the upload. Because the injected prefix is byte-identical across rows,
+              prompt caching still applies.
 
           extra_headers: Send extra headers
 
@@ -124,9 +151,12 @@ class BatchInferenceJobsResource(SyncAPIResource):
                     "display_name": display_name,
                     "inference_parameters": inference_parameters,
                     "input_dataset_id": input_dataset_id,
+                    "max_job_duration": max_job_duration,
                     "model": model,
                     "output_dataset_id": output_dataset_id,
+                    "placement": placement,
                     "precision": precision,
+                    "system_prompt": system_prompt,
                 },
                 batch_inference_job_create_params.BatchInferenceJobCreateParams,
             ),
@@ -346,8 +376,10 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
         display_name: str | Omit = omit,
         inference_parameters: batch_inference_job_create_params.InferenceParameters | Omit = omit,
         input_dataset_id: str | Omit = omit,
+        max_job_duration: str | Omit = omit,
         model: str | Omit = omit,
         output_dataset_id: str | Omit = omit,
+        placement: PlacementParam | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -366,6 +398,7 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
             "FP4_MX_MOE",
         ]
         | Omit = omit,
+        system_prompt: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -387,14 +420,33 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
           input_dataset_id: The name of the dataset used for inference. This is required, except when
               continued_from_job_name is specified.
 
+          max_job_duration: The customer-requested wall-clock run window for the job: how long it may run
+              before it is expired. This is the single public input that controls the job's
+              lifetime. The server bounds it to [12h, 72h]; if unset it defaults to 24h. The
+              resulting concrete deadline is surfaced as expire_time (= create_time + the
+              bounded window) and the job is expired once that deadline passes. A duration
+              (relative) is used rather than an absolute timestamp because the client does not
+              know create_time at submit time. Customer-visible input.
+
           model: The name of the model to use for inference. This is required, except when
               continued_from_job_name is specified.
 
           output_dataset_id: The name of the dataset used for storing the results. This will also contain the
               error file.
 
+          placement: The desired geographic region where the batch inference job runs. Set
+              `multi_region` to limit the job to a region group (US, EUROPE, APAC, or GLOBAL).
+              If unspecified, the job runs in any supported region.
+
           precision: The precision with which the model should be served. If PRECISION_UNSPECIFIED, a
               default will be chosen based on the model.
+
+          system_prompt: Optional job-level system prompt. When set, it is injected as a leading system
+              message into every input row that does NOT already begin with a system message
+              (a row's own leading system message takes precedence). This lets callers avoid
+              repeating a large, static system prompt on every row of the input dataset,
+              shrinking the upload. Because the injected prefix is byte-identical across rows,
+              prompt caching still applies.
 
           extra_headers: Send extra headers
 
@@ -417,9 +469,12 @@ class AsyncBatchInferenceJobsResource(AsyncAPIResource):
                     "display_name": display_name,
                     "inference_parameters": inference_parameters,
                     "input_dataset_id": input_dataset_id,
+                    "max_job_duration": max_job_duration,
                     "model": model,
                     "output_dataset_id": output_dataset_id,
+                    "placement": placement,
                     "precision": precision,
+                    "system_prompt": system_prompt,
                 },
                 batch_inference_job_create_params.BatchInferenceJobCreateParams,
             ),

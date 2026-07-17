@@ -14,7 +14,7 @@ class Dpo(BaseModel):
     """DPO-specific configuration. Intended for METHOD=DPO."""
 
     beta: Optional[float] = None
-    """DPO temperature parameter (beta in the paper)."""
+    """DPO temperature parameter (beta in the paper). Must be > 0 and < 0.5."""
 
     ref_cache_batch_size: Optional[int] = FieldInfo(alias="refCacheBatchSize", default=None)
     """Number of preference pairs per reference forward call during caching."""

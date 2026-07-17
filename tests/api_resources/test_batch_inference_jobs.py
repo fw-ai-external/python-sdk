@@ -45,9 +45,16 @@ class TestBatchInferenceJobs:
                 "top_p": 0,
             },
             input_dataset_id="inputDatasetId",
+            max_job_duration="maxJobDuration",
             model="model",
             output_dataset_id="outputDatasetId",
+            placement={
+                "multi_region": "MULTI_REGION_UNSPECIFIED",
+                "region": "REGION_UNSPECIFIED",
+                "regions": ["REGION_UNSPECIFIED"],
+            },
             precision="PRECISION_UNSPECIFIED",
+            system_prompt="systemPrompt",
         )
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 
@@ -289,9 +296,16 @@ class TestAsyncBatchInferenceJobs:
                 "top_p": 0,
             },
             input_dataset_id="inputDatasetId",
+            max_job_duration="maxJobDuration",
             model="model",
             output_dataset_id="outputDatasetId",
+            placement={
+                "multi_region": "MULTI_REGION_UNSPECIFIED",
+                "region": "REGION_UNSPECIFIED",
+                "regions": ["REGION_UNSPECIFIED"],
+            },
             precision="PRECISION_UNSPECIFIED",
+            system_prompt="systemPrompt",
         )
         assert_matches_type(BatchInferenceJob, batch_inference_job, path=["response"])
 

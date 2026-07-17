@@ -26,6 +26,11 @@ class Dataset(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, immutable, stamped at creation)."""
+
     estimated_token_count: Optional[str] = FieldInfo(alias="estimatedTokenCount", default=None)
     """The estimated number of tokens in the dataset."""
 

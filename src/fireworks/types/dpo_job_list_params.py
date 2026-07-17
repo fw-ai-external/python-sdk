@@ -18,6 +18,13 @@ class DpoJobListParams(TypedDict, total=False):
     See https://google.aip.dev/160 for the filter syntax specification.
     """
 
+    include_archived: Annotated[bool, PropertyInfo(alias="includeArchived")]
+    """
+    If true, include archived (post-delete retention) jobs in the response. Archived
+    jobs are inert (no resources running, no further billing) but their checkpoints
+    remain promotable until the retention window expires.
+    """
+
     order_by: Annotated[str, PropertyInfo(alias="orderBy")]
     """A comma-separated list of fields to order by.
 

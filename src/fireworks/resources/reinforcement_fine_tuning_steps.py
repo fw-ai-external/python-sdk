@@ -11,7 +11,6 @@ from ..types import (
     reinforcement_fine_tuning_step_list_params,
     reinforcement_fine_tuning_step_create_params,
     reinforcement_fine_tuning_step_resume_params,
-    reinforcement_fine_tuning_step_execute_params,
 )
 from .._types import Body, Omit, Query, Headers, NotGiven, SequenceNotStr, omit, not_given
 from .._utils import path_template, maybe_transform, async_maybe_transform
@@ -77,6 +76,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
+        trainer_replica_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -124,7 +124,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
           inactivity_timeout: Trainer inactivity timeout. The trainer reports tracked activity, including
               trainer API operations and active-session heartbeats. If no tracked activity is
               observed for this duration, the trainer is automatically stopped. When unset or
-              0, defaults to 60 minutes. Set disableInactivityCleanup to true to disable
+              0, defaults to 60 minutes. Set disable_inactivity_cleanup to true to disable
               automatic cleanup. GPU usage continues to accrue while the trainer is running.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
@@ -141,6 +141,9 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
 
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
+
+          trainer_replica_count: Data-parallel replica count for service-mode trainers. When unset or 0, defaults
+              to 1. Values greater than 1 launch replicated HSDP training.
 
           training_config: Common training configurations.
 
@@ -181,6 +184,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
+                    "trainer_replica_count": trainer_replica_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -207,6 +211,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         filter: str | Omit = omit,
+        include_archived: bool | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
         page_token: str | Omit = omit,
@@ -224,6 +229,12 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
         Args:
           filter: Filter criteria for the returned jobs. See https://google.aip.dev/160 for the
               filter syntax specification.
+
+          include_archived: If true, include archived (post-delete retention) jobs in the response. Archived
+              jobs are inert (no resources running, no further billing) but their checkpoints
+              remain promotable until the retention window expires. Default false matches the
+              customer-facing list semantics — archived jobs are hidden unless explicitly
+              requested.
 
           order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
               order is ascending. To specify a descending order for a field, append a " desc"
@@ -264,6 +275,7 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 query=maybe_transform(
                     {
                         "filter": filter,
+                        "include_archived": include_archived,
                         "order_by": order_by,
                         "page_size": page_size,
                         "page_token": page_token,
@@ -313,64 +325,6 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
                 account_id=account_id,
                 rlor_trainer_job_id=rlor_trainer_job_id,
-            ),
-            options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
-            ),
-            cast_to=object,
-        )
-
-    def execute(
-        self,
-        rlor_trainer_job_id: str,
-        *,
-        account_id: str | None = None,
-        dataset: str,
-        output_model: str,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
-        # The extra values given here take precedence over values defined on the client or passed to this method.
-        extra_headers: Headers | None = None,
-        extra_query: Query | None = None,
-        extra_body: Body | None = None,
-        timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
-        """
-        Execute one training step for keep-alive Reinforcement Fine-tuning Step
-
-        Args:
-          dataset: Dataset to process for this iteration.
-
-          output_model: Output model to materialize when training completes.
-
-          extra_headers: Send extra headers
-
-          extra_query: Add additional query parameters to the request
-
-          extra_body: Add additional JSON properties to the request
-
-          timeout: Override the client-level default timeout for this request, in seconds
-        """
-        if account_id is None:
-            account_id = self._client._get_account_id_path_param()
-        if not account_id:
-            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not rlor_trainer_job_id:
-            raise ValueError(
-                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
-            )
-        return self._post(
-            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
-            + path_template(
-                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
-                account_id=account_id,
-                rlor_trainer_job_id=rlor_trainer_job_id,
-            ),
-            body=maybe_transform(
-                {
-                    "dataset": dataset,
-                    "output_model": output_model,
-                },
-                reinforcement_fine_tuning_step_execute_params.ReinforcementFineTuningStepExecuteParams,
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -528,6 +482,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         reward_weights: SequenceNotStr[str] | Omit = omit,
         rollout_deployment_name: str | Omit = omit,
         service_mode: bool | Omit = omit,
+        trainer_replica_count: int | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -575,7 +530,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
           inactivity_timeout: Trainer inactivity timeout. The trainer reports tracked activity, including
               trainer API operations and active-session heartbeats. If no tracked activity is
               observed for this duration, the trainer is automatically stopped. When unset or
-              0, defaults to 60 minutes. Set disableInactivityCleanup to true to disable
+              0, defaults to 60 minutes. Set disable_inactivity_cleanup to true to disable
               automatic cleanup. GPU usage continues to accrue while the trainer is running.
 
           loss_config: Reinforcement learning loss method + hyperparameters for the underlying trainer.
@@ -592,6 +547,9 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
 
           rollout_deployment_name: Rollout deployment name associated with this RLOR trainer job. This is optional.
               If not set, trainer will not trigger weight sync to rollout engine.
+
+          trainer_replica_count: Data-parallel replica count for service-mode trainers. When unset or 0, defaults
+              to 1. Values greater than 1 launch replicated HSDP training.
 
           training_config: Common training configurations.
 
@@ -632,6 +590,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                     "reward_weights": reward_weights,
                     "rollout_deployment_name": rollout_deployment_name,
                     "service_mode": service_mode,
+                    "trainer_replica_count": trainer_replica_count,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -658,6 +617,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         filter: str | Omit = omit,
+        include_archived: bool | Omit = omit,
         order_by: str | Omit = omit,
         page_size: int | Omit = omit,
         page_token: str | Omit = omit,
@@ -677,6 +637,12 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
         Args:
           filter: Filter criteria for the returned jobs. See https://google.aip.dev/160 for the
               filter syntax specification.
+
+          include_archived: If true, include archived (post-delete retention) jobs in the response. Archived
+              jobs are inert (no resources running, no further billing) but their checkpoints
+              remain promotable until the retention window expires. Default false matches the
+              customer-facing list semantics — archived jobs are hidden unless explicitly
+              requested.
 
           order_by: A comma-separated list of fields to order by. e.g. "foo,bar" The default sort
               order is ascending. To specify a descending order for a field, append a " desc"
@@ -717,6 +683,7 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 query=maybe_transform(
                     {
                         "filter": filter,
+                        "include_archived": include_archived,
                         "order_by": order_by,
                         "page_size": page_size,
                         "page_token": page_token,
@@ -766,64 +733,6 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
                 "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
                 account_id=account_id,
                 rlor_trainer_job_id=rlor_trainer_job_id,
-            ),
-            options=make_request_options(
-                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
-            ),
-            cast_to=object,
-        )
-
-    async def execute(
-        self,
-        rlor_trainer_job_id: str,
-        *,
-        account_id: str | None = None,
-        dataset: str,
-        output_model: str,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
-        # The extra values given here take precedence over values defined on the client or passed to this method.
-        extra_headers: Headers | None = None,
-        extra_query: Query | None = None,
-        extra_body: Body | None = None,
-        timeout: float | httpx.Timeout | None | NotGiven = not_given,
-    ) -> object:
-        """
-        Execute one training step for keep-alive Reinforcement Fine-tuning Step
-
-        Args:
-          dataset: Dataset to process for this iteration.
-
-          output_model: Output model to materialize when training completes.
-
-          extra_headers: Send extra headers
-
-          extra_query: Add additional query parameters to the request
-
-          extra_body: Add additional JSON properties to the request
-
-          timeout: Override the client-level default timeout for this request, in seconds
-        """
-        if account_id is None:
-            account_id = self._client._get_account_id_path_param()
-        if not account_id:
-            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
-        if not rlor_trainer_job_id:
-            raise ValueError(
-                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
-            )
-        return await self._post(
-            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
-            + path_template(
-                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:executeTrainStep",
-                account_id=account_id,
-                rlor_trainer_job_id=rlor_trainer_job_id,
-            ),
-            body=await async_maybe_transform(
-                {
-                    "dataset": dataset,
-                    "output_model": output_model,
-                },
-                reinforcement_fine_tuning_step_execute_params.ReinforcementFineTuningStepExecuteParams,
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -950,9 +859,6 @@ class ReinforcementFineTuningStepsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute = to_raw_response_wrapper(
-            reinforcement_fine_tuning_steps.execute,
-        )
         self.get = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
@@ -973,9 +879,6 @@ class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         )
         self.delete = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
-        )
-        self.execute = async_to_raw_response_wrapper(
-            reinforcement_fine_tuning_steps.execute,
         )
         self.get = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.get,
@@ -998,9 +901,6 @@ class ReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
-        self.execute = to_streamed_response_wrapper(
-            reinforcement_fine_tuning_steps.execute,
-        )
         self.get = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,
         )
@@ -1021,9 +921,6 @@ class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
-        )
-        self.execute = async_to_streamed_response_wrapper(
-            reinforcement_fine_tuning_steps.execute,
         )
         self.get = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.get,

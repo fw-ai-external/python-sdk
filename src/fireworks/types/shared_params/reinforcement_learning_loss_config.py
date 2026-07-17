@@ -13,7 +13,7 @@ class Dpo(TypedDict, total=False):
     """DPO-specific configuration. Intended for METHOD=DPO."""
 
     beta: float
-    """DPO temperature parameter (beta in the paper)."""
+    """DPO temperature parameter (beta in the paper). Must be > 0 and < 0.5."""
 
     ref_cache_batch_size: Annotated[int, PropertyInfo(alias="refCacheBatchSize")]
     """Number of preference pairs per reference forward call during caching."""

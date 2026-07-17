@@ -7,9 +7,10 @@ from typing_extensions import Literal
 from pydantic import Field as FieldInfo
 
 from .._models import BaseModel
+from .placement import Placement
 from .shared.status import Status
 
-__all__ = ["BatchInferenceJob", "InferenceParameters", "JobProgress"]
+__all__ = ["BatchInferenceJob", "InferenceParameters", "JobProgress", "Lifecycle"]
 
 
 class InferenceParameters(BaseModel):
@@ -74,6 +75,25 @@ class JobProgress(BaseModel):
     """Total number of requests that have been processed (successfully or failed)."""
 
 
+class Lifecycle(BaseModel):
+    """Lifecycle milestone timestamps (validated / run-start / end) for the job."""
+
+    end_time: Optional[datetime] = FieldInfo(alias="endTime", default=None)
+    """
+    The terminal time of the job (when it reached COMPLETED, FAILED, EXPIRED, or
+    CANCELLED).
+    """
+
+    run_start_time: Optional[datetime] = FieldInfo(alias="runStartTime", default=None)
+    """When the runner first started processing (the job first became RUNNING)."""
+
+    validated_time: Optional[datetime] = FieldInfo(alias="validatedTime", default=None)
+    """When dataset validation completed and the job left VALIDATING.
+
+    Unset for jobs that skip validation or that fail before validating.
+    """
+
+
 class BatchInferenceJob(BaseModel):
     continued_from_job_name: Optional[str] = FieldInfo(alias="continuedFromJobName", default=None)
     """
@@ -89,6 +109,20 @@ class BatchInferenceJob(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    expire_time: Optional[datetime] = FieldInfo(alias="expireTime", default=None)
+    """
+    The time when the batch inference job will expire (stop running); any completed
+    requests will have been written to the output dataset by then.
+
+    This is the job's effective execution deadline, derived by the server as
+    create_time + the bounded run window (see max_job_duration). It is exposed so
+    customers can read back the concrete deadline without recomputing it
+    client-side. OUTPUT_ONLY: it is always computed server-side and any
+    client-supplied value is ignored (previously this was a SUPERUSER_ONLY input
+    that overlapped with max_job_duration; the two are now unified as one public
+    input (duration) + one public derived deadline (this timestamp)).
+    """
+
     inference_parameters: Optional[InferenceParameters] = FieldInfo(alias="inferenceParameters", default=None)
     """Parameters controlling the inference process."""
 
@@ -100,6 +134,20 @@ class BatchInferenceJob(BaseModel):
 
     job_progress: Optional[JobProgress] = FieldInfo(alias="jobProgress", default=None)
     """Job progress."""
+
+    lifecycle: Optional[Lifecycle] = None
+    """Lifecycle milestone timestamps (validated / run-start / end) for the job."""
+
+    max_job_duration: Optional[str] = FieldInfo(alias="maxJobDuration", default=None)
+    """
+    The customer-requested wall-clock run window for the job: how long it may run
+    before it is expired. This is the single public input that controls the job's
+    lifetime. The server bounds it to [12h, 72h]; if unset it defaults to 24h. The
+    resulting concrete deadline is surfaced as expire_time (= create_time + the
+    bounded window) and the job is expired once that deadline passes. A duration
+    (relative) is used rather than an absolute timestamp because the client does not
+    know create_time at submit time. Customer-visible input.
+    """
 
     model: Optional[str] = None
     """The name of the model to use for inference.
@@ -113,6 +161,13 @@ class BatchInferenceJob(BaseModel):
     """The name of the dataset used for storing the results.
 
     This will also contain the error file.
+    """
+
+    placement: Optional[Placement] = None
+    """
+    The desired geographic region where the batch inference job runs. Set
+    `multi_region` to limit the job to a region group (US, EUROPE, APAC, or GLOBAL).
+    If unspecified, the job runs in any supported region.
     """
 
     precision: Optional[
@@ -160,11 +215,38 @@ class BatchInferenceJob(BaseModel):
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
             "JOB_STATE_DELETED",
+            "JOB_STATE_ARCHIVED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in."""
 
     status: Optional[Status] = None
 
+    system_prompt: Optional[str] = FieldInfo(alias="systemPrompt", default=None)
+    """Optional job-level system prompt.
+
+    When set, it is injected as a leading system message into every input row that
+    does NOT already begin with a system message (a row's own leading system message
+    takes precedence). This lets callers avoid repeating a large, static system
+    prompt on every row of the input dataset, shrinking the upload. Because the
+    injected prefix is byte-identical across rows, prompt caching still applies.
+    """
+
     update_time: Optional[datetime] = FieldInfo(alias="updateTime", default=None)
     """The update time for the batch inference job."""
+
+    waiting_on_capacity: Optional[bool] = FieldInfo(alias="waitingOnCapacity", default=None)
+    """
+    True only while a job that has ALREADY started running is briefly re-acquiring
+    capacity after a mid-run preemption/stockout (i.e. it regressed from RUNNING
+    back to an internal PENDING/CREATING phase and is waiting to resume). This is
+    intentionally a transient sub-status annotation on a job whose customer-facing
+    `state` stays RUNNING — NOT a distinct `state` value: the job is still running
+    (progress is saved, it auto-resumes) so introducing a new terminal-or-not enum
+    value would force every state consumer (SDK/CLI/internal maps/billing) to
+    special-case "still running." It drives the customer-facing "Briefly paused —
+    waiting on capacity" card. It must NOT be set during first-time provisioning
+    before the job has ever run, and is cleared once the job returns to RUNNING or
+    reaches a terminal state. So "state=RUNNING, waiting_on_capacity=true" means:
+    running, momentarily paused while it re-acquires capacity.
+    """

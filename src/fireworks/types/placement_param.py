@@ -42,6 +42,7 @@ class PlacementParam(TypedDict, total=False):
         "AP_TOKYO_2",
         "US_CALIFORNIA_1",
         "US_UTAH_1",
+        "US_ARIZONA_3",
         "US_GEORGIA_1",
         "US_GEORGIA_2",
         "US_WASHINGTON_4",
@@ -54,8 +55,11 @@ class PlacementParam(TypedDict, total=False):
         "US_WASHINGTON_5",
         "US_MINNESOTA_1",
         "US_CALIFORNIA_2",
-        "AP_MALAYSIA_1",
-        "US_OHIO_2",
+        "NA_BRITISHCOLUMBIA_2",
+        "AP_MALAYSIA_2",
+        "US_OREGON_1",
+        "NA_BRITISHCOLUMBIA_3",
+        "AP_NEWSOUTHWALES_1",
     ]
     """The region where the deployment must be placed."""
 
@@ -80,6 +84,7 @@ class PlacementParam(TypedDict, total=False):
             "AP_TOKYO_2",
             "US_CALIFORNIA_1",
             "US_UTAH_1",
+            "US_ARIZONA_3",
             "US_GEORGIA_1",
             "US_GEORGIA_2",
             "US_WASHINGTON_4",
@@ -92,7 +97,10 @@ class PlacementParam(TypedDict, total=False):
             "US_WASHINGTON_5",
             "US_MINNESOTA_1",
             "US_CALIFORNIA_2",
-            "AP_MALAYSIA_1",
-            "US_OHIO_2",
+            "NA_BRITISHCOLUMBIA_2",
+            "AP_MALAYSIA_2",
+            "US_OREGON_1",
+            "NA_BRITISHCOLUMBIA_3",
+            "AP_NEWSOUTHWALES_1",
         ]
     ]

@@ -141,6 +141,11 @@ class ReinforcementFineTuningJob(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, stamped at creation)."""
+
     eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
     """Whether to auto-carve the dataset for eval."""
 
@@ -204,6 +209,7 @@ class ReinforcementFineTuningJob(BaseModel):
             "JOB_STATE_EARLY_STOPPED",
             "JOB_STATE_PAUSED",
             "JOB_STATE_DELETED",
+            "JOB_STATE_ARCHIVED",
         ]
     ] = None
     """JobState represents the state an asynchronous job can be in.
@@ -211,6 +217,10 @@ class ReinforcementFineTuningJob(BaseModel):
     - JOB_STATE_PAUSED: Job is paused, typically due to account suspension or manual
       intervention.
     - JOB_STATE_DELETED: Job has been deleted.
+    - JOB_STATE_ARCHIVED: User-facing state for jobs whose row is retained
+      post-delete (e.g. RLOR trainers within the checkpoint retention window). The
+      internal row is still in JOB_STATE_DELETED; the gateway translates it to
+      ARCHIVED on public responses.
     """
 
     status: Optional[Status] = None

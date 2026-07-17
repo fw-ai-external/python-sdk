@@ -60,6 +60,11 @@ class EvaluatorListResponse(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    encryption_state: Optional[
+        Literal["ENCRYPTION_STATE_UNSPECIFIED", "ENCRYPTION_STATE_PLAINTEXT", "ENCRYPTION_STATE_CMEK"]
+    ] = FieldInfo(alias="encryptionState", default=None)
+    """CMEK encryption state (authoritative, stamped at creation)."""
+
     entry_point: Optional[str] = FieldInfo(alias="entryPoint", default=None)
 
     name: Optional[str] = None

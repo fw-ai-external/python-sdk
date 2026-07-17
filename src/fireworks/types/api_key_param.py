@@ -23,3 +23,6 @@ class APIKeyParam(TypedDict, total=False):
 
     If not set, the key never expires.
     """
+
+    is_firepass: Annotated[bool, PropertyInfo(alias="isFirepass")]
+    """True when this key is a FirePass inference key."""

@@ -72,6 +72,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         learning_rate: float | Omit = omit,
         learning_rate_warmup_steps: int | Omit = omit,
         lora_rank: int | Omit = omit,
+        lr_scheduler: supervised_fine_tuning_job_create_params.LrScheduler | Omit = omit,
         max_context_length: int | Omit = omit,
         metrics_file_signed_url: str | Omit = omit,
         mtp_enabled: bool | Omit = omit,
@@ -132,6 +133,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           lora_rank: The rank of the LoRA layers.
 
+          lr_scheduler: The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+              unset, the trainer uses the legacy constant schedule.
+
           max_context_length: The maximum context length to use with the model.
 
           mtp_enabled: Deprecated: MTP is no longer supported by managed training. This field is
@@ -191,6 +195,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "learning_rate": learning_rate,
                     "learning_rate_warmup_steps": learning_rate_warmup_steps,
                     "lora_rank": lora_rank,
+                    "lr_scheduler": lr_scheduler,
                     "max_context_length": max_context_length,
                     "metrics_file_signed_url": metrics_file_signed_url,
                     "mtp_enabled": mtp_enabled,
@@ -482,6 +487,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         learning_rate: float | Omit = omit,
         learning_rate_warmup_steps: int | Omit = omit,
         lora_rank: int | Omit = omit,
+        lr_scheduler: supervised_fine_tuning_job_create_params.LrScheduler | Omit = omit,
         max_context_length: int | Omit = omit,
         metrics_file_signed_url: str | Omit = omit,
         mtp_enabled: bool | Omit = omit,
@@ -542,6 +548,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           lora_rank: The rank of the LoRA layers.
 
+          lr_scheduler: The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+              unset, the trainer uses the legacy constant schedule.
+
           max_context_length: The maximum context length to use with the model.
 
           mtp_enabled: Deprecated: MTP is no longer supported by managed training. This field is
@@ -601,6 +610,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "learning_rate": learning_rate,
                     "learning_rate_warmup_steps": learning_rate_warmup_steps,
                     "lora_rank": lora_rank,
+                    "lr_scheduler": lr_scheduler,
                     "max_context_length": max_context_length,
                     "metrics_file_signed_url": metrics_file_signed_url,
                     "mtp_enabled": mtp_enabled,

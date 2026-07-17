@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing_extensions import Literal, Annotated, TypedDict
 
 from .._utils import PropertyInfo
+from .placement_param import PlacementParam
 
 __all__ = ["BatchInferenceJobCreateParams", "InferenceParameters"]
 
@@ -32,6 +33,17 @@ class BatchInferenceJobCreateParams(TypedDict, total=False):
     This is required, except when continued_from_job_name is specified.
     """
 
+    max_job_duration: Annotated[str, PropertyInfo(alias="maxJobDuration")]
+    """
+    The customer-requested wall-clock run window for the job: how long it may run
+    before it is expired. This is the single public input that controls the job's
+    lifetime. The server bounds it to [12h, 72h]; if unset it defaults to 24h. The
+    resulting concrete deadline is surfaced as expire_time (= create_time + the
+    bounded window) and the job is expired once that deadline passes. A duration
+    (relative) is used rather than an absolute timestamp because the client does not
+    know create_time at submit time. Customer-visible input.
+    """
+
     model: str
     """The name of the model to use for inference.
 
@@ -42,6 +54,13 @@ class BatchInferenceJobCreateParams(TypedDict, total=False):
     """The name of the dataset used for storing the results.
 
     This will also contain the error file.
+    """
+
+    placement: PlacementParam
+    """
+    The desired geographic region where the batch inference job runs. Set
+    `multi_region` to limit the job to a region group (US, EUROPE, APAC, or GLOBAL).
+    If unspecified, the job runs in any supported region.
     """
 
     precision: Literal[
@@ -64,6 +83,16 @@ class BatchInferenceJobCreateParams(TypedDict, total=False):
     """
     The precision with which the model should be served. If PRECISION_UNSPECIFIED, a
     default will be chosen based on the model.
+    """
+
+    system_prompt: Annotated[str, PropertyInfo(alias="systemPrompt")]
+    """Optional job-level system prompt.
+
+    When set, it is injected as a leading system message into every input row that
+    does NOT already begin with a system message (a row's own leading system message
+    takes precedence). This lets callers avoid repeating a large, static system
+    prompt on every row of the input dataset, shrinking the upload. Because the
+    injected prefix is byte-identical across rows, prompt caching still applies.
     """
 
 

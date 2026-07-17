@@ -6,7 +6,55 @@ from pydantic import Field as FieldInfo
 
 from ..._models import BaseModel
 
-__all__ = ["TrainingConfig", "TrainerShardingScheme"]
+__all__ = ["TrainingConfig", "LrScheduler", "LrSchedulerCosine", "LrSchedulerLinear", "TrainerShardingScheme"]
+
+
+class LrSchedulerCosine(BaseModel):
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Optional[float] = FieldInfo(alias="decayRatio", default=None)
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Optional[float] = FieldInfo(alias="minLrRatio", default=None)
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrSchedulerLinear(BaseModel):
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Optional[float] = FieldInfo(alias="decayRatio", default=None)
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Optional[float] = FieldInfo(alias="minLrRatio", default=None)
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrScheduler(BaseModel):
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs).
+    When unset, the trainer uses the legacy constant schedule.
+    """
+
+    constant: Optional[object] = None
+    """Constant learning rate held flat after warmup (legacy default). No decay knobs."""
+
+    cosine: Optional[LrSchedulerCosine] = None
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    linear: Optional[LrSchedulerLinear] = None
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
 
 
 class TrainerShardingScheme(BaseModel):
@@ -36,21 +84,13 @@ class TrainingConfig(BaseModel):
     """
 
     batch_size: Optional[int] = FieldInfo(alias="batchSize", default=None)
-    """Legacy V1 token-packing budget.
+    """Deprecated: legacy V1 token budget.
 
-    V1 SFT, DPO, RFT, and RLOR training paths use this together with the optional
-    batch_size_samples control. Training V2 SFT and DPO reject nonzero values and
-    batch by samples via batch_size_samples.
+    Training V2 batches by samples via batch_size_samples.
     """
 
     batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
-    """Sample-count batching control.
-
-    On V1 training paths this works alongside batch_size: batch_size limits packed
-    tokens per microbatch while this field limits samples per gradient batch. On
-    Training V2 SFT and DPO, this maps to examples or preference pairs per optimizer
-    step.
-    """
+    """The number of samples per gradient batch."""
 
     epochs: Optional[int] = None
     """The number of epochs to train for."""
@@ -63,8 +103,8 @@ class TrainingConfig(BaseModel):
     """
 
     jinja_template: Optional[str] = FieldInfo(alias="jinjaTemplate", default=None)
-    """Deprecated: literal Jinja templates are not supported by Training V2.
-
+    """
+    Deprecated: literal Jinja templates are not supported by Training V2.
     Conversation rendering is selected from the base model's registered renderer
     configuration instead.
     """
@@ -85,6 +125,12 @@ class TrainingConfig(BaseModel):
 
     lora_target_modules: Optional[List[str]] = FieldInfo(alias="loraTargetModules", default=None)
     """Optional LoRA target module names (e.g. q_proj, k_proj, v_proj)."""
+
+    lr_scheduler: Optional[LrScheduler] = FieldInfo(alias="lrScheduler", default=None)
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+    unset, the trainer uses the legacy constant schedule.
+    """
 
     max_context_length: Optional[int] = FieldInfo(alias="maxContextLength", default=None)
     """The maximum context length to use with the model."""

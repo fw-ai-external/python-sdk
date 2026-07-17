@@ -75,6 +75,9 @@ class Account(BaseModel):
     notification_settings: Optional[NotificationSettings] = FieldInfo(alias="notificationSettings", default=None)
     """Notification settings for this account."""
 
+    productivity_only: Optional[bool] = FieldInfo(alias="productivityOnly", default=None)
+    """Marks this account as productivity/coding-only. Set once at account creation."""
+
     state: Optional[Literal["STATE_UNSPECIFIED", "CREATING", "READY", "UPDATING", "DELETING"]] = None
     """The state of the account."""
 

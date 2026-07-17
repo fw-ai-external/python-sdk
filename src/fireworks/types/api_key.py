@@ -29,6 +29,9 @@ class APIKey(BaseModel):
     If not set, the key never expires.
     """
 
+    is_firepass: Optional[bool] = FieldInfo(alias="isFirepass", default=None)
+    """True when this key is a FirePass inference key."""
+
     key: Optional[str] = None
     """
     The actual API key value, only available upon creation and not stored

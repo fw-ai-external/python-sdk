@@ -141,7 +141,6 @@ class ModelsResource(SyncAPIResource):
             "FLUMINA_BASE_MODEL",
             "FLUMINA_ADDON",
             "DRAFT_ADDON",
-            "FIRE_AGENT",
             "LIVE_MERGE",
             "CUSTOM_MODEL",
             "EMBEDDING_MODEL",
@@ -157,6 +156,7 @@ class ModelsResource(SyncAPIResource):
         teft_details: object | Omit = omit,
         training_context_length: int | Omit = omit,
         use_hf_apply_chat_template: bool | Omit = omit,
+        use_training_v2: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -215,6 +215,9 @@ class ModelsResource(SyncAPIResource):
           use_hf_apply_chat_template: If true, the model will use the Hugging Face apply_chat_template API to apply
               the chat template.
 
+          use_training_v2: If true, SFT jobs for this base model use service-mode (StatefulSet +
+              orchestration sidecar) instead of the legacy batch Job path.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -254,6 +257,7 @@ class ModelsResource(SyncAPIResource):
                     "teft_details": teft_details,
                     "training_context_length": training_context_length,
                     "use_hf_apply_chat_template": use_hf_apply_chat_template,
+                    "use_training_v2": use_training_v2,
                 },
                 model_update_params.ModelUpdateParams,
             ),
@@ -542,6 +546,8 @@ class ModelsResource(SyncAPIResource):
         model_id: str,
         *,
         account_id: str | None = None,
+        abort: bool | Omit = omit,
+        accelerator_count: int | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -572,6 +578,11 @@ class ModelsResource(SyncAPIResource):
         Prepare Model for different precisions
 
         Args:
+          abort: If true, abort an active prepare job and clear prepare tracking state. No new
+              prepare job is launched in this request.
+
+          accelerator_count: Number of accelerators (GPUs) to use for quantization. Defaults to 8 if unset.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -593,6 +604,8 @@ class ModelsResource(SyncAPIResource):
             ),
             body=maybe_transform(
                 {
+                    "abort": abort,
+                    "accelerator_count": accelerator_count,
                     "precision": precision,
                     "read_mask": read_mask,
                 },
@@ -764,7 +777,6 @@ class AsyncModelsResource(AsyncAPIResource):
             "FLUMINA_BASE_MODEL",
             "FLUMINA_ADDON",
             "DRAFT_ADDON",
-            "FIRE_AGENT",
             "LIVE_MERGE",
             "CUSTOM_MODEL",
             "EMBEDDING_MODEL",
@@ -780,6 +792,7 @@ class AsyncModelsResource(AsyncAPIResource):
         teft_details: object | Omit = omit,
         training_context_length: int | Omit = omit,
         use_hf_apply_chat_template: bool | Omit = omit,
+        use_training_v2: bool | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
@@ -838,6 +851,9 @@ class AsyncModelsResource(AsyncAPIResource):
           use_hf_apply_chat_template: If true, the model will use the Hugging Face apply_chat_template API to apply
               the chat template.
 
+          use_training_v2: If true, SFT jobs for this base model use service-mode (StatefulSet +
+              orchestration sidecar) instead of the legacy batch Job path.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -877,6 +893,7 @@ class AsyncModelsResource(AsyncAPIResource):
                     "teft_details": teft_details,
                     "training_context_length": training_context_length,
                     "use_hf_apply_chat_template": use_hf_apply_chat_template,
+                    "use_training_v2": use_training_v2,
                 },
                 model_update_params.ModelUpdateParams,
             ),
@@ -1165,6 +1182,8 @@ class AsyncModelsResource(AsyncAPIResource):
         model_id: str,
         *,
         account_id: str | None = None,
+        abort: bool | Omit = omit,
+        accelerator_count: int | Omit = omit,
         precision: Literal[
             "PRECISION_UNSPECIFIED",
             "FP16",
@@ -1195,6 +1214,11 @@ class AsyncModelsResource(AsyncAPIResource):
         Prepare Model for different precisions
 
         Args:
+          abort: If true, abort an active prepare job and clear prepare tracking state. No new
+              prepare job is launched in this request.
+
+          accelerator_count: Number of accelerators (GPUs) to use for quantization. Defaults to 8 if unset.
+
           extra_headers: Send extra headers
 
           extra_query: Add additional query parameters to the request
@@ -1216,6 +1240,8 @@ class AsyncModelsResource(AsyncAPIResource):
             ),
             body=await async_maybe_transform(
                 {
+                    "abort": abort,
+                    "accelerator_count": accelerator_count,
                     "precision": precision,
                     "read_mask": read_mask,
                 },

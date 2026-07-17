@@ -7,7 +7,55 @@ from typing_extensions import Annotated, TypedDict
 from ..._types import SequenceNotStr
 from ..._utils import PropertyInfo
 
-__all__ = ["TrainingConfig", "TrainerShardingScheme"]
+__all__ = ["TrainingConfig", "LrScheduler", "LrSchedulerCosine", "LrSchedulerLinear", "TrainerShardingScheme"]
+
+
+class LrSchedulerCosine(TypedDict, total=False):
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Annotated[float, PropertyInfo(alias="decayRatio")]
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Annotated[float, PropertyInfo(alias="minLrRatio")]
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrSchedulerLinear(TypedDict, total=False):
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Annotated[float, PropertyInfo(alias="decayRatio")]
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Annotated[float, PropertyInfo(alias="minLrRatio")]
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrScheduler(TypedDict, total=False):
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs).
+    When unset, the trainer uses the legacy constant schedule.
+    """
+
+    constant: object
+    """Constant learning rate held flat after warmup (legacy default). No decay knobs."""
+
+    cosine: LrSchedulerCosine
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    linear: LrSchedulerLinear
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
 
 
 class TrainerShardingScheme(TypedDict, total=False):
@@ -37,21 +85,13 @@ class TrainingConfig(TypedDict, total=False):
     """
 
     batch_size: Annotated[int, PropertyInfo(alias="batchSize")]
-    """Legacy V1 token-packing budget.
+    """Deprecated: legacy V1 token budget.
 
-    V1 SFT, DPO, RFT, and RLOR training paths use this together with the optional
-    batch_size_samples control. Training V2 SFT and DPO reject nonzero values and
-    batch by samples via batch_size_samples.
+    Training V2 batches by samples via batch_size_samples.
     """
 
     batch_size_samples: Annotated[int, PropertyInfo(alias="batchSizeSamples")]
-    """Sample-count batching control.
-
-    On V1 training paths this works alongside batch_size: batch_size limits packed
-    tokens per microbatch while this field limits samples per gradient batch. On
-    Training V2 SFT and DPO, this maps to examples or preference pairs per optimizer
-    step.
-    """
+    """The number of samples per gradient batch."""
 
     epochs: int
     """The number of epochs to train for."""
@@ -64,8 +104,8 @@ class TrainingConfig(TypedDict, total=False):
     """
 
     jinja_template: Annotated[str, PropertyInfo(alias="jinjaTemplate")]
-    """Deprecated: literal Jinja templates are not supported by Training V2.
-
+    """
+    Deprecated: literal Jinja templates are not supported by Training V2.
     Conversation rendering is selected from the base model's registered renderer
     configuration instead.
     """
@@ -86,6 +126,12 @@ class TrainingConfig(TypedDict, total=False):
 
     lora_target_modules: Annotated[SequenceNotStr[str], PropertyInfo(alias="loraTargetModules")]
     """Optional LoRA target module names (e.g. q_proj, k_proj, v_proj)."""
+
+    lr_scheduler: Annotated[LrScheduler, PropertyInfo(alias="lrScheduler")]
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+    unset, the trainer uses the legacy constant schedule.
+    """
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """The maximum context length to use with the model."""

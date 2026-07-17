@@ -13,6 +13,12 @@ __all__ = ["DeploymentShape"]
 
 class DeploymentShape(BaseModel):
     base_model: str = FieldInfo(alias="baseModel")
+    """
+    Mutable, but only via UpdateDeploymentShape and only to a compatible model: one
+    with the same model_type, parameter_count, and embedding status. The derived
+    model_type / parameter_count fields (OUTPUT_ONLY, IMMUTABLE) are therefore
+    preserved across a swap. Any incompatible change is rejected.
+    """
 
     accelerator_count: Optional[int] = FieldInfo(alias="acceleratorCount", default=None)
     """
@@ -34,6 +40,8 @@ class DeploymentShape(BaseModel):
             "AMD_MI325X_256GB",
             "AMD_MI350X_288GB",
             "NVIDIA_B300_288GB",
+            "NVIDIA_GB200",
+            "NVIDIA_GB300",
         ]
     ] = FieldInfo(alias="acceleratorType", default=None)
     """
@@ -56,9 +64,9 @@ class DeploymentShape(BaseModel):
     """If true, the deployment size validation is disabled."""
 
     disable_speculative_decoding: Optional[bool] = FieldInfo(alias="disableSpeculativeDecoding", default=None)
-    """
-    If true, speculative decoding is disabled for deployments created from this
-    shape, even if the base model has default draft model settings.
+    """DEPRECATED: This field is a no-op.
+
+    Speculative decoding is configured on deployment.
     """
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
@@ -83,7 +91,10 @@ class DeploymentShape(BaseModel):
     """
 
     enable_addons: Optional[bool] = FieldInfo(alias="enableAddons", default=None)
-    """If true, LORA addons are enabled for deployments created from this shape."""
+    """
+    If true, LORA addons are enabled for deployments created from this shape.
+    Deprecated: set enable_addons on the deployment instead.
+    """
 
     enable_session_affinity: Optional[bool] = FieldInfo(alias="enableSessionAffinity", default=None)
     """Whether to apply sticky routing based on `user` field."""
@@ -138,6 +149,7 @@ class DeploymentShape(BaseModel):
             "AGENTIC_CODING",
             "CHAT",
             "SUMMARIZATION",
+            "MULTI_LORA",
         ]
     ] = FieldInfo(alias="presetType", default=None)
     """Type of deployment shape for different deployment configurations."""

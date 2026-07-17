@@ -7,7 +7,14 @@ from typing_extensions import Literal, Required, Annotated, TypedDict
 from .._utils import PropertyInfo
 from .shared_params.wandb_config import WandbConfig
 
-__all__ = ["SupervisedFineTuningJobCreateParams", "AwsS3Config", "AzureBlobStorageConfig"]
+__all__ = [
+    "SupervisedFineTuningJobCreateParams",
+    "AwsS3Config",
+    "AzureBlobStorageConfig",
+    "LrScheduler",
+    "LrSchedulerCosine",
+    "LrSchedulerLinear",
+]
 
 
 class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
@@ -68,8 +75,8 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     """Whether to run the fine-tuning job in turbo mode."""
 
     jinja_template: Annotated[str, PropertyInfo(alias="jinjaTemplate")]
-    """Deprecated: literal Jinja templates are not supported by Training V2.
-
+    """
+    Deprecated: literal Jinja templates are not supported by Training V2.
     Conversation rendering is selected from the base model's registered renderer
     configuration instead.
     """
@@ -81,6 +88,12 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
 
     lora_rank: Annotated[int, PropertyInfo(alias="loraRank")]
     """The rank of the LoRA layers."""
+
+    lr_scheduler: Annotated[LrScheduler, PropertyInfo(alias="lrScheduler")]
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs). When
+    unset, the trainer uses the legacy constant schedule.
+    """
 
     max_context_length: Annotated[int, PropertyInfo(alias="maxContextLength")]
     """The maximum context length to use with the model."""
@@ -154,3 +167,51 @@ class AzureBlobStorageConfig(TypedDict, total=False):
     """
 
     tenant_id: Annotated[str, PropertyInfo(alias="tenantId")]
+
+
+class LrSchedulerCosine(TypedDict, total=False):
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Annotated[float, PropertyInfo(alias="decayRatio")]
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Annotated[float, PropertyInfo(alias="minLrRatio")]
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrSchedulerLinear(TypedDict, total=False):
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""
+
+    decay_ratio: Annotated[float, PropertyInfo(alias="decayRatio")]
+    """Fraction of total training steps over which to decay.
+
+    0 (unset) decays over the full run.
+    """
+
+    min_lr_ratio: Annotated[float, PropertyInfo(alias="minLrRatio")]
+    """
+    Floor learning rate as a fraction of the peak learning rate (0.0 = decay to
+    zero, 0.1 = decay to 10% of the peak learning rate).
+    """
+
+
+class LrScheduler(TypedDict, total=False):
+    """
+    The learning-rate schedule (constant/linear/cosine + per-type knobs).
+    When unset, the trainer uses the legacy constant schedule.
+    """
+
+    constant: object
+    """Constant learning rate held flat after warmup (legacy default). No decay knobs."""
+
+    cosine: LrSchedulerCosine
+    """Cosine annealing from the peak learning rate toward min_lr_ratio after warmup."""
+
+    linear: LrSchedulerLinear
+    """Linear decay from the peak learning rate toward min_lr_ratio after warmup."""

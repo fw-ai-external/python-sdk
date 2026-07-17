@@ -83,6 +83,7 @@ class TestModels:
                 "teft_details": {},
                 "training_context_length": 0,
                 "use_hf_apply_chat_template": True,
+                "use_training_v2": True,
             },
         )
         assert_matches_type(Model, model, path=["response"])
@@ -182,6 +183,7 @@ class TestModels:
             teft_details={},
             training_context_length=0,
             use_hf_apply_chat_template=True,
+            use_training_v2=True,
         )
         assert_matches_type(Model, model, path=["response"])
 
@@ -543,6 +545,8 @@ class TestModels:
         model = client.models.prepare(
             model_id="model_id",
             account_id="account_id",
+            abort=True,
+            accelerator_count=0,
             precision="PRECISION_UNSPECIFIED",
             read_mask="readMask",
         )
@@ -721,6 +725,7 @@ class TestAsyncModels:
                 "teft_details": {},
                 "training_context_length": 0,
                 "use_hf_apply_chat_template": True,
+                "use_training_v2": True,
             },
         )
         assert_matches_type(Model, model, path=["response"])
@@ -820,6 +825,7 @@ class TestAsyncModels:
             teft_details={},
             training_context_length=0,
             use_hf_apply_chat_template=True,
+            use_training_v2=True,
         )
         assert_matches_type(Model, model, path=["response"])
 
@@ -1181,6 +1187,8 @@ class TestAsyncModels:
         model = await async_client.models.prepare(
             model_id="model_id",
             account_id="account_id",
+            abort=True,
+            accelerator_count=0,
             precision="PRECISION_UNSPECIFIED",
             read_mask="readMask",
         )

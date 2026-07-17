@@ -12,6 +12,15 @@ __all__ = ["ModelPrepareParams"]
 class ModelPrepareParams(TypedDict, total=False):
     account_id: str
 
+    abort: bool
+    """
+    If true, abort an active prepare job and clear prepare tracking state. No new
+    prepare job is launched in this request.
+    """
+
+    accelerator_count: Annotated[int, PropertyInfo(alias="acceleratorCount")]
+    """Number of accelerators (GPUs) to use for quantization. Defaults to 8 if unset."""
+
     precision: Literal[
         "PRECISION_UNSPECIFIED",
         "FP16",

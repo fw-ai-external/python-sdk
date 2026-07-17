@@ -69,6 +69,7 @@ class TestReinforcementFineTuningSteps:
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
             service_mode=True,
+            trainer_replica_count=0,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -82,6 +83,17 @@ class TestReinforcementFineTuningSteps:
                 "lora_dropout": 0,
                 "lora_rank": 0,
                 "lora_target_modules": ["string"],
+                "lr_scheduler": {
+                    "constant": {},
+                    "cosine": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                    "linear": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                },
                 "max_context_length": 0,
                 "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
@@ -156,6 +168,7 @@ class TestReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
             filter="filter",
+            include_archived=True,
             order_by="orderBy",
             page_size=0,
             page_token="pageToken",
@@ -259,68 +272,6 @@ class TestReinforcementFineTuningSteps:
             client.reinforcement_fine_tuning_steps.with_raw_response.delete(
                 rlor_trainer_job_id="",
                 account_id="account_id",
-            )
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    def test_method_execute(self, client: Fireworks) -> None:
-        reinforcement_fine_tuning_step = client.reinforcement_fine_tuning_steps.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        )
-        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    def test_raw_response_execute(self, client: Fireworks) -> None:
-        response = client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        reinforcement_fine_tuning_step = response.parse()
-        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    def test_streaming_response_execute(self, client: Fireworks) -> None:
-        with client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            reinforcement_fine_tuning_step = response.parse()
-            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    def test_path_params_execute(self, client: Fireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-                rlor_trainer_job_id="rlor_trainer_job_id",
-                account_id="",
-                dataset="dataset",
-                output_model="outputModel",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
-            client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-                rlor_trainer_job_id="",
-                account_id="account_id",
-                dataset="dataset",
-                output_model="outputModel",
             )
 
     @pytest.mark.skip(reason="Mock server tests are disabled")
@@ -497,6 +448,7 @@ class TestAsyncReinforcementFineTuningSteps:
             reward_weights=["string"],
             rollout_deployment_name="rolloutDeploymentName",
             service_mode=True,
+            trainer_replica_count=0,
             training_config={
                 "base_model": "baseModel",
                 "batch_size": 0,
@@ -510,6 +462,17 @@ class TestAsyncReinforcementFineTuningSteps:
                 "lora_dropout": 0,
                 "lora_rank": 0,
                 "lora_target_modules": ["string"],
+                "lr_scheduler": {
+                    "constant": {},
+                    "cosine": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                    "linear": {
+                        "decay_ratio": 0,
+                        "min_lr_ratio": 0,
+                    },
+                },
                 "max_context_length": 0,
                 "optimizer_weight_decay": 0,
                 "output_model": "outputModel",
@@ -584,6 +547,7 @@ class TestAsyncReinforcementFineTuningSteps:
         reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.list(
             account_id="account_id",
             filter="filter",
+            include_archived=True,
             order_by="orderBy",
             page_size=0,
             page_token="pageToken",
@@ -687,68 +651,6 @@ class TestAsyncReinforcementFineTuningSteps:
             await async_client.reinforcement_fine_tuning_steps.with_raw_response.delete(
                 rlor_trainer_job_id="",
                 account_id="account_id",
-            )
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    async def test_method_execute(self, async_client: AsyncFireworks) -> None:
-        reinforcement_fine_tuning_step = await async_client.reinforcement_fine_tuning_steps.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        )
-        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    async def test_raw_response_execute(self, async_client: AsyncFireworks) -> None:
-        response = await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        )
-
-        assert response.is_closed is True
-        assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-        reinforcement_fine_tuning_step = await response.parse()
-        assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    async def test_streaming_response_execute(self, async_client: AsyncFireworks) -> None:
-        async with async_client.reinforcement_fine_tuning_steps.with_streaming_response.execute(
-            rlor_trainer_job_id="rlor_trainer_job_id",
-            account_id="account_id",
-            dataset="dataset",
-            output_model="outputModel",
-        ) as response:
-            assert not response.is_closed
-            assert response.http_request.headers.get("X-Stainless-Lang") == "python"
-
-            reinforcement_fine_tuning_step = await response.parse()
-            assert_matches_type(object, reinforcement_fine_tuning_step, path=["response"])
-
-        assert cast(Any, response.is_closed) is True
-
-    @pytest.mark.skip(reason="Mock server tests are disabled")
-    @parametrize
-    async def test_path_params_execute(self, async_client: AsyncFireworks) -> None:
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `account_id` but received ''"):
-            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-                rlor_trainer_job_id="rlor_trainer_job_id",
-                account_id="",
-                dataset="dataset",
-                output_model="outputModel",
-            )
-
-        with pytest.raises(ValueError, match=r"Expected a non-empty value for `rlor_trainer_job_id` but received ''"):
-            await async_client.reinforcement_fine_tuning_steps.with_raw_response.execute(
-                rlor_trainer_job_id="",
-                account_id="account_id",
-                dataset="dataset",
-                output_model="outputModel",
             )
 
     @pytest.mark.skip(reason="Mock server tests are disabled")
