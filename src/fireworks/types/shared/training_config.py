@@ -36,13 +36,21 @@ class TrainingConfig(BaseModel):
     """
 
     batch_size: Optional[int] = FieldInfo(alias="batchSize", default=None)
-    """Deprecated: legacy V1 token budget.
+    """Legacy V1 token-packing budget.
 
-    Training V2 batches by samples via batch_size_samples.
+    V1 SFT, DPO, RFT, and RLOR training paths use this together with the optional
+    batch_size_samples control. Training V2 SFT and DPO reject nonzero values and
+    batch by samples via batch_size_samples.
     """
 
     batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
-    """The number of samples per gradient batch."""
+    """Sample-count batching control.
+
+    On V1 training paths this works alongside batch_size: batch_size limits packed
+    tokens per microbatch while this field limits samples per gradient batch. On
+    Training V2 SFT and DPO, this maps to examples or preference pairs per optimizer
+    step.
+    """
 
     epochs: Optional[int] = None
     """The number of epochs to train for."""
