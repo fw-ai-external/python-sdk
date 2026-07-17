@@ -3035,6 +3035,23 @@ class FiretitanServiceClient(ServiceClient):
         )
 
     def _managed_config_for_resume(self) -> Any | None:
+        """The frozen managed config to resume from, or ``None`` to derive the
+        config from the checkpoint via the ``/api/v1/weights_info`` endpoint.
+
+        This is the serverless-vs-dedicated gate for
+        ``create_training_client_from_state[_with_optimizer]``:
+
+        * Serverless (a connected multi-session service: ``holder`` present,
+          no ``_managed_config``) returns ``None`` so resume derives
+          ``base_model``/``lora_rank``/``train_*`` from the checkpoint itself
+          (the real REST client, not the lazy-managed stub). This is what lets a
+          caller resume a *different* run's checkpoint (cross-run) and get that
+          checkpoint's config.
+        * SDK-managed / dedicated (an unconnected lazy service: ``_managed_config``
+          set, no ``holder`` yet) returns the frozen managed config — a dedicated
+          trainer has one fixed configuration, so resume stays pinned to it. This
+          path is unchanged.
+        """
         if self._managed_config is None or hasattr(self, "holder"):
             return None
         return self._managed_config

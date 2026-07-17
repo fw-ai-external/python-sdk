@@ -999,6 +999,106 @@ class TestFiretitanServiceClientManagedCompat:
         )
         training_client.load_state_with_optimizer.assert_called_once_with("tinker://run/weights/step-1")
 
+    @staticmethod
+    def _weights_info(**overrides):
+        base = dict(
+            base_model="accounts/acct/models/base",
+            is_lora=True,
+            lora_rank=16,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+        )
+        base.update(overrides)
+        return SimpleNamespace(**base)
+
+    def test_create_training_client_from_state_serverless_derives_config_from_weights_info(self):
+        # Serverless service: no _managed_config, so resume derives its config
+        # from the checkpoint via the real /api/v1/weights_info endpoint (not the
+        # frozen managed config), enabling cross-run resume of another run's
+        # checkpoint. The bare "<account>/<run>/<name>" ref is passed to both
+        # weights_info and load_state unchanged.
+        svc = self._make_service()
+        assert svc._managed_config is None  # serverless resume branch
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info()
+        svc.create_rest_client = MagicMock(return_value=rest)
+        training_client = MagicMock()
+        training_client.load_state.return_value.result.return_value = None
+        svc.create_lora_training_client = MagicMock(return_value=training_client)
+
+        path = "acct/run-0123456789abcdef0123456789abcdef/step-5"
+        result = svc.create_training_client_from_state(path, user_metadata={"owner": "t"})
+
+        assert result is training_client
+        rest.get_weights_info_by_tinker_path.assert_called_once_with(path)
+        svc.create_lora_training_client.assert_called_once_with(
+            base_model="accounts/acct/models/base",
+            rank=16,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+            user_metadata={"owner": "t"},
+        )
+        training_client.load_state.assert_called_once_with(path)
+
+    def test_create_training_client_from_state_with_optimizer_serverless_derives_config(self):
+        svc = self._make_service()
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info(
+            lora_rank=32,
+        )
+        svc.create_rest_client = MagicMock(return_value=rest)
+        training_client = MagicMock()
+        training_client.load_state_with_optimizer.return_value.result.return_value = None
+        svc.create_lora_training_client = MagicMock(return_value=training_client)
+
+        path = "acct/run-0123456789abcdef0123456789abcdef/step-9"
+        result = svc.create_training_client_from_state_with_optimizer(path)
+
+        assert result is training_client
+        rest.get_weights_info_by_tinker_path.assert_called_once_with(path)
+        assert svc.create_lora_training_client.call_args.kwargs["rank"] == 32
+        training_client.load_state_with_optimizer.assert_called_once_with(path)
+
+    def test_create_training_client_from_state_serverless_defaults_train_flags_true(self):
+        # weights_info train_* may be null; the SDK defaults them to True.
+        svc = self._make_service()
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info(
+            train_unembed=None,
+            train_mlp=None,
+            train_attn=None,
+        )
+        svc.create_rest_client = MagicMock(return_value=rest)
+        svc.create_lora_training_client = MagicMock(return_value=MagicMock())
+
+        svc.create_training_client_from_state("acct/run-x/step-1")
+
+        kwargs = svc.create_lora_training_client.call_args.kwargs
+        assert kwargs["train_unembed"] is True
+        assert kwargs["train_mlp"] is True
+        assert kwargs["train_attn"] is True
+
+    def test_lazy_managed_rest_client_weights_info_ignores_path(self):
+        # Dedicated/managed path: the lazy-managed stub returns the frozen
+        # managed config regardless of the requested path (resume stays pinned
+        # to the one dedicated trainer config). This locks the non-serverless
+        # behavior that must stay unchanged.
+        managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            lora_rank=8,
+            train_unembed=True,
+            train_mlp=False,
+            train_attn=True,
+        )
+        stub = _LazyManagedRestClient(managed_config)
+        info = stub.get_weights_info_by_tinker_path("some/other/run/step-1").result()
+        assert info.base_model == "accounts/acct/models/base"
+        assert info.is_lora is True
+        assert info.lora_rank == 8
+        assert info.train_mlp is False
+
     def test_from_firetitan_config_deprecates_accelerator_fields(self):
         with pytest.warns(DeprecationWarning) as record:
             svc = FiretitanServiceClient.from_firetitan_config(
