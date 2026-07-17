@@ -106,9 +106,12 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
 
+          batch_size: Deprecated: legacy V1 token budget. Training V2 batches by samples via
+              batch_size_samples.
+
           batch_size_samples: The number of samples per gradient batch.
 
-          early_stop: Whether to stop training early if the validation loss does not improve.
+          early_stop: Deprecated: early stopping is not supported by managed training.
 
           epochs: The number of epochs to train for.
 
@@ -116,7 +119,14 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
+          gradient_accumulation_steps: Deprecated: legacy V1 gradient accumulation. Training V2 batches by samples via
+              batch_size_samples and rejects this field when set.
+
           is_turbo: Whether to run the fine-tuning job in turbo mode.
+
+          jinja_template: Deprecated: literal Jinja templates are not supported by Training V2.
+              Conversation rendering is selected from the base model's registered renderer
+              configuration instead.
 
           learning_rate: The learning rate used for training.
 
@@ -124,8 +134,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           max_context_length: The maximum context length to use with the model.
 
-          mtp_enabled: Deprecated: MTP is not supported in V2 training. These fields are retained for
-              V1 Helm-based SFT backward compatibility only.
+          mtp_enabled: Deprecated: MTP is no longer supported by managed training. This field is
+              retained for API wire compatibility only.
 
           mtp_freeze_base_model: Deprecated: see mtp_enabled.
 
@@ -506,9 +516,12 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           base_model: The name of the base model to be fine-tuned Only one of 'base_model' or
               'warm_start_from' should be specified.
 
+          batch_size: Deprecated: legacy V1 token budget. Training V2 batches by samples via
+              batch_size_samples.
+
           batch_size_samples: The number of samples per gradient batch.
 
-          early_stop: Whether to stop training early if the validation loss does not improve.
+          early_stop: Deprecated: early stopping is not supported by managed training.
 
           epochs: The number of epochs to train for.
 
@@ -516,7 +529,14 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           evaluation_dataset: The name of a separate dataset to use for evaluation.
 
+          gradient_accumulation_steps: Deprecated: legacy V1 gradient accumulation. Training V2 batches by samples via
+              batch_size_samples and rejects this field when set.
+
           is_turbo: Whether to run the fine-tuning job in turbo mode.
+
+          jinja_template: Deprecated: literal Jinja templates are not supported by Training V2.
+              Conversation rendering is selected from the base model's registered renderer
+              configuration instead.
 
           learning_rate: The learning rate used for training.
 
@@ -524,8 +544,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           max_context_length: The maximum context length to use with the model.
 
-          mtp_enabled: Deprecated: MTP is not supported in V2 training. These fields are retained for
-              V1 Helm-based SFT backward compatibility only.
+          mtp_enabled: Deprecated: MTP is no longer supported by managed training. This field is
+              retained for API wire compatibility only.
 
           mtp_freeze_base_model: Deprecated: see mtp_enabled.
 

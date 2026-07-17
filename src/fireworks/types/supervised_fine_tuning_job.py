@@ -119,6 +119,10 @@ class SupervisedFineTuningJob(BaseModel):
     """
 
     batch_size: Optional[int] = FieldInfo(alias="batchSize", default=None)
+    """Deprecated: legacy V1 token budget.
+
+    Training V2 batches by samples via batch_size_samples.
+    """
 
     batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
     """The number of samples per gradient batch."""
@@ -133,7 +137,7 @@ class SupervisedFineTuningJob(BaseModel):
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
     early_stop: Optional[bool] = FieldInfo(alias="earlyStop", default=None)
-    """Whether to stop training early if the validation loss does not improve."""
+    """Deprecated: early stopping is not supported by managed training."""
 
     epochs: Optional[int] = None
     """The number of epochs to train for."""
@@ -148,11 +152,21 @@ class SupervisedFineTuningJob(BaseModel):
     """The name of a separate dataset to use for evaluation."""
 
     gradient_accumulation_steps: Optional[int] = FieldInfo(alias="gradientAccumulationSteps", default=None)
+    """Deprecated: legacy V1 gradient accumulation.
+
+    Training V2 batches by samples via batch_size_samples and rejects this field
+    when set.
+    """
 
     is_turbo: Optional[bool] = FieldInfo(alias="isTurbo", default=None)
     """Whether to run the fine-tuning job in turbo mode."""
 
     jinja_template: Optional[str] = FieldInfo(alias="jinjaTemplate", default=None)
+    """Deprecated: literal Jinja templates are not supported by Training V2.
+
+    Conversation rendering is selected from the base model's registered renderer
+    configuration instead.
+    """
 
     job_progress: Optional[JobProgress] = FieldInfo(alias="jobProgress", default=None)
     """Job progress."""
@@ -171,9 +185,9 @@ class SupervisedFineTuningJob(BaseModel):
     metrics_file_signed_url: Optional[str] = FieldInfo(alias="metricsFileSignedUrl", default=None)
 
     mtp_enabled: Optional[bool] = FieldInfo(alias="mtpEnabled", default=None)
-    """Deprecated: MTP is not supported in V2 training.
+    """Deprecated: MTP is no longer supported by managed training.
 
-    These fields are retained for V1 Helm-based SFT backward compatibility only.
+    This field is retained for API wire compatibility only.
     """
 
     mtp_freeze_base_model: Optional[bool] = FieldInfo(alias="mtpFreezeBaseModel", default=None)

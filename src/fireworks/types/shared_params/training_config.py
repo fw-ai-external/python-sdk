@@ -37,7 +37,10 @@ class TrainingConfig(TypedDict, total=False):
     """
 
     batch_size: Annotated[int, PropertyInfo(alias="batchSize")]
-    """The maximum packed number of tokens per batch for training in sequence packing."""
+    """Deprecated: legacy V1 token budget.
+
+    Training V2 batches by samples via batch_size_samples.
+    """
 
     batch_size_samples: Annotated[int, PropertyInfo(alias="batchSizeSamples")]
     """The number of samples per gradient batch."""
@@ -46,8 +49,18 @@ class TrainingConfig(TypedDict, total=False):
     """The number of epochs to train for."""
 
     gradient_accumulation_steps: Annotated[int, PropertyInfo(alias="gradientAccumulationSteps")]
+    """Deprecated: legacy V1 gradient accumulation.
+
+    Training V2 batches by samples via batch_size_samples and rejects this field
+    when set.
+    """
 
     jinja_template: Annotated[str, PropertyInfo(alias="jinjaTemplate")]
+    """Deprecated: literal Jinja templates are not supported by Training V2.
+
+    Conversation rendering is selected from the base model's registered renderer
+    configuration instead.
+    """
 
     learning_rate: Annotated[float, PropertyInfo(alias="learningRate")]
     """The learning rate used for training."""

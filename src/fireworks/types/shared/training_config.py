@@ -36,7 +36,10 @@ class TrainingConfig(BaseModel):
     """
 
     batch_size: Optional[int] = FieldInfo(alias="batchSize", default=None)
-    """The maximum packed number of tokens per batch for training in sequence packing."""
+    """Deprecated: legacy V1 token budget.
+
+    Training V2 batches by samples via batch_size_samples.
+    """
 
     batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
     """The number of samples per gradient batch."""
@@ -45,8 +48,18 @@ class TrainingConfig(BaseModel):
     """The number of epochs to train for."""
 
     gradient_accumulation_steps: Optional[int] = FieldInfo(alias="gradientAccumulationSteps", default=None)
+    """Deprecated: legacy V1 gradient accumulation.
+
+    Training V2 batches by samples via batch_size_samples and rejects this field
+    when set.
+    """
 
     jinja_template: Optional[str] = FieldInfo(alias="jinjaTemplate", default=None)
+    """Deprecated: literal Jinja templates are not supported by Training V2.
+
+    Conversation rendering is selected from the base model's registered renderer
+    configuration instead.
+    """
 
     learning_rate: Optional[float] = FieldInfo(alias="learningRate", default=None)
     """The learning rate used for training."""

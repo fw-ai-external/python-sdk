@@ -35,6 +35,10 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     """
 
     batch_size: Annotated[int, PropertyInfo(alias="batchSize")]
+    """Deprecated: legacy V1 token budget.
+
+    Training V2 batches by samples via batch_size_samples.
+    """
 
     batch_size_samples: Annotated[int, PropertyInfo(alias="batchSizeSamples")]
     """The number of samples per gradient batch."""
@@ -42,7 +46,7 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
     early_stop: Annotated[bool, PropertyInfo(alias="earlyStop")]
-    """Whether to stop training early if the validation loss does not improve."""
+    """Deprecated: early stopping is not supported by managed training."""
 
     epochs: int
     """The number of epochs to train for."""
@@ -54,11 +58,21 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     """The name of a separate dataset to use for evaluation."""
 
     gradient_accumulation_steps: Annotated[int, PropertyInfo(alias="gradientAccumulationSteps")]
+    """Deprecated: legacy V1 gradient accumulation.
+
+    Training V2 batches by samples via batch_size_samples and rejects this field
+    when set.
+    """
 
     is_turbo: Annotated[bool, PropertyInfo(alias="isTurbo")]
     """Whether to run the fine-tuning job in turbo mode."""
 
     jinja_template: Annotated[str, PropertyInfo(alias="jinjaTemplate")]
+    """Deprecated: literal Jinja templates are not supported by Training V2.
+
+    Conversation rendering is selected from the base model's registered renderer
+    configuration instead.
+    """
 
     learning_rate: Annotated[float, PropertyInfo(alias="learningRate")]
     """The learning rate used for training."""
@@ -74,9 +88,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     metrics_file_signed_url: Annotated[str, PropertyInfo(alias="metricsFileSignedUrl")]
 
     mtp_enabled: Annotated[bool, PropertyInfo(alias="mtpEnabled")]
-    """Deprecated: MTP is not supported in V2 training.
+    """Deprecated: MTP is no longer supported by managed training.
 
-    These fields are retained for V1 Helm-based SFT backward compatibility only.
+    This field is retained for API wire compatibility only.
     """
 
     mtp_freeze_base_model: Annotated[bool, PropertyInfo(alias="mtpFreezeBaseModel")]
