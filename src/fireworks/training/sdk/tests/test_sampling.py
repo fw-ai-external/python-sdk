@@ -8,6 +8,7 @@ recorded attempt or exception.
 
 from __future__ import annotations
 
+import uuid
 import asyncio
 
 import httpx
@@ -65,6 +66,25 @@ def _install_stream(sampler, effects):
 
     sampler.async_completions_stream = _fake
     return calls
+
+
+class _CountingController:
+    def __init__(self) -> None:
+        self.acquired = 0
+        self.released = 0
+
+    @property
+    def window_size(self) -> int:
+        return 1
+
+    async def acquire(self) -> None:
+        self.acquired += 1
+
+    def release(self, _metrics: ServerMetrics | None = None) -> None:
+        self.released += 1
+
+    def step_completed(self) -> dict[str, float]:
+        return {"window": 1.0}
 
 
 @pytest.fixture
@@ -158,6 +178,52 @@ class TestSamplingRetryLoop:
         assert len(sent_ids) == 1  # identical across every attempt
         assert excinfo.value.logical_request_id == sent_ids.pop()
 
+    def test_cancelled_stream_releases_concurrency_slot(self):
+        controller = _CountingController()
+        sampler = _make_sampler(concurrency_controller=controller)
+        stream_started = asyncio.Event()
+        never_finishes = asyncio.Event()
+
+        async def _blocked_stream(*_args, **_kwargs):
+            stream_started.set()
+            await never_finishes.wait()
+            return _SUCCESS
+
+        sampler.async_completions_stream = _blocked_stream
+
+        async def _cancel_live_request():
+            task = asyncio.create_task(sampler.sample_with_prompt_tokens([1, 2, 3]))
+            await stream_started.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        asyncio.run(_cancel_live_request())
+        assert controller.acquired == 1
+        assert controller.released == 1
+
+    def test_unclassified_stream_error_releases_concurrency_slot(self):
+        controller = _CountingController()
+        sampler = _make_sampler(concurrency_controller=controller)
+        _install_stream(sampler, [ValueError("contract failure")])
+
+        with pytest.raises(ValueError, match="contract failure"):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert controller.acquired == 1
+        assert controller.released == 1
+
+    def test_retry_releases_each_acquired_slot_once(self, no_sleep, no_jitter):
+        controller = _CountingController()
+        sampler = _make_sampler(concurrency_controller=controller)
+        _install_stream(sampler, [_http_error(429), _SUCCESS])
+
+        results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert len(results) == 1
+        assert controller.acquired == 2
+        assert controller.released == 2
+
 
 class TestContextAndRedaction:
     def test_context_carried_into_error(self, no_sleep, no_jitter):
@@ -171,7 +237,14 @@ class TestContextAndRedaction:
         assert err.context == {"session": "sess-1", "run": "run-1", "checkpoint": "ckpt-3", "step": 2, "group": 7}
         assert err.model == "m" and err.logical_request_id
 
-    def test_error_record_has_no_secrets_or_prompt(self, no_sleep, no_jitter):
+    def test_error_record_has_no_secrets_or_prompt(
+        self, no_sleep, no_jitter, monkeypatch
+    ):
+        monkeypatch.setattr(
+            uuid,
+            "uuid4",
+            lambda: uuid.UUID("01234567-89ab-cdef-0123-456789abcdef"),
+        )
         sampler = _make_sampler()
         _install_stream(sampler, [_http_error(503)])
         with pytest.raises(SamplingRequestError) as excinfo:

@@ -852,15 +852,18 @@ class DeploymentSampler(_RestClient):
                 transient, label = e, "SSE truncation"
             except httpx.HTTPStatusError as e:
                 if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
-                    self._release_concurrency(server_metrics)
                     # Non-retryable (e.g. 400/401/403/404/409/422): fail fast
                     # with the raw HTTP error (unchanged behavior).
                     raise
                 transient, label = e, f"HTTP {e.response.status_code}"
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
                 transient, label = e, type(e).__name__
-
-            self._release_concurrency(server_metrics)
+            finally:
+                # A caller may cancel a live stream (for example, a bounded
+                # rollout timeout or scheduler shutdown), and contract/parser
+                # failures may bypass the retryable exception branches above.
+                # Every successful acquire must release exactly once.
+                self._release_concurrency(server_metrics)
 
             if transient is None:
                 return self._parse_completions_result(
