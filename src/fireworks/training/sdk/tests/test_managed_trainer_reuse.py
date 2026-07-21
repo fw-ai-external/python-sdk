@@ -76,11 +76,18 @@ def test_wait_for_started_trainer_resumes_failed_job():
             job_name="accounts/acct/rlorTrainerJobs/sft-job-1",
             job_id="sft-job-1",
         ),
-        _ManagedTinkerConfig(base_model="accounts/fireworks/models/qwen3p5-9b"),
+        _ManagedTinkerConfig(
+            base_model="accounts/fireworks/models/qwen3p5-9b",
+            trainer_pending_timeout_s=12345.0,
+        ),
     )
 
     assert endpoint.job_id == "sft-job-1"
-    trainer_mgr.resume_and_wait.assert_called_once_with("sft-job-1", timeout_s=3600.0)
+    trainer_mgr.resume_and_wait.assert_called_once_with(
+        "sft-job-1",
+        timeout_s=3600.0,
+        pending_timeout_s=12345.0,
+    )
     trainer_mgr.wait_for_ready.assert_not_called()
 
 

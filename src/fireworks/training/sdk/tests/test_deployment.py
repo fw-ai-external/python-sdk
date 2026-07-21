@@ -12,8 +12,14 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from tinker import types as tinker_types
 
-from fireworks.training.sdk.client import FiretitanSamplingClient
+from fireworks.training.sdk.client import (
+    FiretitanSampleResponse,
+    FiretitanSamplingClient,
+    FiretitanSamplingParams,
+    FiretitanSampledSequence,
+)
 from fireworks.training.sdk.deployment import (
     ServerMetrics,
     DeploymentInfo,
@@ -23,6 +29,7 @@ from fireworks.training.sdk.deployment import (
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
+    SamplingConcurrencyController,
     _SSETruncationError,
     _deployment_hot_load_trainer_job,
 )
@@ -1445,6 +1452,57 @@ class TestFiretitanSamplingClient:
         assert captured["seed"] == 123
         assert captured["logprobs"] is True
 
+    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, fake_tinker):
+        sampler = _make_sampler()
+        captured = {}
+
+        async def _fake_stream(*args, **kwargs):
+            captured.update(kwargs)
+            return {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [40, 50]},
+                        "logprobs": {
+                            "content": [
+                                {
+                                    "logprob": -0.3,
+                                    "sampling_logprob": -0.31,
+                                    "routing_matrix": "matrix-1",
+                                },
+                                {
+                                    "logprob": -0.4,
+                                    "sampling_logprob": -0.41,
+                                    "routing_matrix": "matrix-2",
+                                },
+                            ]
+                        },
+                    }
+                ]
+            }, ServerMetrics()
+
+        sampler.async_completions_stream = _fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            response = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints([10, 20, 30]),
+                num_samples=1,
+                sampling_params=FiretitanSamplingParams(
+                    max_tokens=2,
+                    include_routing_matrix=True,
+                ),
+            ).result(timeout=5)
+        finally:
+            client.close()
+
+        assert captured["include_routing_matrix"] is True
+        assert isinstance(response, FiretitanSampleResponse)
+        assert isinstance(response, tinker_types.SampleResponse)
+        assert isinstance(response.sequences[0], FiretitanSampledSequence)
+        assert isinstance(response.sequences[0], tinker_types.SampledSequence)
+        assert response.sequences[0].routing_matrices == ["matrix-1", "matrix-2"]
+
     def test_sample_splits_echo_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
@@ -1459,11 +1517,11 @@ class TestFiretitanSamplingClient:
                     "finish_reason": "length",
                     "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
                     "logprobs": {"content": [
-                        {"logprob": 0.0, "sampling_logprob": None},
-                        {"logprob": -0.1, "sampling_logprob": None},
-                        {"logprob": -0.2, "sampling_logprob": None},
-                        {"logprob": -0.3, "sampling_logprob": -0.33},
-                        {"logprob": -0.4, "sampling_logprob": -0.44},
+                        {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
+                        {"logprob": -0.1, "sampling_logprob": None, "routing_matrix": "prompt-1"},
+                        {"logprob": -0.2, "sampling_logprob": None, "routing_matrix": "prompt-2"},
+                        {"logprob": -0.3, "sampling_logprob": -0.33, "routing_matrix": "completion-1"},
+                        {"logprob": -0.4, "sampling_logprob": -0.44, "routing_matrix": "completion-2"},
                     ]},
                 }]
             }, ServerMetrics()
@@ -1474,7 +1532,10 @@ class TestFiretitanSamplingClient:
             response = client.sample(
                 prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
                 num_samples=1,
-                sampling_params=fake_tinker.SamplingParams(max_tokens=2),
+                sampling_params=FiretitanSamplingParams(
+                    max_tokens=2,
+                    include_routing_matrix=True,
+                ),
                 include_prompt_logprobs=True,
             ).result(timeout=5)
         finally:
@@ -1485,6 +1546,7 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].tokens == completion_ids
         assert response.sequences[0].logprobs == [-0.33, -0.44]
         assert response.sequences[0].stop_reason == "length"
+        assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
 
     def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]
@@ -1704,6 +1766,10 @@ class TestServerMetrics:
 
 
 class TestAdaptiveConcurrencyController:
+    def test_controllers_implement_shared_interface(self):
+        assert isinstance(FixedConcurrencyController(4), SamplingConcurrencyController)
+        assert isinstance(AdaptiveConcurrencyController(), SamplingConcurrencyController)
+
     def test_initial_window(self):
         ctrl = AdaptiveConcurrencyController(initial_window=16)
         assert ctrl.window_size == 16
@@ -1726,6 +1792,82 @@ class TestAdaptiveConcurrencyController:
         ctrl = AdaptiveConcurrencyController(initial_window=10, ema_alpha=1.0)
         ctrl.release(ServerMetrics(prefill_queue_duration=5.0))
         assert ctrl.window_size == 10  # unchanged until step_completed()
+
+    def test_adjustment_interval_updates_within_step(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 10
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 5
+
+        summary = ctrl.step_completed()
+        assert summary["window"] == 5
+        assert "avg_pq" not in summary
+
+    def test_adjustment_interval_does_not_shrink_below_in_flight_requests(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=4,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=1,
+        )
+
+        async def _test() -> None:
+            for _ in range(4):
+                await ctrl.acquire()
+
+            ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+            assert ctrl.window_size == 3
+            assert ctrl._semaphore._value == 0
+
+            blocked_acquire = asyncio.create_task(ctrl.acquire())
+            await asyncio.sleep(0)
+            assert not blocked_acquire.done()
+
+            ctrl.release()
+            await asyncio.wait_for(blocked_acquire, timeout=1.0)
+
+        asyncio.run(_test())
+
+    def test_adjustment_interval_counts_releases_without_metrics(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 10
+
+        ctrl.release(None)
+        assert ctrl.window_size == 5
+
+    def test_adjustment_interval_restarts_at_step_boundaries(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
+            adjustment_interval=2,
+        )
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        ctrl.step_completed()
+        assert ctrl.window_size == 5
+
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
+        assert ctrl.window_size == 5
+
+    def test_adjustment_interval_must_be_non_negative(self):
+        with pytest.raises(ValueError, match="adjustment_interval must be non-negative"):
+            AdaptiveConcurrencyController(adjustment_interval=-1)
 
     def test_step_completed_decrease_on_high_pq(self):
         ctrl = AdaptiveConcurrencyController(
@@ -1807,6 +1949,17 @@ class TestAdaptiveConcurrencyController:
 
 
 class TestStreamingCompletions:
+    def test_concurrency_controller_can_be_replaced(self):
+        initial = AdaptiveConcurrencyController(initial_window=8)
+        replacement = AdaptiveConcurrencyController(initial_window=32)
+        sampler = _make_sampler(concurrency_controller=initial)
+
+        sampler.concurrency_controller = replacement
+
+        assert sampler.concurrency_controller is replacement
+        assert sampler._concurrency_controller is replacement
+        sampler.close()
+
     def test_streaming_with_adaptive_controller(self):
         import json as _json
         prompt_ids = [1, 2, 3]
@@ -1910,8 +2063,14 @@ class TestSseTruncationRetry:
         sampler.close()
 
     def test_truncation_exhausts_after_max_attempts(self, monkeypatch):
-        """After _RETRY_MAX_ATTEMPTS truncations, the error surfaces."""
+        """After _RETRY_MAX_ATTEMPTS truncations, a structured terminal error surfaces.
+
+        The terminal is now a ``SamplingRequestError`` carrying the attempt
+        history; the original ``_SSETruncationError`` is preserved as ``__cause__``.
+        """
         import random as _random
+
+        from fireworks.training.sdk.sampling import SamplingRequestError
 
         monkeypatch.setattr(_random, "random", lambda: 0.0)
         async def _no_sleep(_s):
@@ -1926,10 +2085,13 @@ class TestSseTruncationRetry:
             raise _SSETruncationError("truncated")
 
         sampler.async_completions_stream = _fake
-        with pytest.raises(_SSETruncationError):
+        with pytest.raises(SamplingRequestError) as excinfo:
             asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
 
         assert attempts["n"] == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert excinfo.value.attempts == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert isinstance(excinfo.value.__cause__, _SSETruncationError)
+        assert excinfo.value.final_error_kind == "sse_truncation"
         sampler.close()
 
 
@@ -2033,7 +2195,9 @@ class TestSamplerTimeoutDiagnostics:
         assert "recent_client_ttft_p95=599.0s" in msg
         assert "If they are elevated, reduce rollout concurrency" in msg
         assert "otherwise investigate gateway, network, or client timeout limits" in msg
-        assert "DeploymentSampler request hit a timeout-like transient" in caplog.text
+        assert "Timeout-like transient" in caplog.text
+        # retry line is tagged with the logical request id so the call is identifiable
+        assert "DeploymentSampler request " in caplog.text
         sampler.close()
 
     def test_read_timeout_exhaustion_raises_generic_sampler_timeout_diagnostic(self, monkeypatch):

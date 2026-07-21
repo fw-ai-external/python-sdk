@@ -20,8 +20,11 @@ from fireworks.training.sdk.client import (
     GradNormMetricsMode,
     GradAccNormalization,
     FiretitanServiceClient,
+    FiretitanSampleResponse,
     FiretitanSamplingClient,
+    FiretitanSamplingParams,
     FiretitanTrainingClient,
+    FiretitanSampledSequence,
 )
 from fireworks.training.sdk.managed import FiretitanProvisioningConfig
 from fireworks.training.sdk.trainer import (
@@ -44,9 +47,11 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     SampledCompletion,
+    SamplingRequestError,
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
     DeploymentSamplerTimeoutError,
+    SamplingConcurrencyController,
 )
 from fireworks.training.sdk.tinker_compat import (
     install_tinker_service_client,
@@ -76,6 +81,9 @@ __all__ = [
     # Training (tinker protocol)
     "FiretitanServiceClient",
     "FiretitanTrainingClient",
+    "FiretitanSamplingParams",
+    "FiretitanSampledSequence",
+    "FiretitanSampleResponse",
     "CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE",
     "CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO",
     "DeploymentCleanupOnClose",
@@ -104,9 +112,11 @@ __all__ = [
     "DeploymentManager",
     "DeploymentSampler",
     "FiretitanSamplingClient",
+    "SamplingConcurrencyController",
     "AdaptiveConcurrencyController",
     "FixedConcurrencyController",
     "SampledCompletion",
+    "SamplingRequestError",
     "DeploymentSamplerTimeoutError",
     "ServerMetrics",
     # LR scheduler shared schema

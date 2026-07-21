@@ -71,6 +71,11 @@ syncer = WeightSyncer(
 syncer.save_and_hotload("step-1")
 ```
 
+Trainer provisioning has separate wait budgets. `pending_timeout_s` controls
+how long `TrainerJobManager` waits for GPU capacity while the job is
+`JOB_STATE_PENDING` (48 hours by default). `timeout_s` starts after placement
+and controls how long the trainer may take to become healthy and ready.
+
 Training APIs require a training-scoped Fireworks API key. The SDK resolves the
 account automatically from that key, so you should not pass `account_id` to
 `TrainerJobManager`, `DeploymentManager`, or `FireworksClient`.

@@ -305,6 +305,62 @@ class TestForwardBackward:
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_missing_or_misaligned_logs_one_error(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        empty = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [10, 11, 12],
+                routing_matrices=[],
+            ),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(data=[11, 12, 13], dtype="int64", shape=[3]),
+            },
+        )
+        mismatched = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [20, 21, 22],
+                routing_matrices=[matrix],
+            ),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(data=[21, 22, 23], dtype="int64", shape=[3]),
+            },
+        )
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([empty, mismatched], "supervised")
+            client.forward_backward([empty, mismatched], "supervised")
+
+        messages = [record.message for record in caplog.records if "R3 is enabled" in record.message]
+        assert len(messages) == 1
+        assert "operation=forward_backward" in messages[0]
+        assert "datum[0] routing_matrices is empty; expected 3" in messages[0]
+        assert "datum[1] routing_matrix_count=1; expected 3" in messages[0]
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_valid_or_disabled_does_not_log_error(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        valid = types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [10, 11, 12],
+                routing_matrices=[matrix, matrix, matrix],
+            ),
+            loss_fn_inputs={},
+        )
+        disabled = types.Datum(
+            model_input=types.ModelInput.from_ints([20, 21, 22]),
+            loss_fn_inputs={},
+        )
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([valid, disabled], "supervised")
+
+        assert "R3 is enabled" not in caplog.text
+
 
 class TestParallelChunkSubmission:
     class _ClientContext:
@@ -942,6 +998,106 @@ class TestFiretitanServiceClientManagedCompat:
             user_metadata={"owner": "test"},
         )
         training_client.load_state_with_optimizer.assert_called_once_with("tinker://run/weights/step-1")
+
+    @staticmethod
+    def _weights_info(**overrides):
+        base = dict(
+            base_model="accounts/acct/models/base",
+            is_lora=True,
+            lora_rank=16,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+        )
+        base.update(overrides)
+        return SimpleNamespace(**base)
+
+    def test_create_training_client_from_state_serverless_derives_config_from_weights_info(self):
+        # Serverless service: no _managed_config, so resume derives its config
+        # from the checkpoint via the real /api/v1/weights_info endpoint (not the
+        # frozen managed config), enabling cross-run resume of another run's
+        # checkpoint. The bare "<account>/<run>/<name>" ref is passed to both
+        # weights_info and load_state unchanged.
+        svc = self._make_service()
+        assert svc._managed_config is None  # serverless resume branch
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info()
+        svc.create_rest_client = MagicMock(return_value=rest)
+        training_client = MagicMock()
+        training_client.load_state.return_value.result.return_value = None
+        svc.create_lora_training_client = MagicMock(return_value=training_client)
+
+        path = "acct/run-0123456789abcdef0123456789abcdef/step-5"
+        result = svc.create_training_client_from_state(path, user_metadata={"owner": "t"})
+
+        assert result is training_client
+        rest.get_weights_info_by_tinker_path.assert_called_once_with(path)
+        svc.create_lora_training_client.assert_called_once_with(
+            base_model="accounts/acct/models/base",
+            rank=16,
+            train_unembed=True,
+            train_mlp=True,
+            train_attn=True,
+            user_metadata={"owner": "t"},
+        )
+        training_client.load_state.assert_called_once_with(path)
+
+    def test_create_training_client_from_state_with_optimizer_serverless_derives_config(self):
+        svc = self._make_service()
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info(
+            lora_rank=32,
+        )
+        svc.create_rest_client = MagicMock(return_value=rest)
+        training_client = MagicMock()
+        training_client.load_state_with_optimizer.return_value.result.return_value = None
+        svc.create_lora_training_client = MagicMock(return_value=training_client)
+
+        path = "acct/run-0123456789abcdef0123456789abcdef/step-9"
+        result = svc.create_training_client_from_state_with_optimizer(path)
+
+        assert result is training_client
+        rest.get_weights_info_by_tinker_path.assert_called_once_with(path)
+        assert svc.create_lora_training_client.call_args.kwargs["rank"] == 32
+        training_client.load_state_with_optimizer.assert_called_once_with(path)
+
+    def test_create_training_client_from_state_serverless_defaults_train_flags_true(self):
+        # weights_info train_* may be null; the SDK defaults them to True.
+        svc = self._make_service()
+        rest = MagicMock()
+        rest.get_weights_info_by_tinker_path.return_value.result.return_value = self._weights_info(
+            train_unembed=None,
+            train_mlp=None,
+            train_attn=None,
+        )
+        svc.create_rest_client = MagicMock(return_value=rest)
+        svc.create_lora_training_client = MagicMock(return_value=MagicMock())
+
+        svc.create_training_client_from_state("acct/run-x/step-1")
+
+        kwargs = svc.create_lora_training_client.call_args.kwargs
+        assert kwargs["train_unembed"] is True
+        assert kwargs["train_mlp"] is True
+        assert kwargs["train_attn"] is True
+
+    def test_lazy_managed_rest_client_weights_info_ignores_path(self):
+        # Dedicated/managed path: the lazy-managed stub returns the frozen
+        # managed config regardless of the requested path (resume stays pinned
+        # to the one dedicated trainer config). This locks the non-serverless
+        # behavior that must stay unchanged.
+        managed_config = SimpleNamespace(
+            base_model="accounts/acct/models/base",
+            lora_rank=8,
+            train_unembed=True,
+            train_mlp=False,
+            train_attn=True,
+        )
+        stub = _LazyManagedRestClient(managed_config)
+        info = stub.get_weights_info_by_tinker_path("some/other/run/step-1").result()
+        assert info.base_model == "accounts/acct/models/base"
+        assert info.is_lora is True
+        assert info.lora_rank == 8
+        assert info.train_mlp is False
 
     def test_from_firetitan_config_deprecates_accelerator_fields(self):
         with pytest.warns(DeprecationWarning) as record:

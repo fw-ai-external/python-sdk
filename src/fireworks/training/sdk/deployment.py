@@ -1066,9 +1066,11 @@ from fireworks.training.sdk.sampling import (  # noqa: F401,E402
     ServerMetrics,
     DeploymentSampler,
     SampledCompletion,
+    SamplingRequestError,
     DeploymentSamplerTimeoutError,
 )
 from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
+    SamplingConcurrencyController,
 )

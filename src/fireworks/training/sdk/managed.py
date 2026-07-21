@@ -29,6 +29,7 @@ from fireworks.training.sdk._constants import (
     DEFAULT_TRAINER_TIMEOUT_S,
     REATTACH_SETTLE_TIMEOUT_S,
     DEPLOYMENT_READY_TIMEOUT_S,
+    DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
     SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION,
@@ -41,6 +42,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
+from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
 )
@@ -103,6 +105,7 @@ class FiretitanProvisioningConfig:
     trainer_replica_count: int | None = None  # data-parallel HSDP replicas for the trainer
     replica_count: int = 1  # inference deployment min/max replicas
     trainer_timeout_s: float = DEFAULT_TRAINER_TIMEOUT_S
+    trainer_pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S
     inactivity_timeout: timedelta | str | None = None
     disable_inactivity_cleanup: bool = False
     deployment_timeout_s: float = DEPLOYMENT_READY_TIMEOUT_S
@@ -290,7 +293,7 @@ class _TinkerSamplerBackend:
     def get_sampling_client(
         self,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> FiretitanSamplingClient:
         sampler = DeploymentSampler(
             inference_url=self.deploy_mgr.inference_url,
@@ -714,11 +717,13 @@ def _wait_for_started_trainer(
             return trainer_mgr.resume_and_wait(
                 started_trainer.job_id,
                 timeout_s=config.trainer_timeout_s,
+                pending_timeout_s=config.trainer_pending_timeout_s,
             )
     return trainer_mgr.wait_for_ready(
         started_trainer.job_id,
         job_name=started_trainer.job_name,
         timeout_s=config.trainer_timeout_s,
+        pending_timeout_s=config.trainer_pending_timeout_s,
     )
 
 

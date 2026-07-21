@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 import requests
 
@@ -13,11 +15,15 @@ from fireworks.training.sdk.errors import (
     AGENT_DEBUG_INSTRUCTIONS,
     parse_api_error,
     format_sdk_error,
+    parse_retry_after,
     request_with_retries,
     _is_retryable_status_code,
+    async_request_with_retries,
     format_checkpoint_promotion_error,
     format_session_checkpoint_promotion_error,
 )
+
+_URL = "https://api.example.com/inference/v1/completions"
 
 # ---------------------------------------------------------------------------
 # format_sdk_error
@@ -282,3 +288,72 @@ class TestRequestWithRetries:
         func = MagicMock(return_value=ok)
         request_with_retries(func, "http://example.com", json={"a": 1}, timeout=10)
         func.assert_called_once_with("http://example.com", json={"a": 1}, timeout=10)
+
+
+# ---------------------------------------------------------------------------
+# async_request_with_retries — default retries + per-call opt-out
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncRequestWithRetries:
+    @staticmethod
+    def _resp(status):
+        return httpx.Response(status, request=httpx.Request("POST", _URL))
+
+    @patch("fireworks.training.sdk.errors.asyncio.sleep")
+    def test_default_retries_status(self, mock_sleep):
+        async def _sleep(_s):
+            return None
+
+        mock_sleep.side_effect = _sleep
+        seq = [self._resp(503), self._resp(200)]
+        calls = {"n": 0}
+
+        async def _func(*a, **k):
+            r = seq[min(calls["n"], len(seq) - 1)]
+            calls["n"] += 1
+            return r
+
+        resp = asyncio.run(async_request_with_retries(_func))
+        assert resp.status_code == 200
+        assert calls["n"] == 2
+
+    def test_opt_out_makes_single_call(self):
+        calls = {"n": 0}
+
+        async def _func(*a, **k):
+            calls["n"] += 1
+            return self._resp(503)
+
+        resp = asyncio.run(
+            async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
+        )
+        assert resp.status_code == 503
+        assert calls["n"] == 1  # no transport-level retry (sampling opts out here)
+
+    def test_opt_out_does_not_retry_exceptions(self):
+        async def _func(*a, **k):
+            raise httpx.ConnectError("down")
+
+        with pytest.raises(httpx.ConnectError):
+            asyncio.run(
+                async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
+            )
+
+
+class TestParseRetryAfter:
+    @staticmethod
+    def _resp(headers):
+        return httpx.Response(429, headers=headers, request=httpx.Request("POST", _URL))
+
+    def test_seconds(self):
+        assert parse_retry_after(self._resp({"retry-after": "5"})) == 5.0
+
+    def test_missing(self):
+        assert parse_retry_after(self._resp({})) is None
+
+    def test_garbage_is_none(self):
+        assert parse_retry_after(self._resp({"retry-after": "soon"})) is None
+
+    def test_http_date_far_past_clamped_to_zero(self):
+        assert parse_retry_after(self._resp({"retry-after": "Wed, 21 Oct 2015 07:28:00 GMT"})) == 0.0

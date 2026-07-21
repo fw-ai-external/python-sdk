@@ -26,7 +26,7 @@ from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
 from dataclasses import fields, replace, dataclass, is_dataclass
-from collections.abc import AsyncGenerator
+from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
@@ -60,6 +60,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
+from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     SamplerCheckpointType,
     normalize_checkpoint_type,
@@ -96,6 +97,26 @@ class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
     base_only: bool = True
 
 
+class FiretitanSamplingParams(types.SamplingParams):
+    """Tinker sampling parameters with optional FireTitan response fields."""
+
+    include_routing_matrix: bool = False
+
+
+@dataclass(frozen=True)
+class FiretitanSampledSequence(types.SampledSequence):
+    """A Tinker sampled sequence with FireTitan-specific token metadata."""
+
+    routing_matrices: list[str] | None = None
+
+
+@dataclass(frozen=True)
+class FiretitanSampleResponse(types.SampleResponse):
+    """A Tinker sample response containing extended FireTitan sequences."""
+
+    sequences: Sequence[FiretitanSampledSequence]
+
+
 # Default LoRA alpha. Tinker pins alpha to this value regardless of rank; the
 # FireTitan backend would otherwise default to 2 * rank, so we send it
 # explicitly to keep the alpha/rank scale consistent across stacks.
@@ -129,7 +150,7 @@ class FiretitanSamplingClient(SamplingClient):
         model: str,
         api_key: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
-        concurrency_controller: "AdaptiveConcurrencyController | FixedConcurrencyController | None" = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
         max_concurrency: int | None = None,
         additional_headers: dict[str, str] | None = None,
     ) -> "FiretitanSamplingClient":
@@ -205,6 +226,12 @@ class FiretitanSamplingClient(SamplingClient):
         if seed is not None:
             kwargs["seed"] = seed
 
+        if (
+            isinstance(sampling_params, FiretitanSamplingParams)
+            and sampling_params.include_routing_matrix
+        ):
+            kwargs["include_routing_matrix"] = True
+
         return kwargs
 
     @staticmethod
@@ -227,6 +254,7 @@ class FiretitanSamplingClient(SamplingClient):
         self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
 
         tinker_types = self._tinker_types()
+        use_firetitan_response = isinstance(sampling_params, FiretitanSamplingParams)
         prompt_token_ids = list(prompt.to_ints())
         max_tokens = getattr(sampling_params, "max_tokens", None)
         if max_tokens is None:
@@ -253,6 +281,7 @@ class FiretitanSamplingClient(SamplingClient):
         for completion in completions:
             completion_tokens = completion.full_tokens[completion.prompt_len :]
             completion_logprobs = completion.sampling_logprobs
+            routing_matrices = completion.routing_matrices
             if completion_logprobs is None:
                 raise RuntimeError(
                     "Deployment response missing logprobs.content[].sampling_logprob; "
@@ -281,6 +310,10 @@ class FiretitanSamplingClient(SamplingClient):
                         f"({len(completion_logprobs)} < {response_start + len(completion_tokens)})."
                     )
                 completion_logprobs = completion_logprobs[response_start : response_start + len(completion_tokens)]
+                if routing_matrices is not None:
+                    routing_matrices = routing_matrices[
+                        response_start : response_start + len(completion_tokens)
+                    ]
             if len(completion_logprobs) != len(completion_tokens):
                 raise RuntimeError(
                     "Deployment response sampling_logprobs are not aligned with completion tokens "
@@ -290,16 +323,36 @@ class FiretitanSamplingClient(SamplingClient):
                 raise RuntimeError(
                     "Deployment response has null logprobs.content[].sampling_logprob for generated tokens."
                 )
+            if routing_matrices is not None and len(routing_matrices) != len(completion_tokens):
+                raise RuntimeError(
+                    "Deployment response routing matrices are not aligned with completion tokens "
+                    f"({len(routing_matrices)} != {len(completion_tokens)})."
+                )
             sampled_logprobs = [float(lp) for lp in completion_logprobs]
 
-            sequences.append(
-                tinker_types.SampledSequence(
-                    stop_reason=self._stop_reason(completion.finish_reason),
-                    _tokens_list=completion_tokens,
-                    _logprobs_list=sampled_logprobs,
+            if use_firetitan_response:
+                sequences.append(
+                    FiretitanSampledSequence(
+                        stop_reason=self._stop_reason(completion.finish_reason),
+                        _tokens_list=completion_tokens,
+                        _logprobs_list=sampled_logprobs,
+                        routing_matrices=routing_matrices,
+                    )
                 )
-            )
+            else:
+                sequences.append(
+                    tinker_types.SampledSequence(
+                        stop_reason=self._stop_reason(completion.finish_reason),
+                        _tokens_list=completion_tokens,
+                        _logprobs_list=sampled_logprobs,
+                    )
+                )
 
+        if use_firetitan_response:
+            return FiretitanSampleResponse(
+                sequences=sequences,
+                _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
+            )
         return tinker_types.SampleResponse(
             sequences=sequences,
             _prompt_logprobs_list=prompt_logprobs if include_prompt_logprobs else None,
@@ -1114,6 +1167,30 @@ def _text_token_count(datum: types.Datum) -> int:
     )
 
 
+def _r3_request_issues(data: list[types.Datum]) -> list[str]:
+    """Return missing/misaligned R3 data immediately before trainer send."""
+    issues: list[str] = []
+    for datum_index, datum in enumerate(data):
+        raw_datum = _dump_tinker_model(datum)
+        routing_matrices = raw_datum.get("model_input", {}).get("routing_matrices")
+        if routing_matrices is None:
+            # No routing_matrices field means this is not an R3 datum.
+            continue
+
+        token_count = _text_token_count(datum)
+        matrix_count = len(routing_matrices)
+        if matrix_count == 0:
+            issues.append(
+                f"datum[{datum_index}] routing_matrices is empty; expected {token_count}"
+            )
+        elif matrix_count != token_count:
+            issues.append(
+                f"datum[{datum_index}] routing_matrix_count={matrix_count}; "
+                f"expected {token_count}"
+            )
+    return issues
+
+
 def _pool_embedding_tensor(
     embedding,
     datum: types.Datum,
@@ -1404,6 +1481,8 @@ class FiretitanTrainingClient(TrainingClient):
                 "This training client does not support Tinker's proto forward transport. Use the JSON forward path."
             )
 
+        self._log_r3_request_error(data, operation="forward")
+
         requests = self._chunked_requests(data)
 
         async def _forward_async():
@@ -1520,6 +1599,7 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
                 "Use the JSON forward_backward path."
             )
+        self._log_r3_request_error(data, operation="forward_backward")
         future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future
@@ -1751,6 +1831,27 @@ class FiretitanTrainingClient(TrainingClient):
                 pooling=pooling,
             )
         ).result()
+
+    def _log_r3_request_error(
+        self,
+        data: list[types.Datum],
+        *,
+        operation: str,
+    ) -> None:
+        """Log one client-side error when an R3 trainer request is invalid."""
+        if getattr(self, "_r3_request_error_logged", False):
+            return
+        issues = _r3_request_issues(data)
+        if not issues:
+            return
+
+        self._r3_request_error_logged = True
+        logger.error(
+            "R3 is enabled, but routing data is missing or misaligned before trainer request: "
+            "operation=%s; %s",
+            operation,
+            "; ".join(issues),
+        )
 
     async def forward_backward_contrastive_async(
         self,
@@ -2934,6 +3035,23 @@ class FiretitanServiceClient(ServiceClient):
         )
 
     def _managed_config_for_resume(self) -> Any | None:
+        """The frozen managed config to resume from, or ``None`` to derive the
+        config from the checkpoint via the ``/api/v1/weights_info`` endpoint.
+
+        This is the serverless-vs-dedicated gate for
+        ``create_training_client_from_state[_with_optimizer]``:
+
+        * Serverless (a connected multi-session service: ``holder`` present,
+          no ``_managed_config``) returns ``None`` so resume derives
+          ``base_model``/``lora_rank``/``train_*`` from the checkpoint itself
+          (the real REST client, not the lazy-managed stub). This is what lets a
+          caller resume a *different* run's checkpoint (cross-run) and get that
+          checkpoint's config.
+        * SDK-managed / dedicated (an unconnected lazy service: ``_managed_config``
+          set, no ``holder`` yet) returns the frozen managed config — a dedicated
+          trainer has one fixed configuration, so resume stays pinned to it. This
+          path is unchanged.
+        """
         if self._managed_config is None or hasattr(self, "holder"):
             return None
         return self._managed_config
@@ -3151,7 +3269,7 @@ class FiretitanServiceClient(ServiceClient):
         deployment_sampler: DeploymentSampler | None = None,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> FiretitanSamplingClient:
         """Create a Tinker-shaped sampler backed by a configured deployment.
 
@@ -3294,7 +3412,7 @@ class FiretitanServiceClient(ServiceClient):
         model: str,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
         inference_url: str | None = None,
     ) -> DeploymentSampler:
         """Create a FireTitan-native sampler for an existing inference model."""
@@ -3320,7 +3438,7 @@ class FiretitanServiceClient(ServiceClient):
         timeout_s: float = 5400,
         cleanup_on_close: DeploymentCleanupOnClose | None = None,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> DeploymentSampler:
         """Create or reuse an inference deployment and return a sampler for it.
 
@@ -3383,7 +3501,7 @@ class FiretitanServiceClient(ServiceClient):
         model_path: str | None = None,
         *,
         tokenizer: Any | None = None,
-        concurrency_controller: Any | None = None,
+        concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> DeploymentSampler:
         """Return the FireTitan ``DeploymentSampler`` directly (not the Tinker wrapper).
 

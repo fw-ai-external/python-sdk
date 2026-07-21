@@ -152,6 +152,43 @@ def _is_retryable_status_code(status_code: int) -> bool:
     return status_code in RETRYABLE_STATUS_CODES
 
 
+def parse_retry_after(resp: Any) -> float | None:
+    """Return the ``Retry-After`` delay in seconds from a response, or ``None``.
+
+    Accepts both header forms: an integer number of seconds, or an HTTP-date.
+    Never returns a negative value. Any parse failure yields ``None`` so callers
+    can fall back to their own backoff.
+    """
+    headers = getattr(resp, "headers", None)
+    if not headers:
+        return None
+    # httpx headers are case-insensitive; requests/dict headers may not be.
+    raw = headers.get("retry-after")
+    if raw is None and hasattr(headers, "get"):
+        raw = headers.get("Retry-After")
+    if raw is None:
+        return None
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if when is None:
+        return None
+    import datetime as _dt
+
+    now = _dt.datetime.now(when.tzinfo) if when.tzinfo is not None else _dt.datetime.now()
+    return max(0.0, (when - now).total_seconds())
+
+
 def _backoff_delay(attempt: int, start_time: float, max_wait_time: float) -> float | None:
     """Return delay in seconds, or None if budget exhausted."""
     elapsed = time.time() - start_time
@@ -202,15 +239,27 @@ async def async_request_with_retries(
     func: Callable[..., Awaitable[Any]],
     *args: Any,
     max_wait_time: float = MAX_WAIT_TIME,
+    retry_status_codes: Tuple[int, ...] | None = None,
+    retry_exceptions: Tuple[type, ...] | None = None,
     **kwargs: Any,
 ) -> Any:
-    """Async HTTP request with exponential backoff retries."""
+    """Async HTTP request with exponential backoff retries.
+
+    ``retry_status_codes`` / ``retry_exceptions`` default to the module-level
+    ``RETRYABLE_STATUS_CODES`` / ``RETRYABLE_EXCEPTIONS`` so existing callers are
+    unchanged. Pass an empty tuple to opt out of status- or exception-based
+    retries for a single call -- used by the sampling path, which owns its own
+    retry budget one layer up (see ``DeploymentSampler._do_one_completion``) and
+    must not have that budget silently multiplied by a second retry loop here.
+    """
+    status_codes = RETRYABLE_STATUS_CODES if retry_status_codes is None else retry_status_codes
+    exc_types = RETRYABLE_EXCEPTIONS if retry_exceptions is None else retry_exceptions
     start = time.time()
     attempt = 0
     while True:
         try:
             resp = await func(*args, **kwargs)
-        except RETRYABLE_EXCEPTIONS as e:
+        except exc_types as e:
             delay = _backoff_delay(attempt, start, max_wait_time)
             if delay is not None:
                 attempt += 1
@@ -219,7 +268,7 @@ async def async_request_with_retries(
                 continue
             raise
 
-        if _is_retryable_status_code(resp.status_code):
+        if resp.status_code in status_codes:
             delay = _backoff_delay(attempt, start, max_wait_time)
             if delay is not None:
                 attempt += 1
