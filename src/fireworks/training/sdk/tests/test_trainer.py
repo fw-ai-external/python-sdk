@@ -603,6 +603,23 @@ class TestPollUntilReady:
         assert result.base_url == "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         assert result.max_context_length == 32768
 
+    @patch.object(TrainerJobManager, "_check_healthz")
+    @patch.object(TrainerJobManager, "get")
+    def test_running_falls_back_to_direct_route_endpoint(self, mock_get, mock_healthz, mgr):
+        mock_get.return_value = {
+            "state": "JOB_STATE_RUNNING",
+            "directRouteHandle": "https://trainer.internal:8080/",
+        }
+        mock_healthz.side_effect = [False, True]
+
+        result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
+
+        assert result.base_url == "https://trainer.internal:8080"
+        assert mock_healthz.call_args_list[0].args[0] == (
+            "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
+        )
+        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.internal:8080"
+
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):
         mock_get.return_value = {
