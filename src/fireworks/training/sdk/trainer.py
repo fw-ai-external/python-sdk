@@ -285,6 +285,8 @@ class TrainerJobConfig:
     """Skip server-side shape validation. Requires superuser API key."""
     purpose: str | None = None
     """Internal. Populated automatically by the Fireworks platform when needed."""
+    preemptible: bool = False
+    """Request preemptible trainer scheduling. Requires an admin API key."""
     managed_by: str | None = None
     """Internal. Populated automatically by the Fireworks platform when needed."""
     requested_job_id: str | None = None
@@ -527,6 +529,8 @@ class TrainerJobManager(FireworksClient):
             payload["forwardOnly"] = True
         if config.purpose:
             payload["purpose"] = config.purpose
+        if config.preemptible:
+            payload["preemptible"] = True
         if config.managed_by:
             payload["managedBy"] = config.managed_by
         if config.inactivity_timeout is not None:

@@ -368,6 +368,7 @@ class TestCreate:
             node_count=4,
             max_context_length=8192,
             region="US_OHIO_1",
+            preemptible=True,
         )
         resp = MagicMock()
         resp.is_success = True
@@ -388,6 +389,7 @@ class TestCreate:
         assert tc["maxContextLength"] == 8192
         assert payload["nodeCount"] == 4
         assert tc["region"] == "US_OHIO_1"
+        assert payload["preemptible"] is True
 
     def test_trainer_replica_count_sent_on_shape_path(self, mgr):
         """trainer_replica_count is a run-level HSDP knob: it rides the shape
