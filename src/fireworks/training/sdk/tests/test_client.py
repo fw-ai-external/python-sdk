@@ -1375,6 +1375,16 @@ class TestFiretitanServiceClientManagedCompat:
 
         assert svc._managed_config.managed_by == "parent-job"
 
+    def test_from_firetitan_config_accepts_preemptible(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_url=None,
+            base_model="accounts/acct/models/base",
+            preemptible=True,
+        )
+
+        assert svc._managed_config.preemptible is True
+
     def test_existing_managed_deployment_is_reattached_with_patch(self):
         deploy_mgr = MagicMock()
         existing = SimpleNamespace(

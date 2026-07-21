@@ -130,6 +130,14 @@ def _extract_job_status_message(job: dict[str, Any]) -> str:
     return ""
 
 
+def _extract_direct_route_handle(job: dict[str, Any]) -> str:
+    for key in ("directRouteHandle", "direct_route_handle"):
+        value = job.get(key)
+        if value:
+            return str(value).rstrip("/")
+    return ""
+
+
 def _extract_job_training_config(job: dict[str, Any]) -> dict[str, Any] | None:
     training_config = job.get("trainingConfig")
     if not isinstance(training_config, dict):
@@ -285,6 +293,8 @@ class TrainerJobConfig:
     """Skip server-side shape validation. Requires superuser API key."""
     purpose: str | None = None
     """Internal. Populated automatically by the Fireworks platform when needed."""
+    preemptible: bool = False
+    """Request preemptible trainer scheduling. Requires an admin API key."""
     managed_by: str | None = None
     """Internal. Populated automatically by the Fireworks platform when needed."""
     requested_job_id: str | None = None
@@ -527,6 +537,8 @@ class TrainerJobManager(FireworksClient):
             payload["forwardOnly"] = True
         if config.purpose:
             payload["purpose"] = config.purpose
+        if config.preemptible:
+            payload["preemptible"] = True
         if config.managed_by:
             payload["managedBy"] = config.managed_by
         if config.inactivity_timeout is not None:
@@ -649,7 +661,8 @@ class TrainerJobManager(FireworksClient):
         pending_deadline = start + pending_timeout_s
         readiness_deadline: float | None = None
         service_ready = False
-        base_url = self._get_trainer_gateway_url(job_id)
+        gateway_base_url = self._get_trainer_gateway_url(job_id)
+        ready_base_url = gateway_base_url
         last_log_signature: tuple[str, str, bool] | None = None
         last_log_elapsed_s = -POLL_LOG_HEARTBEAT_S
 
@@ -678,7 +691,14 @@ class TrainerJobManager(FireworksClient):
                 )
 
             if state == "JOB_STATE_RUNNING":
-                service_ready = self._check_healthz(base_url)
+                if self._check_healthz(gateway_base_url):
+                    service_ready = True
+                    ready_base_url = gateway_base_url
+                else:
+                    direct_route_handle = _extract_direct_route_handle(job)
+                    if direct_route_handle and self._check_healthz(direct_route_handle):
+                        service_ready = True
+                        ready_base_url = direct_route_handle
 
             if service_ready:
                 self.boot_time_s = now - start
@@ -691,7 +711,7 @@ class TrainerJobManager(FireworksClient):
                 return TrainerServiceEndpoint(
                     job_name=job_name,
                     job_id=job_id,
-                    base_url=base_url,
+                    base_url=ready_base_url,
                     max_context_length=_extract_job_max_context_length(job),
                 )
 

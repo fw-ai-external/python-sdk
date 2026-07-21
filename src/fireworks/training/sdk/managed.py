@@ -116,6 +116,7 @@ class FiretitanProvisioningConfig:
     cleanup_deployment_on_close: DeploymentCleanupOnClose | None = None
     display_name: str | None = None
     purpose: str | None = None
+    preemptible: bool = False
     managed_by: str | None = None
     skip_validations: bool = False
     disable_speculative_decoding: bool = False
@@ -653,6 +654,7 @@ def _build_trainer_job_config(
         auto_select_training_shape=auto_select_training_shape,
         skip_validations=config.skip_validations,
         purpose=config.purpose,
+        preemptible=config.preemptible,
         managed_by=config.managed_by,
         forward_only=config.forward_only,
         inactivity_timeout=config.inactivity_timeout,
