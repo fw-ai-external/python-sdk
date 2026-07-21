@@ -69,6 +69,37 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Require generated promotion source
+        env:
+          GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+          TAG_EXISTS: ${{ steps.tag.outputs.exists }}
+        run: |
+          set -euo pipefail
+          promotion_pr="$(
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+              --jq '.[] | select(
+                .base.ref == "main" and
+                .head.repo.full_name == "fw-ai-external/python-sdk" and
+                .head.ref == "autorelease/next" and
+                .user.login == "bot-fireworks-ai"
+              ) | .number' | head -1
+          )"
+          if [[ -z "${promotion_pr}" ]]; then
+            echo "::error::SDK releases must come from the bot-authored autorelease/next PR."
+            exit 1
+          fi
+
+          labels="$(gh pr view "${promotion_pr}" --repo "${GITHUB_REPOSITORY}" \
+            --json labels --jq '[.labels[].name] | join(",")')"
+          if [[ ",${labels}," == *",autorelease: pending,"* ]]; then
+            echo "Verified pending generated SDK promotion PR #${promotion_pr}."
+          elif [[ "${TAG_EXISTS}" == "true" && ",${labels}," == *",autorelease: tagged,"* ]]; then
+            echo "Verified idempotent rerun for tagged SDK promotion PR #${promotion_pr}."
+          else
+            echo "::error::SDK promotion PR must be pending, or tagged with its exact tag already present."
+            exit 1
+          fi
+
       - name: Require FW_AI_BOT_TOKEN
         env:
           BOT_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
