@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.2 (2026-07-21)
+
+Full Changelog: [v1.2.1...v1.2.2](https://github.com/fw-ai-external/python-sdk/compare/v1.2.1...v1.2.2)
+
+## 1.2.1 (2026-07-20)
+
+Full Changelog: [v1.2.0...v1.2.1](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0...v1.2.1)
+
+### Features
+* **serverless-rl:** single retry owner + structured sampling error (SDK) ([7113d1a](https://github.com/fw-ai-external/python-sdk/commit/7113d1aa7f6d43e62044f64ba72de2012543d41f))
+* **training-sdk:** adjust rollout concurrency within RL steps ([68595ff](https://github.com/fw-ai-external/python-sdk/commit/68595ff736f94dd93657b2c7bef9de93d82d5735))
+* **training-sdk:** expose routing matrices in sample responses ([81d52c2](https://github.com/fw-ai-external/python-sdk/commit/81d52c22b19f6d7950fb6eeb385a62730b138ca1))
+* **training:** serverless cross-run resume — SDK config-from-checkpoint + cookbook unlock (PR3+PR5) ([a284467](https://github.com/fw-ai-external/python-sdk/commit/a284467109d58445b8f46c56aba144b484ce8691))
+
+### Bug Fixes
+* **training-sdk:** support Tinker 0.23 and unblock 1.2.1 release ([7415ed8](https://github.com/fw-ai-external/python-sdk/commit/7415ed82005d85b5f1a3b32bd7b44012922c3dff))
+* **training:** pin compatible pyqwest transport ([53ae2be](https://github.com/fw-ai-external/python-sdk/commit/53ae2be658f9bbb2ab180ce96586df1c6e888827))
+
+### Refactors
+* **training-sdk:** add sampling concurrency protocol ([9572c14](https://github.com/fw-ai-external/python-sdk/commit/9572c14cfc9633fdeb9fc1129539915e90097662))
+* **async-rl:** use a batch-native rollout producer ([04ff3ea](https://github.com/fw-ai-external/python-sdk/commit/04ff3ea7417a5470fe5c884475033ebe98243efc))
+
+## 1.2.0 (2026-07-11)
+
+Full Changelog: [v1.2.0-alpha.89...v1.2.0](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.89...v1.2.0)
+
 ## 1.2.0-alpha.89 (2026-07-10)
 
 Full Changelog: [v1.2.0-alpha.88...v1.2.0-alpha.89](https://github.com/fw-ai-external/python-sdk/compare/v1.2.0-alpha.88...v1.2.0-alpha.89)
