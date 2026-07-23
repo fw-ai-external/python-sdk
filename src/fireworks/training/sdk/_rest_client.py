@@ -12,6 +12,9 @@ correct TLS policy.
 
 from __future__ import annotations
 
+import os
+import re
+import uuid
 import logging
 import ipaddress
 from urllib.parse import urlparse
@@ -28,6 +31,26 @@ logger = logging.getLogger(__name__)
 logging.getLogger("tinker.lib.api_future_impl").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+_CLIENT_SOURCE_RE = re.compile(r"^fireworks-training-skill(?:/[0-9A-Za-z][0-9A-Za-z._+-]{0,63})?$")
+
+
+def _validated_client_source(value: str | None) -> str | None:
+    if not value or len(value) > 128 or not _CLIENT_SOURCE_RE.fullmatch(value):
+        return None
+    return value
+
+
+def _validated_session_id(value: str | None) -> str | None:
+    if not value or len(value) > 36:
+        return None
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError):
+        return None
+    if str(parsed) != value.lower():
+        return None
+    return value
 
 
 def _should_verify_ssl(url: str) -> bool:
@@ -139,7 +162,16 @@ class _RestClient:
             "Content-Type": "application/json",
             "X-Api-Key": self.api_key,
         }
+        client_source = _validated_client_source(os.environ.get("FIREWORKS_CLIENT_SOURCE"))
+        if client_source:
+            headers["X-Fireworks-Client-Source"] = client_source
+        session_id = _validated_session_id(os.environ.get("FIREWORKS_SESSION_ID"))
+        if session_id:
+            headers["X-Fireworks-Session-Id"] = session_id
         if self.additional_headers:
+            # Explicit caller headers win, including case-insensitive duplicates.
+            explicit_names = {name.lower() for name in self.additional_headers}
+            headers = {name: value for name, value in headers.items() if name.lower() not in explicit_names}
             headers.update(self.additional_headers)
         if extra:
             headers.update(extra)

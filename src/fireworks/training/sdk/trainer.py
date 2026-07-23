@@ -580,7 +580,13 @@ class TrainerJobManager(FireworksClient):
         resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
         if resp.status_code == 404:
             return None
-        resp.raise_for_status()
+        if not resp.is_success:
+            # Surface the backend's response body rather than httpx's bare status
+            # line so poll failures carry the real cause (the orchestrator
+            # persists str(exc) as the job's failure status).
+            raise RuntimeError(
+                f"Failed to get RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
         return resp.json()
 
     def get(self, job_id: str) -> dict:
@@ -600,7 +606,10 @@ class TrainerJobManager(FireworksClient):
     def _delete_job(self, job_id: str) -> None:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
         resp = self._delete(path, timeout=HTTP_READ_TIMEOUT_S)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(
+                f"Failed to delete RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
 
     def _resume(self, job_id: str) -> dict:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
