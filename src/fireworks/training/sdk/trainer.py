@@ -23,6 +23,7 @@ from fireworks.training.sdk.errors import (
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
+    parse_training_api_error,
 )
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
@@ -478,13 +479,9 @@ class TrainerJobManager(FireworksClient):
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
-            # Surface the backend's response body (e.g. "B200/B300 training
-            # requires a Tier 2 account...") rather than httpx's bare status
-            # line. The orchestrator persists str(exc) as the job's failure
-            # status, so raising the parsed message is what makes the real
-            # cause reach the customer instead of "429 Too Many Requests".
-            raise RuntimeError(
-                f"RLOR job creation failed (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            raise parse_training_api_error(
+                resp,
+                context="RLOR job creation failed",
             )
         return resp.json()
 

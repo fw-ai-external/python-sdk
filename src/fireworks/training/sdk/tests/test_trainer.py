@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from fireworks.training.sdk.errors import TrainingAPIError
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
@@ -564,6 +565,37 @@ class TestCreate:
         err_text = str(exc_info.value)
         assert "RLOR job creation failed (HTTP 403)" in err_text
         assert body_message in err_text
+
+    def test_create_preserves_structured_training_reason(self, mgr):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            display_name="valid-name",
+        )
+        resp = httpx.Response(
+            403,
+            json={
+                "code": 7,
+                "message": "message text is not the classifier",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "TIER_REQUIRED",
+                    }
+                ],
+            },
+            request=httpx.Request(
+                "POST",
+                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
+            ),
+        )
+        mgr._post = MagicMock(return_value=resp)
+
+        with pytest.raises(TrainingAPIError) as exc_info:
+            mgr._create(config)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.reason == "TIER_REQUIRED"
+        assert "message text is not the classifier" in str(exc_info.value)
 
 
 class TestPollUntilReady:
