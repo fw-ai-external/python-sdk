@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
+_MAX_INACTIVITY_TIMEOUT_S = 3 * 60 * 60
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 _AUTO_TRAINER_JOB_ID_PREFIX = "training-api-service"
 _TRAINER_TOMBSTONE_STATES = frozenset(
@@ -281,14 +282,12 @@ class TrainerJobConfig:
     The trainer reports tracked activity, including trainer API operations and
     active-session heartbeats. If no tracked activity is observed for this
     duration, the trainer is automatically stopped. When unset or 0, Fireworks
-    uses the 60-minute default. Use ``disable_inactivity_cleanup=True`` to
-    disable automatic cleanup.
+    uses the 60-minute default. Values above 3 hours are rejected.
     """
     disable_inactivity_cleanup: bool = False
     """Disable trainer inactivity cleanup.
 
-    When true, the trainer is not automatically stopped due to inactivity. GPU
-    usage continues to accrue while the trainer is running.
+    Only supported for trainers created in the ``fireworks`` account.
     """
     skip_validations: bool = False
     """Skip server-side shape validation. Requires superuser API key."""
@@ -333,9 +332,12 @@ class TrainerJobConfig:
             errors.append("display_name must be fewer than 64 characters")
         if self.inactivity_timeout is not None:
             try:
-                _format_proto_duration(self.inactivity_timeout)
+                inactivity_timeout = _format_proto_duration(self.inactivity_timeout)
             except (TypeError, ValueError) as e:
                 errors.append(f"inactivity_timeout {e}")
+            else:
+                if float(inactivity_timeout[:-1]) > _MAX_INACTIVITY_TIMEOUT_S:
+                    errors.append("inactivity_timeout must be at most 3 hours")
         shape_owned_path = bool(self.training_shape_ref or self.auto_select_training_shape)
         if self.training_shape_ref and self.auto_select_training_shape:
             errors.append("training_shape_ref and auto_select_training_shape cannot both be set")
@@ -426,6 +428,10 @@ class TrainerJobManager(FireworksClient):
 
     def _create(self, config: TrainerJobConfig) -> dict:
         config.validate()
+        if config.disable_inactivity_cleanup and self.account_id != "fireworks":
+            raise ValueError(
+                "disable_inactivity_cleanup is only supported for trainers in the fireworks account"
+            )
 
         if config.training_shape_ref:
             self._validate_shape_ref(config.training_shape_ref)
