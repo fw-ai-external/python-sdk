@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from fireworks.training.sdk.errors import TrainingAPIError
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
     CreatedTrainerJob,
@@ -426,12 +427,11 @@ class TestCreate:
         payload = mgr._post.call_args[1]["json"]
         assert "trainerReplicaCount" not in payload
 
-    def test_inactivity_cleanup_fields(self, mgr):
+    def test_inactivity_timeout_field(self, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
             training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
             inactivity_timeout=timedelta(minutes=30),
-            disable_inactivity_cleanup=True,
         )
         resp = MagicMock()
         resp.is_success = True
@@ -443,7 +443,36 @@ class TestCreate:
 
         payload = mgr._post.call_args[1]["json"]
         assert payload["inactivityTimeout"] == "1800s"
+        assert "disableInactivityCleanup" not in payload
+
+    def test_disable_inactivity_cleanup_field_for_fireworks_account(self):
+        mgr = TrainerJobManager(api_key="k", base_url="https://api.example.com")
+        mgr._account_id = "fireworks"
+        config = TrainerJobConfig(
+            base_model="accounts/fireworks/models/m",
+            disable_inactivity_cleanup=True,
+        )
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {"name": "j"}
+        mgr._post = MagicMock(return_value=resp)
+
+        mgr._create(config)
+
+        payload = mgr._post.call_args[1]["json"]
         assert payload["disableInactivityCleanup"] is True
+
+    def test_rejects_disable_inactivity_cleanup_outside_fireworks_account(self):
+        mgr = TrainerJobManager(api_key="k", base_url="https://api.example.com")
+        mgr._account_id = "test-account"
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            disable_inactivity_cleanup=True,
+        )
+
+        with pytest.raises(ValueError, match="disable_inactivity_cleanup is only supported"):
+            mgr._create(config)
 
     def test_inactivity_timeout_accepts_proto_duration_string(self, mgr):
         config = TrainerJobConfig(
@@ -564,6 +593,37 @@ class TestCreate:
         err_text = str(exc_info.value)
         assert "RLOR job creation failed (HTTP 403)" in err_text
         assert body_message in err_text
+
+    def test_create_preserves_structured_training_reason(self, mgr):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            display_name="valid-name",
+        )
+        resp = httpx.Response(
+            403,
+            json={
+                "code": 7,
+                "message": "message text is not the classifier",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "TIER_REQUIRED",
+                    }
+                ],
+            },
+            request=httpx.Request(
+                "POST",
+                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
+            ),
+        )
+        mgr._post = MagicMock(return_value=resp)
+
+        with pytest.raises(TrainingAPIError) as exc_info:
+            mgr._create(config)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.reason == "TIER_REQUIRED"
+        assert "message text is not the classifier" in str(exc_info.value)
 
 
 class TestPollUntilReady:
@@ -1181,6 +1241,22 @@ class TestValidate:
             inactivity_timeout="30m",
         )
         with pytest.raises(ValueError, match="protobuf JSON duration"):
+            config.validate()
+
+    def test_rejects_inactivity_timeout_over_three_hours(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            inactivity_timeout=timedelta(hours=3, seconds=1),
+        )
+        with pytest.raises(ValueError, match="inactivity_timeout must be at most 3 hours"):
+            config.validate()
+
+    def test_rejects_inactivity_timeout_string_over_three_hours(self):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            inactivity_timeout="10801s",
+        )
+        with pytest.raises(ValueError, match="inactivity_timeout must be at most 3 hours"):
             config.validate()
 
 
