@@ -19,7 +19,7 @@ from fireworks.training.sdk.trainer import (
     TrainerServiceEndpoint,
 )
 from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
-from fireworks.training.sdk.fireworks_client import TrainingShapeProfile
+from fireworks.training.sdk.fireworks_client import FireworksClient, TrainingShapeProfile
 
 
 def _query_params(path: str) -> dict[str, list[str]]:
@@ -911,6 +911,57 @@ class TestResolveTrainingProfile:
             mgr.resolve_training_profile("accounts/a/trainingShapes/ts-test")
 
         mgr.close()
+
+
+class TestModelIsMoe:
+    @staticmethod
+    def _response(body, status=200):
+        response = MagicMock()
+        response.is_success = 200 <= status < 300
+        response.status_code = status
+        response.json.return_value = body
+        return response
+
+    @pytest.mark.parametrize(
+        ("details_key", "moe"),
+        [
+            ("baseModelDetails", True),
+            ("base_model_details", False),
+        ],
+    )
+    def test_reads_model_architecture(self, details_key, moe):
+        client = FireworksClient(api_key="k", base_url="https://x")
+        client._get = MagicMock(
+            return_value=self._response({details_key: {"moe": moe}})
+        )
+
+        assert client.model_is_moe("accounts/a/models/m") is moe
+        client._get.assert_called_once_with(
+            "/v1/accounts/a/models/m",
+            timeout=30,
+        )
+        client.close()
+
+    def test_rejects_missing_architecture(self):
+        client = FireworksClient(api_key="k", base_url="https://x")
+        client._get = MagicMock(return_value=self._response({}))
+
+        with pytest.raises(ValueError, match="baseModelDetails.moe"):
+            client.model_is_moe("accounts/a/models/m")
+        client.close()
+
+    def test_reports_control_plane_failure(self):
+        client = FireworksClient(api_key="k", base_url="https://x")
+        client._get = MagicMock(
+            return_value=self._response(
+                {"error": {"message": "denied"}},
+                status=403,
+            )
+        )
+
+        with pytest.raises(RuntimeError, match="HTTP 403"):
+            client.model_is_moe("accounts/a/models/m")
+        client.close()
 
 
 class TestListCheckpoints:

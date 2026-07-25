@@ -193,6 +193,30 @@ class FireworksClient(_RestClient):
             verify_ssl=verify_ssl,
         )
 
+    def model_is_moe(self, model: str) -> bool:
+        """Return whether ``model`` is a mixture-of-experts model.
+
+        Router Replay requires inference-time expert routing data, which dense
+        models cannot produce.  Fail explicitly when the control plane cannot
+        establish the model architecture so callers never silently change
+        training semantics.
+        """
+        resp = self._get(f"/v1/{model.lstrip('/')}", timeout=30)
+        if not resp.is_success:
+            raise RuntimeError(
+                f"Failed to fetch model details for {model!r} "
+                f"(HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
+        data = resp.json() or {}
+        details = data.get("baseModelDetails") or data.get("base_model_details") or {}
+        moe = details.get("moe")
+        if not isinstance(moe, bool):
+            raise ValueError(
+                f"Base model {model!r} is missing baseModelDetails.moe; "
+                "cannot determine Router Replay support."
+            )
+        return moe
+
     def _get_operation(self, name: str) -> dict:
         """Fetch operation state from the control plane.
 
