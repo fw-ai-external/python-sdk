@@ -13,10 +13,12 @@ from fireworks.training.sdk.errors import (
     DISCORD_URL,
     HTTP_STATUS_HINTS,
     AGENT_DEBUG_INSTRUCTIONS,
+    TrainingAPIError,
     parse_api_error,
     format_sdk_error,
     parse_retry_after,
     request_with_retries,
+    parse_training_api_error,
     _is_retryable_status_code,
     async_request_with_retries,
     format_checkpoint_promotion_error,
@@ -191,6 +193,85 @@ class TestParseApiError:
         resp = self._resp(json_body={"detail": "not found"})
         result = parse_api_error(resp)
         assert "detail" in result
+
+
+class TestParseTrainingApiError:
+    def _resp(self, body, status_code=403):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.json.return_value = body
+        return resp
+
+    def test_parses_error_info_in_arbitrary_detail_order(self):
+        resp = self._resp(
+            {
+                "code": 7,
+                "message": "changeable diagnostic",
+                "details": [
+                    {"@type": "type.googleapis.com/example.Unknown", "value": "ignored"},
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "TIER_REQUIRED",
+                        "metadata": {
+                            "quota_required": "8",
+                            "authorization": "must-not-escape",
+                        },
+                    },
+                ],
+            }
+        )
+
+        err = parse_training_api_error(resp, context="RLOR job creation failed")
+
+        assert isinstance(err, TrainingAPIError)
+        assert isinstance(err, RuntimeError)
+        assert err.status_code == 403
+        assert err.reason == "TIER_REQUIRED"
+        assert err.metadata == {"quota_required": "8"}
+        assert str(err) == "RLOR job creation failed (HTTP 403): changeable diagnostic"
+        assert "authorization" not in str(err)
+
+    def test_nested_grpc_gateway_error(self):
+        resp = self._resp(
+            {
+                "error": {
+                    "code": 7,
+                    "message": "diagnostic",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "QUOTA_EXCEEDED",
+                        }
+                    ],
+                }
+            }
+        )
+
+        err = parse_training_api_error(resp)
+
+        assert err.reason == "QUOTA_EXCEEDED"
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"code": 7, "message": "legacy only"},
+            {
+                "code": 7,
+                "message": "malformed",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": 7,
+                    }
+                ],
+            },
+            {"message": '{"error":"tier_required","message":"legacy nested JSON"}'},
+        ],
+    )
+    def test_missing_or_malformed_details_do_not_infer_reason(self, body):
+        err = parse_training_api_error(self._resp(body))
+
+        assert err.reason is None
 
 
 # ---------------------------------------------------------------------------

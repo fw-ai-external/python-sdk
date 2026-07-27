@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_DELTA_COMPRESSION = "arc_v2"
 DEFAULT_CHECKSUM_FORMAT = "alder32"
 
+HOT_LOAD_TRANSITION_TYPE_ASYNC = "ASYNC"
+HOT_LOAD_TRANSITION_TYPE_SYNC = "SYNC"
+HOT_LOAD_TRANSITION_TYPES = (HOT_LOAD_TRANSITION_TYPE_ASYNC, HOT_LOAD_TRANSITION_TYPE_SYNC)
+HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED_VALUES = {
+    "HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED",
+    "UNSPECIFIED",
+}
+
 # Deployment-specific wait budgets and poll intervals (seconds).
 # Default budget for the low-level wait_for_ready (direct deployment CRUD).
 # SDK-managed large-model deployments pass the longer
@@ -58,6 +66,35 @@ def _format_snapshot_identity(identity: str | None) -> str:
     return identity if identity else "none"
 
 
+def normalize_hot_load_transition_type(value: str | None) -> str | None:
+    """Canonicalize a hot-load transition type, or ``None`` when unset.
+
+    Unset leaves the choice to the control plane, which resolves it to ``ASYNC``
+    for hot-load deployments.
+    """
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if not normalized:
+        return None
+    if normalized not in HOT_LOAD_TRANSITION_TYPES:
+        raise ValueError(f"hot_load_transition_type must be one of {list(HOT_LOAD_TRANSITION_TYPES)}, got {value!r}")
+    return normalized
+
+
+def _parse_hot_load_transition_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if not normalized or normalized in HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED_VALUES:
+        return None
+    return normalize_hot_load_transition_type(value)
+
+
+def _effective_hot_load_transition_type(value: str | None) -> str:
+    return _parse_hot_load_transition_type(value) or HOT_LOAD_TRANSITION_TYPE_ASYNC
+
+
 @dataclass
 class DeploymentInfo:
     """Metadata about a Fireworks deployment."""
@@ -67,6 +104,7 @@ class DeploymentInfo:
     state: str
     hot_load_bucket_url: str | None = None
     hot_load_trainer_job: str | None = None
+    hot_load_transition_type: str | None = None
     deployment_shape_version: str | None = None
     inference_model: str | None = None
     """Model string for completions API (``accounts/{account}/deployments/{id}``)."""
@@ -116,6 +154,18 @@ class DeploymentConfig:
     When set, the deployment shares the trainer's checkpoint bucket."""
     enable_hot_load: bool = True
     """Whether the deployment should be created with hot-load training support."""
+    hot_load_transition_type: str | None = None
+    """How the server transitions in-flight requests during a hot load.
+
+    ``"ASYNC"`` pauses the generator mid-flight and resumes the request on the
+    weights it just swapped in, keeping the KV cache built under the previous
+    weights. ``"SYNC"`` drains in-flight requests -- they finish on the old
+    weights -- before applying the new ones, at the cost of a TTFT stall.
+
+    Leave unset to let the control plane choose (``ASYNC`` for hot-load
+    deployments). Set ``"SYNC"`` for rollouts that must not mix weight versions
+    within a single generation.
+    """
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
@@ -128,6 +178,9 @@ class DeploymentConfig:
     SDK-managed rollout deployments set this to true so server-side trainer
     cleanup can reclaim them if the client disappears before close().
     """
+
+    def __post_init__(self) -> None:
+        self.hot_load_transition_type = normalize_hot_load_transition_type(self.hot_load_transition_type)
 
     @classmethod
     def from_training_profile(
@@ -351,6 +404,8 @@ class DeploymentManager(_RestClient):
             body["hotLoadBucketType"] = config.hot_load_bucket_type
         if config.hot_load_trainer_job:
             body["hotLoadTrainerJob"] = config.hot_load_trainer_job
+        if config.hot_load_transition_type:
+            body["hotLoadTransitionType"] = config.hot_load_transition_type
         if config.deployment_shape:
             body["deploymentShape"] = config.deployment_shape
         else:
@@ -382,6 +437,9 @@ class DeploymentManager(_RestClient):
             state=state if state is not None else data.get("state", "UNKNOWN"),
             hot_load_bucket_url=data.get("hotLoadBucketUrl"),
             hot_load_trainer_job=data.get("hotLoadTrainerJob") or data.get("hot_load_trainer_job"),
+            hot_load_transition_type=_parse_hot_load_transition_type(
+                data.get("hotLoadTransitionType") or data.get("hot_load_transition_type")
+            ),
             deployment_shape_version=data.get("deploymentShape") or data.get("deployment_shape"),
             inference_model=f"accounts/{self.account_id}/deployments/{deployment_id}",
         )
@@ -597,7 +655,7 @@ class DeploymentManager(_RestClient):
         if not replicas:
             return None
         replica = replicas[0]
-        return replica.get("current_snapshot_identity") or replica.get("identity")
+        return replica.get("identity") or replica.get("current_snapshot_identity")
 
     def reattach_trainer(
         self,
@@ -607,8 +665,14 @@ class DeploymentManager(_RestClient):
         trainer_job_name: str,
         timeout_s: float,
         poll_interval_s: float = HOTLOAD_WAIT_POLL_S,
+        hot_load_transition_type: str | None = None,
     ) -> DeploymentInfo:
-        """Point an existing deployment at a trainer bucket and wait for the serving pod to roll."""
+        """Point an existing deployment at a trainer bucket and wait for the serving pod to roll.
+
+        ``hot_load_transition_type`` is reconciled in the same PATCH so a
+        reattach that also changes the transition type costs one pod roll
+        instead of two. Leave it unset to keep the deployment's current value.
+        """
         if isinstance(deployment, str):
             deployment_id = deployment
             deployment_info = self.get(deployment_id)
@@ -618,7 +682,21 @@ class DeploymentManager(_RestClient):
             deployment_info = deployment
             deployment_id = deployment.deployment_id
 
-        if _deployment_hot_load_trainer_job(deployment_info) == trainer_job_name:
+        hot_load_transition_type = normalize_hot_load_transition_type(hot_load_transition_type)
+        body: dict[str, Any] = {}
+        update_mask: list[str] = []
+        if _deployment_hot_load_trainer_job(deployment_info) != trainer_job_name:
+            body["hotLoadTrainerJob"] = trainer_job_name
+            update_mask.append("hot_load_trainer_job")
+        if (
+            hot_load_transition_type
+            and _effective_hot_load_transition_type(deployment_info.hot_load_transition_type)
+            != hot_load_transition_type
+        ):
+            body["hotLoadTransitionType"] = hot_load_transition_type
+            update_mask.append("hot_load_transition_type")
+
+        if not update_mask:
             logger.info(
                 "Deployment %s is already attached to trainer %s",
                 deployment_id,
@@ -627,15 +705,16 @@ class DeploymentManager(_RestClient):
             return deployment_info
 
         logger.info(
-            "Re-attaching deployment %s to trainer %s via hotLoadTrainerJob PATCH",
+            "Patching deployment %s for trainer %s: %s",
             deployment_id,
             trainer_job_name,
+            ", ".join(update_mask),
         )
         prev_identity = self._read_replica_identity(deployment_id, base_model)
         updated = self.update(
             deployment_id,
-            body={"hotLoadTrainerJob": trainer_job_name},
-            update_mask="hot_load_trainer_job",
+            body=body,
+            update_mask=",".join(update_mask),
         )
 
         deadline = time.time() + max(timeout_s, 1)

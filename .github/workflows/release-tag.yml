@@ -63,7 +63,12 @@ jobs:
         run: |
           set -euo pipefail
           if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "Tag ${TAG} already exists."
+            tagged_sha="$(git rev-parse "${TAG}^{commit}")"
+            if [[ "${tagged_sha}" != "${GITHUB_SHA}" ]]; then
+              echo "::error::Tag ${TAG} already identifies ${tagged_sha}, not release commit ${GITHUB_SHA}."
+              exit 1
+            fi
+            echo "Tag ${TAG} already identifies this exact release commit."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -106,28 +111,40 @@ jobs:
         run: |
           [[ -n "${BOT_TOKEN}" ]] || { echo "::error::FW_AI_BOT_TOKEN is required"; exit 1; }
 
-      - name: Create tag and GitHub Release
+      - name: Create tag
         if: steps.tag.outputs.exists == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "${TAG}"
+          git push origin "${TAG}"
+
+      - name: Ensure GitHub Release
         env:
           GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "GitHub Release ${TAG} already exists."
+            exit 0
+          fi
 
-          # Extract this version's CHANGELOG section as the release notes.
           notes_file="$(mktemp)"
           awk -v ver="${VERSION}" '
             $0 ~ "^## " ver "($| )" { capture = 1; print; next }
             capture && /^## / { exit }
             capture { print }
           ' CHANGELOG.md > "${notes_file}"
-
-          # Tag this commit and push.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${TAG}" -m "${TAG}"
-          git push origin "${TAG}"
+          if [[ ! -s "${notes_file}" ]]; then
+            echo "::error::CHANGELOG.md has no release section for ${VERSION}."
+            exit 1
+          fi
 
           # Versions with a prerelease suffix stay marked as prerelease.
           prerelease_flag=""
@@ -171,3 +188,18 @@ jobs:
           gh pr edit "${pr_number}" --repo "${GITHUB_REPOSITORY}" \
             --remove-label "autorelease: pending" \
             --add-label "autorelease: tagged"
+
+      - name: Request private staging metadata sync
+        env:
+          GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/fw-ai/fireworks/dispatches" \
+            -f event_type="sdk_release_published" \
+            -F "client_payload[version]=${VERSION}" \
+            -F "client_payload[tag]=${TAG}" \
+            -F "client_payload[public_sha]=${GITHUB_SHA}"

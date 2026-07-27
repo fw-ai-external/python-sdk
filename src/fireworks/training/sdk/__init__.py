@@ -26,6 +26,7 @@ from fireworks.training.sdk.client import (
     FiretitanTrainingClient,
     FiretitanSampledSequence,
 )
+from fireworks.training.sdk.errors import TrainingAPIError
 from fireworks.training.sdk.managed import FiretitanProvisioningConfig
 from fireworks.training.sdk.trainer import (
     TrainerJobConfig,
@@ -88,6 +89,7 @@ __all__ = [
     "CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO",
     "DeploymentCleanupOnClose",
     "FiretitanProvisioningConfig",
+    "TrainingAPIError",
     "GradAccNormalization",
     "GradNormMetricsMode",
     "SaveSamplerResult",

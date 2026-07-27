@@ -3,12 +3,13 @@
 This layer extends the upstream tinker client with:
   1. training-client creation with lora_config=None support
   2. optimizer-step grad_accumulation_normalization and grad-norm metrics controls
-  3. forward() JSON chunk parallelization
-  4. forward_backward() response_tokens backfill for cross_entropy
-  5. save_state() blocking waits and unsupported-overwrite guards
-  6. save_weights_for_sampler_ext() checkpoint_type support
-  7. DCP checkpoint listing
-  8. HF PEFT adapter warm-start loading (weights-only)
+  3. routing_matrices-aware JSON request sizing
+  4. forward() JSON chunk parallelization
+  5. forward_backward() response_tokens backfill for cross_entropy
+  6. save_state() blocking waits and unsupported-overwrite guards
+  7. save_weights_for_sampler_ext() checkpoint_type support
+  8. DCP checkpoint listing
+  9. HF PEFT adapter warm-start loading (weights-only)
 
 Most other methods are inherited from tinker.
 """
@@ -16,6 +17,7 @@ Most other methods are inherited from tinker.
 from __future__ import annotations
 
 import os
+import json
 import time
 import uuid
 import asyncio
@@ -1280,6 +1282,35 @@ SAMPLING_CLIENT_FROM_TRAINER_MESSAGE = (
 )
 
 
+def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
+    """Return the compact-JSON bytes added by ``routing_matrices``.
+
+    Tinker's base request-size estimator knows only about its native
+    ``ModelInput.chunks`` fields. Fireworks adds ``routing_matrices`` to that
+    model dynamically, so count the actual JSON field fragment here without
+    first materializing one potentially hundreds-of-megabytes JSON array.
+
+    ``ModelInput`` always serializes ``chunks`` before this patched field, hence
+    the leading comma in the wire fragment.
+    """
+    routing_matrices = getattr(model_input, "routing_matrices", None)
+    if routing_matrices is None:
+        return 0
+
+    byte_count = len(b',"routing_matrices":[') + 1  # closing ``]``
+    for index, matrix in enumerate(routing_matrices):
+        if index:
+            byte_count += 1  # item separator
+        byte_count += len(
+            json.dumps(
+                matrix,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+    return byte_count
+
+
 class FiretitanTrainingClient(TrainingClient):
     """TrainingClient with firetitan-specific extensions.
 
@@ -1395,6 +1426,10 @@ class FiretitanTrainingClient(TrainingClient):
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         return bool(getattr(client_config, "parallel_fwdbwd_chunks", False))
+
+    def _estimate_bytes_count(self, datum: types.Datum) -> int:
+        """Include Fireworks' R3 payload in Tinker's chunk-size estimate."""
+        return super()._estimate_bytes_count(datum) + _routing_matrices_wire_bytes(datum.model_input)
 
     async def _run_chunked_requests(
         self,
@@ -2153,7 +2188,10 @@ class FiretitanTrainingClient(TrainingClient):
 
         The returned ``path`` is not a raw storage URI. It is the public
         snapshot identity consumed by ``create_sampling_client(model_path=...)``
-        on a client/service with an SDK-managed deployment sampler backend.
+        on a client/service with an SDK-managed deployment sampler backend. It
+        is not a resumable DCP checkpoint and must not be passed to
+        ``load_state`` or ``create_training_client_from_state``; use the path
+        returned by ``save_state`` for exact training continuation.
         """
         result = self.save_weights_for_sampler_ext(
             name,
@@ -3070,6 +3108,13 @@ class FiretitanServiceClient(ServiceClient):
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
     ) -> FiretitanTrainingClient:
+        """Resume from a DCP checkpoint path returned by ``save_state``.
+
+        Sampler/HF snapshot identities returned by
+        ``save_weights_for_sampler`` are not trainer-state checkpoints. Import
+        a PEFT adapter through ``load_adapter`` when a weights-only warm start
+        with a fresh optimizer is intended.
+        """
         self._reject_weights_access_token("create_training_client_from_state", weights_access_token)
         managed_config = self._managed_config_for_resume()
         if managed_config is None:

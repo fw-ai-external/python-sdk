@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.4 (2026-07-27)
+
+Full Changelog: [v1.2.3...v1.2.4](https://github.com/fw-ai-external/python-sdk/compare/v1.2.3...v1.2.4)
+
+### Features
+* **training-sdk:** expose MoE model capability lookup for Router Replay
+* **training-sdk:** expose structured Training API errors
+* **training-sdk:** propagate training skill attribution headers
+
+### Bug Fixes
+* **training-sdk:** gate RLOR inactivity cleanup compatibility to Fireworks-owned jobs
+
 ## 1.2.3 (2026-07-21)
 
 Full Changelog: [v1.2.2...v1.2.3](https://github.com/fw-ai-external/python-sdk/compare/v1.2.2...v1.2.3)

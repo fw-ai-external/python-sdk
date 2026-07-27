@@ -5,6 +5,7 @@ Provides:
   - format_checkpoint_promotion_error(): format checkpoint-promotion HTTP failures
   - format_session_checkpoint_promotion_error(): format session checkpoint promotion HTTP failures
   - parse_api_error(): extract a human-readable string from an HTTP error response
+  - parse_training_api_error(): preserve structured Training API classification
   - request_with_retries(): sync retry with exponential backoff
   - async_request_with_retries(): async retry with exponential backoff
   - HTTP_STATUS_HINTS: status-code -> actionable one-liner
@@ -16,7 +17,7 @@ from __future__ import annotations
 import time
 import asyncio
 import logging
-from typing import Any, Tuple, Callable, Awaitable
+from typing import Any, Tuple, Mapping, Callable, Awaitable
 
 import httpx
 
@@ -30,6 +31,32 @@ AGENT_DEBUG_INSTRUCTIONS = (
     "If the cookbook is not available locally, clone "
     "https://github.com/fw-ai/cookbook and search cookbook/skills."
 )
+
+_ERROR_INFO_TYPE = "type.googleapis.com/google.rpc.ErrorInfo"
+_SAFE_ERROR_INFO_METADATA_KEYS = frozenset({"quota_required", "quota_available"})
+_MAX_ERROR_INFO_METADATA_VALUE_LENGTH = 128
+
+
+class TrainingAPIError(RuntimeError):
+    """A Training API failure with stable machine-readable classification.
+
+    ``reason`` comes only from ``google.rpc.ErrorInfo``. It is never inferred
+    from the diagnostic message, which remains available through ``str(exc)``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None,
+        reason: str | None = None,
+        metadata: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.reason = reason
+        self.metadata = dict(metadata or {})
+
 
 HTTP_STATUS_HINTS: dict[int, str] = {
     400: "Check that all request parameters are valid.",
@@ -79,6 +106,60 @@ def parse_api_error(resp) -> str:
     except Exception:
         text = getattr(resp, "text", str(resp))
         return text.strip()[:200]
+
+
+def parse_training_api_error(
+    resp: Any,
+    *,
+    context: str | None = None,
+) -> TrainingAPIError:
+    """Parse a Training API response without classifying from free-form text."""
+    message = parse_api_error(resp)
+    status_code = getattr(resp, "status_code", None)
+    reason: str | None = None
+    metadata: dict[str, str] = {}
+
+    try:
+        body = resp.json()
+        status_body = body
+        if isinstance(body, dict) and isinstance(body.get("error"), dict):
+            status_body = body["error"]
+        details = status_body.get("details", []) if isinstance(status_body, dict) else []
+        if isinstance(details, list):
+            for detail in details:
+                if not isinstance(detail, dict) or detail.get("@type") != _ERROR_INFO_TYPE:
+                    continue
+                candidate = detail.get("reason")
+                if isinstance(candidate, str) and candidate.strip():
+                    reason = candidate.strip()
+                    metadata = _safe_error_info_metadata(detail.get("metadata"))
+                    break
+    except Exception:
+        # Message parsing already provides the compatibility fallback. A
+        # malformed details block must not turn one API failure into another.
+        pass
+
+    rendered = message
+    if context:
+        http_suffix = f" (HTTP {status_code})" if status_code is not None else ""
+        rendered = f"{context}{http_suffix}: {message}"
+    return TrainingAPIError(
+        rendered,
+        status_code=status_code,
+        reason=reason,
+        metadata=metadata,
+    )
+
+
+def _safe_error_info_metadata(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, str] = {}
+    for key in _SAFE_ERROR_INFO_METADATA_KEYS:
+        item = value.get(key)
+        if isinstance(item, str):
+            safe[key] = item[:_MAX_ERROR_INFO_METADATA_VALUE_LENGTH]
+    return safe
 
 
 _PROMOTE_CHECKPOINT_CLIENT_ERROR_SOLUTION = (

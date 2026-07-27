@@ -23,6 +23,7 @@ from fireworks.training.sdk.errors import (
     HTTP_STATUS_HINTS,
     parse_api_error,
     format_sdk_error,
+    parse_training_api_error,
 )
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
+_MAX_INACTIVITY_TIMEOUT_S = 3 * 60 * 60
 _PROTO_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<seconds>\d+)(\.\d{1,9})?s$")
 _AUTO_TRAINER_JOB_ID_PREFIX = "training-api-service"
 _TRAINER_TOMBSTONE_STATES = frozenset(
@@ -280,14 +282,12 @@ class TrainerJobConfig:
     The trainer reports tracked activity, including trainer API operations and
     active-session heartbeats. If no tracked activity is observed for this
     duration, the trainer is automatically stopped. When unset or 0, Fireworks
-    uses the 60-minute default. Use ``disable_inactivity_cleanup=True`` to
-    disable automatic cleanup.
+    uses the 60-minute default. Values above 3 hours are rejected.
     """
     disable_inactivity_cleanup: bool = False
     """Disable trainer inactivity cleanup.
 
-    When true, the trainer is not automatically stopped due to inactivity. GPU
-    usage continues to accrue while the trainer is running.
+    Only supported for trainers created in the ``fireworks`` account.
     """
     skip_validations: bool = False
     """Skip server-side shape validation. Requires superuser API key."""
@@ -332,9 +332,12 @@ class TrainerJobConfig:
             errors.append("display_name must be fewer than 64 characters")
         if self.inactivity_timeout is not None:
             try:
-                _format_proto_duration(self.inactivity_timeout)
+                inactivity_timeout = _format_proto_duration(self.inactivity_timeout)
             except (TypeError, ValueError) as e:
                 errors.append(f"inactivity_timeout {e}")
+            else:
+                if float(inactivity_timeout[:-1]) > _MAX_INACTIVITY_TIMEOUT_S:
+                    errors.append("inactivity_timeout must be at most 3 hours")
         shape_owned_path = bool(self.training_shape_ref or self.auto_select_training_shape)
         if self.training_shape_ref and self.auto_select_training_shape:
             errors.append("training_shape_ref and auto_select_training_shape cannot both be set")
@@ -425,6 +428,10 @@ class TrainerJobManager(FireworksClient):
 
     def _create(self, config: TrainerJobConfig) -> dict:
         config.validate()
+        if config.disable_inactivity_cleanup and self.account_id != "fireworks":
+            raise ValueError(
+                "disable_inactivity_cleanup is only supported for trainers in the fireworks account"
+            )
 
         if config.training_shape_ref:
             self._validate_shape_ref(config.training_shape_ref)
@@ -478,13 +485,9 @@ class TrainerJobManager(FireworksClient):
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
-            # Surface the backend's response body (e.g. "B200/B300 training
-            # requires a Tier 2 account...") rather than httpx's bare status
-            # line. The orchestrator persists str(exc) as the job's failure
-            # status, so raising the parsed message is what makes the real
-            # cause reach the customer instead of "429 Too Many Requests".
-            raise RuntimeError(
-                f"RLOR job creation failed (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            raise parse_training_api_error(
+                resp,
+                context="RLOR job creation failed",
             )
         return resp.json()
 
@@ -580,7 +583,13 @@ class TrainerJobManager(FireworksClient):
         resp = self._get(path, timeout=HTTP_READ_TIMEOUT_S)
         if resp.status_code == 404:
             return None
-        resp.raise_for_status()
+        if not resp.is_success:
+            # Surface the backend's response body rather than httpx's bare status
+            # line so poll failures carry the real cause (the orchestrator
+            # persists str(exc) as the job's failure status).
+            raise RuntimeError(
+                f"Failed to get RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
         return resp.json()
 
     def get(self, job_id: str) -> dict:
@@ -600,7 +609,10 @@ class TrainerJobManager(FireworksClient):
     def _delete_job(self, job_id: str) -> None:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
         resp = self._delete(path, timeout=HTTP_READ_TIMEOUT_S)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(
+                f"Failed to delete RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
 
     def _resume(self, job_id: str) -> dict:
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}:resume"
