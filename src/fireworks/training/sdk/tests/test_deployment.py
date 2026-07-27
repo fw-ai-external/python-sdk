@@ -588,6 +588,248 @@ class TestReattachTrainer:
             update_mask="hot_load_trainer_job",
         )
 
+    def test_transition_type_change_rides_the_trainer_patch(self, mgr, monkeypatch):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
+            hot_load_transition_type="ASYNC",
+        )
+        mgr.update = MagicMock(return_value=existing)
+        mgr.hotload_check_status = MagicMock(
+            side_effect=[
+                {
+                    "replicas": [
+                        {"current_snapshot_identity": "same-snapshot", "identity": "old-pod"}
+                    ]
+                },
+                {
+                    "replicas": [
+                        {"current_snapshot_identity": "same-snapshot", "identity": "new-pod"}
+                    ]
+                },
+            ]
+        )
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+
+        mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="SYNC",
+        )
+
+        mgr.update.assert_called_once_with(
+            "dep-1",
+            body={
+                "hotLoadTrainerJob": "accounts/test-acct/rlorTrainerJobs/job-1",
+                "hotLoadTransitionType": "SYNC",
+            },
+            update_mask="hot_load_trainer_job,hot_load_transition_type",
+        )
+
+    def test_transition_type_change_alone_still_patches(self, mgr, monkeypatch):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="ASYNC",
+        )
+        mgr.update = MagicMock(return_value=existing)
+        mgr.hotload_check_status = MagicMock(
+            side_effect=[
+                {"replicas": [{"current_snapshot_identity": "old-pod"}]},
+                {"replicas": [{"current_snapshot_identity": "new-pod"}]},
+            ]
+        )
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+
+        mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="SYNC",
+        )
+
+        mgr.update.assert_called_once_with(
+            "dep-1",
+            body={"hotLoadTransitionType": "SYNC"},
+            update_mask="hot_load_transition_type",
+        )
+
+    def test_matching_transition_type_is_not_patched(self, mgr):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="SYNC",
+        )
+        mgr.update = MagicMock()
+        mgr.hotload_check_status = MagicMock()
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="SYNC",
+        )
+
+        assert result is existing
+        mgr.update.assert_not_called()
+
+    def test_unset_transition_type_matches_async_default(self, mgr):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type=None,
+        )
+        mgr.update = MagicMock()
+        mgr.hotload_check_status = MagicMock()
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="ASYNC",
+        )
+
+        assert result is existing
+        mgr.update.assert_not_called()
+        mgr.hotload_check_status.assert_not_called()
+
+    def test_unspecified_transition_type_matches_async_default(self, mgr):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED",
+        )
+        mgr.update = MagicMock()
+        mgr.hotload_check_status = MagicMock()
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="ASYNC",
+        )
+
+        assert result is existing
+        mgr.update.assert_not_called()
+        mgr.hotload_check_status.assert_not_called()
+
+    def test_unspecified_transition_type_can_change_to_sync(self, mgr, monkeypatch):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED",
+        )
+        mgr.update = MagicMock(return_value=existing)
+        mgr.hotload_check_status = MagicMock(
+            side_effect=[
+                {
+                    "replicas": [
+                        {"current_snapshot_identity": "same-snapshot", "identity": "old-pod"}
+                    ]
+                },
+                {
+                    "replicas": [
+                        {"current_snapshot_identity": "same-snapshot", "identity": "new-pod"}
+                    ]
+                },
+            ]
+        )
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+
+        mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+            hot_load_transition_type="SYNC",
+        )
+
+        mgr.update.assert_called_once_with(
+            "dep-1",
+            body={"hotLoadTransitionType": "SYNC"},
+            update_mask="hot_load_transition_type",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Hot-load transition type
+# ---------------------------------------------------------------------------
+
+
+class TestHotLoadTransitionType:
+    def test_omitted_from_body_when_unset(self, deploy_config):
+        body = DeploymentManager._build_deployment_body(deploy_config)
+
+        assert "hotLoadTransitionType" not in body
+
+    @pytest.mark.parametrize(
+        ("configured", "expected"),
+        [("ASYNC", "ASYNC"), ("SYNC", "SYNC"), ("sync", "SYNC"), (" async ", "ASYNC")],
+    )
+    def test_normalized_into_body(self, configured, expected):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            hot_load_transition_type=configured,
+        )
+
+        assert config.hot_load_transition_type == expected
+        assert DeploymentManager._build_deployment_body(config)["hotLoadTransitionType"] == expected
+
+    def test_blank_is_treated_as_unset(self):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            hot_load_transition_type="  ",
+        )
+
+        assert config.hot_load_transition_type is None
+
+    def test_unknown_value_is_rejected(self):
+        with pytest.raises(ValueError, match=r"must be one of \['ASYNC', 'SYNC'\]"):
+            DeploymentConfig(
+                deployment_id="dep-1",
+                base_model="accounts/test/models/qwen3-1p7b",
+                hot_load_transition_type="DRAIN",
+            )
+
+    def test_parsed_from_deployment_response(self, mgr):
+        info = mgr._parse_deployment_info("dep-1", {"name": "n", "hotLoadTransitionType": "SYNC"})
+
+        assert info.hot_load_transition_type == "SYNC"
+
+    def test_unspecified_response_is_parsed_as_unset(self, mgr):
+        info = mgr._parse_deployment_info(
+            "dep-1",
+            {"name": "n", "hotLoadTransitionType": "HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED"},
+        )
+
+        assert info.hot_load_transition_type is None
+
 
 # ---------------------------------------------------------------------------
 # Hotload

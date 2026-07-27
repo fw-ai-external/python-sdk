@@ -41,6 +41,8 @@ from fireworks.training.sdk.deployment import (
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
+    normalize_hot_load_transition_type,
+    _effective_hot_load_transition_type,
 )
 from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
@@ -120,8 +122,19 @@ class FiretitanProvisioningConfig:
     managed_by: str | None = None
     skip_validations: bool = False
     disable_speculative_decoding: bool = False
+    hot_load_transition_type: str | None = None
+    """``"ASYNC"``/``"SYNC"`` hot-load transition for the rollout deployment.
+
+    Unset leaves the choice to the control plane (``ASYNC``). See
+    :attr:`DeploymentConfig.hot_load_transition_type`.
+    """
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "hot_load_transition_type",
+            normalize_hot_load_transition_type(self.hot_load_transition_type),
+        )
         if self.replica_count is None:
             object.__setattr__(self, "replica_count", 1)
         elif self.replica_count == 0:
@@ -782,14 +795,20 @@ def _create_or_reattach_deployment_result(
                 f"deployment_shape {deployment_shape!r}. Delete the existing deployment or "
                 "request its shape; a reattach must not silently serve a different shape."
             )
-        previous_trainer_job = getattr(existing, "hot_load_trainer_job", None)
-        reattached = previous_trainer_job != trainer_job_name
+        trainer_job_changed = existing.hot_load_trainer_job != trainer_job_name
+        transition_type_changed = (
+            config.hot_load_transition_type is not None
+            and _effective_hot_load_transition_type(existing.hot_load_transition_type)
+            != config.hot_load_transition_type
+        )
+        reattached = trainer_job_changed or transition_type_changed
         deployment = deploy_mgr.reattach_trainer(
             existing,
             base_model=config.base_model,
             trainer_job_name=trainer_job_name,
             timeout_s=config.reattach_settle_timeout_s,
             poll_interval_s=config.reattach_poll_interval_s,
+            hot_load_transition_type=config.hot_load_transition_type,
         )
         if existing.state not in DEPLOYMENT_SERVING_STATES:
             deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
@@ -811,6 +830,7 @@ def _create_or_reattach_deployment_result(
         max_replica_count=replica_count,
         accelerator_type=config.accelerator_type,
         hot_load_trainer_job=trainer_job_name,
+        hot_load_transition_type=config.hot_load_transition_type,
         for_training=True,
         # ``skip_validations`` belongs to trainer shape creation. Deployment
         # shape validation is a separate control-plane permission and should

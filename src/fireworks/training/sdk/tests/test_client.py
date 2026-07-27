@@ -33,6 +33,7 @@ from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
     _TinkerSamplerBackend,
     _create_or_reattach_deployment,
+    _create_or_reattach_deployment_result,
 )
 from fireworks.training.sdk._constants import CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO
 from fireworks.training.sdk.deployment import DeploymentConfig
@@ -1391,6 +1392,7 @@ class TestFiretitanServiceClientManagedCompat:
             state="READY",
             deployment_id="dep-1",
             hot_load_trainer_job="accounts/acct/rlorTrainerJobs/old-job",
+            hot_load_transition_type=None,
             deployment_shape_version=None,
         )
         deploy_mgr.get.return_value = existing
@@ -1420,6 +1422,7 @@ class TestFiretitanServiceClientManagedCompat:
             trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
             timeout_s=5,
             poll_interval_s=0.01,
+            hot_load_transition_type=None,
         )
         deploy_mgr.wait_for_ready.assert_not_called()
 
@@ -1429,6 +1432,7 @@ class TestFiretitanServiceClientManagedCompat:
             state="READY",
             deployment_id="dep-1",
             hot_load_trainer_job="accounts/acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type=None,
             deployment_shape_version=None,
         )
         deploy_mgr.get.return_value = existing
@@ -1452,7 +1456,92 @@ class TestFiretitanServiceClientManagedCompat:
             trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
             timeout_s=config.reattach_settle_timeout_s,
             poll_interval_s=config.reattach_poll_interval_s,
+            hot_load_transition_type=None,
         )
+
+    def test_reattach_forwards_requested_hot_load_transition_type(self):
+        deploy_mgr = MagicMock()
+        existing = SimpleNamespace(
+            state="READY",
+            deployment_id="dep-1",
+            hot_load_trainer_job="accounts/acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="ASYNC",
+            deployment_shape_version=None,
+        )
+        deploy_mgr.get.return_value = existing
+        deploy_mgr.reattach_trainer.return_value = existing
+        config = _ManagedTinkerConfig(
+            base_model="accounts/acct/models/base",
+            deployment_id="dep-1",
+            hot_load_transition_type="sync",
+        )
+
+        result = _create_or_reattach_deployment_result(
+            deploy_mgr,
+            config,
+            trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
+            deployment_shape=None,
+        )
+
+        assert result.deployment is existing
+        assert result.reattached is True
+        assert deploy_mgr.reattach_trainer.call_args.kwargs["hot_load_transition_type"] == "SYNC"
+
+    def test_reattach_does_not_resync_for_default_async_transition(self):
+        deploy_mgr = MagicMock()
+        existing = SimpleNamespace(
+            state="READY",
+            deployment_id="dep-1",
+            hot_load_trainer_job="accounts/acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type=None,
+            deployment_shape_version=None,
+        )
+        deploy_mgr.get.return_value = existing
+        deploy_mgr.reattach_trainer.return_value = existing
+        config = _ManagedTinkerConfig(
+            base_model="accounts/acct/models/base",
+            deployment_id="dep-1",
+            hot_load_transition_type="async",
+        )
+
+        result = _create_or_reattach_deployment_result(
+            deploy_mgr,
+            config,
+            trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
+            deployment_shape=None,
+        )
+
+        assert result.deployment is existing
+        assert result.reattached is False
+        assert deploy_mgr.reattach_trainer.call_args.kwargs["hot_load_transition_type"] == "ASYNC"
+
+    def test_created_managed_deployment_carries_hot_load_transition_type(self):
+        deploy_mgr = MagicMock()
+        deploy_mgr.create_or_get.return_value = SimpleNamespace(
+            state="READY",
+            deployment_id="dep-1",
+        )
+        config = _ManagedTinkerConfig(
+            base_model="accounts/acct/models/base",
+            hot_load_transition_type="SYNC",
+        )
+
+        _create_or_reattach_deployment(
+            deploy_mgr,
+            config,
+            trainer_job_name="accounts/acct/rlorTrainerJobs/job-1",
+            deployment_shape="accounts/acct/deploymentShapes/shape/versions/1",
+        )
+
+        created = deploy_mgr.create_or_get.call_args.args[0]
+        assert created.hot_load_transition_type == "SYNC"
+
+    def test_managed_config_rejects_unknown_hot_load_transition_type(self):
+        with pytest.raises(ValueError, match="hot_load_transition_type"):
+            _ManagedTinkerConfig(
+                base_model="accounts/acct/models/base",
+                hot_load_transition_type="DRAIN",
+            )
 
     def test_generated_managed_deployment_id_does_not_reattach(self):
         deploy_mgr = MagicMock()

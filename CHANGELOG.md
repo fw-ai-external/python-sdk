@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.4 (2026-07-25)
+## 1.2.4 (2026-07-27)
 
 Full Changelog: [v1.2.3...v1.2.4](https://github.com/fw-ai-external/python-sdk/compare/v1.2.3...v1.2.4)
 
