@@ -2188,7 +2188,10 @@ class FiretitanTrainingClient(TrainingClient):
 
         The returned ``path`` is not a raw storage URI. It is the public
         snapshot identity consumed by ``create_sampling_client(model_path=...)``
-        on a client/service with an SDK-managed deployment sampler backend.
+        on a client/service with an SDK-managed deployment sampler backend. It
+        is not a resumable DCP checkpoint and must not be passed to
+        ``load_state`` or ``create_training_client_from_state``; use the path
+        returned by ``save_state`` for exact training continuation.
         """
         result = self.save_weights_for_sampler_ext(
             name,
@@ -3105,6 +3108,13 @@ class FiretitanServiceClient(ServiceClient):
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
     ) -> FiretitanTrainingClient:
+        """Resume from a DCP checkpoint path returned by ``save_state``.
+
+        Sampler/HF snapshot identities returned by
+        ``save_weights_for_sampler`` are not trainer-state checkpoints. Import
+        a PEFT adapter through ``load_adapter`` when a weights-only warm start
+        with a fresh optimizer is intended.
+        """
         self._reject_weights_access_token("create_training_client_from_state", weights_access_token)
         managed_config = self._managed_config_for_resume()
         if managed_config is None:
