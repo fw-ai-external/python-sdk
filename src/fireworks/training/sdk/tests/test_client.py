@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import asyncio
 import logging
 import warnings
@@ -27,6 +28,7 @@ from fireworks.training.sdk.client import (
     _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
     _FireworksApiKeyAuthProvider,
+    _serialize_input_for_extra_body,
     _check_cos_similarity_matrix_single_chunk,
 )
 from fireworks.training.sdk.managed import (
@@ -361,6 +363,86 @@ class TestForwardBackward:
             client.forward_backward([valid, disabled], "supervised")
 
         assert "R3 is enabled" not in caplog.text
+
+
+class TestRoutingMatrixChunkSizing:
+    @staticmethod
+    def _make_client() -> FiretitanTrainingClient:
+        client = _bare_training_client()
+        client.holder = SimpleNamespace(
+            estimate_bytes_count_in_model_input=lambda _model_input: 20,
+        )
+        return client
+
+    @staticmethod
+    def _datum(routing_matrices: list[str] | None) -> types.Datum:
+        return types.Datum(
+            model_input=types.ModelInput.from_ints(
+                [10, 11],
+                routing_matrices=routing_matrices,
+            ),
+            loss_fn_inputs={},
+        )
+
+    def test_estimator_counts_compact_json_wire_bytes(self):
+        client = self._make_client()
+        routing_matrices = ["AQIDBA==", "/+abc=="]
+        datum = self._datum(routing_matrices)
+
+        compact_array = json.dumps(
+            routing_matrices,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        expected_r3_bytes = len(f',"routing_matrices":{compact_array}'.encode())
+        base_datum = self._datum(None)
+        r3_input = types.ForwardBackwardInput(
+            data=[datum],
+            loss_fn="supervised",
+            loss_fn_config=None,
+        )
+        base_input = types.ForwardBackwardInput(
+            data=[base_datum],
+            loss_fn="supervised",
+            loss_fn_config=None,
+        )
+        r3_wire_bytes = len(
+            json.dumps(
+                _serialize_input_for_extra_body(r3_input),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode()
+        )
+        base_wire_bytes = len(
+            json.dumps(
+                _serialize_input_for_extra_body(base_input),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode()
+        )
+
+        assert r3_wire_bytes - base_wire_bytes == expected_r3_bytes
+        assert client._estimate_bytes_count(datum) == 20 + expected_r3_bytes
+
+    def test_routing_matrices_force_chunk_split(self, monkeypatch):
+        import tinker.lib.public_interfaces.training_client as tinker_training_client
+
+        client = self._make_client()
+        datum = self._datum(["A" * 160])
+        estimated_bytes = client._estimate_bytes_count(datum)
+        base_estimated_bytes = 20
+        chunk_limit = estimated_bytes + base_estimated_bytes
+        assert base_estimated_bytes * 2 <= chunk_limit
+
+        monkeypatch.setattr(
+            tinker_training_client,
+            "MAX_CHUNK_BYTES_COUNT",
+            chunk_limit,
+        )
+
+        chunks = list(client._chunked_requests_generator([datum, datum]))
+
+        assert [len(chunk) for chunk in chunks] == [1, 1]
 
 
 class TestParallelChunkSubmission:
