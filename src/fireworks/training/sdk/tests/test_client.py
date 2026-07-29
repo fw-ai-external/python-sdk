@@ -27,6 +27,7 @@ from fireworks.training.sdk.client import (
     _LazyManagedRestClient,
     _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
+    _model_input_position_count,
     _FireworksApiKeyAuthProvider,
     _serialize_input_for_extra_body,
     _check_cos_similarity_matrix_single_chunk,
@@ -363,6 +364,94 @@ class TestForwardBackward:
             client.forward_backward([valid, disabled], "supervised")
 
         assert "R3 is enabled" not in caplog.text
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_multimodal_counts_image_positions(
+        self, mock_forward_backward, caplog
+    ):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        model_input = types.ModelInput(
+            chunks=[
+                types.EncodedTextChunk(tokens=[10, 11]),
+                types.ImageChunk(
+                    data=b"fake-png",
+                    format="png",
+                    expected_tokens=100,
+                ),
+                types.EncodedTextChunk(tokens=[12]),
+            ],
+            routing_matrices=[matrix] * 103,
+        )
+        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([datum], "supervised")
+
+        assert "R3 is enabled" not in caplog.text
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_multimodal_mismatch_uses_expanded_position_count(
+        self, mock_forward_backward, caplog
+    ):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        model_input = types.ModelInput(
+            chunks=[
+                types.EncodedTextChunk(tokens=[10, 11]),
+                types.ImageChunk(
+                    data=b"fake-png",
+                    format="png",
+                    expected_tokens=100,
+                ),
+                types.EncodedTextChunk(tokens=[12]),
+            ],
+            routing_matrices=[matrix] * 102,
+        )
+        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([datum], "supervised")
+
+        assert "routing_matrix_count=102; expected 103" in caplog.text
+
+    @patch(
+        "fireworks.training.sdk.client._dump_tinker_model",
+        return_value={
+            "model_input": {
+                "chunks": [
+                    {"tokens": [10, 11]},
+                    {"expected_tokens": 100},
+                    {"tokens": [12]},
+                ]
+            }
+        },
+    )
+    def test_r3_position_count_legacy_fallback_includes_images(self, _mock_dump):
+        datum = SimpleNamespace(model_input=SimpleNamespace(length=None))
+
+        assert _model_input_position_count(datum) == 103
+
+    def test_r3_position_count_unknown_image_length_is_nonblocking(self):
+        datum = types.Datum(
+            model_input=types.ModelInput(
+                chunks=[
+                    types.EncodedTextChunk(tokens=[10, 11]),
+                    types.ImageChunk(
+                        data=b"fake-png",
+                        format="png",
+                        expected_tokens=None,
+                    ),
+                    types.EncodedTextChunk(tokens=[12]),
+                ],
+                routing_matrices=["AQIDBAUGBwg="] * 3,
+            ),
+            loss_fn_inputs={},
+        )
+
+        assert _model_input_position_count(datum) is None
 
 
 class TestRoutingMatrixChunkSizing:

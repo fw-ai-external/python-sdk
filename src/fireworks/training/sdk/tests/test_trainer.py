@@ -427,6 +427,24 @@ class TestCreate:
         payload = mgr._post.call_args[1]["json"]
         assert "trainerReplicaCount" not in payload
 
+    def test_create_logs_backend_warning_status(self, mgr, basic_config, caplog):
+        resp = MagicMock()
+        resp.is_success = True
+        resp.status_code = 200
+        resp.json.return_value = {
+            "name": "accounts/test/rlorTrainerJobs/job-1",
+            "status": {
+                "code": "OK",
+                "message": "Warning: selected training shape shape-a overrode request config: node_count 2->1",
+            },
+        }
+        mgr._post = MagicMock(return_value=resp)
+
+        with caplog.at_level(logging.WARNING):
+            mgr._create(basic_config)
+
+        assert "selected training shape shape-a overrode request config" in caplog.text
+
     def test_inactivity_timeout_field(self, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",

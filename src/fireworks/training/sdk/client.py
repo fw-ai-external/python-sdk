@@ -1169,6 +1169,37 @@ def _text_token_count(datum: types.Datum) -> int:
     )
 
 
+def _model_input_position_count(datum: types.Datum) -> int | None:
+    """Return expanded trainer positions, or ``None`` when they are unknown."""
+    model_input = getattr(datum, "model_input", None)
+    try:
+        length = getattr(model_input, "length", None)
+    except (AttributeError, TypeError, ValueError):
+        length = None
+    if isinstance(length, int) and not isinstance(length, bool):
+        return length
+
+    # Keep the diagnostic compatible with older Tinker ModelInput variants
+    # that do not expose ``length``. Image chunks occupy ``expected_tokens``
+    # positions even though multimodal target_tokens intentionally omit them.
+    raw_datum = _dump_tinker_model(datum)
+    chunks = raw_datum.get("model_input", {}).get("chunks", [])
+    position_count = 0
+    for chunk in chunks:
+        if "tokens" in chunk:
+            position_count += len(chunk["tokens"])
+            continue
+        expected_tokens = chunk.get("expected_tokens")
+        if (
+            not isinstance(expected_tokens, int)
+            or isinstance(expected_tokens, bool)
+            or expected_tokens < 0
+        ):
+            return None
+        position_count += expected_tokens
+    return position_count
+
+
 def _r3_request_issues(data: list[types.Datum]) -> list[str]:
     """Return missing/misaligned R3 data immediately before trainer send."""
     issues: list[str] = []
@@ -1179,16 +1210,21 @@ def _r3_request_issues(data: list[types.Datum]) -> list[str]:
             # No routing_matrices field means this is not an R3 datum.
             continue
 
-        token_count = _text_token_count(datum)
+        position_count = _model_input_position_count(datum)
+        if position_count is None:
+            # This diagnostic must never block an otherwise valid trainer
+            # request when an older image chunk omits its expanded length.
+            continue
         matrix_count = len(routing_matrices)
         if matrix_count == 0:
             issues.append(
-                f"datum[{datum_index}] routing_matrices is empty; expected {token_count}"
+                f"datum[{datum_index}] routing_matrices is empty; "
+                f"expected {position_count}"
             )
-        elif matrix_count != token_count:
+        elif matrix_count != position_count:
             issues.append(
                 f"datum[{datum_index}] routing_matrix_count={matrix_count}; "
-                f"expected {token_count}"
+                f"expected {position_count}"
             )
     return issues
 

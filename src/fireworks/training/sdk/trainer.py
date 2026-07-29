@@ -132,6 +132,12 @@ def _extract_job_status_message(job: dict[str, Any]) -> str:
     return ""
 
 
+def _log_backend_warning_status(job: dict[str, Any]) -> None:
+    message = _extract_job_status_message(job).strip()
+    if message.startswith("Warning:"):
+        logger.warning("%s", message)
+
+
 def _extract_direct_route_handle(job: dict[str, Any]) -> str:
     for key in ("directRouteHandle", "direct_route_handle"):
         value = job.get(key)
@@ -482,6 +488,7 @@ class TrainerJobManager(FireworksClient):
             if existing:
                 if _is_trainer_tombstone_state(_trainer_job_state(existing)):
                     _raise_trainer_tombstone_error(requested_job_id, existing)
+                _log_backend_warning_status(existing)
                 return existing
         if not resp.is_success:
             self._log_create_failure(resp)
@@ -489,7 +496,9 @@ class TrainerJobManager(FireworksClient):
                 resp,
                 context="RLOR job creation failed",
             )
-        return resp.json()
+        created = resp.json()
+        _log_backend_warning_status(created)
+        return created
 
     @staticmethod
     def _build_trainer_create_payload(config: TrainerJobConfig) -> dict[str, Any]:
