@@ -7,7 +7,8 @@ gets the same behavior:
 * LoRA policy without an explicit reference shape/job -> reuse the policy session.
 * Full-parameter references use a separate forward-only runtime trainer. When
   no ``reference_training_shape_id`` is pinned, trainer creation asks the
-  backend to auto-select a ``LORA_TRAINER`` shape.
+  backend to auto-select a ``LORA_TRAINER`` shape. Explicit rank-0 references
+  may pin ``LORA_TRAINER`` or ``FORWARD_ONLY`` inventory.
 
 These tests cover the decision predicate and the derived reference config; the
 recipe-facing wrapper is tested in the cookbook suite.
@@ -606,7 +607,7 @@ class TestManagedProvisioning:
 
         _validate_reference_training_shape(FakeTrainerManager(), reference)
 
-    def test_full_param_reference_rejects_forward_only_trainer_shape(self):
+    def test_full_param_reference_accepts_forward_only_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.lora_rank == 0
@@ -624,7 +625,27 @@ class TestManagedProvisioning:
                     trainer_mode="FORWARD_ONLY",
                 )
 
-        with pytest.raises(ValueError, match="trainer_mode in"):
+        _validate_reference_training_shape(FakeTrainerManager(), reference)
+
+    def test_lora_reference_rejects_forward_only_trainer_shape(self):
+        config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
+        reference = _reference_managed_config(config, policy_lora_rank=16)
+        assert reference.lora_rank == 16
+        assert reference.forward_only is True
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                assert training_shape_id == "ts-ref-forward-only"
+                return SimpleNamespace(
+                    training_shape_version="ts-ref-forward-only/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="FORWARD_ONLY",
+                )
+
+        with pytest.raises(ValueError, match=r"trainer_mode in \{LORA_TRAINER\}"):
             _validate_reference_training_shape(FakeTrainerManager(), reference)
 
     def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):

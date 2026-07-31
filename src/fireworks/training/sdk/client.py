@@ -3024,9 +3024,9 @@ class FiretitanServiceClient(ServiceClient):
 
         Shared LoRA references run on the policy trainer. Full-parameter
         references use a separate reference trainer, either auto-selected by the
-        backend, explicitly pinned by a LoRA-capable shape, or reattached from
-        an existing job. Recipes should use this for reference reconnect
-        metadata.
+        backend, explicitly pinned by a compatible LORA_TRAINER or FORWARD_ONLY
+        shape, or reattached from an existing job. Recipes should use this for
+        reference reconnect metadata.
         """
         return self.reference_job_id or self.trainer_job_id
 
@@ -3688,6 +3688,8 @@ class FiretitanServiceClient(ServiceClient):
           the SDK owns and tears down on :meth:`close` (or early via
           :meth:`release_references`). If ``reference_training_shape_id`` is not
           set, trainer creation asks the backend to select a LoRA-capable shape.
+          An explicit rank-0 reference may pin a compatible ``LORA_TRAINER`` or
+          ``FORWARD_ONLY`` shape.
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:

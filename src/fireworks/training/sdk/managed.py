@@ -54,8 +54,11 @@ logger = logging.getLogger(__name__)
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
 _POLICY_TRAINER_MODE = "POLICY_TRAINER"
+_FORWARD_ONLY_TRAINER_MODE = "FORWARD_ONLY"
 _LORA_TRAINER_MODE = "LORA_TRAINER"
-_REFERENCE_TRAINER_MODES_RANK0 = frozenset({_LORA_TRAINER_MODE})
+# Backend auto-selection prefers LORA_TRAINER, but an explicitly pinned
+# rank-0 frozen reference may use the purpose-built FORWARD_ONLY inventory.
+_REFERENCE_TRAINER_MODES_RANK0 = frozenset({_LORA_TRAINER_MODE, _FORWARD_ONLY_TRAINER_MODE})
 
 
 @dataclass(frozen=True)
@@ -72,8 +75,9 @@ class FiretitanProvisioningConfig:
     lora_rank: int = 0
     lora_alpha: int | None = None
     training_shape_id: str | None = None
-    # Optional separate reference trainer shape. Full-parameter references
-    # without this ask the backend to auto-select a LoRA-capable shape.
+    # Optional separate reference trainer shape. Rank-0 references accept
+    # LORA_TRAINER (preferred) or FORWARD_ONLY. Without this, the backend
+    # auto-selects a LoRA-capable shape.
     reference_training_shape_id: str | None = None
     # Optional existing reference trainer to reattach to. When set, it disables
     # LoRA shared-reference and is never cleaned up on close.
@@ -562,7 +566,8 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
     frozen base for free by disabling the adapter on the policy session — no
     second trainer. Full-parameter references provision a separate trainer; when
     no reference shape is pinned, backend trainer creation auto-selects a
-    LoRA-capable shape for that frozen reference runtime.
+    LoRA-capable shape for that frozen reference runtime. An explicitly pinned
+    rank-0 reference may instead use a FORWARD_ONLY shape.
     """
     return (
         config.reference_training_shape_id is None and config.reference_trainer_job_id is None and policy_lora_rank > 0
@@ -581,9 +586,10 @@ def _reference_managed_config(
     ownership with the caller. A LoRA reference with an explicit shape loads the
     adapter on top of the base; otherwise the reference forwards the frozen base
     directly. When no explicit reference shape is provided, backend trainer
-    creation auto-selects a LoRA-capable shape. Fresh SDK-created references are
-    cleaned by default unless the parent config explicitly keeps them for a
-    later reattach phase.
+    creation auto-selects a LoRA-capable shape. An explicitly pinned rank-0
+    reference may use either LORA_TRAINER (preferred) or FORWARD_ONLY. Fresh
+    SDK-created references are cleaned by default unless the parent config
+    explicitly keeps them for a later reattach phase.
     """
     reference_shape = config.reference_training_shape_id
     reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
