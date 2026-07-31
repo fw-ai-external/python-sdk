@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.6 (2026-07-31)
+
+Full Changelog: [v1.2.5...v1.2.6](https://github.com/fw-ai-external/python-sdk/compare/v1.2.5...v1.2.6)
+
+### Bug Fixes
+* **release:** avoid false promotion-source failures after successful SDK releases
+
 ## 1.2.5 (2026-07-31)
 
 Full Changelog: [v1.2.4...v1.2.5](https://github.com/fw-ai-external/python-sdk/compare/v1.2.4...v1.2.5)
