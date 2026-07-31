@@ -85,6 +85,8 @@ T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
 _INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
+DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY: int = 128
+PARALLEL_CHUNK_SEND_CONCURRENCY_ENV = "FIREWORKS_TRAINING_PARALLEL_CHUNK_SEND_CONCURRENCY"
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "parallel_fwdbwd_chunks": True,
     "proto_write_fwdbwd": False,
@@ -228,10 +230,7 @@ class FiretitanSamplingClient(SamplingClient):
         if seed is not None:
             kwargs["seed"] = seed
 
-        if (
-            isinstance(sampling_params, FiretitanSamplingParams)
-            and sampling_params.include_routing_matrix
-        ):
+        if isinstance(sampling_params, FiretitanSamplingParams) and sampling_params.include_routing_matrix:
             kwargs["include_routing_matrix"] = True
 
         return kwargs
@@ -313,9 +312,7 @@ class FiretitanSamplingClient(SamplingClient):
                     )
                 completion_logprobs = completion_logprobs[response_start : response_start + len(completion_tokens)]
                 if routing_matrices is not None:
-                    routing_matrices = routing_matrices[
-                        response_start : response_start + len(completion_tokens)
-                    ]
+                    routing_matrices = routing_matrices[response_start : response_start + len(completion_tokens)]
             if len(completion_logprobs) != len(completion_tokens):
                 raise RuntimeError(
                     "Deployment response sampling_logprobs are not aligned with completion tokens "
@@ -1190,11 +1187,7 @@ def _model_input_position_count(datum: types.Datum) -> int | None:
             position_count += len(chunk["tokens"])
             continue
         expected_tokens = chunk.get("expected_tokens")
-        if (
-            not isinstance(expected_tokens, int)
-            or isinstance(expected_tokens, bool)
-            or expected_tokens < 0
-        ):
+        if not isinstance(expected_tokens, int) or isinstance(expected_tokens, bool) or expected_tokens < 0:
             return None
         position_count += expected_tokens
     return position_count
@@ -1217,16 +1210,25 @@ def _r3_request_issues(data: list[types.Datum]) -> list[str]:
             continue
         matrix_count = len(routing_matrices)
         if matrix_count == 0:
-            issues.append(
-                f"datum[{datum_index}] routing_matrices is empty; "
-                f"expected {position_count}"
-            )
+            issues.append(f"datum[{datum_index}] routing_matrices is empty; expected {position_count}")
         elif matrix_count != position_count:
-            issues.append(
-                f"datum[{datum_index}] routing_matrix_count={matrix_count}; "
-                f"expected {position_count}"
-            )
+            issues.append(f"datum[{datum_index}] routing_matrix_count={matrix_count}; expected {position_count}")
     return issues
+
+
+def _parallel_chunk_send_concurrency() -> int:
+    raw_value = os.environ.get(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV)
+    if raw_value is None or raw_value.strip() == "":
+        return DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY
+    try:
+        concurrency = int(raw_value)
+    except ValueError as err:
+        raise ValueError(
+            f"{PARALLEL_CHUNK_SEND_CONCURRENCY_ENV} must be a positive integer; got {raw_value!r}"
+        ) from err
+    if concurrency < 1:
+        raise ValueError(f"{PARALLEL_CHUNK_SEND_CONCURRENCY_ENV} must be a positive integer; got {raw_value!r}")
+    return concurrency
 
 
 def _pool_embedding_tensor(
@@ -1463,6 +1465,12 @@ class FiretitanTrainingClient(TrainingClient):
         client_config = getattr(holder, "_client_config", None)
         return bool(getattr(client_config, "parallel_fwdbwd_chunks", False))
 
+    def _can_run_firetitan_chunked_requests(self) -> bool:
+        if "_chunked_requests" in self.__dict__:
+            return True
+        holder = getattr(self, "holder", None)
+        return holder is not None and hasattr(holder, "estimate_bytes_count_in_model_input")
+
     def _estimate_bytes_count(self, datum: types.Datum) -> int:
         """Include Fireworks' R3 payload in Tinker's chunk-size estimate."""
         return super()._estimate_bytes_count(datum) + _routing_matrices_wire_bytes(datum.model_input)
@@ -1503,13 +1511,39 @@ class FiretitanTrainingClient(TrainingClient):
                     queue_state_observer=self._queue_state_logger,
                 )
 
+        async def _submit_limited(
+            semaphore: asyncio.Semaphore,
+            request_id: int,
+            chunk: list[types.Datum],
+        ) -> APIFuture[types.ForwardBackwardOutput]:
+            async with semaphore:
+                return await _submit_chunk(request_id, chunk)
+
         if parallel and len(requests) > 1:
-            rest_futures = list(
-                await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests[1:]])
-            )
-            first_request_id, first_chunk = requests[0]
-            first_future = await _submit_chunk(first_request_id, first_chunk)
-            futures = [first_future] + rest_futures
+            concurrency = _parallel_chunk_send_concurrency()
+            if concurrency == 1:
+                futures = []
+                for request_id, chunk in requests:
+                    futures.append(await _submit_chunk(request_id, chunk))
+            else:
+                rest_semaphore = asyncio.Semaphore(concurrency - 1)
+                rest_tasks = [
+                    asyncio.create_task(_submit_limited(rest_semaphore, request_id, chunk))
+                    for request_id, chunk in requests[1:]
+                ]
+                try:
+                    # Let later chunks enter the transport queue first without
+                    # making the first/gate chunk wait for every later ack.
+                    await asyncio.sleep(0)
+                    first_request_id, first_chunk = requests[0]
+                    first_future = await _submit_chunk(first_request_id, first_chunk)
+                    rest_futures = list(await asyncio.gather(*rest_tasks))
+                    futures = [first_future] + rest_futures
+                except BaseException:
+                    for task in rest_tasks:
+                        task.cancel()
+                    await asyncio.gather(*rest_tasks, return_exceptions=True)
+                    raise
         else:
             futures = list(await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests]))
 
@@ -1570,6 +1604,25 @@ class FiretitanTrainingClient(TrainingClient):
             return await combined_future
 
         return self.holder.run_coroutine_threadsafe(_forward_async())
+
+    async def _send_single_forward_backward_request(
+        self,
+        request_id: int,
+        data: list[types.Datum],
+        loss_fn: types.LossFnType,
+        loss_fn_config: dict[str, float] | None,
+    ) -> Any:
+        request = types.ForwardBackwardRequest(
+            forward_backward_input=types.ForwardBackwardInput(
+                data=data,
+                loss_fn=loss_fn,
+                loss_fn_config=loss_fn_config,
+            ),
+            model_id=self._guaranteed_model_id(),
+            seq_id=request_id + 1,
+        )
+        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            return await client.training.forward_backward(request=request)
 
     def optim_step(
         self,
@@ -1671,7 +1724,25 @@ class FiretitanTrainingClient(TrainingClient):
                 "Use the JSON forward_backward path."
             )
         self._log_r3_request_error(data, operation="forward_backward")
-        future = super().forward_backward(data, loss_fn, loss_fn_config)
+        if self._can_run_firetitan_chunked_requests():
+            requests = self._chunked_requests(data)
+
+            async def _forward_backward_async():
+                combined_future = await self._run_chunked_requests(
+                    requests,
+                    lambda request_id, chunk: self._send_single_forward_backward_request(
+                        request_id,
+                        chunk,
+                        loss_fn,
+                        loss_fn_config,
+                    ),
+                    request_type="ForwardBackward",
+                )
+                return await combined_future
+
+            future = self.holder.run_coroutine_threadsafe(_forward_backward_async())
+        else:
+            future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
             return future
 
@@ -1918,8 +1989,7 @@ class FiretitanTrainingClient(TrainingClient):
 
         self._r3_request_error_logged = True
         logger.error(
-            "R3 is enabled, but routing data is missing or misaligned before trainer request: "
-            "operation=%s; %s",
+            "R3 is enabled, but routing data is missing or misaligned before trainer request: operation=%s; %s",
             operation,
             "; ".join(issues),
         )
