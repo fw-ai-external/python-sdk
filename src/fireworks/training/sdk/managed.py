@@ -51,6 +51,47 @@ from fireworks.training.sdk._snapshot_chain import (
 
 logger = logging.getLogger(__name__)
 
+_FIREWORKS_CMEK_RESOURCE_METADATA_KEY = "fireworks_cmek_resource"
+_POLICY_OUTPUT_EXTRA_ARGS = frozenset(
+    {
+        "--fireworks-gateway-target",
+        "--cmek-output-model-resource",
+        "--require-cmek-output-encryption",
+    }
+)
+
+
+def _reference_user_metadata(user_metadata: dict[str, str] | None) -> dict[str, str] | None:
+    """Keep ordinary metadata while withholding the policy output CMEK key."""
+    filtered = dict(user_metadata or {})
+    filtered.pop(_FIREWORKS_CMEK_RESOURCE_METADATA_KEY, None)
+    return filtered or None
+
+
+def _reference_extra_args(extra_args: list[str] | None) -> list[str] | None:
+    """Remove policy-output-only runtime flags from a separate reference."""
+    if extra_args is None:
+        return None
+
+    filtered: list[str] = []
+    skip_next_value = False
+    for arg in extra_args:
+        if skip_next_value:
+            skip_next_value = False
+            continue
+        stripped = arg.strip()
+        if not stripped:
+            filtered.append(arg)
+            continue
+        option = stripped.split("=", 1)[0].split(maxsplit=1)[0]
+        if option not in _POLICY_OUTPUT_EXTRA_ARGS:
+            filtered.append(arg)
+            continue
+        if stripped == option and option != "--require-cmek-output-encryption":
+            skip_next_value = True
+    return filtered
+
+
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
 _POLICY_TRAINER_MODE = "POLICY_TRAINER"
@@ -264,6 +305,8 @@ class _TinkerSamplerBackend:
     deploy_mgr: DeploymentManager
     deployment_id: str
     base_model: str
+    hot_load_bucket_url: str | None = None
+    cmek_resource: str | None = None
     hotload_timeout_s: int = HOTLOAD_TIMEOUT_S
     reset_prompt_cache: bool = True
     lora_rank: int = 0
@@ -294,6 +337,16 @@ class _TinkerSamplerBackend:
             base_identity=self._base_identity,
             compression_format=self.compression_format,
         )
+        source_uri = None
+        if self.cmek_resource:
+            bucket_root = (self.hot_load_bucket_url or "").rstrip("/")
+            if not bucket_root:
+                raise RuntimeError(
+                    "CMEK hot-load requires the deployment hot_load_bucket_url; "
+                    "refusing to issue an undecryptable hot-load request"
+                )
+            source_uri = f"{bucket_root}/{model_path.strip('/')}/"
+
         ok = self.deploy_mgr.hotload_and_wait(
             deployment_id=self.deployment_id,
             base_model=self.base_model,
@@ -301,7 +354,8 @@ class _TinkerSamplerBackend:
             incremental_snapshot_metadata=incremental,
             reset_prompt_cache=self.reset_prompt_cache,
             timeout_seconds=self.hotload_timeout_s,
-            path=None,
+            path=source_uri,
+            cmek_resource=self.cmek_resource,
         )
         if ok:
             # Track the snapshot the deployment now holds so the next delta
@@ -365,6 +419,7 @@ def _attach_managed_deployment(
     *,
     trainer_job_name: str,
     deployment_shape: str | None,
+    cmek_resource: str | None = None,
 ) -> tuple[DeploymentInfo, "_TinkerSamplerBackend", bool, bool]:
     """Create/reattach the managed deployment and build its sampler backend."""
     attach_result = _create_or_reattach_deployment_result(
@@ -378,6 +433,8 @@ def _attach_managed_deployment(
         deploy_mgr=deploy_mgr,
         deployment_id=deployment.deployment_id,
         base_model=config.base_model,
+        hot_load_bucket_url=deployment.hot_load_bucket_url,
+        cmek_resource=cmek_resource,
         hotload_timeout_s=config.hotload_timeout_s,
         lora_rank=config.lora_rank,
     )
@@ -405,6 +462,9 @@ def _create_managed_tinker_client(
     ignored). ``max_context_length`` is resolved here from the shape and flows
     as a local; it is never folded back into ``config``.
     """
+    cmek_resource = (user_metadata or {}).get(_FIREWORKS_CMEK_RESOURCE_METADATA_KEY) or None
+    reference_user_metadata = _reference_user_metadata(user_metadata)
+
     trainer_mgr, deploy_mgr = _build_resource_managers(
         api_key=api_key,
         base_url=base_url,
@@ -446,6 +506,7 @@ def _create_managed_tinker_client(
                 config,
                 trainer_job_name=started_trainer.job.job_name,
                 deployment_shape=deployment_shape,
+                cmek_resource=cmek_resource,
             )
 
         reference_future = None
@@ -454,7 +515,7 @@ def _create_managed_tinker_client(
                 _create_managed_tinker_client,
                 api_key=api_key,
                 config=reference_config,
-                user_metadata=user_metadata,
+                user_metadata=reference_user_metadata,
                 base_url=base_url,
                 inference_url=inference_url,
                 hotload_api_url=hotload_api_url,
@@ -603,6 +664,7 @@ def _reference_managed_config(
         forward_only=True,
         reference_required=False,
         trainer_replica_count=None,
+        extra_args=_reference_extra_args(config.extra_args),
         cleanup_trainer_on_close=config.cleanup_reference_trainer_on_close,
     )
 

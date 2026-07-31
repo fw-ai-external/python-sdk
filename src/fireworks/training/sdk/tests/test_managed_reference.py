@@ -26,6 +26,7 @@ import fireworks.training.sdk.managed as managed_module
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
     _ManagedTinkerHandle,
+    _reference_user_metadata,
     _reference_managed_config,
     _use_shared_base_reference,
     _validate_reference_training_shape,
@@ -34,6 +35,16 @@ from fireworks.training.sdk.trainer import CreatedTrainerJob, TrainerServiceEndp
 from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
 
 BASE_MODEL = "accounts/acct/models/base"
+
+
+def test_reference_metadata_excludes_only_policy_cmek_resource():
+    assert _reference_user_metadata(
+        {
+            "fireworks_cmek_resource": "models/output-model",
+            "recipe": "async-rl",
+        }
+    ) == {"recipe": "async-rl"}
+    assert _reference_user_metadata({"fireworks_cmek_resource": "models/output-model"}) is None
 
 
 def _policy_config(**overrides) -> _ManagedTinkerConfig:
@@ -127,6 +138,47 @@ class TestReferenceManagedConfig:
         )
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.trainer_replica_count is None
+
+    def test_reference_drops_policy_output_encryption_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=[
+                "--pp=2",
+                "--fireworks-gateway-target=gateway:443",
+                "--cmek-output-model-resource=models/output",
+                "--require-cmek-output-encryption",
+            ],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--pp=2"]
+
+    def test_reference_drops_split_policy_output_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=[
+                "--fireworks-gateway-target",
+                "gateway:443",
+                "--cmek-output-model-resource",
+                "models/output",
+                "--activation-checkpoint",
+            ],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--activation-checkpoint"]
+
+    def test_reference_tolerates_blank_extra_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=["--pp=2", "", "--require-cmek-output-encryption"],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--pp=2", ""]
 
 
 class TestManagedProvisioning:
@@ -431,6 +483,7 @@ class TestManagedProvisioning:
             *,
             trainer_job_name,
             deployment_shape,
+            cmek_resource=None,
         ):
             events.append(f"deployment_start:{trainer_job_name}:{deployment_shape}")
             deployment_started.set()

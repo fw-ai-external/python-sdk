@@ -2195,8 +2195,46 @@ class TestTrainingClientSamplingHelpers:
             reset_prompt_cache=True,
             timeout_seconds=123,
             path=None,
+            cmek_resource=None,
         )
         deploy_mgr.get.assert_not_called()
+
+    def test_tinker_sampler_backend_cmek_uses_exact_snapshot_source(self):
+        deploy_mgr = MagicMock()
+        deploy_mgr.account_id = "acct"
+        deploy_mgr.api_key = "fw-key"
+        deploy_mgr.inference_url = "https://inference.test"
+        deploy_mgr.hotload_and_wait.return_value = True
+
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            hot_load_bucket_url="gs://bucket/trainer-root/",
+            cmek_resource="models/output-model",
+            lora_rank=8,
+        )
+
+        assert sampler_backend.hotload_saved_snapshot("runs/run-1/step-2") is True
+        kwargs = deploy_mgr.hotload_and_wait.call_args.kwargs
+        assert kwargs["path"] == "gs://bucket/trainer-root/runs/run-1/step-2/"
+        assert kwargs["cmek_resource"] == "models/output-model"
+        assert kwargs["incremental_snapshot_metadata"] is None
+
+    def test_tinker_sampler_backend_cmek_requires_bucket_root(self):
+        deploy_mgr = MagicMock()
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            cmek_resource="models/output-model",
+            lora_rank=8,
+        )
+
+        with pytest.raises(RuntimeError, match="hot_load_bucket_url"):
+            sampler_backend.hotload_saved_snapshot("step-1")
+
+        deploy_mgr.hotload_and_wait.assert_not_called()
 
     def test_tinker_sampler_backend_full_param_delta_chain(self):
         """Full-param: first save is base (FULL hotload), later deltas carry

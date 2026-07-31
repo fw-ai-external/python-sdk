@@ -291,12 +291,14 @@ class DeploymentManager(_RestClient):
     # because the body schema rejects unknown fields, while unknown
     # headers are tolerated cross-engine.
     _HOTLOAD_SOURCE_URL_HEADER = "x-fireworks-hot-load-source-url"
+    _HOTLOAD_CMEK_RESOURCE_HEADER = "x-fireworks-hot-load-cmek-resource"
 
     def _hotload_headers(
         self,
         deployment_id: str,
         base_model: str,
         path: str | None = None,
+        cmek_resource: str | None = None,
     ) -> dict[str, str]:
         """Construct headers for hotload API requests.
 
@@ -308,6 +310,9 @@ class DeploymentManager(_RestClient):
                 trainer wants the deployment to fetch the snapshot bytes from
                 a specific URI instead of resolving from the deployment's
                 configured storage.
+            cmek_resource: Optional internal CMEK resource descriptor. When
+                set, the serving runtime decrypts the source URI with this
+                resource before making the snapshot visible.
         """
         extra: dict[str, str] = {
             "fireworks-model": base_model,
@@ -315,6 +320,8 @@ class DeploymentManager(_RestClient):
         }
         if path:
             extra[self._HOTLOAD_SOURCE_URL_HEADER] = path
+        if cmek_resource:
+            extra[self._HOTLOAD_CMEK_RESOURCE_HEADER] = cmek_resource
         return self._headers(Authorization=f"Bearer {self.api_key}", **extra)
 
     # -- Deployment CRUD -------------------------------------------------------
@@ -766,6 +773,7 @@ class DeploymentManager(_RestClient):
         reset_prompt_cache: bool = True,
         timeout: int = 60,
         path: str | None = None,
+        cmek_resource: str | None = None,
     ) -> dict[str, Any]:
         """Load a weight snapshot onto a deployment via the gateway.
 
@@ -784,14 +792,24 @@ class DeploymentManager(_RestClient):
                 field) so the same wire shape is accepted across serving
                 backends; backends that do not consume the header simply
                 ignore it.
+            cmek_resource: Optional internal CMEK model resource. When set,
+                forwarded as ``x-fireworks-hot-load-cmek-resource`` alongside
+                ``path`` so a CMEK-aware serving runtime decrypts the source.
         """
-        headers = self._hotload_headers(deployment_id, base_model, path=path)
+        headers = self._hotload_headers(
+            deployment_id,
+            base_model,
+            path=path,
+            cmek_resource=cmek_resource,
+        )
         url = f"{self.hotload_api_url}/hot_load/v1/models/hot_load"
 
         ckpt_type = "DELTA" if incremental_snapshot_metadata else "BASE (non-delta)"
         details: list[str] = []
         if path:
             details.append(f"source={path}")
+        if cmek_resource:
+            details.append(f"cmek_resource={cmek_resource}")
         detail_suffix = f" ({', '.join(details)})" if details else ""
         logger.info(
             "Hotloading %s snapshot '%s' to deployment '%s'%s",
@@ -1039,10 +1057,11 @@ class DeploymentManager(_RestClient):
         reset_prompt_cache: bool = True,
         timeout_seconds: int = HOTLOAD_WAIT_TIMEOUT_S,
         path: str | None = None,
+        cmek_resource: str | None = None,
     ) -> bool:
         """Hotload a snapshot and wait for it to complete. Returns True on success.
 
-        See :meth:`hotload` for ``path`` semantics.
+        See :meth:`hotload` for ``path`` and ``cmek_resource`` semantics.
         """
         self.hotload(
             deployment_id=deployment_id,
@@ -1051,6 +1070,7 @@ class DeploymentManager(_RestClient):
             incremental_snapshot_metadata=incremental_snapshot_metadata,
             reset_prompt_cache=reset_prompt_cache,
             path=path,
+            cmek_resource=cmek_resource,
         )
         return self.wait_for_hotload(
             deployment_id=deployment_id,
