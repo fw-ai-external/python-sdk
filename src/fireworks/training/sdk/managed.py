@@ -119,6 +119,7 @@ class FiretitanProvisioningConfig:
     display_name: str | None = None
     purpose: str | None = None
     preemptible: bool = False
+    """Request preemptible scheduling for managed trainers and rollouts."""
     managed_by: str | None = None
     skip_validations: bool = False
     disable_speculative_decoding: bool = False
@@ -840,6 +841,7 @@ def _create_or_reattach_deployment_result(
         extra_args=config.deployment_extra_args,
         extra_values=config.deployment_extra_values,
         annotations={SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"},
+        preemptible=config.preemptible,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)
     if deployment.state not in DEPLOYMENT_SERVING_STATES:
