@@ -786,6 +786,18 @@ class TestHotLoadTransitionType:
 
         assert "hotLoadTransitionType" not in body
 
+    def test_preemptible_included_when_set(self):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            preemptible=True,
+        )
+
+        assert DeploymentManager._build_deployment_body(config)["preemptible"] is True
+
+    def test_preemptible_omitted_when_false(self, deploy_config):
+        assert "preemptible" not in DeploymentManager._build_deployment_body(deploy_config)
+
     @pytest.mark.parametrize(
         ("configured", "expected"),
         [("ASYNC", "ASYNC"), ("SYNC", "SYNC"), ("sync", "SYNC"), (" async ", "ASYNC")],

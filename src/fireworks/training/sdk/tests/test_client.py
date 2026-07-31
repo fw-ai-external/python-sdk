@@ -16,7 +16,9 @@ from tinker import types
 
 from fireworks.training.sdk.client import (
     FIRETITAN_TINKER_CLIENT_CONFIG,
+    PARALLEL_CHUNK_SEND_CONCURRENCY_ENV,
     SAMPLING_CLIENT_FROM_TRAINER_MESSAGE,
+    DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY,
     SaveSamplerResult,
     GradNormMetricsMode,
     FiretitanServiceClient,
@@ -27,8 +29,10 @@ from fireworks.training.sdk.client import (
     _LazyManagedRestClient,
     _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
+    _model_input_position_count,
     _FireworksApiKeyAuthProvider,
     _serialize_input_for_extra_body,
+    _parallel_chunk_send_concurrency,
     _check_cos_similarity_matrix_single_chunk,
 )
 from fireworks.training.sdk.managed import (
@@ -364,6 +368,90 @@ class TestForwardBackward:
 
         assert "R3 is enabled" not in caplog.text
 
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_multimodal_counts_image_positions(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        model_input = types.ModelInput(
+            chunks=[
+                types.EncodedTextChunk(tokens=[10, 11]),
+                types.ImageChunk(
+                    data=b"fake-png",
+                    format="png",
+                    expected_tokens=100,
+                ),
+                types.EncodedTextChunk(tokens=[12]),
+            ],
+            routing_matrices=[matrix] * 103,
+        )
+        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([datum], "supervised")
+
+        assert "R3 is enabled" not in caplog.text
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    def test_r3_multimodal_mismatch_uses_expanded_position_count(self, mock_forward_backward, caplog):
+        client = self._make_client()
+        mock_forward_backward.return_value = MagicMock()
+        matrix = "AQIDBAUGBwg="
+        model_input = types.ModelInput(
+            chunks=[
+                types.EncodedTextChunk(tokens=[10, 11]),
+                types.ImageChunk(
+                    data=b"fake-png",
+                    format="png",
+                    expected_tokens=100,
+                ),
+                types.EncodedTextChunk(tokens=[12]),
+            ],
+            routing_matrices=[matrix] * 102,
+        )
+        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
+
+        with caplog.at_level(logging.ERROR):
+            client.forward_backward([datum], "supervised")
+
+        assert "routing_matrix_count=102; expected 103" in caplog.text
+
+    @patch(
+        "fireworks.training.sdk.client._dump_tinker_model",
+        return_value={
+            "model_input": {
+                "chunks": [
+                    {"tokens": [10, 11]},
+                    {"expected_tokens": 100},
+                    {"tokens": [12]},
+                ]
+            }
+        },
+    )
+    def test_r3_position_count_legacy_fallback_includes_images(self, _mock_dump):
+        datum = SimpleNamespace(model_input=SimpleNamespace(length=None))
+
+        assert _model_input_position_count(datum) == 103
+
+    def test_r3_position_count_unknown_image_length_is_nonblocking(self):
+        datum = types.Datum(
+            model_input=types.ModelInput(
+                chunks=[
+                    types.EncodedTextChunk(tokens=[10, 11]),
+                    types.ImageChunk(
+                        data=b"fake-png",
+                        format="png",
+                        expected_tokens=None,
+                    ),
+                    types.EncodedTextChunk(tokens=[12]),
+                ],
+                routing_matrices=["AQIDBAUGBwg="] * 3,
+            ),
+            loss_fn_inputs={},
+        )
+
+        assert _model_input_position_count(datum) is None
+
 
 class TestRoutingMatrixChunkSizing:
     @staticmethod
@@ -516,6 +604,11 @@ class TestParallelChunkSubmission:
                 await asyncio.sleep(0)
                 return request.seq_id
 
+            async def forward_backward(self, *, request) -> int:
+                send_order.append(request.seq_id)
+                await asyncio.sleep(0)
+                return request.seq_id
+
         async def execute_with_retries(send, *args):
             return await send(*args)
 
@@ -545,9 +638,130 @@ class TestParallelChunkSubmission:
         assert send_order == [2, 3, 1]
         assert result == [1, 2, 3]
 
+    def test_forward_backward_parallel_chunks_send_rest_before_first(self) -> None:
+        send_order: list[int] = []
+        client = self._make_client(parallel=True, send_order=send_order)
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            result = client.forward_backward([self._datum()], "linear").result()
+
+        assert send_order == [2, 3, 1]
+        assert result == [1, 2, 3]
+
     def test_forward_respects_serial_chunk_flag(self):
         send_order: list[int] = []
         client = self._make_client(parallel=False, send_order=send_order)
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            result = client.forward([self._datum()], "cross_entropy").result()
+
+        assert send_order == [1, 2, 3]
+        assert result == [1, 2, 3]
+
+    def test_parallel_chunk_send_concurrency_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, raising=False)
+
+        assert _parallel_chunk_send_concurrency() == DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY
+
+    def test_parallel_chunk_send_concurrency_uses_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "7")
+
+        assert _parallel_chunk_send_concurrency() == 7
+
+    @pytest.mark.parametrize("value", ["0", "-1", "not-an-int"])
+    def test_parallel_chunk_send_concurrency_rejects_invalid_env(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        value: str,
+    ) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, value)
+
+        with pytest.raises(ValueError, match=PARALLEL_CHUNK_SEND_CONCURRENCY_ENV):
+            _parallel_chunk_send_concurrency()
+
+    def test_parallel_chunk_submission_respects_env_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "3")
+        client = self._make_client(parallel=True, send_order=[])
+        requests = [(index, [self._datum(index)]) for index in range(6)]
+        started: list[int] = []
+        active = 0
+        max_active = 0
+
+        async def send_chunk(request_id: int, _chunk: list[types.Datum]) -> int:
+            nonlocal active, max_active
+            started.append(request_id)
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return request_id + 1
+
+        with (
+            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
+            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
+        ):
+            future = asyncio.run(
+                client._run_chunked_requests(
+                    requests,
+                    send_chunk,
+                    request_type="Forward",
+                )
+            )
+            result = asyncio.run(future.result_async())
+
+        assert max_active <= 3
+        assert started[:3] == [1, 2, 0]
+        assert result == [1, 2, 3, 4, 5, 6]
+
+    def test_parallel_chunk_submission_cancels_rest_tasks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "2")
+        client = self._make_client(parallel=True, send_order=[])
+        requests = [(index, [self._datum(index)]) for index in range(4)]
+
+        async def run_and_cancel() -> None:
+            started: list[int] = []
+            initial_sends_started = asyncio.Event()
+            release_sends = asyncio.Event()
+
+            async def send_chunk(request_id: int, _chunk: list[types.Datum]) -> int:
+                started.append(request_id)
+                if {0, 1}.issubset(started):
+                    initial_sends_started.set()
+                await release_sends.wait()
+                return request_id + 1
+
+            operation = asyncio.create_task(
+                client._run_chunked_requests(
+                    requests,
+                    send_chunk,
+                    request_type="Forward",
+                )
+            )
+            await asyncio.wait_for(initial_sends_started.wait(), timeout=1)
+            operation.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await operation
+
+            started_before_release = list(started)
+            release_sends.set()
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+
+            assert started_before_release == [1, 0]
+            assert started == started_before_release
+
+        asyncio.run(run_and_cancel())
+
+    def test_parallel_chunk_submission_env_one_sends_in_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "1")
+        send_order: list[int] = []
+        client = self._make_client(parallel=True, send_order=send_order)
 
         with (
             patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),

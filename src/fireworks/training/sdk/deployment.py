@@ -178,6 +178,8 @@ class DeploymentConfig:
     SDK-managed rollout deployments set this to true so server-side trainer
     cleanup can reclaim them if the client disappears before close().
     """
+    preemptible: bool = False
+    """Request preemptible deployment scheduling. Requires an admin API key."""
 
     def __post_init__(self) -> None:
         self.hot_load_transition_type = normalize_hot_load_transition_type(self.hot_load_transition_type)
@@ -422,6 +424,8 @@ class DeploymentManager(_RestClient):
             body["extraValues"] = config.extra_values
         if config.annotations:
             body["annotations"] = config.annotations
+        if config.preemptible:
+            body["preemptible"] = True
         return body
 
     def _parse_deployment_info(

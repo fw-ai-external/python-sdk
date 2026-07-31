@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5 (2026-07-31)
+
+Full Changelog: [v1.2.4...v1.2.5](https://github.com/fw-ai-external/python-sdk/compare/v1.2.4...v1.2.5)
+
+### Bug Fixes
+* **training-sdk:** log backend training shape override warnings
+
 ## 1.2.4 (2026-07-27)
 
 Full Changelog: [v1.2.3...v1.2.4](https://github.com/fw-ai-external/python-sdk/compare/v1.2.3...v1.2.4)
