@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.6 (2026-08-03)
+
+Full Changelog: [v1.2.5...v1.2.6](https://github.com/fw-ai-external/python-sdk/compare/v1.2.5...v1.2.6)
+
+### Features
+* **training:** support CMEK-encrypted managed RFT sampler hot-loads and isolate reference trainers
+* **training-sdk:** support repeated per-adapter model creation on one managed trainer
+
+### Bug Fixes
+* **release:** avoid false promotion-source failures after successful SDK releases
+
 ## 1.2.5 (2026-07-31)
 
 Full Changelog: [v1.2.4...v1.2.5](https://github.com/fw-ai-external/python-sdk/compare/v1.2.4...v1.2.5)

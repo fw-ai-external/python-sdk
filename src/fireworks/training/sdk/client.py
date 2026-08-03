@@ -2273,7 +2273,11 @@ class FiretitanTrainingClient(TrainingClient):
         if self._sampler_backend is None or not hasattr(self._sampler_backend, "remember_saved_snapshot"):
             return
         try:
-            self._sampler_backend.remember_saved_snapshot(snapshot_name, checkpoint_type=checkpoint_type)
+            self._sampler_backend.remember_saved_snapshot(
+                snapshot_name,
+                checkpoint_type=checkpoint_type,
+                lora_rank=self._lora_rank,
+            )
         except Exception as e:
             logger.error(
                 "Failed to record sampler snapshot type for '%s'; the "
@@ -2549,13 +2553,17 @@ class FiretitanServiceClient(ServiceClient):
         )
         self._managed_verify_ssl = kwargs.pop("managed_verify_ssl", None)
         self._managed_handle: Any | None = None
+        self._managed_lifecycle_lock = threading.RLock()
+        self._service_closed = False
         self._fireworks_api_key = api_key if api_key and not api_key.startswith("tml-") else None
         self._created_training_configs: set[_TrainingKey] = set()
+        self._allow_duplicate_training_configs = False
         self._sampler_backend: Any | None = None
         self._reference_handle: Any | None = None
         # Separate frozen reference trainers this service provisioned and owns
         # (full-param / explicit reference shape). Torn down on close().
         self._owned_reference_handles: list[Any] = []
+        self._reference_handles_by_rank: dict[int, Any] = {}
         self._owned_inference_deployments: list[tuple[DeploymentManager, str, DeploymentCleanupOnClose]] = []
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
         self._default_project_id: str | None = kwargs.get("project_id")
@@ -2690,6 +2698,19 @@ class FiretitanServiceClient(ServiceClient):
         logger.info(f"[sampler model]: {sampling_model_name}")
         return sampling_model_name
 
+    def _serverless_base_sampling_model_name(self) -> str:
+        # No checkpoints segment: the rollout host serves the base model.
+        session_id = self.training_session_id
+        account = self._resolved_account_id()
+        if account is None or session_id is None:
+            raise ValueError(
+                "serverless base-model sampling requires a resolvable Fireworks "
+                "account id and a bound training session."
+            )
+        sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}"
+        logger.info(f"[sampler model (base-only)]: {sampling_model_name}")
+        return sampling_model_name
+
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
         if managed_config is None:
@@ -2746,6 +2767,18 @@ class FiretitanServiceClient(ServiceClient):
             project_id=project_id,
         )
 
+    def _ensure_managed_lifecycle_state(self) -> Any:
+        """Initialize lifecycle state for test/compat instances that bypassed ``__init__``."""
+        lifecycle_lock = getattr(self, "_managed_lifecycle_lock", None)
+        if lifecycle_lock is None:
+            lifecycle_lock = threading.RLock()
+            self._managed_lifecycle_lock = lifecycle_lock
+        if not hasattr(self, "_service_closed"):
+            self._service_closed = False
+        if not hasattr(self, "_managed_handle"):
+            self._managed_handle = None
+        return lifecycle_lock
+
     def _ensure_managed_handle(
         self,
         *,
@@ -2765,14 +2798,17 @@ class FiretitanServiceClient(ServiceClient):
         managed_config = self._managed_config
         if managed_config is None:
             return None
-        if self._managed_handle is not None:
-            return self._managed_handle
-        if self._fireworks_api_key is None:
-            raise ValueError(
-                "FireTitan SDK-managed Tinker compatibility requires a Fireworks API key. "
-                "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
-            )
-        return self._provision_managed_handle(managed_config, user_metadata=user_metadata)
+        with self._ensure_managed_lifecycle_state():
+            if self._service_closed:
+                raise RuntimeError("FiretitanServiceClient is closed")
+            if self._managed_handle is not None:
+                return self._managed_handle
+            if self._fireworks_api_key is None:
+                raise ValueError(
+                    "FireTitan SDK-managed Tinker compatibility requires a Fireworks API key. "
+                    "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
+                )
+            return self._provision_managed_handle(managed_config, user_metadata=user_metadata)
 
     def _provision_managed_handle(
         self,
@@ -2957,6 +2993,10 @@ class FiretitanServiceClient(ServiceClient):
         return self._control_plane_client().promote_checkpoint(*args, **kwargs)
 
     def close(self) -> None:
+        with self._ensure_managed_lifecycle_state():
+            if self._service_closed:
+                return
+            self._service_closed = True
         close_error: Exception | None = None
 
         def record_close_error(exc: Exception) -> None:
@@ -3024,9 +3064,9 @@ class FiretitanServiceClient(ServiceClient):
 
         Shared LoRA references run on the policy trainer. Full-parameter
         references use a separate reference trainer, either auto-selected by the
-        backend, explicitly pinned by a LoRA-capable shape, or reattached from
-        an existing job. Recipes should use this for reference reconnect
-        metadata.
+        backend, explicitly pinned by a compatible LORA_TRAINER or FORWARD_ONLY
+        shape, or reattached from an existing job. Recipes should use this for
+        reference reconnect metadata.
         """
         return self.reference_job_id or self.trainer_job_id
 
@@ -3037,6 +3077,14 @@ class FiretitanServiceClient(ServiceClient):
         Recipes (e.g. DPO) call this to free the reference trainer as soon as
         all reference forwards finish, while policy training continues.
         """
+        lifecycle_lock = getattr(self, "_managed_lifecycle_lock", None)
+        if lifecycle_lock is None:
+            self._release_references_locked()
+            return
+        with lifecycle_lock:
+            self._release_references_locked()
+
+    def _release_references_locked(self) -> None:
         while self._owned_reference_handles:
             handle = self._owned_reference_handles.pop()
             try:
@@ -3044,10 +3092,11 @@ class FiretitanServiceClient(ServiceClient):
             except Exception as e:  # best-effort cleanup
                 logger.warning("Failed to release reference trainer: %s", e)
         self._reference_handle = None
+        getattr(self, "_reference_handles_by_rank", {}).clear()
 
     def create_training_client(
         self,
-        base_model: str,
+        base_model: str | None = None,
         lora_rank: int = 0,
         seed: int | None = None,
         train_mlp: bool = True,
@@ -3062,20 +3111,61 @@ class FiretitanServiceClient(ServiceClient):
         full-parameter training (``lora_rank == 0``). Pass ``None`` to let the
         backend choose its own default (``2 * lora_rank``).
         """
-        if self._managed_config is not None:
-            _warn_deprecated_override(
-                "create_training_client", "base_model", base_model, self._managed_config.base_model
-            )
-            _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, self._managed_config.lora_rank)
+        managed_config = self._managed_config
+        if managed_config is not None and managed_config.max_lora_rank is not None:
+            resolved_base_model = base_model or managed_config.base_model
+            if resolved_base_model != managed_config.base_model:
+                raise ValueError(
+                    f"base_model={resolved_base_model!r} does not match the managed trainer base model "
+                    f"{managed_config.base_model!r}"
+                )
+            if not 1 <= lora_rank <= managed_config.max_lora_rank:
+                raise ValueError(
+                    f"lora_rank must be between 1 and max_lora_rank={managed_config.max_lora_rank}, "
+                    f"got {lora_rank}"
+                )
+            with self._ensure_managed_lifecycle_state():
+                if self._service_closed:
+                    raise RuntimeError("FiretitanServiceClient is closed")
+                managed_handle = self._ensure_managed_handle(
+                    user_metadata=self._user_metadata(user_metadata),
+                )
+                training_client = managed_handle.service_client.create_training_client(
+                    base_model=managed_config.base_model,
+                    lora_rank=lora_rank,
+                    seed=seed,
+                    train_mlp=train_mlp,
+                    train_attn=train_attn,
+                    train_unembed=train_unembed,
+                    lora_alpha=lora_alpha,
+                    user_metadata=self._user_metadata(user_metadata),
+                )
+                training_client._tokenizer_model = managed_config.tokenizer_model
+                if managed_handle.sampler_backend is not None:
+                    training_client._attach_sampler_backend(managed_handle.sampler_backend)
+                managed_handle.training_clients.append(training_client)
+                return training_client
+
+        if managed_config is not None:
+            if base_model is not None:
+                _warn_deprecated_override(
+                    "create_training_client", "base_model", base_model, managed_config.base_model
+                )
+            _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
         managed_handle = self._ensure_managed_handle(
             user_metadata=self._user_metadata(user_metadata),
         )
         if managed_handle is not None:
+            assert managed_handle.training_client is not None
             return managed_handle.training_client
 
+        if base_model is None:
+            raise ValueError("base_model is required for a direct training client")
         effective_alpha = lora_alpha if lora_rank > 0 else None
         config_key = _TrainingKey(base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha)
-        if config_key in self._created_training_configs:
+        if config_key in self._created_training_configs and not getattr(
+            self, "_allow_duplicate_training_configs", False
+        ):
             raise ValueError(
                 f"A training client for '{base_model}' (lora_rank={lora_rank}) "
                 f"already exists on this service. Create a new "
@@ -3198,6 +3288,11 @@ class FiretitanServiceClient(ServiceClient):
         """
         if self._managed_config is None or hasattr(self, "holder"):
             return None
+        if getattr(self._managed_config, "max_lora_rank", None) is not None:
+            raise NotImplementedError(
+                "Managed multi-model resume requires checkpoint-derived rank and alpha; "
+                "create a model explicitly and call load_state on that training client."
+            )
         return self._managed_config
 
     @staticmethod
@@ -3470,6 +3565,40 @@ class FiretitanServiceClient(ServiceClient):
             self.hotload_sampler_snapshot(model_path)
             return self._require_sampler_backend().get_sampling_client(tokenizer, concurrency_controller)
 
+        # Base-only sampling on a serverless session (no model_path).
+        if (
+            base_model is not None
+            and self._sampler_backend is None
+            and managed_config is None
+            and self.training_session_id is not None
+        ):
+            # base_model selects base-only routing but its value is not used: the
+            # rollout host is bound to the training session's base weights. Warn so
+            # a caller who asked for a different reference model isn't silently
+            # regularizing against the session base (mirrors the model_path branch).
+            logger.warning(
+                "base_model is ignored for serverless base-only sampling; "
+                "the rollout host serves the training session's base weights."
+            )
+            serverless_base_url = self._managed_base_url
+            serverless_base_url = serverless_base_url.rstrip("/")
+            if not serverless_base_url.endswith("/training/v1/serverless"):
+                raise ValueError(
+                    "serverless sampling requires FiretitanServiceClient base_url to end with "
+                    f"/training/v1/serverless; got {serverless_base_url!r}."
+                )
+            serverless_model = self._serverless_base_sampling_model_name()
+            additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
+            additional_headers["X-Session-Affinity"] = serverless_model
+            return FiretitanSamplingClient.create(
+                inference_url=serverless_base_url,
+                model=serverless_model,
+                api_key=self._require_fireworks_api_key("serverless sampling"),
+                tokenizer=tokenizer,
+                concurrency_controller=concurrency_controller,
+                additional_headers=additional_headers,
+            )
+
         if self._sampler_backend is not None:
             return self._sampler_backend.get_sampling_client(tokenizer, concurrency_controller)
 
@@ -3671,9 +3800,10 @@ class FiretitanServiceClient(ServiceClient):
 
     def create_reference_client(
         self,
-        base_model: str,
+        base_model: str | None = None,
         *,
-        lora_rank: int = 0,
+        lora_rank: int | None = None,
+        policy_client: FiretitanTrainingClient | None = None,
         user_metadata: dict[str, str] | None = None,
     ) -> FiretitanTrainingClient:
         """Create a frozen reference client for KL/DPO baseline logprobs.
@@ -3688,22 +3818,78 @@ class FiretitanServiceClient(ServiceClient):
           the SDK owns and tears down on :meth:`close` (or early via
           :meth:`release_references`). If ``reference_training_shape_id`` is not
           set, trainer creation asks the backend to select a LoRA-capable shape.
+          An explicit rank-0 reference may pin a compatible ``LORA_TRAINER`` or
+          ``FORWARD_ONLY`` shape.
         """
         managed_config = self._managed_config
         if not hasattr(self, "holder") and managed_config is not None:
-            from fireworks.training.sdk.managed import _use_shared_base_reference
+            return self._create_managed_reference_client(
+                base_model=base_model,
+                lora_rank=lora_rank,
+                policy_client=policy_client,
+                user_metadata=user_metadata,
+            )
+        # Direct (non-managed) holder service: base-only on the same session.
+        if base_model is None:
+            raise ValueError("base_model is required for a direct reference client")
+        return self.create_base_training_client(
+            base_model,
+            user_metadata=self._user_metadata(user_metadata),
+        )
 
-            _warn_deprecated_override("create_reference_client", "base_model", base_model, managed_config.base_model)
-            policy_lora_rank = lora_rank or managed_config.lora_rank
-            if _use_shared_base_reference(managed_config, policy_lora_rank=policy_lora_rank):
+    def _create_managed_reference_client(
+        self,
+        *,
+        base_model: str | None,
+        lora_rank: int | None,
+        policy_client: FiretitanTrainingClient | None,
+        user_metadata: dict[str, str] | None,
+    ) -> FiretitanTrainingClient:
+        from fireworks.training.sdk.managed import _use_shared_base_reference
+
+        managed_config = self._managed_config
+        assert managed_config is not None
+        with self._ensure_managed_lifecycle_state():
+            if self._service_closed:
+                raise RuntimeError("FiretitanServiceClient is closed")
+            if base_model is not None:
+                _warn_deprecated_override("create_reference_client", "base_model", base_model, managed_config.base_model)
+            max_lora_rank = getattr(managed_config, "max_lora_rank", None)
+            if max_lora_rank is not None:
+                if policy_client is None:
+                    raise ValueError("policy_client is required for a managed multi-model reference")
+                handle = self._managed_handle
+                if handle is None or not any(client is policy_client for client in handle.training_clients):
+                    raise ValueError("policy_client was not created by this managed service")
+            else:
                 handle = self._ensure_managed_handle(
                     user_metadata=self._user_metadata(user_metadata),
                 )
+
+            if policy_client is not None:
+                if lora_rank is not None and lora_rank != policy_client._lora_rank:
+                    raise ValueError(
+                        f"lora_rank={lora_rank} does not match policy_client rank={policy_client._lora_rank}"
+                    )
+                policy_lora_rank = policy_client._lora_rank
+            else:
+                policy_lora_rank = lora_rank or managed_config.lora_rank
+
+            if _use_shared_base_reference(managed_config, policy_lora_rank=policy_lora_rank):
                 return handle.service_client.create_base_training_client(
-                    base_model,
+                    managed_config.base_model,
                     user_metadata=self._user_metadata(user_metadata),
                 )
-            handle = self._ensure_managed_handle(user_metadata=self._user_metadata(user_metadata))
+            if max_lora_rank is not None:
+                reference_handle = self._reference_handles_by_rank.get(policy_lora_rank)
+                if reference_handle is None:
+                    reference_handle = self._provision_reference_handle(
+                        policy_lora_rank=policy_lora_rank,
+                        user_metadata=self._user_metadata(user_metadata),
+                    )
+                    self._reference_handles_by_rank[policy_lora_rank] = reference_handle
+                self._reference_handle = reference_handle
+                return reference_handle.training_client
             if handle.reference_handle is not None:
                 self._reference_handle = handle.reference_handle
                 return handle.reference_handle.training_client
@@ -3712,11 +3898,6 @@ class FiretitanServiceClient(ServiceClient):
                 user_metadata=self._user_metadata(user_metadata),
             )
             return reference_handle.training_client
-        # Direct (non-managed) holder service: base-only on the same session.
-        return self.create_base_training_client(
-            base_model,
-            user_metadata=self._user_metadata(user_metadata),
-        )
 
     def _provision_reference_handle(
         self,

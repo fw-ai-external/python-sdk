@@ -7,7 +7,8 @@ gets the same behavior:
 * LoRA policy without an explicit reference shape/job -> reuse the policy session.
 * Full-parameter references use a separate forward-only runtime trainer. When
   no ``reference_training_shape_id`` is pinned, trainer creation asks the
-  backend to auto-select a ``LORA_TRAINER`` shape.
+  backend to auto-select a ``LORA_TRAINER`` shape. Explicit rank-0 references
+  may pin ``LORA_TRAINER`` or ``FORWARD_ONLY`` inventory.
 
 These tests cover the decision predicate and the derived reference config; the
 recipe-facing wrapper is tested in the cookbook suite.
@@ -25,6 +26,7 @@ import fireworks.training.sdk.managed as managed_module
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
     _ManagedTinkerHandle,
+    _reference_user_metadata,
     _reference_managed_config,
     _use_shared_base_reference,
     _validate_reference_training_shape,
@@ -33,6 +35,16 @@ from fireworks.training.sdk.trainer import CreatedTrainerJob, TrainerServiceEndp
 from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
 
 BASE_MODEL = "accounts/acct/models/base"
+
+
+def test_reference_metadata_excludes_only_policy_cmek_resource():
+    assert _reference_user_metadata(
+        {
+            "fireworks_cmek_resource": "models/output-model",
+            "recipe": "async-rl",
+        }
+    ) == {"recipe": "async-rl"}
+    assert _reference_user_metadata({"fireworks_cmek_resource": "models/output-model"}) is None
 
 
 def _policy_config(**overrides) -> _ManagedTinkerConfig:
@@ -127,6 +139,47 @@ class TestReferenceManagedConfig:
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.trainer_replica_count is None
 
+    def test_reference_drops_policy_output_encryption_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=[
+                "--pp=2",
+                "--fireworks-gateway-target=gateway:443",
+                "--cmek-output-model-resource=models/output",
+                "--require-cmek-output-encryption",
+            ],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--pp=2"]
+
+    def test_reference_drops_split_policy_output_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=[
+                "--fireworks-gateway-target",
+                "gateway:443",
+                "--cmek-output-model-resource",
+                "models/output",
+                "--activation-checkpoint",
+            ],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--activation-checkpoint"]
+
+    def test_reference_tolerates_blank_extra_args(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            extra_args=["--pp=2", "", "--require-cmek-output-encryption"],
+        )
+
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+
+        assert reference.extra_args == ["--pp=2", ""]
+
 
 class TestManagedProvisioning:
     def test_trainer_create_keeps_region_unset_when_user_does_not_set_it(self):
@@ -194,6 +247,18 @@ class TestManagedProvisioning:
         assert trainer_config.training_shape_ref is None
         assert trainer_config.auto_select_training_shape is True
         assert trainer_config.extra_args == ["--pp", "2"]
+
+    def test_max_lora_rank_sets_trainer_capacity(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                lora_rank=0,
+                max_lora_rank=256,
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.lora_rank == 256
 
     def test_empty_extra_args_keep_auto_shape_selection(self):
         trainer_config = managed_module._build_trainer_job_config(
@@ -430,6 +495,7 @@ class TestManagedProvisioning:
             *,
             trainer_job_name,
             deployment_shape,
+            cmek_resource=None,
         ):
             events.append(f"deployment_start:{trainer_job_name}:{deployment_shape}")
             deployment_started.set()
@@ -606,7 +672,7 @@ class TestManagedProvisioning:
 
         _validate_reference_training_shape(FakeTrainerManager(), reference)
 
-    def test_full_param_reference_rejects_forward_only_trainer_shape(self):
+    def test_full_param_reference_accepts_forward_only_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.lora_rank == 0
@@ -624,7 +690,27 @@ class TestManagedProvisioning:
                     trainer_mode="FORWARD_ONLY",
                 )
 
-        with pytest.raises(ValueError, match="trainer_mode in"):
+        _validate_reference_training_shape(FakeTrainerManager(), reference)
+
+    def test_lora_reference_rejects_forward_only_trainer_shape(self):
+        config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
+        reference = _reference_managed_config(config, policy_lora_rank=16)
+        assert reference.lora_rank == 16
+        assert reference.forward_only is True
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                assert training_shape_id == "ts-ref-forward-only"
+                return SimpleNamespace(
+                    training_shape_version="ts-ref-forward-only/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="FORWARD_ONLY",
+                )
+
+        with pytest.raises(ValueError, match=r"trainer_mode in \{LORA_TRAINER\}"):
             _validate_reference_training_shape(FakeTrainerManager(), reference)
 
     def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):

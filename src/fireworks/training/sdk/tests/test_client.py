@@ -7,7 +7,9 @@ import asyncio
 import logging
 import warnings
 from types import SimpleNamespace
+from threading import Event, RLock
 from unittest.mock import MagicMock, patch
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import torch
@@ -1445,6 +1447,219 @@ class TestFiretitanServiceClientManagedCompat:
         assert create.call_args.kwargs["user_metadata"] == {"recipe": "sdft"}
         assert svc._sampler_backend is handle.sampler_backend
 
+    def test_managed_multi_model_creates_distinct_clients_on_one_handle(self):
+        client_a = MagicMock()
+        client_b = MagicMock()
+        client_c = MagicMock()
+        inner_service = MagicMock()
+        inner_service.create_training_client.side_effect = [client_a, client_b, client_c]
+        sampler_backend = object()
+        handle = SimpleNamespace(
+            service_client=inner_service,
+            training_clients=[],
+            sampler_backend=sampler_backend,
+        )
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+            tokenizer_model="Qwen/Qwen3-8B",
+        )
+        svc._ensure_managed_handle = MagicMock(return_value=handle)
+
+        actual_a = svc.create_training_client(
+            lora_rank=64,
+            lora_alpha=128,
+        )
+        actual_b = svc.create_training_client(
+            "accounts/acct/models/base",
+            lora_rank=256,
+            lora_alpha=32,
+        )
+        actual_c = svc.create_training_client(
+            lora_rank=64,
+            lora_alpha=128,
+        )
+
+        assert actual_a is client_a
+        assert actual_b is client_b
+        assert actual_c is client_c
+        assert handle.training_clients == [client_a, client_b, client_c]
+        assert [call.kwargs["lora_rank"] for call in inner_service.create_training_client.call_args_list] == [64, 256, 64]
+        assert [call.kwargs["lora_alpha"] for call in inner_service.create_training_client.call_args_list] == [
+            128,
+            32,
+            128,
+        ]
+        assert client_a._tokenizer_model == "Qwen/Qwen3-8B"
+        client_a._attach_sampler_backend.assert_called_once_with(sampler_backend)
+        client_b._attach_sampler_backend.assert_called_once_with(sampler_backend)
+        client_c._attach_sampler_backend.assert_called_once_with(sampler_backend)
+
+    @pytest.mark.parametrize("lora_rank", [0, 257])
+    def test_managed_multi_model_validates_rank_before_provisioning(self, lora_rank):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        svc._ensure_managed_handle = MagicMock()
+
+        with pytest.raises(ValueError, match="between 1 and max_lora_rank=256"):
+            svc.create_training_client(
+                "accounts/acct/models/base",
+                lora_rank=lora_rank,
+            )
+
+        svc._ensure_managed_handle.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "legacy_kwargs",
+        [
+            {"lora_rank": 64},
+            {"lora_alpha": 128},
+        ],
+    )
+    def test_managed_multi_model_rejects_service_level_model_config(self, legacy_kwargs):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-key",
+                base_model="accounts/acct/models/base",
+                max_lora_rank=256,
+                **legacy_kwargs,
+            )
+
+    def test_managed_multi_model_rejects_different_base_model(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        svc._ensure_managed_handle = MagicMock()
+
+        with pytest.raises(ValueError, match="does not match the managed trainer base model"):
+            svc.create_training_client(
+                "accounts/acct/models/other",
+                lora_rank=64,
+            )
+
+        svc._ensure_managed_handle.assert_not_called()
+
+    def test_managed_multi_model_resume_requires_explicit_model(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+
+        with pytest.raises(NotImplementedError, match="checkpoint-derived rank and alpha"):
+            svc.create_training_client_from_state("tinker://checkpoint")
+
+    def test_managed_multi_model_reference_uses_selected_policy(self):
+        inner_service = MagicMock()
+        inner_service.create_base_training_client.return_value = "base-reference"
+        policy_client = SimpleNamespace(_lora_rank=64)
+        handle = SimpleNamespace(
+            service_client=inner_service,
+            reference_handle=None,
+            training_clients=[policy_client],
+        )
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        svc._managed_handle = handle
+
+        result = svc.create_reference_client(policy_client=policy_client)
+
+        assert result == "base-reference"
+        inner_service.create_base_training_client.assert_called_once_with(
+            "accounts/acct/models/base",
+            user_metadata=None,
+        )
+
+    def test_managed_multi_model_reference_rejects_foreign_policy(self):
+        handle = SimpleNamespace(
+            service_client=MagicMock(),
+            reference_handle=None,
+            training_clients=[],
+        )
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        svc._managed_handle = handle
+        svc._ensure_managed_handle = MagicMock()
+
+        with pytest.raises(ValueError, match="not created by this managed service"):
+            svc.create_reference_client(
+                policy_client=SimpleNamespace(_lora_rank=64),
+            )
+        svc._ensure_managed_handle.assert_not_called()
+
+    def test_managed_multi_model_reference_cache_tracks_selected_policy_rank(self):
+        policy_a = SimpleNamespace(_lora_rank=64)
+        policy_b = SimpleNamespace(_lora_rank=128)
+        handle = SimpleNamespace(
+            service_client=MagicMock(),
+            reference_handle=None,
+            training_clients=[policy_a, policy_b],
+        )
+        reference_a = SimpleNamespace(training_client="reference-a")
+        reference_b = SimpleNamespace(training_client="reference-b")
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+            reference_training_shape_id="accounts/acct/trainingShapes/reference",
+        )
+        svc._managed_handle = handle
+        svc._provision_reference_handle = MagicMock(side_effect=[reference_a, reference_b])
+
+        assert svc.create_reference_client(policy_client=policy_a) == "reference-a"
+        assert svc.create_reference_client(policy_client=policy_b) == "reference-b"
+        assert svc.create_reference_client(policy_client=policy_a) == "reference-a"
+
+        assert svc._provision_reference_handle.call_count == 2
+        assert svc._reference_handle is reference_a
+
+    def test_managed_handle_provisions_once_under_concurrent_create(self):
+        handle = SimpleNamespace(
+            training_client=None,
+            training_clients=[],
+            sampler_backend=None,
+            reference_handle=None,
+            service_client=MagicMock(),
+        )
+        started = Event()
+        release = Event()
+
+        def create_handle(**_kwargs):
+            started.set()
+            assert release.wait(timeout=2)
+            return handle
+
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        with patch(
+            "fireworks.training.sdk.managed._create_managed_tinker_client",
+            side_effect=create_handle,
+        ) as create:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                first = executor.submit(svc._ensure_managed_handle)
+                assert started.wait(timeout=2)
+                second = executor.submit(svc._ensure_managed_handle)
+                release.set()
+                assert first.result(timeout=2) is handle
+                assert second.result(timeout=2) is handle
+
+        create.assert_called_once()
+
     def test_managed_max_context_length_surfaces_shape_resolved_value(self):
         # The recipe leaves context length unset; it is resolved from the
         # training shape during provisioning and only the handle carries the
@@ -1549,6 +1764,9 @@ class TestFiretitanServiceClientManagedCompat:
         svc._default_user_metadata = None
         svc._reference_handle = None
         svc._owned_reference_handles = []
+        svc._reference_handles_by_rank = {}
+        svc._managed_lifecycle_lock = RLock()
+        svc._service_closed = False
         svc._ensure_managed_handle = MagicMock(return_value=SimpleNamespace(reference_handle=reference_handle))
         svc._provision_reference_handle = MagicMock()
 
@@ -1952,6 +2170,73 @@ class TestFiretitanServiceClientManagedCompat:
         with pytest.raises(ValueError, match="/training/v1/serverless"):
             svc.create_sampling_client(model_path="test-account/run-1/step-1")
 
+    def test_create_sampling_client_serverless_base_model_route(self):
+        # Base-only route omits /checkpoints/ so the rollout host serves the base model.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {"X-Test-Header": "1"}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+        expected_model = "accounts/test-account/trainingSessions/ts-abc123"
+        assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
+        assert sampler.deployment_sampler.model == expected_model
+        assert sampler.deployment_sampler.api_key == "fw_test"
+        assert sampler.deployment_sampler.additional_headers == {
+            "X-Test-Header": "1",
+            "X-Session-Affinity": expected_model,
+        }
+        sampler.close()
+
+    def test_create_sampling_client_serverless_base_model_warns_value_ignored(self, caplog):
+        # base_model selects base-only routing but its value is not used (the
+        # rollout host serves the session base); the SDK must warn, not stay silent.
+        import logging
+
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with caplog.at_level(logging.WARNING):
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+        sampler.close()
+        assert any("base_model is ignored" in r.message for r in caplog.records)
+
+    def test_create_sampling_client_serverless_base_model_rejects_non_serverless_base_url(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with pytest.raises(ValueError, match="/training/v1/serverless"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+    def test_create_sampling_client_base_model_fails_when_account_unresolved(self):
+        # Fail loudly instead of baking "None" into the route.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = None  # _resolved_account_id() degrades to None.
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with pytest.raises(ValueError, match="resolvable Fireworks"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
     def test_hotload_sampler_snapshot_returns_none(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
@@ -2149,8 +2434,8 @@ class TestTrainingClientSamplingHelpers:
         calls = sampler_backend.remember_saved_snapshot.call_args_list
         assert [call.args[0] for call in calls] == [public_path, "step-1-test1234"]
         assert [call.kwargs for call in calls] == [
-            {"checkpoint_type": "delta"},
-            {"checkpoint_type": "delta"},
+            {"checkpoint_type": "delta", "lora_rank": 0},
+            {"checkpoint_type": "delta", "lora_rank": 0},
         ]
 
     def test_attach_sampler_backend_returns_self(self):
@@ -2195,8 +2480,46 @@ class TestTrainingClientSamplingHelpers:
             reset_prompt_cache=True,
             timeout_seconds=123,
             path=None,
+            cmek_resource=None,
         )
         deploy_mgr.get.assert_not_called()
+
+    def test_tinker_sampler_backend_cmek_uses_exact_snapshot_source(self):
+        deploy_mgr = MagicMock()
+        deploy_mgr.account_id = "acct"
+        deploy_mgr.api_key = "fw-key"
+        deploy_mgr.inference_url = "https://inference.test"
+        deploy_mgr.hotload_and_wait.return_value = True
+
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            hot_load_bucket_url="gs://bucket/trainer-root/",
+            cmek_resource="models/output-model",
+            lora_rank=8,
+        )
+
+        assert sampler_backend.hotload_saved_snapshot("runs/run-1/step-2") is True
+        kwargs = deploy_mgr.hotload_and_wait.call_args.kwargs
+        assert kwargs["path"] == "gs://bucket/trainer-root/runs/run-1/step-2/"
+        assert kwargs["cmek_resource"] == "models/output-model"
+        assert kwargs["incremental_snapshot_metadata"] is None
+
+    def test_tinker_sampler_backend_cmek_requires_bucket_root(self):
+        deploy_mgr = MagicMock()
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            cmek_resource="models/output-model",
+            lora_rank=8,
+        )
+
+        with pytest.raises(RuntimeError, match="hot_load_bucket_url"):
+            sampler_backend.hotload_saved_snapshot("step-1")
+
+        deploy_mgr.hotload_and_wait.assert_not_called()
 
     def test_tinker_sampler_backend_full_param_delta_chain(self):
         """Full-param: first save is base (FULL hotload), later deltas carry
@@ -2246,6 +2569,32 @@ class TestTrainingClientSamplingHelpers:
         assert sampler_backend.hotload_saved_snapshot("snap-a") is True
         sampler_backend.remember_saved_snapshot("snap-b", checkpoint_type="delta")
         assert sampler_backend.hotload_saved_snapshot("snap-b") is True
+        assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is None
+
+    def test_tinker_sampler_backend_uses_snapshot_model_rank(self):
+        deploy_mgr = MagicMock()
+        deploy_mgr.account_id = "acct"
+        deploy_mgr.hotload_and_wait.return_value = True
+        sampler_backend = _TinkerSamplerBackend(
+            deploy_mgr=deploy_mgr,
+            deployment_id="dep-1",
+            base_model="accounts/acct/models/base",
+            lora_rank=0,
+        )
+
+        sampler_backend.remember_saved_snapshot(
+            "base",
+            checkpoint_type="base",
+            lora_rank=0,
+        )
+        assert sampler_backend.hotload_saved_snapshot("base") is True
+        sampler_backend.remember_saved_snapshot(
+            "adapter-a",
+            checkpoint_type="delta",
+            lora_rank=64,
+        )
+
+        assert sampler_backend.hotload_saved_snapshot("adapter-a") is True
         assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is None
 
     def test_tinker_sampler_backend_reset_snapshot_chain_forces_full_hotload(self):

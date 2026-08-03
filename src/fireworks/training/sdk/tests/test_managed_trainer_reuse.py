@@ -171,3 +171,44 @@ def test_create_managed_client_cleans_created_stable_trainer(monkeypatch):
     )
 
     assert handle.cleanup_trainer_on_close is True
+
+
+def test_create_managed_multi_model_handle_defers_create_model(monkeypatch):
+    trainer_mgr = MagicMock(spec=TrainerJobManager)
+    trainer_mgr.account_id = "acct"
+    trainer_mgr.try_get.return_value = {"state": "JOB_STATE_RUNNING"}
+    trainer_mgr.wait_for_ready.return_value = TrainerServiceEndpoint(
+        job_name="accounts/acct/rlorTrainerJobs/sft-job-1",
+        job_id="sft-job-1",
+        base_url="https://api.example.com/training/v1/rlorTrainerJobs/acct/sft-job-1",
+    )
+
+    class FakeServiceClient:
+        def __init__(self, **_kwargs):
+            self.create_training_client = MagicMock()
+
+        def _attach_sampler_backend(self, _backend):
+            return self
+
+    monkeypatch.setattr(
+        "fireworks.training.sdk.managed._build_resource_managers",
+        lambda **_kwargs: (trainer_mgr, object()),
+    )
+    monkeypatch.setattr(
+        "fireworks.training.sdk.managed.FiretitanServiceClient",
+        FakeServiceClient,
+    )
+
+    handle = _create_managed_tinker_client(
+        api_key="fw-key",
+        config=_ManagedTinkerConfig(
+            base_model="accounts/fireworks/models/qwen3p5-9b",
+            max_lora_rank=256,
+            trainer_job_id="sft-job-1",
+            create_deployment=False,
+        ),
+    )
+
+    assert handle.training_client is None
+    assert handle.training_clients == []
+    handle.service_client.create_training_client.assert_not_called()

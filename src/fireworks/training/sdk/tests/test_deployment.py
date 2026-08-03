@@ -957,6 +957,23 @@ class TestHotload:
         mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
         headers = mgr._sync_request.call_args[1]["headers"]
         assert "x-fireworks-hot-load-source-url" not in headers
+        assert "x-fireworks-hot-load-cmek-resource" not in headers
+
+    def test_hotload_cmek_resource_sent_as_header_not_body(self, mgr):
+        resp = self._response(200)
+        mgr._sync_request = MagicMock(return_value=resp)
+
+        mgr.hotload(
+            "dep-1",
+            "accounts/test/models/m",
+            "snap-123",
+            path="gs://my-bucket/snapshots/snap-123/",
+            cmek_resource="models/output-model",
+        )
+        call_kwargs = mgr._sync_request.call_args[1]
+
+        assert "cmek_resource" not in call_kwargs["json"]
+        assert call_kwargs["headers"]["x-fireworks-hot-load-cmek-resource"] == "models/output-model"
 
     def test_hotload_and_wait_forwards_path(self, mgr):
         resp = self._response(200)
@@ -968,10 +985,12 @@ class TestHotload:
             "accounts/test/models/m",
             "snap-123",
             path="gs://my-bucket/snapshots/snap-123/",
+            cmek_resource="models/output-model",
         )
         assert ok is True
         headers = mgr._sync_request.call_args[1]["headers"]
         assert headers.get("x-fireworks-hot-load-source-url") == "gs://my-bucket/snapshots/snap-123/"
+        assert headers.get("x-fireworks-hot-load-cmek-resource") == "models/output-model"
 
 
 # ---------------------------------------------------------------------------
