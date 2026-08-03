@@ -1952,6 +1952,73 @@ class TestFiretitanServiceClientManagedCompat:
         with pytest.raises(ValueError, match="/training/v1/serverless"):
             svc.create_sampling_client(model_path="test-account/run-1/step-1")
 
+    def test_create_sampling_client_serverless_base_model_route(self):
+        # Base-only route omits /checkpoints/ so the rollout host serves the base model.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {"X-Test-Header": "1"}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+        expected_model = "accounts/test-account/trainingSessions/ts-abc123"
+        assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
+        assert sampler.deployment_sampler.model == expected_model
+        assert sampler.deployment_sampler.api_key == "fw_test"
+        assert sampler.deployment_sampler.additional_headers == {
+            "X-Test-Header": "1",
+            "X-Session-Affinity": expected_model,
+        }
+        sampler.close()
+
+    def test_create_sampling_client_serverless_base_model_warns_value_ignored(self, caplog):
+        # base_model selects base-only routing but its value is not used (the
+        # rollout host serves the session base); the SDK must warn, not stay silent.
+        import logging
+
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with caplog.at_level(logging.WARNING):
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+        sampler.close()
+        assert any("base_model is ignored" in r.message for r in caplog.records)
+
+    def test_create_sampling_client_serverless_base_model_rejects_non_serverless_base_url(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with pytest.raises(ValueError, match="/training/v1/serverless"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+    def test_create_sampling_client_base_model_fails_when_account_unresolved(self):
+        # Fail loudly instead of baking "None" into the route.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = None  # _resolved_account_id() degrades to None.
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+
+        with pytest.raises(ValueError, match="resolvable Fireworks"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
     def test_hotload_sampler_snapshot_returns_none(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None

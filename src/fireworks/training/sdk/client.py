@@ -2690,6 +2690,19 @@ class FiretitanServiceClient(ServiceClient):
         logger.info(f"[sampler model]: {sampling_model_name}")
         return sampling_model_name
 
+    def _serverless_base_sampling_model_name(self) -> str:
+        # No checkpoints segment: the rollout host serves the base model.
+        session_id = self.training_session_id
+        account = self._resolved_account_id()
+        if account is None or session_id is None:
+            raise ValueError(
+                "serverless base-model sampling requires a resolvable Fireworks "
+                "account id and a bound training session."
+            )
+        sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}"
+        logger.info(f"[sampler model (base-only)]: {sampling_model_name}")
+        return sampling_model_name
+
     def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
         managed_config = self._managed_config
         if managed_config is None:
@@ -3469,6 +3482,40 @@ class FiretitanServiceClient(ServiceClient):
                 )
             self.hotload_sampler_snapshot(model_path)
             return self._require_sampler_backend().get_sampling_client(tokenizer, concurrency_controller)
+
+        # Base-only sampling on a serverless session (no model_path).
+        if (
+            base_model is not None
+            and self._sampler_backend is None
+            and managed_config is None
+            and self.training_session_id is not None
+        ):
+            # base_model selects base-only routing but its value is not used: the
+            # rollout host is bound to the training session's base weights. Warn so
+            # a caller who asked for a different reference model isn't silently
+            # regularizing against the session base (mirrors the model_path branch).
+            logger.warning(
+                "base_model is ignored for serverless base-only sampling; "
+                "the rollout host serves the training session's base weights."
+            )
+            serverless_base_url = self._managed_base_url
+            serverless_base_url = serverless_base_url.rstrip("/")
+            if not serverless_base_url.endswith("/training/v1/serverless"):
+                raise ValueError(
+                    "serverless sampling requires FiretitanServiceClient base_url to end with "
+                    f"/training/v1/serverless; got {serverless_base_url!r}."
+                )
+            serverless_model = self._serverless_base_sampling_model_name()
+            additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
+            additional_headers["X-Session-Affinity"] = serverless_model
+            return FiretitanSamplingClient.create(
+                inference_url=serverless_base_url,
+                model=serverless_model,
+                api_key=self._require_fireworks_api_key("serverless sampling"),
+                tokenizer=tokenizer,
+                concurrency_controller=concurrency_controller,
+                additional_headers=additional_headers,
+            )
 
         if self._sampler_backend is not None:
             return self._sampler_backend.get_sampling_client(tokenizer, concurrency_controller)
