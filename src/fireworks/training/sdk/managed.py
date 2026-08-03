@@ -115,6 +115,13 @@ class FiretitanProvisioningConfig:
     tokenizer_model: str | None = None
     lora_rank: int = 0
     lora_alpha: int | None = None
+    max_lora_rank: int | None = None
+    """Trainer LoRA capacity for managed multi-model services.
+
+    When set, model rank/alpha come from each ``create_training_client`` call.
+    When unset, ``lora_rank``/``lora_alpha`` retain the legacy single-model
+    managed behavior.
+    """
     training_shape_id: str | None = None
     # Optional separate reference trainer shape. Rank-0 references accept
     # LORA_TRAINER (preferred) or FORWARD_ONLY. Without this, the backend
@@ -188,6 +195,13 @@ class FiretitanProvisioningConfig:
             object.__setattr__(self, "replica_count", 1)
         if self.hotload_timeout_s is None:
             object.__setattr__(self, "hotload_timeout_s", HOTLOAD_TIMEOUT_S)
+        if self.max_lora_rank is not None and self.max_lora_rank <= 0:
+            raise ValueError("max_lora_rank must be positive when set")
+        if self.max_lora_rank is not None and (self.lora_rank != 0 or self.lora_alpha is not None):
+            raise ValueError(
+                "max_lora_rank cannot be combined with service-level lora_rank or lora_alpha; "
+                "pass model rank/alpha to create_training_client"
+            )
 
         for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
             if getattr(self, infra_field) is not None:
@@ -204,13 +218,18 @@ class FiretitanProvisioningConfig:
 _ManagedTinkerConfig = FiretitanProvisioningConfig
 
 
+def _trainer_lora_capacity(config: FiretitanProvisioningConfig) -> int:
+    return config.max_lora_rank if config.max_lora_rank is not None else config.lora_rank
+
+
 @dataclass
 class _ManagedTinkerHandle:
     """Private resources owned by the SDK-managed Tinker compatibility path."""
 
     service_client: FiretitanServiceClient
-    training_client: FiretitanTrainingClient
+    training_client: FiretitanTrainingClient | None
     trainer_endpoint: TrainerServiceEndpoint
+    training_clients: list[FiretitanTrainingClient] = field(default_factory=list)
     training_profile: Any | None = None
     max_context_length: int | None = None
     deployment_shape: str | None = None
@@ -230,7 +249,9 @@ class _ManagedTinkerHandle:
             return
         self._closed = True
 
-        holder = getattr(self.training_client, "holder", None)
+        holder = getattr(self.service_client, "holder", None)
+        if holder is None and self.training_client is not None:
+            holder = getattr(self.training_client, "holder", None)
         if holder is not None:
             telemetry = holder.get_telemetry()
             if telemetry is not None:
@@ -312,6 +333,7 @@ class _TinkerSamplerBackend:
     lora_rank: int = 0
     compression_format: str = DEFAULT_DELTA_COMPRESSION
     _snapshot_types: dict[str, str] = field(default_factory=dict)
+    _snapshot_lora_ranks: dict[str, int] = field(default_factory=dict)
     _base_identity: str | None = None
 
     def _deployment_model(self) -> str:
@@ -321,18 +343,22 @@ class _TinkerSamplerBackend:
         self,
         model_path: str,
         checkpoint_type: str | None = None,
+        lora_rank: int | None = None,
     ) -> None:
         if checkpoint_type is not None:
             self._snapshot_types[model_path] = checkpoint_type.lower()
+        if lora_rank is not None:
+            self._snapshot_lora_ranks[model_path] = lora_rank
 
     def reset_snapshot_chain(self) -> None:
         """Forget snapshots from a previous trainer namespace after reattach."""
         self._snapshot_types.clear()
+        self._snapshot_lora_ranks.clear()
         self._base_identity = None
 
     def hotload_saved_snapshot(self, model_path: str) -> bool:
         incremental = build_incremental_metadata(
-            lora_rank=self.lora_rank,
+            lora_rank=self._snapshot_lora_ranks.get(model_path, self.lora_rank),
             checkpoint_type=self._snapshot_types.get(model_path),
             base_identity=self._base_identity,
             compression_format=self.compression_format,
@@ -436,7 +462,7 @@ def _attach_managed_deployment(
         hot_load_bucket_url=deployment.hot_load_bucket_url,
         cmek_resource=cmek_resource,
         hotload_timeout_s=config.hotload_timeout_s,
-        lora_rank=config.lora_rank,
+        lora_rank=_trainer_lora_capacity(config),
     )
     if attach_result.reattached:
         sampler_backend.reset_snapshot_chain()
@@ -454,13 +480,13 @@ def _create_managed_tinker_client(
     additional_headers: dict[str, str] | None = None,
     verify_ssl: bool | None = None,
 ) -> _ManagedTinkerHandle:
-    """Provision trainer/deployment resources and return a Tinker client.
+    """Provision trainer/deployment resources and return their shared handle.
 
-    ``config`` is the immutable, single-source infra + training config:
-    ``base_model``/``lora_rank`` come from it (the per-call values passed to
-    ``create_training_client`` must match — a divergent value is deprecated and
-    ignored). ``max_context_length`` is resolved here from the shape and flows
-    as a local; it is never folded back into ``config``.
+    Legacy configs eagerly create one model from service-level ``lora_rank`` /
+    ``lora_alpha``. ``max_lora_rank`` configs provision only shared resources;
+    each outer ``create_training_client`` call creates its own model later.
+    ``max_context_length`` is resolved here from the shape and flows as a local;
+    it is never folded back into ``config``.
     """
     cmek_resource = (user_metadata or {}).get(_FIREWORKS_CMEK_RESOURCE_METADATA_KEY) or None
     reference_user_metadata = _reference_user_metadata(user_metadata)
@@ -479,9 +505,10 @@ def _create_managed_tinker_client(
     if max_context_length is None and profile is not None:
         max_context_length = profile.max_supported_context_length
 
+    policy_lora_rank = _trainer_lora_capacity(config)
     reference_config = None
     if _should_provision_reference(config):
-        reference_config = _reference_managed_config(config, policy_lora_rank=config.lora_rank)
+        reference_config = _reference_managed_config(config, policy_lora_rank=policy_lora_rank)
         _validate_reference_training_shape(trainer_mgr, reference_config)
 
     started_trainer = _start_or_reuse_trainer(
@@ -544,25 +571,34 @@ def _create_managed_tinker_client(
         resolved_max_context_length = endpoint.max_context_length
 
     service_client = FiretitanServiceClient(base_url=endpoint.base_url, api_key=api_key)
-    create_model_kwargs: dict[str, Any] = {
-        "base_model": config.base_model,
-        "lora_rank": config.lora_rank,
-        "user_metadata": user_metadata,
-    }
-    if config.lora_rank > 0:
-        create_model_kwargs["lora_alpha"] = config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
-    training_client = service_client.create_training_client(**create_model_kwargs)
-    # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
-    training_client._tokenizer_model = config.tokenizer_model
+    service_client._allow_duplicate_training_configs = config.max_lora_rank is not None
+    training_client = None
+    training_clients: list[FiretitanTrainingClient] = []
+    if config.max_lora_rank is None:
+        create_model_kwargs: dict[str, Any] = {
+            "base_model": config.base_model,
+            "lora_rank": config.lora_rank,
+            "user_metadata": user_metadata,
+        }
+        if config.lora_rank > 0:
+            create_model_kwargs["lora_alpha"] = (
+                config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
+            )
+        training_client = service_client.create_training_client(**create_model_kwargs)
+        # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
+        training_client._tokenizer_model = config.tokenizer_model
+        training_clients.append(training_client)
 
+        if sampler_backend is not None:
+            training_client._attach_sampler_backend(sampler_backend)
     if sampler_backend is not None:
-        training_client._attach_sampler_backend(sampler_backend)
         service_client._attach_sampler_backend(sampler_backend)
 
     return _ManagedTinkerHandle(
         service_client=service_client,
         training_client=training_client,
         trainer_endpoint=endpoint,
+        training_clients=training_clients,
         training_profile=profile,
         max_context_length=resolved_max_context_length,
         deployment_shape=deployment_shape,
@@ -581,7 +617,8 @@ def _should_provision_reference(config: _ManagedTinkerConfig) -> bool:
     return (
         config.reference_required
         and not config.forward_only
-        and not _use_shared_base_reference(config, policy_lora_rank=config.lora_rank)
+        and config.max_lora_rank is None
+        and not _use_shared_base_reference(config, policy_lora_rank=_trainer_lora_capacity(config))
     )
 
 
@@ -658,6 +695,7 @@ def _reference_managed_config(
         config,
         training_shape_id=reference_shape,
         lora_rank=reference_lora_rank,
+        max_lora_rank=None,
         trainer_job_id=config.reference_trainer_job_id,
         deployment_id=None,
         create_deployment=False,
@@ -720,7 +758,7 @@ def _build_trainer_job_config(
     auto_select_training_shape = profile_training_shape is None and not _uses_manual_training_infra(config)
     return TrainerJobConfig(
         base_model=config.base_model,
-        lora_rank=config.lora_rank,
+        lora_rank=_trainer_lora_capacity(config),
         max_context_length=max_context_length,
         learning_rate=config.learning_rate,
         gradient_accumulation_steps=config.gradient_accumulation_steps,

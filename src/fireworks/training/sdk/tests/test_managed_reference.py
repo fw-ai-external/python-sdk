@@ -248,6 +248,18 @@ class TestManagedProvisioning:
         assert trainer_config.auto_select_training_shape is True
         assert trainer_config.extra_args == ["--pp", "2"]
 
+    def test_max_lora_rank_sets_trainer_capacity(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(
+                lora_rank=0,
+                max_lora_rank=256,
+            ),
+            max_context_length=32768,
+            profile_training_shape=None,
+        )
+
+        assert trainer_config.lora_rank == 256
+
     def test_empty_extra_args_keep_auto_shape_selection(self):
         trainer_config = managed_module._build_trainer_job_config(
             _policy_config(
