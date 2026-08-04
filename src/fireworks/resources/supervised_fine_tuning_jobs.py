@@ -80,6 +80,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
             "US_IOWA_1",
@@ -171,6 +172,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 to select the concrete chat
+              renderer for this job.
+
           region: The region where the fine-tuning job is located.
 
           use_purpose: Use dedicated resources for the job. The only supported value currently is
@@ -223,6 +227,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
                     "wandb_config": wandb_config,
@@ -515,6 +520,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
             "US_IOWA_1",
@@ -606,6 +612,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 to select the concrete chat
+              renderer for this job.
+
           region: The region where the fine-tuning job is located.
 
           use_purpose: Use dedicated resources for the job. The only supported value currently is
@@ -658,6 +667,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
                     "wandb_config": wandb_config,

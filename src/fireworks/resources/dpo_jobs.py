@@ -56,6 +56,7 @@ class DpoJobsResource(SyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -77,6 +78,8 @@ class DpoJobsResource(SyncAPIResource):
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
+
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
 
           training_config: Common training configurations.
 
@@ -104,6 +107,7 @@ class DpoJobsResource(SyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -393,6 +397,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -414,6 +419,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
+
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
 
           training_config: Common training configurations.
 
@@ -441,6 +448,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

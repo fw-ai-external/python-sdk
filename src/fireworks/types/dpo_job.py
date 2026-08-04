@@ -70,6 +70,9 @@ class DpoJob(BaseModel):
     Set method to ORPO for ORPO training.
     """
 
+    renderer_hugging_face_repo_id: Optional[str] = FieldInfo(alias="rendererHuggingFaceRepoId", default=None)
+    """Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering."""
+
     name: Optional[str] = None
 
     state: Optional[

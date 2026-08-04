@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.7 (2026-08-04)
+
+Full Changelog: [v1.2.6...v1.2.7](https://github.com/fw-ai-external/python-sdk/compare/v1.2.6...v1.2.7)
+
+### Features
+* **training-sdk:** expose managed SFT and DPO renderer Hugging Face repo ID selection
+
 ## 1.2.6 (2026-08-03)
 
 Full Changelog: [v1.2.5...v1.2.6](https://github.com/fw-ai-external/python-sdk/compare/v1.2.5...v1.2.6)

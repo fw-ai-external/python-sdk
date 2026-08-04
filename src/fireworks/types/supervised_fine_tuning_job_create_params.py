@@ -132,6 +132,12 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     ]
     """The region where the fine-tuning job is located."""
 
+    renderer_hugging_face_repo_id: Annotated[str, PropertyInfo(alias="rendererHuggingFaceRepoId")]
+    """
+    Curated renderer model ID used by Training V2 to select the concrete chat
+    renderer for this job.
+    """
+
     use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
     """Use dedicated resources for the job.
 

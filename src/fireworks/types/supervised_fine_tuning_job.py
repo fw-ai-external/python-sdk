@@ -233,6 +233,12 @@ class SupervisedFineTuningJob(BaseModel):
     ] = None
     """The region where the fine-tuning job is located."""
 
+    renderer_hugging_face_repo_id: Optional[str] = FieldInfo(alias="rendererHuggingFaceRepoId", default=None)
+    """
+    Curated renderer model ID used by Training V2 to select the concrete chat
+    renderer for this job.
+    """
+
     state: Optional[
         Literal[
             "JOB_STATE_UNSPECIFIED",
