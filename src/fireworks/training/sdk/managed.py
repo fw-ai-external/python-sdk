@@ -51,21 +51,37 @@ from fireworks.training.sdk._snapshot_chain import (
 
 logger = logging.getLogger(__name__)
 
-_FIREWORKS_CMEK_RESOURCE_METADATA_KEY = "fireworks_cmek_resource"
+_CMEK_OUTPUT_MODEL_RESOURCE_FLAG = "--cmek-output-model-resource"
 _POLICY_OUTPUT_EXTRA_ARGS = frozenset(
     {
         "--fireworks-gateway-target",
-        "--cmek-output-model-resource",
+        _CMEK_OUTPUT_MODEL_RESOURCE_FLAG,
         "--require-cmek-output-encryption",
     }
 )
 
 
-def _reference_user_metadata(user_metadata: dict[str, str] | None) -> dict[str, str] | None:
-    """Keep ordinary metadata while withholding the policy output CMEK key."""
-    filtered = dict(user_metadata or {})
-    filtered.pop(_FIREWORKS_CMEK_RESOURCE_METADATA_KEY, None)
-    return filtered or None
+def _policy_output_cmek_resource(extra_args: list[str] | None) -> str | None:
+    """Recover the policy output CMEK resource from the trainer flags.
+
+    A separate reference has this flag stripped by ``_reference_extra_args``,
+    so it resolves to ``None`` there.
+    """
+    if not extra_args:
+        return None
+    take_next = False
+    for arg in extra_args:
+        stripped = str(arg).strip()
+        if take_next:
+            return stripped or None
+        if not stripped.startswith(_CMEK_OUTPUT_MODEL_RESOURCE_FLAG):
+            continue
+        remainder = stripped[len(_CMEK_OUTPUT_MODEL_RESOURCE_FLAG) :]
+        if not remainder:
+            take_next = True
+        elif remainder[0] in "= ":
+            return remainder[1:].strip() or None
+    return None
 
 
 def _reference_extra_args(extra_args: list[str] | None) -> list[str] | None:
@@ -488,8 +504,7 @@ def _create_managed_tinker_client(
     ``max_context_length`` is resolved here from the shape and flows as a local;
     it is never folded back into ``config``.
     """
-    cmek_resource = (user_metadata or {}).get(_FIREWORKS_CMEK_RESOURCE_METADATA_KEY) or None
-    reference_user_metadata = _reference_user_metadata(user_metadata)
+    cmek_resource = _policy_output_cmek_resource(config.extra_args)
 
     trainer_mgr, deploy_mgr = _build_resource_managers(
         api_key=api_key,
@@ -542,7 +557,7 @@ def _create_managed_tinker_client(
                 _create_managed_tinker_client,
                 api_key=api_key,
                 config=reference_config,
-                user_metadata=reference_user_metadata,
+                user_metadata=user_metadata,
                 base_url=base_url,
                 inference_url=inference_url,
                 hotload_api_url=hotload_api_url,
