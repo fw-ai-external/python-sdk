@@ -72,6 +72,7 @@ class TestDpoJobs:
                 "region": "REGION_UNSPECIFIED",
                 "warm_start_from": "warmStartFrom",
             },
+            use_reservation=True,
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,

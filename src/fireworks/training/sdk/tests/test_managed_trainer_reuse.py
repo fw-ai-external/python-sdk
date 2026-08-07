@@ -20,7 +20,11 @@ def test_start_or_reuse_trainer_reuses_existing_job():
 
     started = _start_or_reuse_trainer(
         trainer_mgr,
-        _ManagedTinkerConfig(base_model="accounts/fireworks/models/qwen3p5-9b", trainer_job_id="sft-job-1"),
+        _ManagedTinkerConfig(
+            base_model="accounts/fireworks/models/qwen3p5-9b",
+            trainer_job_id="sft-job-1",
+            use_reservation=True,
+        ),
         max_context_length=200_000,
         profile_training_shape="accounts/fireworks/trainingShapes/qwen3p5-9b/versions/1",
     )

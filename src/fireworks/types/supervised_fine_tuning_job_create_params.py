@@ -144,6 +144,11 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     The only supported value currently is "pilot". Defaults to empty.
     """
 
+    use_reservation: Annotated[bool, PropertyInfo(alias="useReservation")]
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
+    """
+
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging training progress."""
 

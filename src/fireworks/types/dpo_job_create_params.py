@@ -41,6 +41,11 @@ class DpoJobCreateParams(TypedDict, total=False):
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 
+    use_reservation: Annotated[bool, PropertyInfo(alias="useReservation")]
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
+    """
+
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]
     """The Weights & Biases team/user account for logging job progress."""
 

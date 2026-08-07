@@ -197,6 +197,8 @@ class FiretitanProvisioningConfig:
     Unset leaves the choice to the control plane (``ASYNC``). See
     :attr:`DeploymentConfig.hot_load_transition_type`.
     """
+    use_reservation: bool = False
+    """Try the account's reservation capacity before shared trainer capacity."""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -790,6 +792,7 @@ def _build_trainer_job_config(
         skip_validations=config.skip_validations,
         purpose=config.purpose,
         preemptible=config.preemptible,
+        use_reservation=config.use_reservation,
         managed_by=config.managed_by,
         forward_only=config.forward_only,
         inactivity_timeout=config.inactivity_timeout,

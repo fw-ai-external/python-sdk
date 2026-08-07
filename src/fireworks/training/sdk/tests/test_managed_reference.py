@@ -23,6 +23,7 @@ from datetime import timedelta
 import pytest
 
 import fireworks.training.sdk.managed as managed_module
+from fireworks.training.sdk.client import _managed_config_from_kwargs
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
     _ManagedTinkerHandle,
@@ -76,6 +77,17 @@ def test_reference_config_derives_no_policy_cmek_resource():
 
     reference = _reference_managed_config(policy, policy_lora_rank=policy.lora_rank)
     assert _policy_output_cmek_resource(reference.extra_args) is None
+
+
+def test_managed_config_kwargs_accept_use_reservation():
+    config = _managed_config_from_kwargs(
+        {
+            "base_model": BASE_MODEL,
+            "use_reservation": True,
+        }
+    )
+
+    assert config.use_reservation is True
 
 
 def _policy_config(**overrides) -> _ManagedTinkerConfig:
@@ -158,6 +170,14 @@ class TestReferenceManagedConfig:
         config = _policy_config(reference_training_shape_id="ts-ref")
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.region == "US_OHIO_1"
+
+    def test_reference_inherits_use_reservation(self):
+        config = _policy_config(
+            reference_training_shape_id="ts-ref",
+            use_reservation=True,
+        )
+        reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.use_reservation is True
 
     def test_reference_drops_policy_hsdp_replicas(self):
         # HSDP replicas are a policy-trainer knob. A frozen reference is
@@ -278,6 +298,15 @@ class TestManagedProvisioning:
         assert trainer_config.training_shape_ref is None
         assert trainer_config.auto_select_training_shape is True
         assert trainer_config.extra_args == ["--pp", "2"]
+
+    def test_use_reservation_flows_to_trainer_config(self):
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(use_reservation=True),
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert trainer_config.use_reservation is True
 
     def test_max_lora_rank_sets_trainer_capacity(self):
         trainer_config = managed_module._build_trainer_job_config(

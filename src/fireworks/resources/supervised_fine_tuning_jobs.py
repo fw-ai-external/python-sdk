@@ -122,6 +122,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -180,6 +181,9 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
 
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           warm_start_from: The PEFT addon model in Fireworks format to be fine-tuned from Only one of
@@ -230,6 +234,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },
@@ -562,6 +567,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -620,6 +626,9 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
 
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
+
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
           warm_start_from: The PEFT addon model in Fireworks format to be fine-tuned from Only one of
@@ -670,6 +679,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },

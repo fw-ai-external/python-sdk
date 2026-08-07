@@ -114,5 +114,10 @@ class DpoJob(BaseModel):
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
 
+    use_reservation: Optional[bool] = FieldInfo(alias="useReservation", default=None)
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
+    """
+
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
     """The Weights & Biases team/user account for logging job progress."""
