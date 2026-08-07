@@ -670,7 +670,7 @@ class TestPollUntilReady:
     def test_running_uses_gateway_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.internal:8080",
+            "directRouteHandle": "https://trainer.example.test:8080",
             "trainingConfig": {
                 "maxContextLength": 32768,
             },
@@ -686,17 +686,17 @@ class TestPollUntilReady:
     def test_running_falls_back_to_direct_route_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.internal:8080/",
+            "directRouteHandle": "https://trainer.example.test:8080/",
         }
         mock_healthz.side_effect = [False, True]
 
         result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
 
-        assert result.base_url == "https://trainer.internal:8080"
+        assert result.base_url == "https://trainer.example.test:8080"
         assert mock_healthz.call_args_list[0].args[0] == (
             "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         )
-        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.internal:8080"
+        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.example.test:8080"
 
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):

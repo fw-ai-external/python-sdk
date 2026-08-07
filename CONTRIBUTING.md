@@ -62,7 +62,7 @@ If you'd like to use the repository from source, you can either install from git
 To install via git:
 
 ```sh
-$ pip install git+ssh://git@github.com/fw-ai-external/python-sdk.git
+$ pip install git+https://github.com/fw-ai-external/python-sdk.git
 ```
 
 Alternatively, you can build from source and install the wheel file:

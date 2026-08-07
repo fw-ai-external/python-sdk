@@ -5,7 +5,7 @@ description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
 authors = [
-{ name = "Fireworks", email = "dhuang@fireworks.ai" },
+  { name = "Fireworks" },
 ]
 
 dependencies = [

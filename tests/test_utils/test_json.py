@@ -120,7 +120,7 @@ class TestOpenapiDumps:
         json_bytes = openapi_dumps(data)
         assert json_bytes == b'{"model":{"name":"Eve","email":null,"phone":null}}'
 
-        model_with_values = User(name="Frank", email="frank@example.com", phone=None)
+        model_with_values = User(name="Frank", email="redacted", phone=None)
         data = {"model": model_with_values}
         json_bytes = openapi_dumps(data)
-        assert json_bytes == b'{"model":{"name":"Frank","email":"frank@example.com","phone":null}}'
+        assert json_bytes == b'{"model":{"name":"Frank","email":"redacted","phone":null}}'
