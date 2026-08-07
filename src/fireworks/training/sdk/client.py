@@ -2604,6 +2604,35 @@ class FiretitanServiceClient(ServiceClient):
             return None
         return super().get_telemetry()
 
+    def create_support_ticket(
+        self,
+        *,
+        question_type: str,
+        subject: str,
+        description: str,
+        account_id: str | None = None,
+        resource_name: str | None = None,
+        error_reason: str | None = None,
+        request_id: str | None = None,
+        user_confirmed: bool = False,
+    ) -> dict:
+        """Submit reviewed support fields through the Fireworks control plane."""
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        api_key = self._require_fireworks_api_key("support ticket submission")
+        base_url = _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
+        with FireworksClient(api_key=api_key, base_url=base_url) as client:
+            return client.create_support_ticket(
+                question_type=question_type,
+                subject=subject,
+                description=description,
+                account_id=account_id,
+                resource_name=resource_name,
+                error_reason=error_reason,
+                request_id=request_id,
+                user_confirmed=user_confirmed,
+            )
+
     def create_rest_client(self):
         if not hasattr(self, "holder") and self._managed_config is not None:
             return _LazyManagedRestClient(

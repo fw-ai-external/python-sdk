@@ -43,6 +43,14 @@ class _TransientOperationPollError(Exception):
 
 _RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
+_SUPPORT_QUESTION_TYPES = {
+    "job_failure": "SUPPORT_QUESTION_TYPE_JOB_FAILURE",
+    "performance": "SUPPORT_QUESTION_TYPE_PERFORMANCE",
+    "billing": "SUPPORT_QUESTION_TYPE_BILLING",
+    "product_question": "SUPPORT_QUESTION_TYPE_PRODUCT_QUESTION",
+    "other": "SUPPORT_QUESTION_TYPE_OTHER",
+}
+
 # 4-segment checkpoint resource name preferred by promote_checkpoint:
 # accounts/<a>/rlorTrainerJobs/<j>/checkpoints/<c>.
 _CHECKPOINT_NAME_RE = re.compile(
@@ -192,6 +200,61 @@ class FireworksClient(_RestClient):
             additional_headers=additional_headers,
             verify_ssl=verify_ssl,
         )
+
+    def create_support_ticket(
+        self,
+        *,
+        question_type: str,
+        subject: str,
+        description: str,
+        account_id: str | None = None,
+        resource_name: str | None = None,
+        error_reason: str | None = None,
+        request_id: str | None = None,
+        user_confirmed: bool = False,
+    ) -> dict:
+        """Submit reviewed support fields through Fireworks to Pylon."""
+        if not user_confirmed:
+            raise ValueError("user_confirmed=True is required after reviewing the exact support fields")
+        normalized_type = question_type.strip().lower().replace("-", "_")
+        api_question_type = _SUPPORT_QUESTION_TYPES.get(normalized_type)
+        if api_question_type is None:
+            allowed = ", ".join(sorted(_SUPPORT_QUESTION_TYPES))
+            raise ValueError(f"invalid question_type {question_type!r}; expected one of: {allowed}")
+
+        support_account_id = (account_id or "").removeprefix("accounts/")
+        if not support_account_id and resource_name:
+            resource_parts = resource_name.split("/")
+            if len(resource_parts) >= 3 and resource_parts[0] == "accounts":
+                support_account_id = resource_parts[1]
+        if not support_account_id:
+            support_account_id = self.account_id
+
+        payload: dict[str, Any] = {
+            "parent": f"accounts/{support_account_id}",
+            "questionType": api_question_type,
+            "subject": subject,
+            "description": description,
+            "userConfirmed": True,
+        }
+        if resource_name:
+            payload["resourceName"] = resource_name
+        if error_reason:
+            payload["errorReason"] = error_reason
+        if request_id:
+            payload["requestId"] = request_id
+
+        resp = self._post(f"/v1/accounts/{support_account_id}/supportTickets", json=payload)
+        if not resp.is_success:
+            raise RuntimeError(
+                format_sdk_error(
+                    "Failed to create support ticket",
+                    parse_api_error(resp),
+                    "Review the submitted fields or use https://support.fireworks.ai/.",
+                    docs_url=DOCS_SDK,
+                )
+            )
+        return resp.json()
 
     def model_is_moe(self, model: str) -> bool:
         """Return whether ``model`` is a mixture-of-experts model.
