@@ -3550,10 +3550,6 @@ class FiretitanServiceClient(ServiceClient):
                     )
                 serverless_model = self._serverless_sampling_model_name(model_path)
                 additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
-                # The gateway/rollout host use X-Session-Affinity for pod-level
-                # sticky routing. Include the session-qualified checkpoint so
-                # requests for one hotloaded adapter prefer the same replicas.
-                additional_headers["X-Session-Affinity"] = serverless_model
                 return FiretitanSamplingClient.create(
                     inference_url=serverless_base_url,
                     model=serverless_model,
@@ -3589,7 +3585,6 @@ class FiretitanServiceClient(ServiceClient):
                 )
             serverless_model = self._serverless_base_sampling_model_name()
             additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
-            additional_headers["X-Session-Affinity"] = serverless_model
             return FiretitanSamplingClient.create(
                 inference_url=serverless_base_url,
                 model=serverless_model,
