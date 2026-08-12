@@ -2152,10 +2152,7 @@ class TestFiretitanServiceClientManagedCompat:
         assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
         assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
-        assert sampler.deployment_sampler.additional_headers == {
-            "X-Test-Header": "1",
-            "X-Session-Affinity": expected_model,
-        }
+        assert sampler.deployment_sampler.additional_headers == {"X-Test-Header": "1"}
         sampler.close()
 
     def test_create_sampling_client_rejects_non_serverless_base_url(self):
@@ -2187,10 +2184,7 @@ class TestFiretitanServiceClientManagedCompat:
         assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
         assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
-        assert sampler.deployment_sampler.additional_headers == {
-            "X-Test-Header": "1",
-            "X-Session-Affinity": expected_model,
-        }
+        assert sampler.deployment_sampler.additional_headers == {"X-Test-Header": "1"}
         sampler.close()
 
     def test_create_sampling_client_serverless_base_model_warns_value_ignored(self, caplog):
