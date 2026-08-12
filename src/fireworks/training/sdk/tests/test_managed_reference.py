@@ -79,15 +79,17 @@ def test_reference_config_derives_no_policy_cmek_resource():
     assert _policy_output_cmek_resource(reference.extra_args) is None
 
 
-def test_managed_config_kwargs_accept_use_reservation():
-    config = _managed_config_from_kwargs(
+def test_managed_config_defaults_use_reservation_true_and_accepts_opt_out():
+    default = _managed_config_from_kwargs({"base_model": BASE_MODEL})
+    disabled = _managed_config_from_kwargs(
         {
             "base_model": BASE_MODEL,
-            "use_reservation": True,
+            "use_reservation": False,
         }
     )
 
-    assert config.use_reservation is True
+    assert default.use_reservation is True
+    assert disabled.use_reservation is False
 
 
 def _policy_config(**overrides) -> _ManagedTinkerConfig:

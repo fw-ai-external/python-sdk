@@ -87,15 +87,15 @@ class TestCreate:
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
-    def test_use_reservation_payload_is_opt_in(self, mgr):
-        enabled = TrainerJobConfig(
+    def test_use_reservation_payload_defaults_true_and_supports_opt_out(self, mgr):
+        default = TrainerJobConfig(base_model="accounts/test/models/qwen3-1p7b")
+        disabled = TrainerJobConfig(
             base_model="accounts/test/models/qwen3-1p7b",
-            use_reservation=True,
+            use_reservation=False,
         )
-        disabled = TrainerJobConfig(base_model="accounts/test/models/qwen3-1p7b")
 
-        assert mgr._build_trainer_create_payload(enabled)["useReservation"] is True
-        assert "useReservation" not in mgr._build_trainer_create_payload(disabled)
+        assert mgr._build_trainer_create_payload(default)["useReservation"] is True
+        assert mgr._build_trainer_create_payload(disabled)["useReservation"] is False
 
     def test_auto_requested_job_id_query_param_when_unset(self, mgr, basic_config):
         resp = MagicMock()
