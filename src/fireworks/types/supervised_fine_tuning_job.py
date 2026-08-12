@@ -233,6 +233,12 @@ class SupervisedFineTuningJob(BaseModel):
     ] = None
     """The region where the fine-tuning job is located."""
 
+    renderer_hugging_face_repo_id: Optional[str] = FieldInfo(alias="rendererHuggingFaceRepoId", default=None)
+    """
+    Curated renderer model ID used by Training V2 to select the concrete chat
+    renderer for this job.
+    """
+
     state: Optional[
         Literal[
             "JOB_STATE_UNSPECIFIED",
@@ -276,6 +282,11 @@ class SupervisedFineTuningJob(BaseModel):
     """Use dedicated resources for the job.
 
     The only supported value currently is "pilot". Defaults to empty.
+    """
+
+    use_reservation: Optional[bool] = FieldInfo(alias="useReservation", default=None)
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
     """
 
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)

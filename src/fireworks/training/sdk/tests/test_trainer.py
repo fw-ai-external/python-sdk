@@ -87,6 +87,16 @@ class TestCreate:
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
         assert payload["hotLoadDeploymentId"] == "my-deploy"
 
+    def test_use_reservation_payload_is_opt_in(self, mgr):
+        enabled = TrainerJobConfig(
+            base_model="accounts/test/models/qwen3-1p7b",
+            use_reservation=True,
+        )
+        disabled = TrainerJobConfig(base_model="accounts/test/models/qwen3-1p7b")
+
+        assert mgr._build_trainer_create_payload(enabled)["useReservation"] is True
+        assert "useReservation" not in mgr._build_trainer_create_payload(disabled)
+
     def test_auto_requested_job_id_query_param_when_unset(self, mgr, basic_config):
         resp = MagicMock()
         resp.is_success = True
@@ -670,7 +680,7 @@ class TestPollUntilReady:
     def test_running_uses_gateway_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.internal:8080",
+            "directRouteHandle": "https://trainer.example.test:8080",
             "trainingConfig": {
                 "maxContextLength": 32768,
             },
@@ -686,17 +696,17 @@ class TestPollUntilReady:
     def test_running_falls_back_to_direct_route_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.internal:8080/",
+            "directRouteHandle": "https://trainer.example.test:8080/",
         }
         mock_healthz.side_effect = [False, True]
 
         result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
 
-        assert result.base_url == "https://trainer.internal:8080"
+        assert result.base_url == "https://trainer.example.test:8080"
         assert mock_healthz.call_args_list[0].args[0] == (
             "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         )
-        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.internal:8080"
+        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.example.test:8080"
 
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):

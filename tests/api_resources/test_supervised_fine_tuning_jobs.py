@@ -69,6 +69,7 @@ class TestSupervisedFineTuningJobs:
             output_model="outputModel",
             region="REGION_UNSPECIFIED",
             use_purpose="usePurpose",
+            use_reservation=True,
             wandb_config={
                 "api_key": "apiKey",
                 "enabled": True,

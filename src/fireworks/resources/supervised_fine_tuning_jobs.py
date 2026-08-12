@@ -80,6 +80,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
             "US_IOWA_1",
@@ -121,6 +122,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -171,10 +173,16 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 to select the concrete chat
+              renderer for this job.
+
           region: The region where the fine-tuning job is located.
 
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
+
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -223,8 +231,10 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },
@@ -515,6 +525,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         nodes: int | Omit = omit,
         optimizer_weight_decay: float | Omit = omit,
         output_model: str | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         region: Literal[
             "REGION_UNSPECIFIED",
             "US_IOWA_1",
@@ -556,6 +567,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -606,10 +618,16 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           output_model: The model ID to be assigned to the resulting fine-tuned model. If not specified,
               the job ID will be used.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 to select the concrete chat
+              renderer for this job.
+
           region: The region where the fine-tuning job is located.
 
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
+
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
 
@@ -658,8 +676,10 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "nodes": nodes,
                     "optimizer_weight_decay": optimizer_weight_decay,
                     "output_model": output_model,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
                 },

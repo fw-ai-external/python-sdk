@@ -70,6 +70,9 @@ class DpoJob(BaseModel):
     Set method to ORPO for ORPO training.
     """
 
+    renderer_hugging_face_repo_id: Optional[str] = FieldInfo(alias="rendererHuggingFaceRepoId", default=None)
+    """Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering."""
+
     name: Optional[str] = None
 
     state: Optional[
@@ -110,6 +113,11 @@ class DpoJob(BaseModel):
 
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
+
+    use_reservation: Optional[bool] = FieldInfo(alias="useReservation", default=None)
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
+    """
 
     wandb_config: Optional[WandbConfig] = FieldInfo(alias="wandbConfig", default=None)
     """The Weights & Biases team/user account for logging job progress."""

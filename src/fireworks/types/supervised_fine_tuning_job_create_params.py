@@ -132,10 +132,21 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     ]
     """The region where the fine-tuning job is located."""
 
+    renderer_hugging_face_repo_id: Annotated[str, PropertyInfo(alias="rendererHuggingFaceRepoId")]
+    """
+    Curated renderer model ID used by Training V2 to select the concrete chat
+    renderer for this job.
+    """
+
     use_purpose: Annotated[str, PropertyInfo(alias="usePurpose")]
     """Use dedicated resources for the job.
 
     The only supported value currently is "pilot". Defaults to empty.
+    """
+
+    use_reservation: Annotated[bool, PropertyInfo(alias="useReservation")]
+    """Whether to try the account's reservation capacity before falling back to shared
+    trainer capacity.
     """
 
     wandb_config: Annotated[WandbConfig, PropertyInfo(alias="wandbConfig")]

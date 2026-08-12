@@ -56,7 +56,9 @@ class DpoJobsResource(SyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -78,7 +80,12 @@ class DpoJobsResource(SyncAPIResource):
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
+
           training_config: Common training configurations.
+
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
 
           wandb_config: The Weights & Biases team/user account for logging job progress.
 
@@ -104,7 +111,9 @@ class DpoJobsResource(SyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "training_config": training_config,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                 },
                 dpo_job_create_params.DpoJobCreateParams,
@@ -393,7 +402,9 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
+        renderer_hugging_face_repo_id: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
+        use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -415,7 +426,12 @@ class AsyncDpoJobsResource(AsyncAPIResource):
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
 
+          renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
+
           training_config: Common training configurations.
+
+          use_reservation: Whether to try the account's reservation capacity before falling back to
+              shared trainer capacity.
 
           wandb_config: The Weights & Biases team/user account for logging job progress.
 
@@ -441,7 +457,9 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
                     "loss_config": loss_config,
+                    "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "training_config": training_config,
+                    "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                 },
                 dpo_job_create_params.DpoJobCreateParams,
