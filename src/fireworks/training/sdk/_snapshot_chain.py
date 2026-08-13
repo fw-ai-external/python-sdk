@@ -20,6 +20,7 @@ from typing import Any, Literal
 from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
 
 SamplerCheckpointType = Literal["base", "delta", "merged_base"]
+ExportPrecision = Literal["source", "bf16", "nvfp4", "mxfp8", "fp8_block128"]
 
 # ``merged_base`` is a LoRA-only export: the trainer folds the active LoRA
 # adapter into the base weights and saves a full base checkpoint (no adapter
@@ -27,6 +28,8 @@ SamplerCheckpointType = Literal["base", "delta", "merged_base"]
 # Like ``base`` it is a standalone full checkpoint, so it never participates in
 # the delta chain or carries incremental hotload metadata.
 _VALID_CHECKPOINT_TYPES = ("base", "delta", "merged_base")
+_VALID_EXPORT_PRECISIONS = ("source", "bf16", "nvfp4", "mxfp8", "fp8_block128")
+DEFAULT_MERGED_BASE_EXPORT_PRECISION: ExportPrecision = "source"
 
 
 def normalize_checkpoint_type(checkpoint_type: str | None) -> SamplerCheckpointType | None:
@@ -37,6 +40,41 @@ def normalize_checkpoint_type(checkpoint_type: str | None) -> SamplerCheckpointT
     if normalized in _VALID_CHECKPOINT_TYPES:
         return normalized  # type: ignore[return-value]
     raise ValueError(f"checkpoint_type must be one of {_VALID_CHECKPOINT_TYPES}")
+
+
+def normalize_export_precision(
+    precision: str | None,
+) -> ExportPrecision | None:
+    """Lower-case and validate a merged-base export precision."""
+    if precision is None:
+        return None
+    normalized = precision.lower()
+    if normalized in _VALID_EXPORT_PRECISIONS:
+        return normalized  # type: ignore[return-value]
+    raise ValueError(
+        "export_precision must be one of "
+        f"{_VALID_EXPORT_PRECISIONS}"
+    )
+
+
+def resolve_export_precision(
+    *,
+    checkpoint_type: SamplerCheckpointType,
+    precision: str | None,
+) -> ExportPrecision | None:
+    """Resolve output precision without exposing source-storage details.
+
+    ``merged_base`` is the only checkpoint type with a final-export precision.
+    Omitting it means ``source``: the trainer discovers the source encoding from
+    model metadata and re-encodes after merging. Other checkpoint types reject
+    an explicit precision and otherwise carry no precision field.
+    """
+    normalized = normalize_export_precision(precision)
+    if checkpoint_type == "merged_base":
+        return normalized or DEFAULT_MERGED_BASE_EXPORT_PRECISION
+    if normalized is not None:
+        raise ValueError("export_precision requires checkpoint_type='merged_base'")
+    return None
 
 
 def resolve_next_checkpoint_type(

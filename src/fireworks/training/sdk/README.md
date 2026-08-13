@@ -20,10 +20,37 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 
 Fireworks-specific additions:
 
-- `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`.
+- `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`. Merged-base output defaults to the source storage format; use `export_precision="bf16"`, `"nvfp4"`, `"mxfp8"`, or `"fp8_block128"` only for an explicit output override.
 - `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save.
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
+
+```python
+# Source-format output is automatic; no input precision is supplied.
+merged = client.save_weights_for_sampler(
+    "final-merged",
+    checkpoint_type="merged_base",
+).result()
+
+# Optional final-output override.
+merged_nvfp4 = client.save_weights_for_sampler(
+    "final-merged-nvfp4",
+    checkpoint_type="merged_base",
+    export_precision="nvfp4",
+).result()
+```
+
+`export_precision` is optional. Prefer omitting it (or passing `"source"`)
+whenever possible. Explicit conversion is an advanced, use-at-your-own-risk
+override: the requested tensor layout or quantization config may not match the
+model architecture or downstream serving precision. Validate that serving can
+load and run the exported checkpoint before promotion. `source` and explicit
+values use the same merge-and-encode pipeline; `source` only resolves the target
+encoding from model metadata. Dense models quantize MLP projections, while MoE
+models quantize routed-expert projections. `ExportPrecision` and
+`DEFAULT_MERGED_BASE_EXPORT_PRECISION` are exported from
+`fireworks.training.sdk` for typed integrations.
+
 - automatic model-input patch for router replay (`_tinker_r3_patch.py`)
 
 ## Minimal lifecycle example

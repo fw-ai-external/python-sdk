@@ -2404,6 +2404,42 @@ class TestTrainingClientSamplingHelpers:
         assert future.result().path == "raw/path"
         save_ext.assert_called_once_with("step-1", checkpoint_type="base", ttl_seconds=60)
 
+    def test_save_weights_for_sampler_passes_export_precision(self):
+        client = self._make_client()
+        with patch.object(
+            client,
+            "save_weights_for_sampler_ext",
+            return_value=SaveSamplerResult(path="raw/path", snapshot_name="merged-test1234"),
+        ) as save_ext:
+            future = client.save_weights_for_sampler(
+                "merged",
+                checkpoint_type="merged_base",
+                export_precision="nvfp4",
+            )
+
+        assert future.result().path == "raw/path"
+        save_ext.assert_called_once_with(
+            "merged",
+            checkpoint_type="merged_base",
+            ttl_seconds=None,
+            export_precision="nvfp4",
+        )
+
+    def test_public_sdk_exposes_source_default(self):
+        from fireworks.training.sdk import DEFAULT_MERGED_BASE_EXPORT_PRECISION
+
+        assert DEFAULT_MERGED_BASE_EXPORT_PRECISION == "source"
+
+    def test_save_weights_for_sampler_rejects_precision_without_merged_base(self):
+        client = self._make_client()
+
+        with pytest.raises(ValueError, match="requires checkpoint_type='merged_base'"):
+            client.save_weights_for_sampler_ext(
+                "step-1",
+                checkpoint_type="base",
+                export_precision="nvfp4",
+            )
+
     def test_save_weights_for_sampler_records_public_path_and_snapshot_alias(self):
         client = self._make_client()
         client.session_id = "test1234"

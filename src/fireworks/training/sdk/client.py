@@ -64,7 +64,9 @@ from fireworks.training.sdk.deployment import (
 )
 from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
+    ExportPrecision,
     SamplerCheckpointType,
+    resolve_export_precision,
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
 )
@@ -2190,6 +2192,7 @@ class FiretitanTrainingClient(TrainingClient):
         name: str,
         checkpoint_type: str | None = None,
         ttl_seconds: int | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> SaveSamplerResult:
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
@@ -2209,16 +2212,33 @@ class FiretitanTrainingClient(TrainingClient):
         adapter first via :meth:`load_adapter`; saving from a fresh LoRA session
         would export base-identical weights.
 
+        ``export_precision`` selects the precision of the final standalone
+        checkpoint and is only valid with ``checkpoint_type="merged_base"``.
+        It defaults to ``"source"``: the trainer discovers the base model's
+        storage format and re-encodes the merged weights. Explicit output
+        overrides are ``"bf16"``, ``"nvfp4"``, ``"mxfp8"``, and
+        ``"fp8_block128"``. No input-precision argument is required. Prefer
+        ``"source"`` whenever possible. Explicit conversion is an advanced,
+        use-at-your-own-risk override because its tensor/config layout may not
+        match the model architecture or downstream serving precision; validate
+        serving load and inference before promotion.
+
         Returns:
             :class:`SaveSamplerResult` with the trainer-returned public sampler
             identity in ``path`` and the requested snapshot name in
             ``snapshot_name``.
         """
+        resolved_checkpoint_type = self._next_sampler_checkpoint_type(checkpoint_type)
+        resolved_export_precision = resolve_export_precision(
+            checkpoint_type=resolved_checkpoint_type,
+            precision=export_precision,
+        )
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
-        resolved_checkpoint_type = self._next_sampler_checkpoint_type(checkpoint_type)
-        extra_body = {"checkpoint_type": resolved_checkpoint_type}
+        extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
+        if resolved_export_precision is not None:
+            extra_body["export_precision"] = resolved_export_precision
         request_id = self._get_request_id()
 
         async def _save():
@@ -2293,6 +2313,7 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         *,
         checkpoint_type: str | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         """Save sampler weights and return a FireTitan snapshot identity.
 
@@ -2302,12 +2323,20 @@ class FiretitanTrainingClient(TrainingClient):
         is not a resumable DCP checkpoint and must not be passed to
         ``load_state`` or ``create_training_client_from_state``; use the path
         returned by ``save_state`` for exact training continuation.
+
+        For ``checkpoint_type="merged_base"``, ``export_precision`` is an
+        optional final-output override. Omit it to preserve the source storage
+        format automatically. Prefer that default whenever possible. Explicit
+        conversion may mismatch the model's downstream serving contract and
+        should be validated before promotion.
         """
-        result = self.save_weights_for_sampler_ext(
-            name,
-            checkpoint_type=checkpoint_type,
-            ttl_seconds=ttl_seconds,
-        )
+        save_kwargs: dict[str, Any] = {
+            "checkpoint_type": checkpoint_type,
+            "ttl_seconds": ttl_seconds,
+        }
+        if export_precision is not None:
+            save_kwargs["export_precision"] = export_precision
+        result = self.save_weights_for_sampler_ext(name, **save_kwargs)
         return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.path))
 
     async def save_weights_for_sampler_async(
@@ -2316,13 +2345,15 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         *,
         checkpoint_type: str | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
-        return await asyncio.to_thread(
-            self.save_weights_for_sampler,
-            name,
-            ttl_seconds=ttl_seconds,
-            checkpoint_type=checkpoint_type,
-        )
+        save_kwargs: dict[str, Any] = {
+            "ttl_seconds": ttl_seconds,
+            "checkpoint_type": checkpoint_type,
+        }
+        if export_precision is not None:
+            save_kwargs["export_precision"] = export_precision
+        return await asyncio.to_thread(self.save_weights_for_sampler, name, **save_kwargs)
 
     def create_sampling_client(
         self,
