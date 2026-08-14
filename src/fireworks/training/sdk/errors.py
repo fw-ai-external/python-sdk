@@ -18,6 +18,7 @@ import time
 import asyncio
 import logging
 from typing import Any, Tuple, Mapping, Callable, Awaitable
+from dataclasses import field, dataclass
 
 import httpx
 
@@ -33,8 +34,74 @@ AGENT_DEBUG_INSTRUCTIONS = (
 )
 
 _ERROR_INFO_TYPE = "type.googleapis.com/google.rpc.ErrorInfo"
-_SAFE_ERROR_INFO_METADATA_KEYS = frozenset({"quota_required", "quota_available"})
+_ERROR_INFO_DOMAIN = "training.fireworks.ai"
+_ERROR_INFO_VERSION = "1"
+_ERROR_INFO_METADATA_VERSION = "version"
+_ERROR_INFO_METADATA_SOURCE = "source"
+_ERROR_INFO_METADATA_CATEGORY = "category"
+_ERROR_INFO_METADATA_QUOTA_REQUIRED = "quota_required"
+_ERROR_INFO_METADATA_QUOTA_AVAILABLE = "quota_available"
 _MAX_ERROR_INFO_METADATA_VALUE_LENGTH = 128
+_COMPATIBILITY_ERROR_INFO_METADATA_KEYS = frozenset(
+    {
+        _ERROR_INFO_METADATA_QUOTA_REQUIRED,
+        _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
+    }
+)
+
+_SOURCE_MANAGED = "managed"
+_SOURCE_TINKER = "tinker"
+_SOURCE_SERVERLESS_GATEWAY = "serverless_gateway"
+_SOURCE_LIFECYCLE = "lifecycle"
+
+_REASON_SOURCES: dict[str, frozenset[str]] = {
+    "DATASET_INVALID": frozenset({_SOURCE_MANAGED}),
+    "INVALID_INPUT": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
+    "RESOURCE_NOT_FOUND": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
+    "INSUFFICIENT_CAPACITY": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
+    "QUOTA_EXCEEDED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED}),
+    "TIER_REQUIRED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED}),
+    "RATE_LIMIT_EXCEEDED": frozenset({_SOURCE_SERVERLESS_GATEWAY, _SOURCE_MANAGED}),
+    "CANCELLED": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
+    "PERMISSION_DENIED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED, _SOURCE_SERVERLESS_GATEWAY}),
+    "PREREQUISITE_NOT_MET": frozenset({_SOURCE_MANAGED}),
+    "RESOURCE_INVALID": frozenset({_SOURCE_MANAGED}),
+    "TIMEOUT": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
+    "BACKEND_ERROR": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
+    "INTERNAL_ERROR": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
+}
+
+_REASON_METADATA_KEYS: dict[str, frozenset[str]] = {
+    "INVALID_INPUT": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "RESOURCE_NOT_FOUND": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "INSUFFICIENT_CAPACITY": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "QUOTA_EXCEEDED": frozenset(
+        {
+            _ERROR_INFO_METADATA_QUOTA_REQUIRED,
+            _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
+        }
+    ),
+    "TIER_REQUIRED": frozenset(
+        {
+            _ERROR_INFO_METADATA_QUOTA_REQUIRED,
+            _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
+        }
+    ),
+    "CANCELLED": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "TIMEOUT": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "BACKEND_ERROR": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+    "INTERNAL_ERROR": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
+}
+
+
+@dataclass(frozen=True)
+class _TrainingErrorStatus:
+    grpc_code: int
+    public_message: str
+    reason: str
+    domain: str
+    metadata: Mapping[str, str] = field(default_factory=dict)
+    source: str = ""
 
 
 class TrainingAPIError(RuntimeError):
@@ -118,22 +185,20 @@ def parse_training_api_error(
     status_code = getattr(resp, "status_code", None)
     reason: str | None = None
     metadata: dict[str, str] = {}
+    training_status: _TrainingErrorStatus | None = None
 
     try:
         body = resp.json()
         status_body = body
         if isinstance(body, dict) and isinstance(body.get("error"), dict):
             status_body = body["error"]
-        details = status_body.get("details", []) if isinstance(status_body, dict) else []
-        if isinstance(details, list):
-            for detail in details:
-                if not isinstance(detail, dict) or detail.get("@type") != _ERROR_INFO_TYPE:
-                    continue
-                candidate = detail.get("reason")
-                if isinstance(candidate, str) and candidate.strip():
-                    reason = candidate.strip()
-                    metadata = _safe_error_info_metadata(detail.get("metadata"))
-                    break
+        # Keep the existing public SDK view source-preserving and
+        # forward-compatible. This is deliberately separate from the private
+        # carrier below: public ``reason`` reports the source-provided
+        # identifier, while only a fully canonical Fireworks status may be
+        # re-emitted by a managed writer.
+        reason, metadata = _compatibility_error_info(status_body)
+        training_status = _trusted_training_error_status(status_body)
     except Exception:
         # Message parsing already provides the compatibility fallback. A
         # malformed details block must not turn one API failure into another.
@@ -143,23 +208,121 @@ def parse_training_api_error(
     if context:
         http_suffix = f" (HTTP {status_code})" if status_code is not None else ""
         rendered = f"{context}{http_suffix}: {message}"
-    return TrainingAPIError(
+    error = TrainingAPIError(
         rendered,
         status_code=status_code,
         reason=reason,
         metadata=metadata,
     )
+    if training_status is not None:
+        error._fireworks_training_error_status = training_status
+    return error
 
 
-def _safe_error_info_metadata(value: Any) -> dict[str, str]:
+def _compatibility_error_info(value: Any) -> tuple[str | None, dict[str, str]]:
+    """Return the legacy narrow public view of the first ErrorInfo detail.
+
+    This preserves the existing ``TrainingAPIError.reason`` / ``metadata``
+    contract without treating those fields as trusted managed policy. The
+    private writer carrier is validated independently below.
+    """
+
+    if not isinstance(value, dict):
+        return None, {}
+    details = value.get("details", [])
+    if not isinstance(details, list):
+        return None, {}
+    for detail in details:
+        if not isinstance(detail, dict) or detail.get("@type") != _ERROR_INFO_TYPE:
+            continue
+        candidate = detail.get("reason")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip(), _compatibility_error_info_metadata(detail.get("metadata"))
+    return None, {}
+
+
+def _compatibility_error_info_metadata(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
     safe: dict[str, str] = {}
-    for key in _SAFE_ERROR_INFO_METADATA_KEYS:
+    for key in _COMPATIBILITY_ERROR_INFO_METADATA_KEYS:
         item = value.get(key)
         if isinstance(item, str):
             safe[key] = item[:_MAX_ERROR_INFO_METADATA_VALUE_LENGTH]
     return safe
+
+
+def _trusted_training_error_status(value: Any) -> _TrainingErrorStatus | None:
+    if not isinstance(value, dict):
+        return None
+    grpc_code = value.get("code")
+    public_message = value.get("message")
+    details = value.get("details", [])
+    if (
+        not isinstance(grpc_code, int)
+        or isinstance(grpc_code, bool)
+        or not 0 <= grpc_code <= 16
+        or not isinstance(public_message, str)
+        or not isinstance(details, list)
+    ):
+        return None
+
+    trusted: _TrainingErrorStatus | None = None
+    for detail in details:
+        if not isinstance(detail, dict) or detail.get("@type") != _ERROR_INFO_TYPE:
+            continue
+        if detail.get("domain") != _ERROR_INFO_DOMAIN:
+            continue
+        candidate = _trusted_error_info(
+            detail,
+            grpc_code=grpc_code,
+            public_message=public_message,
+        )
+        if candidate is None:
+            return None
+        if trusted is not None and trusted != candidate:
+            return None
+        trusted = candidate
+    return trusted
+
+
+def _trusted_error_info(
+    detail: dict[str, Any],
+    *,
+    grpc_code: int,
+    public_message: str,
+) -> _TrainingErrorStatus | None:
+    reason = detail.get("reason")
+    metadata = detail.get("metadata")
+    if not isinstance(reason, str) or reason not in _REASON_SOURCES or not isinstance(metadata, dict):
+        return None
+    if metadata.get(_ERROR_INFO_METADATA_VERSION) != _ERROR_INFO_VERSION:
+        return None
+    source = metadata.get(_ERROR_INFO_METADATA_SOURCE)
+    if not isinstance(source, str) or source not in _REASON_SOURCES[reason]:
+        return None
+
+    allowed_keys = _REASON_METADATA_KEYS.get(reason, frozenset())
+    safe_metadata: dict[str, str] = {}
+    for key, item in metadata.items():
+        if key in (_ERROR_INFO_METADATA_VERSION, _ERROR_INFO_METADATA_SOURCE):
+            continue
+        if (
+            key not in allowed_keys
+            or not isinstance(item, str)
+            or len(item.encode("utf-8")) > _MAX_ERROR_INFO_METADATA_VALUE_LENGTH
+        ):
+            return None
+        safe_metadata[key] = item
+
+    return _TrainingErrorStatus(
+        grpc_code=grpc_code,
+        public_message=public_message,
+        reason=reason,
+        domain=_ERROR_INFO_DOMAIN,
+        metadata=safe_metadata,
+        source=source,
+    )
 
 
 _PROMOTE_CHECKPOINT_CLIENT_ERROR_SOLUTION = (
@@ -175,9 +338,7 @@ _PROMOTE_SESSION_CHECKPOINT_CLIENT_ERROR_SOLUTION = (
     f"  Console: {CONSOLE_URL}"
 )
 
-_PROMOTE_PLATFORM_ERROR_SOLUTION = (
-    "Retry checkpoint promotion. If the error persists, contact Fireworks support."
-)
+_PROMOTE_PLATFORM_ERROR_SOLUTION = "Retry checkpoint promotion. If the error persists, contact Fireworks support."
 
 
 def format_checkpoint_promotion_error(
@@ -275,7 +436,7 @@ def _backoff_delay(attempt: int, start_time: float, max_wait_time: float) -> flo
     elapsed = time.time() - start_time
     if elapsed >= max_wait_time:
         return None
-    delay = min(2 ** attempt, 30)
+    delay = min(2**attempt, 30)
     return min(delay, start_time + max_wait_time - time.time())
 
 
@@ -367,6 +528,7 @@ def _is_requests_retryable(exc: Exception) -> bool:
     """
     try:
         import requests as _req
+
         return isinstance(exc, (_req.ConnectionError, _req.Timeout))
     except ImportError:
         return False

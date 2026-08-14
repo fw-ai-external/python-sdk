@@ -41,9 +41,7 @@ class TestFormatSdkError:
         assert f"Agent debug: {AGENT_DEBUG_INSTRUCTIONS}" in result
 
     def test_with_docs_url(self):
-        result = format_sdk_error(
-            "Job failed", "bad model", "Fix it", docs_url="https://docs.example.com"
-        )
+        result = format_sdk_error("Job failed", "bad model", "Fix it", docs_url="https://docs.example.com")
         assert "Docs: https://docs.example.com" in result
 
     def test_without_docs_url(self):
@@ -202,7 +200,7 @@ class TestParseTrainingApiError:
         resp.json.return_value = body
         return resp
 
-    def test_parses_error_info_in_arbitrary_detail_order(self):
+    def test_public_compatibility_survives_rejected_private_carrier(self):
         resp = self._resp(
             {
                 "code": 7,
@@ -212,7 +210,10 @@ class TestParseTrainingApiError:
                     {
                         "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                         "reason": "TIER_REQUIRED",
+                        "domain": "training.fireworks.ai",
                         "metadata": {
+                            "version": "1",
+                            "source": "lifecycle",
                             "quota_required": "8",
                             "authorization": "must-not-escape",
                         },
@@ -228,8 +229,48 @@ class TestParseTrainingApiError:
         assert err.status_code == 403
         assert err.reason == "TIER_REQUIRED"
         assert err.metadata == {"quota_required": "8"}
+        assert not hasattr(err, "_fireworks_training_error_status")
         assert str(err) == "RLOR job creation failed (HTTP 403): changeable diagnostic"
         assert "authorization" not in str(err)
+
+    def test_attaches_private_carrier_from_canonical_error_info(self):
+        resp = self._resp(
+            {
+                "code": 8,
+                "message": "exact protobuf message",
+                "details": [
+                    {"@type": "type.googleapis.com/example.Unknown", "value": "ignored"},
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "TIER_REQUIRED",
+                        "domain": "training.fireworks.ai",
+                        "metadata": {
+                            "version": "1",
+                            "source": "lifecycle",
+                            "quota_required": "8",
+                            "quota_available": "4",
+                        },
+                    },
+                ],
+            },
+            status_code=403,
+        )
+
+        err = parse_training_api_error(resp, context="RLOR job creation failed")
+
+        status = err._fireworks_training_error_status
+        assert status.grpc_code == 8
+        assert status.grpc_code != err.status_code
+        assert status.public_message == "exact protobuf message"
+        assert status.reason == "TIER_REQUIRED"
+        assert status.domain == "training.fireworks.ai"
+        assert status.source == "lifecycle"
+        assert status.metadata == {
+            "quota_required": "8",
+            "quota_available": "4",
+        }
+        assert err.reason == "TIER_REQUIRED"
+        assert not hasattr(err, "training_error_reason")
 
     def test_nested_grpc_gateway_error(self):
         resp = self._resp(
@@ -241,6 +282,11 @@ class TestParseTrainingApiError:
                         {
                             "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                             "reason": "QUOTA_EXCEEDED",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {
+                                "version": "1",
+                                "source": "managed",
+                            },
                         }
                     ],
                 }
@@ -272,6 +318,48 @@ class TestParseTrainingApiError:
         err = parse_training_api_error(self._resp(body))
 
         assert err.reason is None
+        assert not hasattr(err, "_fireworks_training_error_status")
+
+    @pytest.mark.parametrize(
+        ("body", "expected_reason"),
+        [
+            (
+                {
+                    "code": 7,
+                    "message": "unknown reason",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "FUTURE_REASON",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {"version": "1", "source": "managed"},
+                        }
+                    ],
+                },
+                "FUTURE_REASON",
+            ),
+            (
+                {
+                    "code": 8,
+                    "message": "unversioned",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "QUOTA_EXCEEDED",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {"source": "managed"},
+                        }
+                    ],
+                },
+                "QUOTA_EXCEEDED",
+            ),
+        ],
+    )
+    def test_public_reason_does_not_require_private_carrier(self, body, expected_reason):
+        err = parse_training_api_error(self._resp(body))
+
+        assert err.reason == expected_reason
+        assert not hasattr(err, "_fireworks_training_error_status")
 
 
 # ---------------------------------------------------------------------------
@@ -406,9 +494,7 @@ class TestAsyncRequestWithRetries:
             calls["n"] += 1
             return self._resp(503)
 
-        resp = asyncio.run(
-            async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
-        )
+        resp = asyncio.run(async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=()))
         assert resp.status_code == 503
         assert calls["n"] == 1  # no transport-level retry (sampling opts out here)
 
@@ -417,9 +503,7 @@ class TestAsyncRequestWithRetries:
             raise httpx.ConnectError("down")
 
         with pytest.raises(httpx.ConnectError):
-            asyncio.run(
-                async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
-            )
+            asyncio.run(async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=()))
 
 
 class TestParseRetryAfter:

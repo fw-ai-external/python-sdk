@@ -206,19 +206,14 @@ class TestCreate:
         mgr.try_get.assert_called_once_with("sft-job-1")
         resp.raise_for_status.assert_not_called()
 
-    def test_create_retry_reuses_auto_job_id_after_conflict(
-        self, mgr, basic_config, monkeypatch
-    ):
+    def test_create_retry_reuses_auto_job_id_after_conflict(self, mgr, basic_config, monkeypatch):
         """E2E-style retry stack test: same SDK call, same generated job ID."""
         generated_job_id = "training-api-service-12345678"
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            if (
-                request.method == "POST"
-                and request.url.path == "/v1/accounts/test-account/rlorTrainerJobs"
-            ):
+            if request.method == "POST" and request.url.path == "/v1/accounts/test-account/rlorTrainerJobs":
                 post_count = sum(req.method == "POST" for req in requests)
                 if post_count == 1:
                     return httpx.Response(
@@ -233,17 +228,11 @@ class TestCreate:
                 )
             if (
                 request.method == "GET"
-                and request.url.path
-                == f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
+                and request.url.path == f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
             ):
                 return httpx.Response(
                     200,
-                    json={
-                        "name": (
-                            "accounts/test-account/rlorTrainerJobs/"
-                            f"{generated_job_id}"
-                        )
-                    },
+                    json={"name": ("accounts/test-account/rlorTrainerJobs/" f"{generated_job_id}")},
                     request=request,
                 )
             return httpx.Response(404, json={"error": "not found"}, request=request)
@@ -252,9 +241,7 @@ class TestCreate:
             "fireworks.training.sdk.errors._backoff_delay",
             lambda *_args, **_kwargs: 0.0,
         )
-        monkeypatch.setattr(
-            "fireworks.training.sdk.errors.time.sleep", lambda _delay: None
-        )
+        monkeypatch.setattr("fireworks.training.sdk.errors.time.sleep", lambda _delay: None)
         mgr._sync_client.close()
         mgr._sync_client = httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -266,9 +253,7 @@ class TestCreate:
 
         post_requests = [req for req in requests if req.method == "POST"]
         get_requests = [req for req in requests if req.method == "GET"]
-        post_job_ids = [
-            _query_params(str(req.url))["rlorTrainerJobId"][0] for req in post_requests
-        ]
+        post_job_ids = [_query_params(str(req.url))["rlorTrainerJobId"][0] for req in post_requests]
 
         assert result == CreatedTrainerJob(
             job_name=f"accounts/test-account/rlorTrainerJobs/{generated_job_id}",
@@ -636,6 +621,11 @@ class TestCreate:
                     {
                         "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                         "reason": "TIER_REQUIRED",
+                        "domain": "training.fireworks.ai",
+                        "metadata": {
+                            "version": "1",
+                            "source": "lifecycle",
+                        },
                     }
                 ],
             },
@@ -796,11 +786,7 @@ class TestPollUntilReady:
         with caplog.at_level("INFO"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
 
-        creating_logs = [
-            record.message
-            for record in caplog.records
-            if "JOB_STATE_CREATING" in record.message
-        ]
+        creating_logs = [record.message for record in caplog.records if "JOB_STATE_CREATING" in record.message]
         assert len(creating_logs) == 1
         assert "Waiting for capacity" in creating_logs[0]
 
@@ -914,9 +900,7 @@ class TestResolveTrainingProfile:
         resp = MagicMock()
         resp.ok = True
         resp.json.return_value = {
-            "trainingShapeVersions": [
-                {"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}
-            ]
+            "trainingShapeVersions": [{"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}]
         }
         mgr._get = MagicMock(return_value=resp)
 
@@ -959,9 +943,7 @@ class TestModelIsMoe:
     )
     def test_reads_model_architecture(self, details_key, moe):
         client = FireworksClient(api_key="k", base_url="https://x")
-        client._get = MagicMock(
-            return_value=self._response({details_key: {"moe": moe}})
-        )
+        client._get = MagicMock(return_value=self._response({details_key: {"moe": moe}}))
 
         assert client.model_is_moe("accounts/a/models/m") is moe
         client._get.assert_called_once_with(
@@ -1084,9 +1066,7 @@ class TestListCheckpoints:
 
     def test_403_surfaces_permission_denied(self):
         mgr = self._mgr()
-        mgr._get = MagicMock(
-            return_value=self._resp({"message": "", "code": 7}, status=403)
-        )
+        mgr._get = MagicMock(return_value=self._resp({"message": "", "code": 7}, status=403))
 
         with pytest.raises(RuntimeError, match="does not have access"):
             mgr.list_checkpoints("j")
@@ -1301,10 +1281,7 @@ class TestValidate:
         )
         with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
             config.validate()
-        assert any(
-            "gradient_accumulation_steps=1 is deprecated" in rec.message
-            for rec in caplog.records
-        )
+        assert any("gradient_accumulation_steps=1 is deprecated" in rec.message for rec in caplog.records)
 
     def test_rejects_negative_inactivity_timeout(self):
         config = TrainerJobConfig(
