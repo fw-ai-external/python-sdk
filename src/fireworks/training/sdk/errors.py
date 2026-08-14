@@ -17,7 +17,7 @@ from __future__ import annotations
 import time
 import asyncio
 import logging
-from typing import Any, Tuple, Mapping, Callable, Awaitable
+from typing import Any, Tuple, Union, Literal, Mapping, Callable, Awaitable
 from dataclasses import field, dataclass
 
 import httpx
@@ -42,6 +42,7 @@ _ERROR_INFO_METADATA_CATEGORY = "category"
 _ERROR_INFO_METADATA_QUOTA_REQUIRED = "quota_required"
 _ERROR_INFO_METADATA_QUOTA_AVAILABLE = "quota_available"
 _MAX_ERROR_INFO_METADATA_VALUE_LENGTH = 128
+_MAX_SOURCE_ERROR_FIELD_LENGTH = 128
 _COMPATIBILITY_ERROR_INFO_METADATA_KEYS = frozenset(
     {
         _ERROR_INFO_METADATA_QUOTA_REQUIRED,
@@ -102,6 +103,27 @@ class _TrainingErrorStatus:
     domain: str
     metadata: Mapping[str, str] = field(default_factory=dict)
     source: str = ""
+
+
+@dataclass(frozen=True)
+class _TinkerSourceError:
+    source: Literal["tinker"]
+    error: str | None
+    category: str | None
+    error_class: str | None
+
+
+@dataclass(frozen=True)
+class _ServerlessGatewaySourceError:
+    source: Literal["serverless_gateway"]
+    code: str | None
+    type: str | None
+
+
+_FireworksTrainingErrorSource = Union[
+    _TinkerSourceError,
+    _ServerlessGatewaySourceError,
+]
 
 
 class TrainingAPIError(RuntimeError):
@@ -217,6 +239,113 @@ def parse_training_api_error(
     if training_status is not None:
         error._fireworks_training_error_status = training_status
     return error
+
+
+def _attach_training_error_status(exc: BaseException, resp: Any) -> bool:
+    """Attach a trusted Lifecycle carrier without changing the exception."""
+
+    if hasattr(exc, "_fireworks_training_error_source"):
+        return False
+    parsed = parse_training_api_error(resp)
+    status = getattr(parsed, "_fireworks_training_error_status", None)
+    if not isinstance(status, _TrainingErrorStatus):
+        return False
+    exc._fireworks_training_error_status = status  # type: ignore[attr-defined]
+    return True
+
+
+def _training_api_runtime_error(
+    resp: Any,
+    *,
+    context: str,
+) -> RuntimeError:
+    parsed = parse_training_api_error(resp, context=context)
+    error = RuntimeError(str(parsed))
+    status = getattr(parsed, "_fireworks_training_error_status", None)
+    if isinstance(status, _TrainingErrorStatus):
+        error._fireworks_training_error_status = status  # type: ignore[attr-defined]
+    return error
+
+
+def _bounded_source_error_field(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeError:
+        return None
+    if len(encoded) > _MAX_SOURCE_ERROR_FIELD_LENGTH:
+        return None
+    return value
+
+
+def _tinker_source_error(
+    *,
+    error: Any,
+    category: Any,
+    error_class: Any,
+) -> _TinkerSourceError | None:
+    source = _TinkerSourceError(
+        source=_SOURCE_TINKER,
+        error=_bounded_source_error_field(error),
+        category=_bounded_source_error_field(category),
+        error_class=_bounded_source_error_field(error_class),
+    )
+    if source.error is None and source.category is None and source.error_class is None:
+        return None
+    return source
+
+
+def _serverless_gateway_source_error(
+    value: Any,
+) -> _ServerlessGatewaySourceError | None:
+    if not isinstance(value, dict) or not isinstance(value.get("error"), dict):
+        return None
+    envelope = value["error"]
+    code = _bounded_source_error_field(envelope.get("code"))
+    error_type = _bounded_source_error_field(envelope.get("type"))
+    # ``code`` and ``type`` are independently optional upstream fields. Reject
+    # malformed present values, but preserve whichever valid fields exist.
+    if envelope.get("code") is not None and code is None:
+        return None
+    if envelope.get("type") is not None and error_type is None:
+        return None
+    if code is None and error_type is None:
+        return None
+    return _ServerlessGatewaySourceError(
+        source=_SOURCE_SERVERLESS_GATEWAY,
+        code=code,
+        type=error_type,
+    )
+
+
+def _is_serverless_gateway_url(value: Any) -> bool:
+    try:
+        path = httpx.URL(str(value)).path
+    except Exception:
+        return False
+    route = "/training/v1/serverless"
+    return path == route or path.startswith(f"{route}/")
+
+
+def _attach_training_error_source(
+    exc: BaseException,
+    source: _FireworksTrainingErrorSource | None,
+) -> bool:
+    if not isinstance(source, (_TinkerSourceError, _ServerlessGatewaySourceError)):
+        return False
+    if hasattr(exc, "_fireworks_training_error_status"):
+        return False
+    exc._fireworks_training_error_source = source  # type: ignore[attr-defined]
+    return True
+
+
+def _copy_training_error_source(
+    exc: BaseException,
+    source_exc: BaseException,
+) -> bool:
+    source = getattr(source_exc, "_fireworks_training_error_source", None)
+    return _attach_training_error_source(exc, source)
 
 
 def _compatibility_error_info(value: Any) -> tuple[str | None, dict[str, str]]:

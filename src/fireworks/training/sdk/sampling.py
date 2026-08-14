@@ -23,7 +23,10 @@ from fireworks.training.sdk.errors import (
     DOCS_SDK,
     format_sdk_error,
     parse_retry_after,
+    _is_serverless_gateway_url,
     async_request_with_retries,
+    _attach_training_error_source,
+    _serverless_gateway_source_error,
 )
 from fireworks.training.sdk.concurrency import (
     FixedConcurrencyController,
@@ -811,8 +814,31 @@ class DeploymentSampler(_RestClient):
             message = self._timeout_diagnostic(
                 label, prompt_ids, max_tokens, kwargs, diagnostic_context, exhausted=True
             )
-            return DeploymentSamplerTimeoutError(message, **common)
-        return SamplingRequestError(**common)
+            error = DeploymentSamplerTimeoutError(message, **common)
+        else:
+            error = SamplingRequestError(**common)
+
+        self._attach_serverless_gateway_source(error, transient)
+        return error
+
+    def _attach_serverless_gateway_source(
+        self,
+        target: BaseException,
+        source: BaseException,
+    ) -> None:
+        """Copy bounded gateway context without changing public exceptions."""
+
+        response = getattr(source, "response", None)
+        if response is None or not _is_serverless_gateway_url(self.base_url):
+            return
+        try:
+            body = response.json()
+        except Exception:
+            body = None
+        _attach_training_error_source(
+            target,
+            _serverless_gateway_source_error(body),
+        )
 
     async def _do_one_completion(
         self,
@@ -853,7 +879,8 @@ class DeploymentSampler(_RestClient):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
                     # Non-retryable (e.g. 400/401/403/404/409/422): fail fast
-                    # with the raw HTTP error (unchanged behavior).
+                    # with the same raw HTTP error and additive private context.
+                    self._attach_serverless_gateway_source(e, e)
                     raise
                 transient, label = e, f"HTTP {e.response.status_code}"
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
@@ -979,11 +1006,7 @@ class DeploymentSampler(_RestClient):
                     )
                 )
 
-            raw_logprobs = (
-                self._extract_logprobs(choice, field="logprob")
-                if user_requested_logprobs
-                else None
-            )
+            raw_logprobs = self._extract_logprobs(choice, field="logprob") if user_requested_logprobs else None
             sampling_logprobs = (
                 self._extract_logprobs(choice, field="sampling_logprob", allow_none=True)
                 if user_requested_logprobs
@@ -1032,11 +1055,7 @@ class DeploymentSampler(_RestClient):
                     )
 
                 completion_ids = completion_ids[len(prompt_for_full) :]
-                lp_is_echo = (
-                    raw_logprobs is not None
-                    or sampling_logprobs is not None
-                    or routing_matrices is not None
-                )
+                lp_is_echo = raw_logprobs is not None or sampling_logprobs is not None or routing_matrices is not None
                 if raw_logprobs is not None:
                     raw_logprobs = raw_logprobs[1:]
                 if sampling_logprobs is not None:

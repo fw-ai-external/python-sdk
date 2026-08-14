@@ -36,9 +36,21 @@ def _make_sampler(**kwargs):
     return DeploymentSampler(**defaults)
 
 
-def _http_error(status: int, headers: dict | None = None) -> httpx.HTTPStatusError:
-    req = httpx.Request("POST", _URL)
-    resp = httpx.Response(status, headers=headers or {}, request=req)
+def _http_error(
+    status: int,
+    headers: dict | None = None,
+    *,
+    body: dict | None = None,
+    url: str = _URL,
+) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", url)
+    response_kwargs = {"json": body} if body is not None else {}
+    resp = httpx.Response(
+        status,
+        headers=headers or {},
+        request=req,
+        **response_kwargs,
+    )
     return httpx.HTTPStatusError(f"HTTP {status}", request=req, response=resp)
 
 
@@ -134,6 +146,67 @@ class TestSamplingRetryLoop:
         assert err.request_id == "gw-x"  # server id of the last attempt, for log search
         assert not isinstance(err, DeploymentSamplerTimeoutError)
 
+    def test_final_serverless_gateway_error_attaches_private_context(self, no_sleep, no_jitter):
+        serverless_url = "https://api.example.com/training/v1/serverless/inference/v1/completions"
+        sampler = _make_sampler(inference_url="https://api.example.com/training/v1/serverless")
+        gateway_body = {
+            "error": {
+                "code": "Future_Code/V2",
+                "type": "Future.Type/V3",
+                "message": "mutable diagnostic",
+            }
+        }
+        _install_stream(
+            sampler,
+            [
+                httpx.ConnectError("first attempt"),
+                _http_error(
+                    503,
+                    {"x-request-id": "gw-final"},
+                    body=gateway_body,
+                    url=serverless_url,
+                ),
+            ],
+        )
+
+        with pytest.raises(SamplingRequestError) as excinfo:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        err = excinfo.value
+        assert err.attempts == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert err.final_status == 503
+        assert err.request_id == "gw-final"
+        source = err._fireworks_training_error_source
+        assert source.source == "serverless_gateway"
+        assert source.code == "Future_Code/V2"
+        assert source.type == "Future.Type/V3"
+        assert "Future_Code/V2" not in str(err)
+        assert "Future_Code/V2" not in repr(err.as_error_record())
+
+    def test_final_connection_error_does_not_inherit_stale_gateway_context(self, no_sleep, no_jitter):
+        sampler = _make_sampler(inference_url="https://api.example.com/training/v1/serverless")
+        structured = _http_error(
+            503,
+            body={
+                "error": {
+                    "code": "SERVICE_UNAVAILABLE",
+                    "type": "error",
+                    "message": "earlier response",
+                }
+            },
+            url="https://api.example.com/training/v1/serverless/inference/v1/completions",
+        )
+        _install_stream(
+            sampler,
+            [structured, httpx.ConnectError("final connection failure")],
+        )
+
+        with pytest.raises(SamplingRequestError) as excinfo:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert excinfo.value.final_error_kind == "connection"
+        assert not hasattr(excinfo.value, "_fireworks_training_error_source")
+
     def test_missing_request_id_header(self, no_sleep, no_jitter):
         sampler = _make_sampler()
         _install_stream(sampler, [_http_error(503)])
@@ -157,9 +230,40 @@ class TestSamplingRetryLoop:
     def test_non_retryable_400_fails_fast(self, no_sleep, no_jitter):
         sampler = _make_sampler()
         calls = _install_stream(sampler, [_http_error(400)])
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
         assert len(calls) == 1  # no retry
+        assert not hasattr(excinfo.value, "_fireworks_training_error_source")
+
+    def test_non_retryable_serverless_gateway_error_keeps_type_and_context(self):
+        serverless_url = "https://api.example.com/training/v1/serverless/inference/v1/completions"
+        sampler = _make_sampler(inference_url="https://api.example.com/training/v1/serverless")
+        original = _http_error(
+            400,
+            body={
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "type": "error",
+                    "message": "mutable diagnostic",
+                }
+            },
+            url=serverless_url,
+        )
+        original_args = original.args
+        calls = _install_stream(sampler, [original])
+
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert excinfo.value is original
+        assert excinfo.value.args == original_args
+        assert len(calls) == 1
+        source = excinfo.value._fireworks_training_error_source
+        assert (source.source, source.code, source.type) == (
+            "serverless_gateway",
+            "BAD_REQUEST",
+            "error",
+        )
 
     def test_persistent_504_raises_timeout_subclass(self, no_sleep, no_jitter):
         sampler = _make_sampler()
@@ -237,9 +341,7 @@ class TestContextAndRedaction:
         assert err.context == {"session": "sess-1", "run": "run-1", "checkpoint": "ckpt-3", "step": 2, "group": 7}
         assert err.model == "m" and err.logical_request_id
 
-    def test_error_record_has_no_secrets_or_prompt(
-        self, no_sleep, no_jitter, monkeypatch
-    ):
+    def test_error_record_has_no_secrets_or_prompt(self, no_sleep, no_jitter, monkeypatch):
         monkeypatch.setattr(
             uuid,
             "uuid4",
@@ -256,9 +358,7 @@ class TestContextAndRedaction:
 
 
 def _sse_success_bytes() -> bytes:
-    chunk = (
-        '{"choices":[{"text":"hi","finish_reason":"stop","raw_output":{"completion_token_ids":[40,50]}}]}'
-    )
+    chunk = '{"choices":[{"text":"hi","finish_reason":"stop","raw_output":{"completion_token_ids":[40,50]}}]}'
     return f"data: {chunk}\n\ndata: [DONE]\n\n".encode("utf-8")
 
 
@@ -289,9 +389,7 @@ class TestTransportLevel:
         sampler = _make_sampler()
         sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
         with pytest.raises(httpx.HTTPStatusError):
-            asyncio.run(
-                sampler.async_completions_stream(prompt=[1, 2, 3], raw_output=True, logical_request_id="lr-1")
-            )
+            asyncio.run(sampler.async_completions_stream(prompt=[1, 2, 3], raw_output=True, logical_request_id="lr-1"))
         # errors.py opt-out means the transport is hit exactly once per stream call.
         assert posts["n"] == 1
         sampler.close()

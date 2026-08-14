@@ -26,6 +26,36 @@ def _query_params(path: str) -> dict[str, list[str]]:
     return parse_qs(urlparse(path).query)
 
 
+def _training_error_response(
+    *,
+    method: str,
+    path: str,
+    message: str,
+    reason: str = "TIER_REQUIRED",
+    source: str = "lifecycle",
+) -> httpx.Response:
+    return httpx.Response(
+        403,
+        json={
+            "code": 8,
+            "message": message,
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": reason,
+                    "domain": "training.fireworks.ai",
+                    "metadata": {
+                        "version": "1",
+                        "source": source,
+                        "quota_required": "8",
+                    },
+                }
+            ],
+        },
+        request=httpx.Request(method, f"https://api.example.com{path}"),
+    )
+
+
 @pytest.fixture
 def mgr():
     manager = TrainerJobManager(
@@ -232,7 +262,7 @@ class TestCreate:
             ):
                 return httpx.Response(
                     200,
-                    json={"name": ("accounts/test-account/rlorTrainerJobs/" f"{generated_job_id}")},
+                    json={"name": (f"accounts/test-account/rlorTrainerJobs/{generated_job_id}")},
                     request=request,
                 )
             return httpx.Response(404, json={"error": "not found"}, request=request)
@@ -607,41 +637,145 @@ class TestCreate:
         assert "RLOR job creation failed (HTTP 403)" in err_text
         assert body_message in err_text
 
-    def test_create_preserves_structured_training_reason(self, mgr):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            display_name="valid-name",
+
+class TestStructuredLifecycleErrors:
+    @staticmethod
+    def _assert_carrier(exc: BaseException, *, message: str, reason: str = "TIER_REQUIRED") -> None:
+        status = exc._fireworks_training_error_status
+        assert status.grpc_code == 8
+        assert status.public_message == message
+        assert status.reason == reason
+        assert status.source == "lifecycle"
+        assert status.metadata == {"quota_required": "8"}
+
+    def test_create_preserves_status_without_changing_public_error(self, mgr):
+        path = "/v1/accounts/test-account/rlorTrainerJobs"
+        response = _training_error_response(
+            method="POST",
+            path=path,
+            message="create diagnostic",
         )
-        resp = httpx.Response(
-            403,
-            json={
-                "code": 7,
-                "message": "message text is not the classifier",
-                "details": [
-                    {
-                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-                        "reason": "TIER_REQUIRED",
-                        "domain": "training.fireworks.ai",
-                        "metadata": {
-                            "version": "1",
-                            "source": "lifecycle",
-                        },
-                    }
-                ],
-            },
-            request=httpx.Request(
-                "POST",
-                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
-            ),
-        )
-        mgr._post = MagicMock(return_value=resp)
+        mgr._post = MagicMock(return_value=response)
+        config = TrainerJobConfig(base_model="accounts/test/models/m")
 
         with pytest.raises(TrainingAPIError) as exc_info:
             mgr._create(config)
 
-        assert exc_info.value.status_code == 403
-        assert exc_info.value.reason == "TIER_REQUIRED"
-        assert "message text is not the classifier" in str(exc_info.value)
+        assert str(exc_info.value) == "RLOR job creation failed (HTTP 403): create diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="create diagnostic")
+
+    def test_get_preserves_status_without_changing_public_error(self, mgr):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="GET",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}",
+            message="get diagnostic",
+        )
+        mgr._get = MagicMock(return_value=response)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get(job_id)
+
+        assert type(exc_info.value) is RuntimeError
+        assert str(exc_info.value) == "Failed to get RLOR job job-1 (HTTP 403): get diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="get diagnostic")
+
+    def test_delete_preserves_status_without_changing_cleanup_behavior(self, mgr, caplog):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="DELETE",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}",
+            message="delete diagnostic",
+        )
+        mgr._delete = MagicMock(return_value=response)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr._delete_job(job_id)
+
+        assert type(exc_info.value) is RuntimeError
+        assert str(exc_info.value) == "Failed to delete RLOR job job-1 (HTTP 403): delete diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        self._assert_carrier(exc_info.value, message="delete diagnostic")
+
+        mgr.delete(job_id)
+        assert "Failed to delete trainer job job-1" in caplog.text
+
+    def test_resume_keeps_http_status_error_and_attaches_status(self, mgr):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="POST",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}:resume",
+            message="resume diagnostic",
+        )
+        mgr._post = MagicMock(return_value=response)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as expected:
+            expected_message = str(expected)
+            expected_args = expected.args
+
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            mgr._resume(job_id)
+
+        assert type(exc_info.value) is httpx.HTTPStatusError
+        assert str(exc_info.value) == expected_message
+        assert exc_info.value.args == expected_args
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="resume diagnostic")
+
+    @pytest.mark.parametrize(
+        ("message", "reason"),
+        [
+            ("same diagnostic", "TIER_REQUIRED"),
+            ("same diagnostic", "QUOTA_EXCEEDED"),
+            ("different diagnostic", "TIER_REQUIRED"),
+        ],
+    )
+    def test_message_text_does_not_classify(self, mgr, message, reason):
+        mgr._get = MagicMock(
+            return_value=_training_error_response(
+                method="GET",
+                path="/v1/accounts/test-account/rlorTrainerJobs/job-1",
+                message=message,
+                reason=reason,
+            )
+        )
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get("job-1")
+        assert exc_info.value._fireworks_training_error_status.reason == reason
+
+    def test_wrong_source_fails_closed(self, mgr):
+        mgr._get = MagicMock(
+            return_value=_training_error_response(
+                method="GET",
+                path="/v1/accounts/test-account/rlorTrainerJobs/job-1",
+                message="TIER_REQUIRED",
+                source="tinker",
+            )
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get("job-1")
+
+        assert not hasattr(exc_info.value, "_fireworks_training_error_status")
+
+    def test_try_get_not_found_still_returns_none(self, mgr):
+        mgr._get = MagicMock(
+            return_value=httpx.Response(
+                404,
+                json={"message": "not found"},
+                request=httpx.Request(
+                    "GET",
+                    "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs/missing",
+                ),
+            )
+        )
+
+        assert mgr.try_get("missing") is None
 
 
 class TestPollUntilReady:

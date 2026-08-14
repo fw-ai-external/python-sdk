@@ -17,10 +17,12 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
     parse_retry_after,
+    _tinker_source_error,
     request_with_retries,
     parse_training_api_error,
     _is_retryable_status_code,
     async_request_with_retries,
+    _serverless_gateway_source_error,
     format_checkpoint_promotion_error,
     format_session_checkpoint_promotion_error,
 )
@@ -360,6 +362,24 @@ class TestParseTrainingApiError:
 
         assert err.reason == expected_reason
         assert not hasattr(err, "_fireworks_training_error_status")
+
+
+def test_invalid_unicode_source_fields_fail_closed() -> None:
+    invalid = "\ud800"
+
+    assert _tinker_source_error(error=invalid, category=invalid, error_class=invalid) is None
+    assert _serverless_gateway_source_error({"error": {"code": invalid, "type": "error"}}) is None
+
+
+def test_serverless_gateway_source_fields_are_independently_optional() -> None:
+    code_only = _serverless_gateway_source_error({"error": {"code": "BAD_REQUEST"}})
+    type_only = _serverless_gateway_source_error({"error": {"type": "error"}})
+
+    assert code_only is not None
+    assert (code_only.code, code_only.type) == ("BAD_REQUEST", None)
+    assert type_only is not None
+    assert (type_only.code, type_only.type) == (None, "error")
+    assert _serverless_gateway_source_error({"error": {}}) is None
 
 
 # ---------------------------------------------------------------------------

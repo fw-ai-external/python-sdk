@@ -9,6 +9,7 @@ Full Changelog: [v1.2.9...v1.2.10](https://github.com/fw-ai-external/python-sdk/
 
 ### Bug Fixes
 * **training-sdk:** preserve canonical structured status details for managed recipe failures
+* **training-sdk:** preserve Lifecycle, Tinker, and serverless gateway error classifications
 
 ## 1.2.9 (2026-08-12)
 
