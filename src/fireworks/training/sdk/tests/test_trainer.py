@@ -861,6 +861,60 @@ class TestPollUntilReady:
         with pytest.raises(RuntimeError, match="archived and cannot be recreated"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
 
+    @pytest.mark.parametrize(
+        "state",
+        [
+            "JOB_STATE_CANCELLING",
+            "JOB_STATE_CANCELLED",
+            "JOB_STATE_COMPLETED",
+            "JOB_STATE_EARLY_STOPPED",
+            "JOB_STATE_DELETING",
+        ],
+    )
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "get")
+    def test_stopped_state_fails_fast_instead_of_waiting_for_readiness_timeout(
+        self,
+        mock_get,
+        mock_time,
+        mock_sleep,
+        mgr,
+        state,
+    ):
+        mock_time.side_effect = [0.0, 60.0]
+        mock_get.return_value = {"state": state, "status": {"message": "Service cancelled"}}
+
+        with pytest.raises(RuntimeError, match=f"stopped in {state} before it became ready") as exc_info:
+            mgr._poll_until_ready("job-1", "name", timeout_s=3600)
+
+        assert not isinstance(exc_info.value, TimeoutError)
+        assert "Service cancelled" in str(exc_info.value)
+        assert mock_get.call_count == 1
+
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
+    @patch.object(TrainerJobManager, "get")
+    def test_stopped_state_tolerated_while_a_resume_settles(
+        self,
+        mock_get,
+        mock_healthz,
+        mock_time,
+        mock_sleep,
+        mgr,
+    ):
+        mock_get.side_effect = [
+            {"state": "JOB_STATE_CANCELLED"},
+            {"state": "JOB_STATE_PENDING"},
+            {"state": "JOB_STATE_RUNNING"},
+        ]
+        mock_time.side_effect = [0.0, 1.0, 2.0, 3.0]
+
+        result = mgr._poll_until_ready("job-1", "name", timeout_s=3600, pending_timeout_s=600)
+
+        assert result.job_id == "job-1"
+
     @patch("fireworks.training.sdk.trainer.time.sleep")
     @patch("fireworks.training.sdk.trainer.time.time")
     @patch.object(TrainerJobManager, "get")

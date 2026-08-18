@@ -8,6 +8,7 @@ Full Changelog: [v1.2.9...v1.2.10](https://github.com/fw-ai-external/python-sdk/
 * **training-sdk:** expose merged-base output precision with source-format export as the default
 
 ### Bug Fixes
+* **training-sdk:** fail trainer readiness waits fast when the job stops instead of polling to the readiness timeout
 * **training-sdk:** preserve canonical structured status details for managed recipe failures
 * **training-sdk:** preserve Lifecycle, Tinker, and serverless gateway error classifications
 

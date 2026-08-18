@@ -55,6 +55,20 @@ _TRAINER_TOMBSTONE_STATES = frozenset(
         "JOB_STATE_ARCHIVED",
     }
 )
+# States a trainer never leaves on its own, so readiness will never arrive.
+# JOB_STATE_FAILED is handled separately because it carries its own guidance.
+_TRAINER_STOPPED_STATES = frozenset(
+    {
+        "JOB_STATE_CANCELLING",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_COMPLETED",
+        "JOB_STATE_EARLY_STOPPED",
+        "JOB_STATE_DELETING",
+    }
+)
+# A resume flips the job out of a stopped state asynchronously, so the first
+# polls after resume_and_wait can still read the pre-resume state.
+_TRAINER_STOPPED_SETTLE_S = 30.0
 
 
 def _trainer_job_state(job: dict[str, Any]) -> str:
@@ -63,6 +77,21 @@ def _trainer_job_state(job: dict[str, Any]) -> str:
 
 def _is_trainer_tombstone_state(state: str) -> bool:
     return state in _TRAINER_TOMBSTONE_STATES
+
+
+def _raise_trainer_stopped_error(job_id: str, state: str, job: dict[str, Any]) -> None:
+    status_message = _extract_job_status_message(job)
+    raise RuntimeError(
+        format_sdk_error(
+            f"Trainer job {job_id} stopped in {state} before it became ready",
+            status_message or "The control plane reported no status detail for the stopped job.",
+            "The job was cancelled, completed, or deleted while the SDK waited for readiness — "
+            "usually an explicit cancel/delete on the job, a parent workflow cleanup, or an "
+            "inactivity auto-stop. Check the job's status detail and audit history, then resume "
+            f"it or create a new trainer job.\n  Console: {CONSOLE_URL}",
+            docs_url=DOCS_SDK,
+        )
+    )
 
 
 def _raise_trainer_tombstone_error(job_id: str, job: dict[str, Any]) -> None:
@@ -703,6 +732,9 @@ class TrainerJobManager(FireworksClient):
 
             if _is_trainer_tombstone_state(state):
                 _raise_trainer_tombstone_error(job_id, job)
+
+            if state in _TRAINER_STOPPED_STATES and now - start >= _TRAINER_STOPPED_SETTLE_S:
+                _raise_trainer_stopped_error(job_id, state, job)
 
             if state == "JOB_STATE_FAILED":
                 msg = status_message or "unknown"
