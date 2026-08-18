@@ -415,23 +415,20 @@ def test_future_failure_preserves_raw_tinker_fields(combined: bool) -> None:
                 "category": {"not": "a string"},
                 "error_class": "x" * 129,
             },
-            ("legacy message remains unchanged", None, None),
+            ("legacy message remains unchanged", None, None, True),
         ),
         (
             {"error": 7, "category": {"not": "a string"}, "error_class": "x" * 129},
-            None,
+            (None, None, None, True),
         ),
     ],
 )
-def test_future_failure_drops_invalid_source_fields(body: dict[str, Any], expected: Any) -> None:
+def test_future_failure_marks_invalid_source_fields(body: dict[str, Any], expected: Any) -> None:
     exc = asyncio.run(_future_exception(body))
 
     assert isinstance(exc, RequestFailedError)
-    if expected is None:
-        assert not hasattr(exc, "_fireworks_training_error_source")
-    else:
-        source = exc._fireworks_training_error_source
-        assert (source.error, source.category, source.error_class) == expected
+    source = exc._fireworks_training_error_source
+    assert (source.error, source.category, source.error_class, source.malformed) == expected
 
 
 def test_direct_serverless_status_error_preserves_only_valid_gateway_envelope() -> None:
@@ -475,7 +472,7 @@ def test_direct_serverless_status_error_preserves_only_valid_gateway_envelope() 
             path="/training/v1/serverless/api/v1/create_model",
         )
     )
-    assert not hasattr(malformed, "_fireworks_training_error_source")
+    assert malformed._fireworks_training_error_source.malformed
 
 
 def test_retrieve_future_copies_final_serverless_http_context() -> None:

@@ -14,11 +14,12 @@ Provides:
 
 from __future__ import annotations
 
+import copy
 import time
 import asyncio
 import logging
 from typing import Any, Tuple, Union, Literal, Mapping, Callable, Awaitable
-from dataclasses import field, dataclass
+from dataclasses import dataclass
 
 import httpx
 
@@ -34,75 +35,57 @@ AGENT_DEBUG_INSTRUCTIONS = (
 )
 
 _ERROR_INFO_TYPE = "type.googleapis.com/google.rpc.ErrorInfo"
-_ERROR_INFO_DOMAIN = "training.fireworks.ai"
-_ERROR_INFO_VERSION = "1"
-_ERROR_INFO_METADATA_VERSION = "version"
-_ERROR_INFO_METADATA_SOURCE = "source"
-_ERROR_INFO_METADATA_CATEGORY = "category"
-_ERROR_INFO_METADATA_QUOTA_REQUIRED = "quota_required"
-_ERROR_INFO_METADATA_QUOTA_AVAILABLE = "quota_available"
 _MAX_ERROR_INFO_METADATA_VALUE_LENGTH = 128
 _MAX_SOURCE_ERROR_FIELD_LENGTH = 128
 _COMPATIBILITY_ERROR_INFO_METADATA_KEYS = frozenset(
     {
-        _ERROR_INFO_METADATA_QUOTA_REQUIRED,
-        _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
+        "quota_required",
+        "quota_available",
     }
 )
 
-_SOURCE_MANAGED = "managed"
 _SOURCE_TINKER = "tinker"
 _SOURCE_SERVERLESS_GATEWAY = "serverless_gateway"
 _SOURCE_LIFECYCLE = "lifecycle"
 
-_REASON_SOURCES: dict[str, frozenset[str]] = {
-    "DATASET_INVALID": frozenset({_SOURCE_MANAGED}),
-    "INVALID_INPUT": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
-    "RESOURCE_NOT_FOUND": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
-    "INSUFFICIENT_CAPACITY": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
-    "QUOTA_EXCEEDED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED}),
-    "TIER_REQUIRED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED}),
-    "RATE_LIMIT_EXCEEDED": frozenset({_SOURCE_SERVERLESS_GATEWAY, _SOURCE_MANAGED}),
-    "CANCELLED": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
-    "PERMISSION_DENIED": frozenset({_SOURCE_LIFECYCLE, _SOURCE_MANAGED, _SOURCE_SERVERLESS_GATEWAY}),
-    "PREREQUISITE_NOT_MET": frozenset({_SOURCE_MANAGED}),
-    "RESOURCE_INVALID": frozenset({_SOURCE_MANAGED}),
-    "TIMEOUT": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER}),
-    "BACKEND_ERROR": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
-    "INTERNAL_ERROR": frozenset({_SOURCE_MANAGED, _SOURCE_TINKER, _SOURCE_SERVERLESS_GATEWAY}),
-}
-
-_REASON_METADATA_KEYS: dict[str, frozenset[str]] = {
-    "INVALID_INPUT": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "RESOURCE_NOT_FOUND": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "INSUFFICIENT_CAPACITY": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "QUOTA_EXCEEDED": frozenset(
-        {
-            _ERROR_INFO_METADATA_QUOTA_REQUIRED,
-            _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
-        }
-    ),
-    "TIER_REQUIRED": frozenset(
-        {
-            _ERROR_INFO_METADATA_QUOTA_REQUIRED,
-            _ERROR_INFO_METADATA_QUOTA_AVAILABLE,
-        }
-    ),
-    "CANCELLED": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "TIMEOUT": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "BACKEND_ERROR": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-    "INTERNAL_ERROR": frozenset({_ERROR_INFO_METADATA_CATEGORY}),
-}
-
 
 @dataclass(frozen=True)
-class _TrainingErrorStatus:
-    grpc_code: int
-    public_message: str
-    reason: str
-    domain: str
-    metadata: Mapping[str, str] = field(default_factory=dict)
-    source: str = ""
+class _LifecycleStatus:
+    status: Mapping[str, Any]
+
+    @property
+    def grpc_code(self) -> Any:
+        return self.status.get("code")
+
+    @property
+    def public_message(self) -> Any:
+        return self.status.get("message")
+
+    @property
+    def reason(self) -> Any:
+        detail = _legacy_error_info_projection(self.status)
+        return detail.get("reason") if detail is not None else None
+
+    @property
+    def domain(self) -> Any:
+        detail = _legacy_error_info_projection(self.status)
+        return detail.get("domain") if detail is not None else None
+
+    @property
+    def source(self) -> Any:
+        detail = _legacy_error_info_projection(self.status)
+        metadata = detail.get("metadata") if detail is not None else None
+        if isinstance(metadata, Mapping):
+            return metadata.get("source")
+        return None
+
+    @property
+    def metadata(self) -> Mapping[str, Any]:
+        detail = _legacy_error_info_projection(self.status)
+        metadata = detail.get("metadata") if detail is not None else None
+        if not isinstance(metadata, Mapping):
+            return {}
+        return {key: copy.deepcopy(value) for key, value in metadata.items() if key not in {"version", "source"}}
 
 
 @dataclass(frozen=True)
@@ -111,6 +94,7 @@ class _TinkerSourceError:
     error: str | None
     category: str | None
     error_class: str | None
+    malformed: bool = False
 
 
 @dataclass(frozen=True)
@@ -118,6 +102,7 @@ class _ServerlessGatewaySourceError:
     source: Literal["serverless_gateway"]
     code: str | None
     type: str | None
+    malformed: bool = False
 
 
 _FireworksTrainingErrorSource = Union[
@@ -207,7 +192,7 @@ def parse_training_api_error(
     status_code = getattr(resp, "status_code", None)
     reason: str | None = None
     metadata: dict[str, str] = {}
-    training_status: _TrainingErrorStatus | None = None
+    lifecycle_status: _LifecycleStatus | None = None
 
     try:
         body = resp.json()
@@ -215,12 +200,10 @@ def parse_training_api_error(
         if isinstance(body, dict) and isinstance(body.get("error"), dict):
             status_body = body["error"]
         # Keep the existing public SDK view source-preserving and
-        # forward-compatible. This is deliberately separate from the private
-        # carrier below: public ``reason`` reports the source-provided
-        # identifier, while only a fully canonical Fireworks status may be
-        # re-emitted by a managed writer.
+        # forward-compatible. The private carrier independently preserves the
+        # complete Lifecycle status without interpreting its policy.
         reason, metadata = _compatibility_error_info(status_body)
-        training_status = _trusted_training_error_status(status_body)
+        lifecycle_status = _lifecycle_status(status_body)
     except Exception:
         # Message parsing already provides the compatibility fallback. A
         # malformed details block must not turn one API failure into another.
@@ -236,8 +219,8 @@ def parse_training_api_error(
         reason=reason,
         metadata=metadata,
     )
-    if training_status is not None:
-        error._fireworks_training_error_status = training_status
+    if lifecycle_status is not None:
+        error._fireworks_training_error_status = lifecycle_status
     return error
 
 
@@ -248,7 +231,7 @@ def _attach_training_error_status(exc: BaseException, resp: Any) -> bool:
         return False
     parsed = parse_training_api_error(resp)
     status = getattr(parsed, "_fireworks_training_error_status", None)
-    if not isinstance(status, _TrainingErrorStatus):
+    if not isinstance(status, _LifecycleStatus):
         return False
     exc._fireworks_training_error_status = status  # type: ignore[attr-defined]
     return True
@@ -262,7 +245,7 @@ def _training_api_runtime_error(
     parsed = parse_training_api_error(resp, context=context)
     error = RuntimeError(str(parsed))
     status = getattr(parsed, "_fireworks_training_error_status", None)
-    if isinstance(status, _TrainingErrorStatus):
+    if isinstance(status, _LifecycleStatus):
         error._fireworks_training_error_status = status  # type: ignore[attr-defined]
     return error
 
@@ -285,13 +268,25 @@ def _tinker_source_error(
     category: Any,
     error_class: Any,
 ) -> _TinkerSourceError | None:
+    bounded_error = _bounded_source_error_field(error)
+    bounded_category = _bounded_source_error_field(category)
+    bounded_error_class = _bounded_source_error_field(error_class)
+    malformed = any(
+        original is not None and bounded is None
+        for original, bounded in (
+            (error, bounded_error),
+            (category, bounded_category),
+            (error_class, bounded_error_class),
+        )
+    )
     source = _TinkerSourceError(
         source=_SOURCE_TINKER,
-        error=_bounded_source_error_field(error),
-        category=_bounded_source_error_field(category),
-        error_class=_bounded_source_error_field(error_class),
+        error=bounded_error,
+        category=bounded_category,
+        error_class=bounded_error_class,
+        malformed=malformed,
     )
-    if source.error is None and source.category is None and source.error_class is None:
+    if not malformed and source.error is None and source.category is None and source.error_class is None:
         return None
     return source
 
@@ -306,16 +301,17 @@ def _serverless_gateway_source_error(
     error_type = _bounded_source_error_field(envelope.get("type"))
     # ``code`` and ``type`` are independently optional upstream fields. Reject
     # malformed present values, but preserve whichever valid fields exist.
-    if envelope.get("code") is not None and code is None:
-        return None
-    if envelope.get("type") is not None and error_type is None:
-        return None
+    malformed = (
+        envelope.get("code") is not None and code is None or envelope.get("type") is not None and error_type is None
+    )
     if code is None and error_type is None:
-        return None
+        if not malformed:
+            return None
     return _ServerlessGatewaySourceError(
         source=_SOURCE_SERVERLESS_GATEWAY,
         code=code,
         type=error_type,
+        malformed=malformed,
     )
 
 
@@ -370,6 +366,55 @@ def _compatibility_error_info(value: Any) -> tuple[str | None, dict[str, str]]:
     return None, {}
 
 
+def _first_error_info(value: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    details = value.get("details", [])
+    if not isinstance(details, list):
+        return None
+    for detail in details:
+        if isinstance(detail, Mapping) and detail.get("@type") == _ERROR_INFO_TYPE:
+            return detail
+    return None
+
+
+def _legacy_error_info_projection(
+    value: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    details = value.get("details", [])
+    if not isinstance(details, list):
+        return None
+
+    trusted: Mapping[str, Any] | None = None
+    for detail in details:
+        if not isinstance(detail, Mapping) or detail.get("@type") != _ERROR_INFO_TYPE:
+            continue
+        if detail.get("domain") != "training.fireworks.ai":
+            continue
+        reason = detail.get("reason")
+        metadata = detail.get("metadata")
+        if (
+            not isinstance(reason, str)
+            or not reason
+            or reason.strip() != reason
+            or not isinstance(metadata, Mapping)
+            or metadata.get("version") != "1"
+            or metadata.get("source") not in {"lifecycle", "managed"}
+        ):
+            return None
+        for key, item in metadata.items():
+            if not isinstance(key, str) or not isinstance(item, str):
+                return None
+            try:
+                if len(item.encode("utf-8")) > _MAX_ERROR_INFO_METADATA_VALUE_LENGTH:
+                    return None
+            except UnicodeError:
+                return None
+        candidate = copy.deepcopy(dict(detail))
+        if trusted is not None and trusted != candidate:
+            return None
+        trusted = candidate
+    return trusted
+
+
 def _compatibility_error_info_metadata(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
@@ -381,76 +426,20 @@ def _compatibility_error_info_metadata(value: Any) -> dict[str, str]:
     return safe
 
 
-def _trusted_training_error_status(value: Any) -> _TrainingErrorStatus | None:
+def _lifecycle_status(value: Any) -> _LifecycleStatus | None:
     if not isinstance(value, dict):
         return None
     grpc_code = value.get("code")
     public_message = value.get("message")
-    details = value.get("details", [])
     if (
         not isinstance(grpc_code, int)
         or isinstance(grpc_code, bool)
         or not 0 <= grpc_code <= 16
         or not isinstance(public_message, str)
-        or not isinstance(details, list)
     ):
         return None
-
-    trusted: _TrainingErrorStatus | None = None
-    for detail in details:
-        if not isinstance(detail, dict) or detail.get("@type") != _ERROR_INFO_TYPE:
-            continue
-        if detail.get("domain") != _ERROR_INFO_DOMAIN:
-            continue
-        candidate = _trusted_error_info(
-            detail,
-            grpc_code=grpc_code,
-            public_message=public_message,
-        )
-        if candidate is None:
-            return None
-        if trusted is not None and trusted != candidate:
-            return None
-        trusted = candidate
-    return trusted
-
-
-def _trusted_error_info(
-    detail: dict[str, Any],
-    *,
-    grpc_code: int,
-    public_message: str,
-) -> _TrainingErrorStatus | None:
-    reason = detail.get("reason")
-    metadata = detail.get("metadata")
-    if not isinstance(reason, str) or reason not in _REASON_SOURCES or not isinstance(metadata, dict):
-        return None
-    if metadata.get(_ERROR_INFO_METADATA_VERSION) != _ERROR_INFO_VERSION:
-        return None
-    source = metadata.get(_ERROR_INFO_METADATA_SOURCE)
-    if not isinstance(source, str) or source not in _REASON_SOURCES[reason]:
-        return None
-
-    allowed_keys = _REASON_METADATA_KEYS.get(reason, frozenset())
-    safe_metadata: dict[str, str] = {}
-    for key, item in metadata.items():
-        if key in (_ERROR_INFO_METADATA_VERSION, _ERROR_INFO_METADATA_SOURCE):
-            continue
-        if (
-            key not in allowed_keys
-            or not isinstance(item, str)
-            or len(item.encode("utf-8")) > _MAX_ERROR_INFO_METADATA_VALUE_LENGTH
-        ):
-            return None
-        safe_metadata[key] = item
-
-    return _TrainingErrorStatus(
-        grpc_code=grpc_code,
-        public_message=public_message,
-        reason=reason,
-        domain=_ERROR_INFO_DOMAIN,
-        metadata=safe_metadata,
-        source=source,
+    return _LifecycleStatus(
+        status=copy.deepcopy(value),
     )
 
 

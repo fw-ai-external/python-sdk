@@ -641,12 +641,17 @@ class TestCreate:
 class TestStructuredLifecycleErrors:
     @staticmethod
     def _assert_carrier(exc: BaseException, *, message: str, reason: str = "TIER_REQUIRED") -> None:
-        status = exc._fireworks_training_error_status
-        assert status.grpc_code == 8
-        assert status.public_message == message
-        assert status.reason == reason
-        assert status.source == "lifecycle"
-        assert status.metadata == {"quota_required": "8"}
+        carrier = exc._fireworks_training_error_status
+        assert carrier.source == "lifecycle"
+        assert carrier.status["code"] == 8
+        assert carrier.status["message"] == message
+        detail = carrier.status["details"][0]
+        assert detail["reason"] == reason
+        assert detail["metadata"] == {
+            "version": "1",
+            "source": "lifecycle",
+            "quota_required": "8",
+        }
 
     def test_create_preserves_status_without_changing_public_error(self, mgr):
         path = "/v1/accounts/test-account/rlorTrainerJobs"
@@ -746,9 +751,10 @@ class TestStructuredLifecycleErrors:
         )
         with pytest.raises(RuntimeError) as exc_info:
             mgr.try_get("job-1")
-        assert exc_info.value._fireworks_training_error_status.reason == reason
+        carrier = exc_info.value._fireworks_training_error_status
+        assert carrier.status["details"][0]["reason"] == reason
 
-    def test_wrong_source_fails_closed(self, mgr):
+    def test_wrong_source_is_preserved_for_internal_validation(self, mgr):
         mgr._get = MagicMock(
             return_value=_training_error_response(
                 method="GET",
@@ -761,7 +767,8 @@ class TestStructuredLifecycleErrors:
         with pytest.raises(RuntimeError) as exc_info:
             mgr.try_get("job-1")
 
-        assert not hasattr(exc_info.value, "_fireworks_training_error_status")
+        carrier = exc_info.value._fireworks_training_error_status
+        assert carrier.status["details"][0]["metadata"]["source"] == "tinker"
 
     def test_try_get_not_found_still_returns_none(self, mgr):
         mgr._get = MagicMock(

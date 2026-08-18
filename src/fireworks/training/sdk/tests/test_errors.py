@@ -202,7 +202,7 @@ class TestParseTrainingApiError:
         resp.json.return_value = body
         return resp
 
-    def test_public_compatibility_survives_rejected_private_carrier(self):
+    def test_public_compatibility_and_complete_status_are_independent(self):
         resp = self._resp(
             {
                 "code": 7,
@@ -231,7 +231,8 @@ class TestParseTrainingApiError:
         assert err.status_code == 403
         assert err.reason == "TIER_REQUIRED"
         assert err.metadata == {"quota_required": "8"}
-        assert not hasattr(err, "_fireworks_training_error_status")
+        assert err._fireworks_training_error_status.source == "lifecycle"
+        assert err._fireworks_training_error_status.status == resp.json.return_value
         assert str(err) == "RLOR job creation failed (HTTP 403): changeable diagnostic"
         assert "authorization" not in str(err)
 
@@ -260,14 +261,28 @@ class TestParseTrainingApiError:
 
         err = parse_training_api_error(resp, context="RLOR job creation failed")
 
-        status = err._fireworks_training_error_status
-        assert status.grpc_code == 8
-        assert status.grpc_code != err.status_code
-        assert status.public_message == "exact protobuf message"
-        assert status.reason == "TIER_REQUIRED"
-        assert status.domain == "training.fireworks.ai"
-        assert status.source == "lifecycle"
-        assert status.metadata == {
+        carrier = err._fireworks_training_error_status
+        assert carrier.source == "lifecycle"
+        assert carrier.grpc_code == 8
+        assert carrier.public_message == "exact protobuf message"
+        assert carrier.reason == "TIER_REQUIRED"
+        assert carrier.domain == "training.fireworks.ai"
+        assert carrier.metadata == {
+            "quota_required": "8",
+            "quota_available": "4",
+        }
+        assert carrier.status["code"] == 8
+        assert carrier.status["code"] != err.status_code
+        assert carrier.status["message"] == "exact protobuf message"
+        assert carrier.status["details"][1]["reason"] == "TIER_REQUIRED"
+        assert carrier.status["details"][1]["domain"] == "training.fireworks.ai"
+        assert carrier.status["details"][0] == {
+            "@type": "type.googleapis.com/example.Unknown",
+            "value": "ignored",
+        }
+        assert carrier.status["details"][1]["metadata"] == {
+            "version": "1",
+            "source": "lifecycle",
             "quota_required": "8",
             "quota_available": "4",
         }
@@ -300,27 +315,30 @@ class TestParseTrainingApiError:
         assert err.reason == "QUOTA_EXCEEDED"
 
     @pytest.mark.parametrize(
-        "body",
+        ("body", "has_status"),
         [
-            {"code": 7, "message": "legacy only"},
-            {
-                "code": 7,
-                "message": "malformed",
-                "details": [
-                    {
-                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-                        "reason": 7,
-                    }
-                ],
-            },
-            {"message": '{"error":"tier_required","message":"legacy nested JSON"}'},
+            ({"code": 7, "message": "legacy only"}, True),
+            (
+                {
+                    "code": 7,
+                    "message": "malformed",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": 7,
+                        }
+                    ],
+                },
+                True,
+            ),
+            ({"message": '{"error":"tier_required","message":"legacy nested JSON"}'}, False),
         ],
     )
-    def test_missing_or_malformed_details_do_not_infer_reason(self, body):
+    def test_missing_or_malformed_details_do_not_infer_reason(self, body, has_status):
         err = parse_training_api_error(self._resp(body))
 
         assert err.reason is None
-        assert not hasattr(err, "_fireworks_training_error_status")
+        assert hasattr(err, "_fireworks_training_error_status") is has_status
 
     @pytest.mark.parametrize(
         ("body", "expected_reason"),
@@ -361,14 +379,68 @@ class TestParseTrainingApiError:
         err = parse_training_api_error(self._resp(body))
 
         assert err.reason == expected_reason
-        assert not hasattr(err, "_fireworks_training_error_status")
+        assert err._fireworks_training_error_status.status == body
+
+    @pytest.mark.parametrize(
+        "details",
+        [
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "2", "source": "lifecycle"},
+                }
+            ],
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1"},
+                }
+            ],
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1", "source": "lifecycle"},
+                },
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "DATASET_INVALID",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1", "source": "lifecycle"},
+                },
+            ],
+        ],
+    )
+    def test_legacy_carrier_projection_fails_closed(self, details):
+        carrier = parse_training_api_error(
+            self._resp(
+                {
+                    "code": 3,
+                    "message": "diagnostic",
+                    "details": details,
+                }
+            )
+        )._fireworks_training_error_status
+
+        assert carrier.reason is None
+        assert carrier.domain is None
+        assert carrier.source is None
+        assert carrier.metadata == {}
 
 
 def test_invalid_unicode_source_fields_fail_closed() -> None:
     invalid = "\ud800"
 
-    assert _tinker_source_error(error=invalid, category=invalid, error_class=invalid) is None
-    assert _serverless_gateway_source_error({"error": {"code": invalid, "type": "error"}}) is None
+    tinker_source = _tinker_source_error(error=invalid, category=invalid, error_class=invalid)
+    gateway_source = _serverless_gateway_source_error({"error": {"code": invalid, "type": "error"}})
+
+    assert tinker_source is not None and tinker_source.malformed
+    assert gateway_source is not None and gateway_source.malformed
 
 
 def test_serverless_gateway_source_fields_are_independently_optional() -> None:
