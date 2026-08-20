@@ -17,6 +17,7 @@ Most other methods are inherited from tinker.
 from __future__ import annotations
 
 import os
+import re
 import json
 import time
 import uuid
@@ -1033,19 +1034,60 @@ def _fireworks_api_root_url(base_url: str | None) -> str:
 # -- Cross-job checkpoint references ------------------------------------------
 
 CROSS_JOB_CHECKPOINT_REF_PREFIX = "cross_job://"
+_CHECKPOINT_DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+_CHECKPOINT_URI_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+_CHECKPOINT_RUN_ID_RE = re.compile(r"^run-[0-9a-f]{32}$")
+
+
+def _validate_logical_checkpoint_path(checkpoint_path: str) -> str:
+    normalized_path = checkpoint_path.strip()
+    if not normalized_path:
+        raise ValueError("checkpoint path cannot be empty")
+    if "\x00" in normalized_path or "\\" in normalized_path:
+        raise ValueError("checkpoint path contains invalid characters")
+    for segment in normalized_path.split("/"):
+        if segment in ("", ".", ".."):
+            raise ValueError("checkpoint path contains empty or traversal segments")
+        if not _CHECKPOINT_DNS_LABEL_RE.fullmatch(segment):
+            raise ValueError(f"checkpoint path segment {segment!r} is not a valid DNS label")
+    return normalized_path
+
+
+def _validate_checkpoint_ref(checkpoint_ref: str) -> str:
+    normalized_ref = checkpoint_ref.strip()
+    if normalized_ref.startswith(CROSS_JOB_CHECKPOINT_REF_PREFIX):
+        payload = normalized_ref[len(CROSS_JOB_CHECKPOINT_REF_PREFIX) :]
+        source_job_id, separator, checkpoint_name = payload.partition("/")
+        if not separator or not source_job_id or not checkpoint_name:
+            raise ValueError(
+                "Invalid cross-job checkpoint ref format. "
+                f"Expected '{CROSS_JOB_CHECKPOINT_REF_PREFIX}<source_job_id>/<checkpoint_name>'"
+            )
+        normalized_source_job_id = _validate_logical_checkpoint_path(source_job_id)
+        if "/" in normalized_source_job_id:
+            raise ValueError("source_job_id must be a single DNS label")
+        normalized_checkpoint_name = _validate_logical_checkpoint_path(checkpoint_name)
+        if "/" in normalized_checkpoint_name:
+            raise ValueError("cross-job checkpoint name must be a single DNS label")
+        return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
+    if normalized_ref.startswith("/") or _CHECKPOINT_URI_RE.match(normalized_ref):
+        raise ValueError("checkpoint path must be a logical name or opaque cross_job:// reference")
+    normalized_path = _validate_logical_checkpoint_path(normalized_ref)
+    segments = normalized_path.split("/")
+    if len(segments) == 1:
+        return normalized_path
+    if len(segments) >= 3 and _CHECKPOINT_RUN_ID_RE.fullmatch(segments[1]):
+        return normalized_path
+    raise ValueError(
+        "checkpoint path must be a bare logical name, "
+        "'<account>/<run>/<checkpoint>', or opaque cross_job:// reference"
+    )
 
 
 def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -> str:
     """Build an opaque checkpoint reference for cross-job resume."""
-    normalized_source_job_id = source_job_id.strip()
-    normalized_checkpoint_name = checkpoint_name.strip()
-    if not normalized_source_job_id:
-        raise ValueError("source_job_id cannot be empty")
-    if not normalized_checkpoint_name:
-        raise ValueError("checkpoint_name cannot be empty")
-    if normalized_checkpoint_name.startswith("gs://") or normalized_checkpoint_name.startswith("/"):
-        raise ValueError("checkpoint_name must be a logical checkpoint name, not a full path")
-    return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
+    checkpoint_ref = f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{source_job_id}/{checkpoint_name}"
+    return _validate_checkpoint_ref(checkpoint_ref)
 
 
 # -- Session-scoped snapshot name qualification --------------------------------
@@ -2150,17 +2192,14 @@ class FiretitanTrainingClient(TrainingClient):
     ) -> str:
         """Resolve checkpoint input to a loadable checkpoint reference.
 
-        Handles two common cases:
+        Handles two supported cases:
 
-        1. *checkpoint_name* is already a full ``gs://`` or local path
-           -- returned as-is.
-        2. *source_job_id* is given -- returns an opaque cross-job
+        1. *source_job_id* is given -- returns an opaque cross-job
            checkpoint reference. The trainer resolves this server-side.
-        3. Otherwise -- returns checkpoint_name unchanged.
+        2. Otherwise -- validates and returns a logical checkpoint path.
 
         Args:
-            checkpoint_name: Checkpoint name (e.g. ``"step-4"``) or a
-                full GCS / local path.
+            checkpoint_name: Logical checkpoint path (e.g. ``"step-4"``).
             source_job_id: RLOR job ID that originally saved the
                 checkpoint. When provided, the returned value is an opaque
                 reference resolved on the trainer side.
@@ -2169,10 +2208,6 @@ class FiretitanTrainingClient(TrainingClient):
             Loadable checkpoint reference suitable for
             ``load_state_with_optimizer()``.
         """
-        # Already a full path -- nothing to resolve
-        if checkpoint_name.startswith("gs://") or checkpoint_name.startswith("/"):
-            return checkpoint_name
-
         if source_job_id:
             checkpoint_ref = make_cross_job_checkpoint_ref(
                 source_job_id=source_job_id,
@@ -2185,7 +2220,7 @@ class FiretitanTrainingClient(TrainingClient):
             )
             return checkpoint_ref
 
-        return checkpoint_name
+        return _validate_checkpoint_ref(checkpoint_name)
 
     def save_weights_for_sampler_ext(
         self,
@@ -2494,7 +2529,10 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient.load_state(weights_access_token=...) is not supported. "
                 "Load checkpoints that are accessible to the current Fireworks API key."
             )
-        return super().load_state(path, weights_access_token=weights_access_token)
+        return super().load_state(
+            _validate_checkpoint_ref(path),
+            weights_access_token=weights_access_token,
+        )
 
     async def load_state_async(
         self,
@@ -2513,7 +2551,10 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient.load_state_with_optimizer(weights_access_token=...) is not supported. "
                 "Load checkpoints that are accessible to the current Fireworks API key."
             )
-        return super().load_state_with_optimizer(path, weights_access_token=weights_access_token)
+        return super().load_state_with_optimizer(
+            _validate_checkpoint_ref(path),
+            weights_access_token=weights_access_token,
+        )
 
     async def load_state_with_optimizer_async(
         self,

@@ -127,13 +127,24 @@ class TestResolveCheckpointPath:
         )
         return client
 
-    def test_gs_path_returned_as_is(self):
+    @pytest.mark.parametrize(
+        "checkpoint_ref",
+        [
+            "gs://bucket/path",
+            "GS://bucket/path",
+            "tinker://run/weights/step-1",
+            "https://example.test/step-1",
+            "/tmp/checkpoint",
+            "../checkpoint",
+            "phase-1/step-1",
+            "cross_job://source-job/../../checkpoint",
+            "cross_job://source-job/phase-1/step-1",
+        ],
+    )
+    def test_non_schema_path_is_rejected(self, checkpoint_ref):
         client = self._make_client()
-        assert client.resolve_checkpoint_path("gs://bucket/path") == "gs://bucket/path"
-
-    def test_absolute_path_returned_as_is(self):
-        client = self._make_client()
-        assert client.resolve_checkpoint_path("/tmp/checkpoint") == "/tmp/checkpoint"
+        with pytest.raises(ValueError, match="checkpoint"):
+            client.resolve_checkpoint_path(checkpoint_ref)
 
     def test_relative_name_returned_as_is(self):
         client = self._make_client()
@@ -213,17 +224,26 @@ class TestLoadStateCompatibility:
         future = MagicMock()
         mock_load_state.return_value = future
 
-        result = client.load_state("tinker://run/weights/step-1")
+        result = client.load_state("step-1")
 
         assert result is future
-        mock_load_state.assert_called_once_with("tinker://run/weights/step-1", weights_access_token=None)
+        mock_load_state.assert_called_once_with("step-1", weights_access_token=None)
+
+    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    def test_load_state_rejects_non_schema_path(self, mock_load_state):
+        client = self._make_client()
+
+        with pytest.raises(ValueError, match="checkpoint"):
+            client.load_state("tinker://run/weights/step-1")
+
+        mock_load_state.assert_not_called()
 
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
     def test_load_state_rejects_access_token(self, mock_load_state):
         client = self._make_client()
 
         with pytest.raises(NotImplementedError, match="weights_access_token"):
-            client.load_state("tinker://run/weights/step-1", weights_access_token="token")
+            client.load_state("step-1", weights_access_token="token")
 
         mock_load_state.assert_not_called()
 
@@ -232,7 +252,7 @@ class TestLoadStateCompatibility:
         client = self._make_client()
 
         with pytest.raises(NotImplementedError, match="weights_access_token"):
-            client.load_state_with_optimizer("tinker://run/weights/step-1", weights_access_token="token")
+            client.load_state_with_optimizer("step-1", weights_access_token="token")
 
         mock_load_state.assert_not_called()
 
@@ -1256,14 +1276,14 @@ class TestFiretitanServiceClientManagedCompat:
         svc = self._make_service()
 
         with pytest.raises(NotImplementedError, match="weights_access_token"):
-            svc.create_training_client_from_state("tinker://run/weights/step-1", weights_access_token="token")
+            svc.create_training_client_from_state("step-1", weights_access_token="token")
 
     def test_create_training_client_from_state_with_optimizer_rejects_access_token(self):
         svc = self._make_service()
 
         with pytest.raises(NotImplementedError, match="weights_access_token"):
             svc.create_training_client_from_state_with_optimizer(
-                "tinker://run/weights/step-1",
+                "step-1",
                 weights_access_token="token",
             )
 
@@ -1282,7 +1302,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc.create_lora_training_client = MagicMock(return_value=training_client)
 
         result = svc.create_training_client_from_state_with_optimizer(
-            "tinker://run/weights/step-1",
+            "step-1",
             user_metadata={"owner": "test"},
         )
 
@@ -1296,7 +1316,7 @@ class TestFiretitanServiceClientManagedCompat:
             train_attn=True,
             user_metadata={"owner": "test"},
         )
-        training_client.load_state_with_optimizer.assert_called_once_with("tinker://run/weights/step-1")
+        training_client.load_state_with_optimizer.assert_called_once_with("step-1")
 
     @staticmethod
     def _weights_info(**overrides):
@@ -1553,7 +1573,7 @@ class TestFiretitanServiceClientManagedCompat:
         )
 
         with pytest.raises(NotImplementedError, match="checkpoint-derived rank and alpha"):
-            svc.create_training_client_from_state("tinker://checkpoint")
+            svc.create_training_client_from_state("step-1")
 
     def test_managed_multi_model_reference_uses_selected_policy(self):
         inner_service = MagicMock()
