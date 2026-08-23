@@ -168,13 +168,6 @@ def _log_backend_warning_status(job: dict[str, Any]) -> None:
         logger.warning("%s", message)
 
 
-def _extract_direct_route_handle(job: dict[str, Any]) -> str:
-    for key in ("directRouteHandle", "direct_route_handle"):
-        value = job.get(key)
-        if value:
-            return str(value).rstrip("/")
-    return ""
-
 
 def _extract_job_training_config(job: dict[str, Any]) -> dict[str, Any] | None:
     training_config = job.get("trainingConfig")
@@ -687,10 +680,6 @@ class TrainerJobManager(FireworksClient):
         trainer pod via DynamoDB route lookup and the ``FIREWORKS-TRAINER``
         header.  The gateway strips the prefix so the trainer receives
         the original path (e.g. ``/api/v1/healthz``).
-
-        This replaces the previous ``directRouteHandle`` approach, which
-        resolved to a GCP-specific hostname and did not work for non-GCP
-        clusters (e.g. OCI).
         """
         return f"{self.base_url}/training/v1/rlorTrainerJobs/{self.account_id}/{job_id}"
 
@@ -754,11 +743,6 @@ class TrainerJobManager(FireworksClient):
                 if self._check_healthz(gateway_base_url):
                     service_ready = True
                     ready_base_url = gateway_base_url
-                else:
-                    direct_route_handle = _extract_direct_route_handle(job)
-                    if direct_route_handle and self._check_healthz(direct_route_handle):
-                        service_ready = True
-                        ready_base_url = direct_route_handle
 
             if service_ready:
                 self.boot_time_s = now - start
