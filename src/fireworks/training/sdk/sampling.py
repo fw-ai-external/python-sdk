@@ -70,9 +70,19 @@ class ServerMetrics:
     server_processing_time: float | None = None
     client_ttft: float | None = None
     """Client-measured time-to-first-token (seconds).  Only set for streaming."""
+    http_status_code: int | None = None
+    transport_error: bool = False
+    """True when the attempt failed below HTTP (connect/read/write error)."""
+    retry_attempt: int | None = None
+    """1-based attempt index that produced this observation."""
 
     @staticmethod
-    def from_headers(headers: dict[str, str], client_ttft: float | None = None) -> "ServerMetrics":
+    def from_headers(
+        headers: dict[str, str],
+        client_ttft: float | None = None,
+        http_status_code: int | None = None,
+        retry_attempt: int | None = None,
+    ) -> "ServerMetrics":
         """Parse server metrics from HTTP response headers."""
 
         def _float(key: str) -> float | None:
@@ -102,6 +112,8 @@ class ServerMetrics:
             prompt_tokens=_int("prompt-tokens"),
             server_processing_time=_float("server-processing-time"),
             client_ttft=client_ttft,
+            http_status_code=http_status_code,
+            retry_attempt=retry_attempt,
         )
 
 
@@ -371,7 +383,11 @@ class DeploymentSampler(_RestClient):
             # Build ServerMetrics: prefer perf_metrics from final chunk
             # (has complete timing), fall back to HTTP headers (partial).
             metrics_source = perf_metrics_dict or dict(resp.headers)
-            server_metrics = ServerMetrics.from_headers(metrics_source, client_ttft=client_ttft)
+            server_metrics = ServerMetrics.from_headers(
+                metrics_source,
+                client_ttft=client_ttft,
+                http_status_code=resp.status_code,
+            )
 
             assembled_choice: dict[str, Any] = {
                 "text": accumulated_text,
@@ -882,8 +898,14 @@ class DeploymentSampler(_RestClient):
                     # with the same raw HTTP error and additive private context.
                     self._attach_serverless_gateway_source(e, e)
                     raise
+                server_metrics = ServerMetrics.from_headers(
+                    dict(e.response.headers),
+                    http_status_code=e.response.status_code,
+                    retry_attempt=attempt,
+                )
                 transient, label = e, f"HTTP {e.response.status_code}"
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
+                server_metrics = ServerMetrics(transport_error=True, retry_attempt=attempt)
                 transient, label = e, type(e).__name__
             finally:
                 # A caller may cancel a live stream (for example, a bounded
@@ -911,6 +933,9 @@ class DeploymentSampler(_RestClient):
             retry_after_s = parse_retry_after(response) if response is not None else None
 
             if attempt == self._RETRY_MAX_ATTEMPTS:
+                notify = getattr(self._concurrency_controller, "note_retry_exhausted", None)
+                if callable(notify):
+                    notify(server_metrics)
                 raise self._terminal_error(
                     transient,
                     attempts=attempt,

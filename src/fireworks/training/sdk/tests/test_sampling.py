@@ -84,6 +84,8 @@ class _CountingController:
     def __init__(self) -> None:
         self.acquired = 0
         self.released = 0
+        self.released_metrics: list[ServerMetrics | None] = []
+        self.exhausted_metrics: list[ServerMetrics | None] = []
 
     @property
     def window_size(self) -> int:
@@ -92,8 +94,12 @@ class _CountingController:
     async def acquire(self) -> None:
         self.acquired += 1
 
-    def release(self, _metrics: ServerMetrics | None = None) -> None:
+    def release(self, metrics: ServerMetrics | None = None) -> None:
         self.released += 1
+        self.released_metrics.append(metrics)
+
+    def note_retry_exhausted(self, metrics: ServerMetrics | None) -> None:
+        self.exhausted_metrics.append(metrics)
 
     def step_completed(self) -> dict[str, float]:
         return {"window": 1.0}
@@ -145,6 +151,21 @@ class TestSamplingRetryLoop:
         assert err.model == "m"
         assert err.request_id == "gw-x"  # server id of the last attempt, for log search
         assert not isinstance(err, DeploymentSamplerTimeoutError)
+
+    def test_retry_exhaustion_reports_final_released_metrics(self, no_sleep, no_jitter):
+        controller = _CountingController()
+        sampler = _make_sampler(concurrency_controller=controller)
+        _install_stream(sampler, [_http_error(503)])
+
+        with pytest.raises(SamplingRequestError):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert len(controller.exhausted_metrics) == 1
+        final_metrics = controller.exhausted_metrics[0]
+        assert final_metrics is controller.released_metrics[-1]
+        assert final_metrics is not None
+        assert final_metrics.http_status_code == 503
+        assert final_metrics.retry_attempt == DeploymentSampler._RETRY_MAX_ATTEMPTS
 
     def test_final_serverless_gateway_error_attaches_private_context(self, no_sleep, no_jitter):
         serverless_url = "https://api.example.com/training/v1/serverless/inference/v1/completions"
@@ -320,13 +341,28 @@ class TestSamplingRetryLoop:
     def test_retry_releases_each_acquired_slot_once(self, no_sleep, no_jitter):
         controller = _CountingController()
         sampler = _make_sampler(concurrency_controller=controller)
-        _install_stream(sampler, [_http_error(429), _SUCCESS])
+        _install_stream(
+            sampler,
+            [
+                _http_error(
+                    429,
+                    {"prefill-queue-duration": "0.250", "num-concurrent-requests": "12"},
+                ),
+                _SUCCESS,
+            ],
+        )
 
         results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
 
         assert len(results) == 1
         assert controller.acquired == 2
         assert controller.released == 2
+        first_metrics = controller.released_metrics[0]
+        assert first_metrics is not None
+        assert first_metrics.http_status_code == 429
+        assert first_metrics.retry_attempt == 1
+        assert first_metrics.prefill_queue_duration == pytest.approx(0.25)
+        assert first_metrics.num_concurrent_requests == 12
 
 
 class TestContextAndRedaction:
