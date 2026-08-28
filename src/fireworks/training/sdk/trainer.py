@@ -335,7 +335,10 @@ class TrainerJobConfig:
     are idempotent.
     """
     use_reservation: bool = True
-    """Try reservation capacity first. Set to ``False`` to use shared capacity."""
+    """Use matching account reservation capacity when available.
+
+    Accounts without a reservation for the selected accelerator use shared capacity.
+    """
 
     def validate(self) -> None:
         """Self-contained pre-flight check. Call before ``_create()``.

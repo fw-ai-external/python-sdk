@@ -198,7 +198,10 @@ class FiretitanProvisioningConfig:
     :attr:`DeploymentConfig.hot_load_transition_type`.
     """
     use_reservation: bool = True
-    """Try reservation capacity first. Set to ``False`` to use shared capacity."""
+    """Use matching account reservation capacity when available.
+
+    Accounts without a reservation for the selected accelerator use shared capacity.
+    """
 
     def __post_init__(self) -> None:
         object.__setattr__(
