@@ -10,6 +10,7 @@ This layer extends the upstream tinker client with:
   7. save_weights_for_sampler_ext() checkpoint_type support
   8. DCP checkpoint listing
   9. HF PEFT adapter warm-start loading (weights-only)
+  10. custom-loss backward reuse of a compatible forward result
 
 Most other methods are inherited from tinker.
 """
@@ -1911,13 +1912,23 @@ class FiretitanTrainingClient(TrainingClient):
         loss_type_input: Literal["logprobs"] = "logprobs",
         output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
+        precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         if output == "logprobs":
+            if precomputed_forward is not None:
+                return await self._forward_backward_custom_from_forward_async(
+                    data,
+                    loss_fn,
+                    precomputed_forward=precomputed_forward,
+                    loss_type_input=loss_type_input,
+                )
             return await super().forward_backward_custom_async(
                 data,
                 loss_fn,
                 loss_type_input=loss_type_input,
             )
+        if precomputed_forward is not None:
+            raise ValueError("precomputed_forward is only supported for output='logprobs'")
         if output not in ("embedding", "cos_similarity_matrix"):
             raise ValueError(
                 f"Unsupported output={output!r}; expected 'logprobs', 'embedding', or 'cos_similarity_matrix'"
@@ -1993,6 +2004,105 @@ class FiretitanTrainingClient(TrainingClient):
 
         return _MappedAPIFuture(backward_future, add_custom_metrics)
 
+    async def _forward_backward_custom_from_forward_async(
+        self,
+        data: list[types.Datum],
+        loss_fn: Callable,
+        *,
+        precomputed_forward: types.ForwardBackwardOutput,
+        loss_type_input: Literal["logprobs"],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Resume a logprob custom loss from a compatible completed forward.
+
+        This follows upstream Tinker's ``forward_backward_custom_async``
+        logprob algorithm, starting after the standalone forward: reconstruct
+        differentiable logprob tensors, run the client loss, then send the
+        resulting linearized cross-entropy weights to the trainer.
+
+        The caller owns the invariant that ``precomputed_forward`` was produced
+        by this policy version for ``data`` in the same order. Structural checks
+        below prevent a mismatched result from silently training wrong tokens.
+        """
+        if loss_type_input != "logprobs":
+            raise ValueError("precomputed_forward only supports loss_type_input='logprobs'")
+
+        try:
+            import torch
+        except ImportError as err:
+            raise ImportError(
+                "PyTorch is not installed. Cannot run custom forward_backward."
+            ) from err
+
+        outputs = precomputed_forward.loss_fn_outputs
+        if len(outputs) != len(data):
+            raise ValueError(
+                "precomputed_forward must contain one output per datum; "
+                f"got {len(outputs)} outputs for {len(data)} datums"
+            )
+
+        logprobs_list = []
+        for index, (datum, out) in enumerate(zip(data, outputs, strict=True)):
+            target_tokens = datum.loss_fn_inputs.get("target_tokens")
+            if target_tokens is None:
+                raise ValueError(f"Datum {index} is missing target_tokens")
+            if "logprobs" not in out:
+                raise ValueError(
+                    f"precomputed_forward output {index} is missing logprobs"
+                )
+
+            logprob_data = out["logprobs"]
+            if len(logprob_data.data) != len(target_tokens.data):
+                raise ValueError(
+                    "precomputed_forward logprobs must align with target_tokens; "
+                    f"datum {index} has {len(logprob_data.data)} logprobs and "
+                    f"{len(target_tokens.data)} target tokens"
+                )
+            logprob = torch.tensor(logprob_data.data)
+            if logprob_data.shape is not None:
+                try:
+                    logprob = logprob.reshape(logprob_data.shape)
+                except (RuntimeError, ValueError) as err:
+                    raise ValueError(
+                        f"precomputed_forward output {index} has an invalid logprob shape"
+                    ) from err
+            logprobs_list.append(logprob.clone().detach().requires_grad_(True))
+
+        loss, metrics = loss_fn(data, logprobs_list)
+        loss.backward()
+
+        linear_loss_data = []
+        for index, (datum, logprob) in enumerate(
+            zip(data, logprobs_list, strict=True)
+        ):
+            if logprob.grad is None:
+                raise ValueError(
+                    f"No gradient computed for precomputed logprob tensor {index}"
+                )
+            linear_loss_data.append(
+                types.Datum(
+                    model_input=datum.model_input,
+                    loss_fn_inputs={
+                        "target_tokens": datum.loss_fn_inputs["target_tokens"],
+                        # Backend CE computes -logprobs * weights.
+                        "weights": -logprob.grad,
+                    },
+                )
+            )
+
+        backward_future = await self.forward_backward_async(
+            linear_loss_data,
+            "cross_entropy",
+            None,
+        )
+
+        def add_custom_metrics(
+            result: types.ForwardBackwardOutput,
+        ) -> types.ForwardBackwardOutput:
+            result.metrics.update(metrics)
+            return result
+
+        return _MappedAPIFuture(backward_future, add_custom_metrics)
+
     def forward_backward_custom(
         self,
         data: list[types.Datum],
@@ -2001,8 +2111,9 @@ class FiretitanTrainingClient(TrainingClient):
         loss_type_input: Literal["logprobs"] = "logprobs",
         output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
+        precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        if output == "logprobs":
+        if output == "logprobs" and precomputed_forward is None:
             return super().forward_backward_custom(
                 data,
                 loss_fn,
@@ -2015,6 +2126,7 @@ class FiretitanTrainingClient(TrainingClient):
                 loss_type_input=loss_type_input,
                 output=output,
                 pooling=pooling,
+                precomputed_forward=precomputed_forward,
             )
         ).result()
 

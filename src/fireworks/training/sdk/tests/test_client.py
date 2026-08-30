@@ -2708,6 +2708,126 @@ class TestForwardBackwardCustomEmbedding:
         assert result is future
         mock_forward_backward_custom.assert_called_once()
 
+    def test_logprob_output_reuses_precomputed_forward(self, monkeypatch):
+        client = self._make_client()
+        datum = types.Datum(
+            model_input=types.ModelInput.from_ints([1, 2]),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(
+                    data=[2, 3],
+                    dtype="int64",
+                    shape=[2],
+                )
+            },
+        )
+        precomputed = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[
+                {
+                    "logprobs": types.TensorData(
+                        data=[-0.2, -0.4],
+                        dtype="float32",
+                        shape=[2],
+                    )
+                }
+            ],
+            metrics={},
+        )
+        backward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 0.0},
+        )
+        captured = {}
+
+        class _ImmediateFuture:
+            def __init__(self, value):
+                self.value = value
+
+            def result(self, timeout=None):
+                return self.value
+
+            async def result_async(self, timeout=None):
+                return self.value
+
+        class _Holder:
+            def run_coroutine_threadsafe(self, coro):
+                return _ImmediateFuture(asyncio.run(coro))
+
+        client.holder = _Holder()
+
+        async def fake_forward_backward(data, loss_fn, loss_fn_config):
+            captured["data"] = data
+            captured["loss_fn"] = loss_fn
+            captured["loss_fn_config"] = loss_fn_config
+            return _ImmediateFuture(backward_output)
+
+        monkeypatch.setattr(client, "forward_backward_async", fake_forward_backward)
+
+        def loss_fn(data, logprobs):
+            assert data == [datum]
+            assert logprobs[0].tolist() == pytest.approx([-0.2, -0.4])
+            return (logprobs[0] * torch.tensor([3.0, -1.0])).sum(), {"custom": 2.0}
+
+        future = client.forward_backward_custom(
+            [datum],
+            loss_fn,
+            precomputed_forward=precomputed,
+        )
+        result = future.result()
+
+        assert result.metrics["custom"] == 2.0
+        assert captured["loss_fn"] == "cross_entropy"
+        assert captured["loss_fn_config"] is None
+        linear_inputs = captured["data"][0].loss_fn_inputs
+        assert linear_inputs["target_tokens"] == datum.loss_fn_inputs["target_tokens"]
+        assert linear_inputs["weights"].tolist() == pytest.approx([-3.0, 1.0])
+
+    @pytest.mark.parametrize(
+        ("outputs", "error"),
+        [
+            ([], "one output per datum"),
+            (
+                [
+                    {
+                        "logprobs": types.TensorData(
+                            data=[-0.2],
+                            dtype="float32",
+                            shape=[1],
+                        )
+                    }
+                ],
+                "align with target_tokens",
+            ),
+        ],
+    )
+    def test_precomputed_forward_rejects_misaligned_outputs(self, outputs, error):
+        client = self._make_client()
+        datum = types.Datum(
+            model_input=types.ModelInput.from_ints([1, 2]),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(
+                    data=[2, 3],
+                    dtype="int64",
+                    shape=[2],
+                )
+            },
+        )
+        precomputed = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=outputs,
+            metrics={},
+        )
+
+        with pytest.raises(ValueError, match=error):
+            asyncio.run(
+                client.forward_backward_custom_async(
+                    [datum],
+                    MagicMock(),
+                    precomputed_forward=precomputed,
+                )
+            )
+
     def test_embedding_output_calls_loss_and_sends_embedding_grads(self, monkeypatch):
         client = self._make_client()
         datum = types.Datum(
