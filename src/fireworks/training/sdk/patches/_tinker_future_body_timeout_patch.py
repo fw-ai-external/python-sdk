@@ -23,6 +23,8 @@ import tinker
 import tinker.lib.api_future_impl as api_future_impl
 from tinker._response import async_to_streamed_response_wrapper
 
+from fireworks.training.sdk.errors import _tinker_source_error
+
 _HEADER_TIMEOUT_SECONDS = 45.0
 _BODY_TIMEOUT_SECONDS = 45.0
 
@@ -103,10 +105,18 @@ def _make_fetch_via_rest(*, header_timeout_seconds: float, body_timeout_seconds:
             error_category = api_future_impl.RequestErrorCategory.Unknown
             with contextlib.suppress(Exception):
                 error_category = api_future_impl.RequestErrorCategory(result_dict.get("category"))
-            return api_future_impl._Failed(
+            failed = api_future_impl._Failed(
                 error_message=result_dict["error"],
                 error_category=error_category,
             )
+            source = _tinker_source_error(
+                error=result_dict.get("error"),
+                category=result_dict.get("category"),
+                error_class=result_dict.get("error_class"),
+            )
+            if source is not None:
+                failed._fireworks_training_error_source = source
+            return failed
         return api_future_impl._SuccessJson(result_dict=result_dict)
 
     _fetch_via_rest._fireworks_body_timeout_patch = True

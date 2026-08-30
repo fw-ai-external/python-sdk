@@ -2,23 +2,28 @@ from __future__ import annotations
 
 import time
 import asyncio
+import contextlib
 from typing import Any, cast
 from contextlib import contextmanager
 from collections.abc import Generator, AsyncIterator
 
 import httpx
 import orjson
+import pytest
+import tinker
 from tinker import types
 from tinker.lib import api_future_impl
 from tinker.proto import tinker_public_pb2
 from pyqwest.httpx import AsyncPyqwestTransport
 from tinker._client import AsyncTinker
+from tinker._response import AsyncAPIResponse
+from tinker._exceptions import RequestFailedError
 from tinker.lib.api_future_impl import _UNCOMPUTED, _APIFuture
 from tinker.lib.internal_client_holder import BytesSemaphore
 from tinker.types.forward_backward_output import ForwardBackwardOutput
 from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
 
-from fireworks.training.sdk.patches import _tinker_future_body_timeout_patch
+from fireworks.training.sdk.patches import _tinker_structured_error_patch, _tinker_future_body_timeout_patch
 
 
 class _ResponseBody:
@@ -50,9 +55,10 @@ class _PyqwestResponse:
         self,
         body: _ResponseBody,
         *,
+        status: int = 200,
         content_type: str = "application/json",
     ) -> None:
-        self.status = 200
+        self.status = status
         self.headers = {"content-type": content_type}
         self.trailers: dict[str, str] = {}
         self.content = body
@@ -139,10 +145,14 @@ def _make_future(
     return cast(_APIFuture[Any], future)
 
 
-def _client_for_transport(transport: Any) -> tuple[AsyncTinker, httpx.AsyncClient]:
+def _client_for_transport(
+    transport: Any,
+    *,
+    base_url: str = "http://test",
+) -> tuple[AsyncTinker, httpx.AsyncClient]:
     http_client = httpx.AsyncClient(transport=AsyncPyqwestTransport(transport=cast(Any, transport)))
     client = AsyncTinker(
-        base_url="http://test",
+        base_url=base_url,
         api_key="tml-test-api-key",
         http_client=http_client,
         _client_config=types.ClientConfigResponse(use_pyqwest_transport=False),
@@ -264,3 +274,223 @@ def test_protobuf_result_still_deserializes(monkeypatch: Any) -> None:
         assert transport.response.closed.is_set()
 
     asyncio.run(run())
+
+
+async def _future_exception(
+    body: dict[str, Any],
+    *,
+    combined: bool = False,
+    status: int = 200,
+    base_url: str = "http://test",
+) -> Exception:
+    transport = _SingleResponseTransport(_PyqwestResponse(_ResponseBody([orjson.dumps(body)]), status=status))
+    client, http_client = _client_for_transport(transport, base_url=base_url)
+    future = _make_future(_Holder(client), "future-structured")
+
+    class _DirectFuture:
+        async def result_async(self, timeout: float | None = None) -> Any:
+            return await future._result_async(timeout)
+
+    awaitable = (
+        api_future_impl._CombinedAPIFuture(
+            futures=[_DirectFuture()],
+            transform=lambda values: values[0],
+            holder=object(),
+        ).result_async()
+        if combined
+        else future._result_async()
+    )
+    try:
+        await awaitable
+    except Exception as exc:
+        return exc
+    finally:
+        await http_client.aclose()
+    raise AssertionError("future unexpectedly succeeded")
+
+
+async def _status_error(body: dict[str, Any], *, path: str) -> Exception:
+    transport = _SingleResponseTransport(_PyqwestResponse(_ResponseBody([b"{}"])))
+    client, http_client = _client_for_transport(transport)
+    response = httpx.Response(
+        404,
+        json=body,
+        headers={"x-request-id": "request-1"},
+        request=httpx.Request("POST", f"https://api.example.com{path}"),
+    )
+    try:
+        return client._make_status_error("legacy public status message", body=body, response=response)
+    finally:
+        await http_client.aclose()
+
+
+def test_structured_error_patch_has_independent_idempotence_guard() -> None:
+    from fireworks.training.sdk.patches import _tinker_structured_error_patch
+
+    for method in (
+        AsyncAPIResponse.json,
+        api_future_impl._APIFuture._fetch_via_rest,
+        AsyncTinker._make_status_error,
+        api_future_impl._APIFuture._handle_outcome,
+        api_future_impl._APIFuture._handle_transport_error,
+    ):
+        assert getattr(method, "_fireworks_structured_error_patch", False)
+    assert _tinker_structured_error_patch._apply_tinker_structured_error_patch() is False
+
+
+def test_future_source_capture_does_not_depend_on_body_timeout_override(
+    monkeypatch: Any,
+) -> None:
+    body = {
+        "error": "native future failure",
+        "category": "Future-Category/V2",
+        "error_class": "Future.Class/V9",
+    }
+
+    async def native_like_fetch(self: Any, state: Any, iteration: int) -> Any:  # noqa: ARG001
+        response = object.__new__(AsyncAPIResponse)
+        response.http_response = httpx.Response(
+            200,
+            content=orjson.dumps(body),
+            request=httpx.Request("POST", "https://api.example.com/future/retrieve"),
+        )
+        result = await response.json()
+        error_category = api_future_impl.RequestErrorCategory.Unknown
+        with contextlib.suppress(Exception):
+            error_category = api_future_impl.RequestErrorCategory(result.get("category"))
+        return api_future_impl._Failed(
+            error_message=result["error"],
+            error_category=error_category,
+        )
+
+    monkeypatch.setattr(
+        api_future_impl._APIFuture,
+        "_fetch_via_rest",
+        _tinker_structured_error_patch._make_fetch_via_rest_with_source_capture(native_like_fetch),
+    )
+
+    exc = asyncio.run(_future_exception({"unused": True}))
+
+    assert isinstance(exc, RequestFailedError)
+    source = exc._fireworks_training_error_source
+    assert (source.error, source.category, source.error_class) == (
+        "native future failure",
+        "Future-Category/V2",
+        "Future.Class/V9",
+    )
+
+
+@pytest.mark.parametrize("combined", [False, True])
+def test_future_failure_preserves_raw_tinker_fields(combined: bool) -> None:
+    exc = asyncio.run(
+        _future_exception(
+            {
+                "error": "human-readable failure",
+                "category": "Future-Category/V2",
+                "error_class": "Future.Class/V9",
+            },
+            combined=combined,
+        )
+    )
+
+    assert isinstance(exc, RequestFailedError)
+    assert exc.category is types.RequestErrorCategory.Unknown
+    assert exc.args == (str(exc),)
+    assert exc.__cause__ is None
+    source = exc._fireworks_training_error_source
+    assert (source.source, source.error, source.category, source.error_class) == (
+        "tinker",
+        "human-readable failure",
+        "Future-Category/V2",
+        "Future.Class/V9",
+    )
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (
+            {
+                "error": "legacy message remains unchanged",
+                "category": {"not": "a string"},
+                "error_class": "x" * 129,
+            },
+            ("legacy message remains unchanged", None, None, True),
+        ),
+        (
+            {"error": 7, "category": {"not": "a string"}, "error_class": "x" * 129},
+            (None, None, None, True),
+        ),
+    ],
+)
+def test_future_failure_marks_invalid_source_fields(body: dict[str, Any], expected: Any) -> None:
+    exc = asyncio.run(_future_exception(body))
+
+    assert isinstance(exc, RequestFailedError)
+    source = exc._fireworks_training_error_source
+    assert (source.error, source.category, source.error_class, source.malformed) == expected
+
+
+def test_direct_serverless_status_error_preserves_only_valid_gateway_envelope() -> None:
+    body = {
+        "error": {
+            "code": "Future_Gateway_Code/V2",
+            "type": "Future.Gateway.Type/V3",
+            "message": "mutable diagnostic",
+        }
+    }
+    exc = asyncio.run(
+        _status_error(
+            body,
+            path="/training/v1/serverless/api/v1/create_model",
+        )
+    )
+
+    assert type(exc) is tinker.NotFoundError
+    assert str(exc) == "legacy public status message"
+    assert exc.args == ("legacy public status message",)
+    assert exc.response.headers["x-request-id"] == "request-1"
+    assert exc.__cause__ is None
+    source = exc._fireworks_training_error_source
+    assert (source.source, source.code, source.type) == (
+        "serverless_gateway",
+        "Future_Gateway_Code/V2",
+        "Future.Gateway.Type/V3",
+    )
+
+    dedicated = asyncio.run(
+        _status_error(
+            body,
+            path="/training/v1/rlorTrainerJobs/acct/job/api/v1/create_model",
+        )
+    )
+    assert not hasattr(dedicated, "_fireworks_training_error_source")
+
+    malformed = asyncio.run(
+        _status_error(
+            {"error": {"code": 404, "type": "error"}},
+            path="/training/v1/serverless/api/v1/create_model",
+        )
+    )
+    assert malformed._fireworks_training_error_source.malformed
+
+
+def test_retrieve_future_copies_final_serverless_http_context() -> None:
+    exc = asyncio.run(
+        _future_exception(
+            {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "type": "error",
+                    "message": "retrieve diagnostic",
+                }
+            },
+            status=404,
+            base_url="https://api.example.com/training/v1/serverless",
+        )
+    )
+
+    source = exc._fireworks_training_error_source
+    assert (source.code, source.type) == ("NOT_FOUND", "error")
+    assert type(exc.__cause__) is tinker.NotFoundError
+    assert exc.__cause__._fireworks_training_error_source == source

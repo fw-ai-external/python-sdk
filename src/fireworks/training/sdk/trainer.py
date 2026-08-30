@@ -17,6 +17,8 @@ from datetime import timedelta
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+import httpx
+
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     CONSOLE_URL,
@@ -24,6 +26,8 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
     parse_training_api_error,
+    _training_api_runtime_error,
+    _attach_training_error_status,
 )
 from fireworks.training.sdk._constants import (
     POLL_INTERVAL_S,
@@ -51,6 +55,20 @@ _TRAINER_TOMBSTONE_STATES = frozenset(
         "JOB_STATE_ARCHIVED",
     }
 )
+# States a trainer never leaves on its own, so readiness will never arrive.
+# JOB_STATE_FAILED is handled separately because it carries its own guidance.
+_TRAINER_STOPPED_STATES = frozenset(
+    {
+        "JOB_STATE_CANCELLING",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_COMPLETED",
+        "JOB_STATE_EARLY_STOPPED",
+        "JOB_STATE_DELETING",
+    }
+)
+# A resume flips the job out of a stopped state asynchronously, so the first
+# polls after resume_and_wait can still read the pre-resume state.
+_TRAINER_STOPPED_SETTLE_S = 30.0
 
 
 def _trainer_job_state(job: dict[str, Any]) -> str:
@@ -61,11 +79,24 @@ def _is_trainer_tombstone_state(state: str) -> bool:
     return state in _TRAINER_TOMBSTONE_STATES
 
 
+def _raise_trainer_stopped_error(job_id: str, state: str, job: dict[str, Any]) -> None:
+    status_message = _extract_job_status_message(job)
+    raise RuntimeError(
+        format_sdk_error(
+            f"Trainer job {job_id} stopped in {state} before it became ready",
+            status_message or "The control plane reported no status detail for the stopped job.",
+            "The job was cancelled, completed, or deleted while the SDK waited for readiness — "
+            "usually an explicit cancel/delete on the job, a parent workflow cleanup, or an "
+            "inactivity auto-stop. Check the job's status detail and audit history, then resume "
+            f"it or create a new trainer job.\n  Console: {CONSOLE_URL}",
+            docs_url=DOCS_SDK,
+        )
+    )
+
+
 def _raise_trainer_tombstone_error(job_id: str, job: dict[str, Any]) -> None:
     status_message = _extract_job_status_message(job)
-    detail = status_message or (
-        "Trainer job was deleted and is retained only for checkpoint recovery."
-    )
+    detail = status_message or ("Trainer job was deleted and is retained only for checkpoint recovery.")
     raise RuntimeError(
         format_sdk_error(
             f"Trainer job {job_id} is archived and cannot be recreated with the same ID",
@@ -91,8 +122,7 @@ def _format_proto_duration(value: timedelta | str) -> str:
     if isinstance(value, str):
         if not _PROTO_DURATION_RE.match(value):
             raise ValueError(
-                "must be a protobuf JSON duration string such as '1800s'; "
-                "use datetime.timedelta for minute/hour values"
+                "must be a protobuf JSON duration string such as '1800s'; use datetime.timedelta for minute/hour values"
             )
         if value.startswith("-"):
             raise ValueError("must be non-negative")
@@ -137,13 +167,6 @@ def _log_backend_warning_status(job: dict[str, Any]) -> None:
     if message.startswith("Warning:"):
         logger.warning("%s", message)
 
-
-def _extract_direct_route_handle(job: dict[str, Any]) -> str:
-    for key in ("directRouteHandle", "direct_route_handle"):
-        value = job.get(key)
-        if value:
-            return str(value).rstrip("/")
-    return ""
 
 
 def _extract_job_training_config(job: dict[str, Any]) -> dict[str, Any] | None:
@@ -312,7 +335,10 @@ class TrainerJobConfig:
     are idempotent.
     """
     use_reservation: bool = True
-    """Try reservation capacity first. Set to ``False`` to use shared capacity."""
+    """Use matching account reservation capacity when available.
+
+    Accounts without a reservation for the selected accelerator use shared capacity.
+    """
 
     def validate(self) -> None:
         """Self-contained pre-flight check. Call before ``_create()``.
@@ -408,9 +434,7 @@ class TrainerJobManager(FireworksClient):
 
     # -- Low-level REST calls --------------------------------------------------
 
-    _SHAPE_REF_RE = re.compile(
-        r"^accounts/[^/]+/trainingShapes/[^/]+(/versions/[^/]+)?$"
-    )
+    _SHAPE_REF_RE = re.compile(r"^accounts/[^/]+/trainingShapes/[^/]+(/versions/[^/]+)?$")
 
     @classmethod
     def _validate_shape_ref(cls, ref: str) -> None:
@@ -438,9 +462,7 @@ class TrainerJobManager(FireworksClient):
     def _create(self, config: TrainerJobConfig) -> dict:
         config.validate()
         if config.disable_inactivity_cleanup and self.account_id != "fireworks":
-            raise ValueError(
-                "disable_inactivity_cleanup is only supported for trainers in the fireworks account"
-            )
+            raise ValueError("disable_inactivity_cleanup is only supported for trainers in the fireworks account")
 
         if config.training_shape_ref:
             self._validate_shape_ref(config.training_shape_ref)
@@ -600,8 +622,9 @@ class TrainerJobManager(FireworksClient):
             # Surface the backend's response body rather than httpx's bare status
             # line so poll failures carry the real cause (the orchestrator
             # persists str(exc) as the job's failure status).
-            raise RuntimeError(
-                f"Failed to get RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            raise _training_api_runtime_error(
+                resp,
+                context=f"Failed to get RLOR job {job_id}",
             )
         return resp.json()
 
@@ -623,8 +646,9 @@ class TrainerJobManager(FireworksClient):
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs/{job_id}"
         resp = self._delete(path, timeout=HTTP_READ_TIMEOUT_S)
         if not resp.is_success:
-            raise RuntimeError(
-                f"Failed to delete RLOR job {job_id} (HTTP {resp.status_code}): {parse_api_error(resp)}"
+            raise _training_api_runtime_error(
+                resp,
+                context=f"Failed to delete RLOR job {job_id}",
             )
 
     def _resume(self, job_id: str) -> dict:
@@ -642,7 +666,11 @@ class TrainerJobManager(FireworksClient):
                     docs_url=DOCS_SDK,
                 ),
             )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            _attach_training_error_status(exc, resp)
+            raise
         return resp.json()
 
     # -- High-level operations -------------------------------------------------
@@ -655,10 +683,6 @@ class TrainerJobManager(FireworksClient):
         trainer pod via DynamoDB route lookup and the ``FIREWORKS-TRAINER``
         header.  The gateway strips the prefix so the trainer receives
         the original path (e.g. ``/api/v1/healthz``).
-
-        This replaces the previous ``directRouteHandle`` approach, which
-        resolved to a GCP-specific hostname and did not work for non-GCP
-        clusters (e.g. OCI).
         """
         return f"{self.base_url}/training/v1/rlorTrainerJobs/{self.account_id}/{job_id}"
 
@@ -701,6 +725,9 @@ class TrainerJobManager(FireworksClient):
             if _is_trainer_tombstone_state(state):
                 _raise_trainer_tombstone_error(job_id, job)
 
+            if state in _TRAINER_STOPPED_STATES and now - start >= _TRAINER_STOPPED_SETTLE_S:
+                _raise_trainer_stopped_error(job_id, state, job)
+
             if state == "JOB_STATE_FAILED":
                 msg = status_message or "unknown"
                 raise RuntimeError(
@@ -719,11 +746,6 @@ class TrainerJobManager(FireworksClient):
                 if self._check_healthz(gateway_base_url):
                     service_ready = True
                     ready_base_url = gateway_base_url
-                else:
-                    direct_route_handle = _extract_direct_route_handle(job)
-                    if direct_route_handle and self._check_healthz(direct_route_handle):
-                        service_ready = True
-                        ready_base_url = direct_route_handle
 
             if service_ready:
                 self.boot_time_s = now - start
@@ -764,10 +786,7 @@ class TrainerJobManager(FireworksClient):
                     )
 
             log_signature = (state, status_message, service_ready)
-            should_log = (
-                log_signature != last_log_signature
-                or elapsed - last_log_elapsed_s >= POLL_LOG_HEARTBEAT_S
-            )
+            should_log = log_signature != last_log_signature or elapsed - last_log_elapsed_s >= POLL_LOG_HEARTBEAT_S
             if should_log:
                 if state == "JOB_STATE_RUNNING":
                     if status_message:

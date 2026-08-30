@@ -26,6 +26,36 @@ def _query_params(path: str) -> dict[str, list[str]]:
     return parse_qs(urlparse(path).query)
 
 
+def _training_error_response(
+    *,
+    method: str,
+    path: str,
+    message: str,
+    reason: str = "TIER_REQUIRED",
+    source: str = "lifecycle",
+) -> httpx.Response:
+    return httpx.Response(
+        403,
+        json={
+            "code": 8,
+            "message": message,
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": reason,
+                    "domain": "training.fireworks.ai",
+                    "metadata": {
+                        "version": "1",
+                        "source": source,
+                        "quota_required": "8",
+                    },
+                }
+            ],
+        },
+        request=httpx.Request(method, f"https://api.example.com{path}"),
+    )
+
+
 @pytest.fixture
 def mgr():
     manager = TrainerJobManager(
@@ -206,19 +236,14 @@ class TestCreate:
         mgr.try_get.assert_called_once_with("sft-job-1")
         resp.raise_for_status.assert_not_called()
 
-    def test_create_retry_reuses_auto_job_id_after_conflict(
-        self, mgr, basic_config, monkeypatch
-    ):
+    def test_create_retry_reuses_auto_job_id_after_conflict(self, mgr, basic_config, monkeypatch):
         """E2E-style retry stack test: same SDK call, same generated job ID."""
         generated_job_id = "training-api-service-12345678"
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            if (
-                request.method == "POST"
-                and request.url.path == "/v1/accounts/test-account/rlorTrainerJobs"
-            ):
+            if request.method == "POST" and request.url.path == "/v1/accounts/test-account/rlorTrainerJobs":
                 post_count = sum(req.method == "POST" for req in requests)
                 if post_count == 1:
                     return httpx.Response(
@@ -233,17 +258,11 @@ class TestCreate:
                 )
             if (
                 request.method == "GET"
-                and request.url.path
-                == f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
+                and request.url.path == f"/v1/accounts/test-account/rlorTrainerJobs/{generated_job_id}"
             ):
                 return httpx.Response(
                     200,
-                    json={
-                        "name": (
-                            "accounts/test-account/rlorTrainerJobs/"
-                            f"{generated_job_id}"
-                        )
-                    },
+                    json={"name": (f"accounts/test-account/rlorTrainerJobs/{generated_job_id}")},
                     request=request,
                 )
             return httpx.Response(404, json={"error": "not found"}, request=request)
@@ -252,9 +271,7 @@ class TestCreate:
             "fireworks.training.sdk.errors._backoff_delay",
             lambda *_args, **_kwargs: 0.0,
         )
-        monkeypatch.setattr(
-            "fireworks.training.sdk.errors.time.sleep", lambda _delay: None
-        )
+        monkeypatch.setattr("fireworks.training.sdk.errors.time.sleep", lambda _delay: None)
         mgr._sync_client.close()
         mgr._sync_client = httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -266,9 +283,7 @@ class TestCreate:
 
         post_requests = [req for req in requests if req.method == "POST"]
         get_requests = [req for req in requests if req.method == "GET"]
-        post_job_ids = [
-            _query_params(str(req.url))["rlorTrainerJobId"][0] for req in post_requests
-        ]
+        post_job_ids = [_query_params(str(req.url))["rlorTrainerJobId"][0] for req in post_requests]
 
         assert result == CreatedTrainerJob(
             job_name=f"accounts/test-account/rlorTrainerJobs/{generated_job_id}",
@@ -622,36 +637,152 @@ class TestCreate:
         assert "RLOR job creation failed (HTTP 403)" in err_text
         assert body_message in err_text
 
-    def test_create_preserves_structured_training_reason(self, mgr):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            display_name="valid-name",
+
+class TestStructuredLifecycleErrors:
+    @staticmethod
+    def _assert_carrier(exc: BaseException, *, message: str, reason: str = "TIER_REQUIRED") -> None:
+        carrier = exc._fireworks_training_error_status
+        assert carrier.source == "lifecycle"
+        assert carrier.status["code"] == 8
+        assert carrier.status["message"] == message
+        detail = carrier.status["details"][0]
+        assert detail["reason"] == reason
+        assert detail["metadata"] == {
+            "version": "1",
+            "source": "lifecycle",
+            "quota_required": "8",
+        }
+
+    def test_create_preserves_status_without_changing_public_error(self, mgr):
+        path = "/v1/accounts/test-account/rlorTrainerJobs"
+        response = _training_error_response(
+            method="POST",
+            path=path,
+            message="create diagnostic",
         )
-        resp = httpx.Response(
-            403,
-            json={
-                "code": 7,
-                "message": "message text is not the classifier",
-                "details": [
-                    {
-                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-                        "reason": "TIER_REQUIRED",
-                    }
-                ],
-            },
-            request=httpx.Request(
-                "POST",
-                "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs",
-            ),
-        )
-        mgr._post = MagicMock(return_value=resp)
+        mgr._post = MagicMock(return_value=response)
+        config = TrainerJobConfig(base_model="accounts/test/models/m")
 
         with pytest.raises(TrainingAPIError) as exc_info:
             mgr._create(config)
 
-        assert exc_info.value.status_code == 403
-        assert exc_info.value.reason == "TIER_REQUIRED"
-        assert "message text is not the classifier" in str(exc_info.value)
+        assert str(exc_info.value) == "RLOR job creation failed (HTTP 403): create diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="create diagnostic")
+
+    def test_get_preserves_status_without_changing_public_error(self, mgr):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="GET",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}",
+            message="get diagnostic",
+        )
+        mgr._get = MagicMock(return_value=response)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get(job_id)
+
+        assert type(exc_info.value) is RuntimeError
+        assert str(exc_info.value) == "Failed to get RLOR job job-1 (HTTP 403): get diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="get diagnostic")
+
+    def test_delete_preserves_status_without_changing_cleanup_behavior(self, mgr, caplog):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="DELETE",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}",
+            message="delete diagnostic",
+        )
+        mgr._delete = MagicMock(return_value=response)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr._delete_job(job_id)
+
+        assert type(exc_info.value) is RuntimeError
+        assert str(exc_info.value) == "Failed to delete RLOR job job-1 (HTTP 403): delete diagnostic"
+        assert exc_info.value.args == (str(exc_info.value),)
+        self._assert_carrier(exc_info.value, message="delete diagnostic")
+
+        mgr.delete(job_id)
+        assert "Failed to delete trainer job job-1" in caplog.text
+
+    def test_resume_keeps_http_status_error_and_attaches_status(self, mgr):
+        job_id = "job-1"
+        response = _training_error_response(
+            method="POST",
+            path=f"/v1/accounts/test-account/rlorTrainerJobs/{job_id}:resume",
+            message="resume diagnostic",
+        )
+        mgr._post = MagicMock(return_value=response)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as expected:
+            expected_message = str(expected)
+            expected_args = expected.args
+
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            mgr._resume(job_id)
+
+        assert type(exc_info.value) is httpx.HTTPStatusError
+        assert str(exc_info.value) == expected_message
+        assert exc_info.value.args == expected_args
+        assert exc_info.value.__cause__ is None
+        self._assert_carrier(exc_info.value, message="resume diagnostic")
+
+    @pytest.mark.parametrize(
+        ("message", "reason"),
+        [
+            ("same diagnostic", "TIER_REQUIRED"),
+            ("same diagnostic", "QUOTA_EXCEEDED"),
+            ("different diagnostic", "TIER_REQUIRED"),
+        ],
+    )
+    def test_message_text_does_not_classify(self, mgr, message, reason):
+        mgr._get = MagicMock(
+            return_value=_training_error_response(
+                method="GET",
+                path="/v1/accounts/test-account/rlorTrainerJobs/job-1",
+                message=message,
+                reason=reason,
+            )
+        )
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get("job-1")
+        carrier = exc_info.value._fireworks_training_error_status
+        assert carrier.status["details"][0]["reason"] == reason
+
+    def test_wrong_source_is_preserved_for_internal_validation(self, mgr):
+        mgr._get = MagicMock(
+            return_value=_training_error_response(
+                method="GET",
+                path="/v1/accounts/test-account/rlorTrainerJobs/job-1",
+                message="TIER_REQUIRED",
+                source="tinker",
+            )
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr.try_get("job-1")
+
+        carrier = exc_info.value._fireworks_training_error_status
+        assert carrier.status["details"][0]["metadata"]["source"] == "tinker"
+
+    def test_try_get_not_found_still_returns_none(self, mgr):
+        mgr._get = MagicMock(
+            return_value=httpx.Response(
+                404,
+                json={"message": "not found"},
+                request=httpx.Request(
+                    "GET",
+                    "https://api.example.com/v1/accounts/test-account/rlorTrainerJobs/missing",
+                ),
+            )
+        )
+
+        assert mgr.try_get("missing") is None
 
 
 class TestPollUntilReady:
@@ -680,7 +811,6 @@ class TestPollUntilReady:
     def test_running_uses_gateway_endpoint(self, mock_get, mock_healthz, mgr):
         mock_get.return_value = {
             "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.example.test:8080",
             "trainingConfig": {
                 "maxContextLength": 32768,
             },
@@ -690,23 +820,6 @@ class TestPollUntilReady:
         assert result.job_id == "job-1"
         assert result.base_url == "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         assert result.max_context_length == 32768
-
-    @patch.object(TrainerJobManager, "_check_healthz")
-    @patch.object(TrainerJobManager, "get")
-    def test_running_falls_back_to_direct_route_endpoint(self, mock_get, mock_healthz, mgr):
-        mock_get.return_value = {
-            "state": "JOB_STATE_RUNNING",
-            "directRouteHandle": "https://trainer.example.test:8080/",
-        }
-        mock_healthz.side_effect = [False, True]
-
-        result = mgr._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
-
-        assert result.base_url == "https://trainer.example.test:8080"
-        assert mock_healthz.call_args_list[0].args[0] == (
-            "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
-        )
-        assert mock_healthz.call_args_list[1].args[0] == "https://trainer.example.test:8080"
 
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):
@@ -729,6 +842,60 @@ class TestPollUntilReady:
         }
         with pytest.raises(RuntimeError, match="archived and cannot be recreated"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
+
+    @pytest.mark.parametrize(
+        "state",
+        [
+            "JOB_STATE_CANCELLING",
+            "JOB_STATE_CANCELLED",
+            "JOB_STATE_COMPLETED",
+            "JOB_STATE_EARLY_STOPPED",
+            "JOB_STATE_DELETING",
+        ],
+    )
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "get")
+    def test_stopped_state_fails_fast_instead_of_waiting_for_readiness_timeout(
+        self,
+        mock_get,
+        mock_time,
+        mock_sleep,
+        mgr,
+        state,
+    ):
+        mock_time.side_effect = [0.0, 60.0]
+        mock_get.return_value = {"state": state, "status": {"message": "Service cancelled"}}
+
+        with pytest.raises(RuntimeError, match=f"stopped in {state} before it became ready") as exc_info:
+            mgr._poll_until_ready("job-1", "name", timeout_s=3600)
+
+        assert not isinstance(exc_info.value, TimeoutError)
+        assert "Service cancelled" in str(exc_info.value)
+        assert mock_get.call_count == 1
+
+    @patch("fireworks.training.sdk.trainer.time.sleep")
+    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
+    @patch.object(TrainerJobManager, "get")
+    def test_stopped_state_tolerated_while_a_resume_settles(
+        self,
+        mock_get,
+        mock_healthz,
+        mock_time,
+        mock_sleep,
+        mgr,
+    ):
+        mock_get.side_effect = [
+            {"state": "JOB_STATE_CANCELLED"},
+            {"state": "JOB_STATE_PENDING"},
+            {"state": "JOB_STATE_RUNNING"},
+        ]
+        mock_time.side_effect = [0.0, 1.0, 2.0, 3.0]
+
+        result = mgr._poll_until_ready("job-1", "name", timeout_s=3600, pending_timeout_s=600)
+
+        assert result.job_id == "job-1"
 
     @patch("fireworks.training.sdk.trainer.time.sleep")
     @patch("fireworks.training.sdk.trainer.time.time")
@@ -796,11 +963,7 @@ class TestPollUntilReady:
         with caplog.at_level("INFO"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
 
-        creating_logs = [
-            record.message
-            for record in caplog.records
-            if "JOB_STATE_CREATING" in record.message
-        ]
+        creating_logs = [record.message for record in caplog.records if "JOB_STATE_CREATING" in record.message]
         assert len(creating_logs) == 1
         assert "Waiting for capacity" in creating_logs[0]
 
@@ -914,9 +1077,7 @@ class TestResolveTrainingProfile:
         resp = MagicMock()
         resp.ok = True
         resp.json.return_value = {
-            "trainingShapeVersions": [
-                {"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}
-            ]
+            "trainingShapeVersions": [{"name": "accounts/fireworks/trainingShapes/ts-test/versions/ver-123"}]
         }
         mgr._get = MagicMock(return_value=resp)
 
@@ -959,9 +1120,7 @@ class TestModelIsMoe:
     )
     def test_reads_model_architecture(self, details_key, moe):
         client = FireworksClient(api_key="k", base_url="https://x")
-        client._get = MagicMock(
-            return_value=self._response({details_key: {"moe": moe}})
-        )
+        client._get = MagicMock(return_value=self._response({details_key: {"moe": moe}}))
 
         assert client.model_is_moe("accounts/a/models/m") is moe
         client._get.assert_called_once_with(
@@ -1084,9 +1243,7 @@ class TestListCheckpoints:
 
     def test_403_surfaces_permission_denied(self):
         mgr = self._mgr()
-        mgr._get = MagicMock(
-            return_value=self._resp({"message": "", "code": 7}, status=403)
-        )
+        mgr._get = MagicMock(return_value=self._resp({"message": "", "code": 7}, status=403))
 
         with pytest.raises(RuntimeError, match="does not have access"):
             mgr.list_checkpoints("j")
@@ -1301,10 +1458,7 @@ class TestValidate:
         )
         with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
             config.validate()
-        assert any(
-            "gradient_accumulation_steps=1 is deprecated" in rec.message
-            for rec in caplog.records
-        )
+        assert any("gradient_accumulation_steps=1 is deprecated" in rec.message for rec in caplog.records)
 
     def test_rejects_negative_inactivity_timeout(self):
         config = TrainerJobConfig(

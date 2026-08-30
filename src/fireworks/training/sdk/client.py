@@ -10,6 +10,7 @@ This layer extends the upstream tinker client with:
   7. save_weights_for_sampler_ext() checkpoint_type support
   8. DCP checkpoint listing
   9. HF PEFT adapter warm-start loading (weights-only)
+  10. custom-loss backward reuse of a compatible forward result
 
 Most other methods are inherited from tinker.
 """
@@ -17,6 +18,7 @@ Most other methods are inherited from tinker.
 from __future__ import annotations
 
 import os
+import re
 import json
 import time
 import uuid
@@ -64,7 +66,9 @@ from fireworks.training.sdk.deployment import (
 )
 from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
+    ExportPrecision,
     SamplerCheckpointType,
+    resolve_export_precision,
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
 )
@@ -1031,19 +1035,60 @@ def _fireworks_api_root_url(base_url: str | None) -> str:
 # -- Cross-job checkpoint references ------------------------------------------
 
 CROSS_JOB_CHECKPOINT_REF_PREFIX = "cross_job://"
+_CHECKPOINT_DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+_CHECKPOINT_URI_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+_CHECKPOINT_RUN_ID_RE = re.compile(r"^run-[0-9a-f]{32}$")
+
+
+def _validate_logical_checkpoint_path(checkpoint_path: str) -> str:
+    normalized_path = checkpoint_path.strip()
+    if not normalized_path:
+        raise ValueError("checkpoint path cannot be empty")
+    if "\x00" in normalized_path or "\\" in normalized_path:
+        raise ValueError("checkpoint path contains invalid characters")
+    for segment in normalized_path.split("/"):
+        if segment in ("", ".", ".."):
+            raise ValueError("checkpoint path contains empty or traversal segments")
+        if not _CHECKPOINT_DNS_LABEL_RE.fullmatch(segment):
+            raise ValueError(f"checkpoint path segment {segment!r} is not a valid DNS label")
+    return normalized_path
+
+
+def _validate_checkpoint_ref(checkpoint_ref: str) -> str:
+    normalized_ref = checkpoint_ref.strip()
+    if normalized_ref.startswith(CROSS_JOB_CHECKPOINT_REF_PREFIX):
+        payload = normalized_ref[len(CROSS_JOB_CHECKPOINT_REF_PREFIX) :]
+        source_job_id, separator, checkpoint_name = payload.partition("/")
+        if not separator or not source_job_id or not checkpoint_name:
+            raise ValueError(
+                "Invalid cross-job checkpoint ref format. "
+                f"Expected '{CROSS_JOB_CHECKPOINT_REF_PREFIX}<source_job_id>/<checkpoint_name>'"
+            )
+        normalized_source_job_id = _validate_logical_checkpoint_path(source_job_id)
+        if "/" in normalized_source_job_id:
+            raise ValueError("source_job_id must be a single DNS label")
+        normalized_checkpoint_name = _validate_logical_checkpoint_path(checkpoint_name)
+        if "/" in normalized_checkpoint_name:
+            raise ValueError("cross-job checkpoint name must be a single DNS label")
+        return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
+    if normalized_ref.startswith("/") or _CHECKPOINT_URI_RE.match(normalized_ref):
+        raise ValueError("checkpoint path must be a logical name or opaque cross_job:// reference")
+    normalized_path = _validate_logical_checkpoint_path(normalized_ref)
+    segments = normalized_path.split("/")
+    if len(segments) == 1:
+        return normalized_path
+    if len(segments) >= 3 and _CHECKPOINT_RUN_ID_RE.fullmatch(segments[1]):
+        return normalized_path
+    raise ValueError(
+        "checkpoint path must be a bare logical name, "
+        "'<account>/<run>/<checkpoint>', or opaque cross_job:// reference"
+    )
 
 
 def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -> str:
     """Build an opaque checkpoint reference for cross-job resume."""
-    normalized_source_job_id = source_job_id.strip()
-    normalized_checkpoint_name = checkpoint_name.strip()
-    if not normalized_source_job_id:
-        raise ValueError("source_job_id cannot be empty")
-    if not normalized_checkpoint_name:
-        raise ValueError("checkpoint_name cannot be empty")
-    if normalized_checkpoint_name.startswith("gs://") or normalized_checkpoint_name.startswith("/"):
-        raise ValueError("checkpoint_name must be a logical checkpoint name, not a full path")
-    return f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{normalized_source_job_id}/{normalized_checkpoint_name}"
+    checkpoint_ref = f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{source_job_id}/{checkpoint_name}"
+    return _validate_checkpoint_ref(checkpoint_ref)
 
 
 # -- Session-scoped snapshot name qualification --------------------------------
@@ -1867,13 +1912,23 @@ class FiretitanTrainingClient(TrainingClient):
         loss_type_input: Literal["logprobs"] = "logprobs",
         output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
+        precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         if output == "logprobs":
+            if precomputed_forward is not None:
+                return await self._forward_backward_custom_from_forward_async(
+                    data,
+                    loss_fn,
+                    precomputed_forward=precomputed_forward,
+                    loss_type_input=loss_type_input,
+                )
             return await super().forward_backward_custom_async(
                 data,
                 loss_fn,
                 loss_type_input=loss_type_input,
             )
+        if precomputed_forward is not None:
+            raise ValueError("precomputed_forward is only supported for output='logprobs'")
         if output not in ("embedding", "cos_similarity_matrix"):
             raise ValueError(
                 f"Unsupported output={output!r}; expected 'logprobs', 'embedding', or 'cos_similarity_matrix'"
@@ -1949,6 +2004,105 @@ class FiretitanTrainingClient(TrainingClient):
 
         return _MappedAPIFuture(backward_future, add_custom_metrics)
 
+    async def _forward_backward_custom_from_forward_async(
+        self,
+        data: list[types.Datum],
+        loss_fn: Callable,
+        *,
+        precomputed_forward: types.ForwardBackwardOutput,
+        loss_type_input: Literal["logprobs"],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Resume a logprob custom loss from a compatible completed forward.
+
+        This follows upstream Tinker's ``forward_backward_custom_async``
+        logprob algorithm, starting after the standalone forward: reconstruct
+        differentiable logprob tensors, run the client loss, then send the
+        resulting linearized cross-entropy weights to the trainer.
+
+        The caller owns the invariant that ``precomputed_forward`` was produced
+        by this policy version for ``data`` in the same order. Structural checks
+        below prevent a mismatched result from silently training wrong tokens.
+        """
+        if loss_type_input != "logprobs":
+            raise ValueError("precomputed_forward only supports loss_type_input='logprobs'")
+
+        try:
+            import torch
+        except ImportError as err:
+            raise ImportError(
+                "PyTorch is not installed. Cannot run custom forward_backward."
+            ) from err
+
+        outputs = precomputed_forward.loss_fn_outputs
+        if len(outputs) != len(data):
+            raise ValueError(
+                "precomputed_forward must contain one output per datum; "
+                f"got {len(outputs)} outputs for {len(data)} datums"
+            )
+
+        logprobs_list = []
+        for index, (datum, out) in enumerate(zip(data, outputs, strict=True)):
+            target_tokens = datum.loss_fn_inputs.get("target_tokens")
+            if target_tokens is None:
+                raise ValueError(f"Datum {index} is missing target_tokens")
+            if "logprobs" not in out:
+                raise ValueError(
+                    f"precomputed_forward output {index} is missing logprobs"
+                )
+
+            logprob_data = out["logprobs"]
+            if len(logprob_data.data) != len(target_tokens.data):
+                raise ValueError(
+                    "precomputed_forward logprobs must align with target_tokens; "
+                    f"datum {index} has {len(logprob_data.data)} logprobs and "
+                    f"{len(target_tokens.data)} target tokens"
+                )
+            logprob = torch.tensor(logprob_data.data)
+            if logprob_data.shape is not None:
+                try:
+                    logprob = logprob.reshape(logprob_data.shape)
+                except (RuntimeError, ValueError) as err:
+                    raise ValueError(
+                        f"precomputed_forward output {index} has an invalid logprob shape"
+                    ) from err
+            logprobs_list.append(logprob.clone().detach().requires_grad_(True))
+
+        loss, metrics = loss_fn(data, logprobs_list)
+        loss.backward()
+
+        linear_loss_data = []
+        for index, (datum, logprob) in enumerate(
+            zip(data, logprobs_list, strict=True)
+        ):
+            if logprob.grad is None:
+                raise ValueError(
+                    f"No gradient computed for precomputed logprob tensor {index}"
+                )
+            linear_loss_data.append(
+                types.Datum(
+                    model_input=datum.model_input,
+                    loss_fn_inputs={
+                        "target_tokens": datum.loss_fn_inputs["target_tokens"],
+                        # Backend CE computes -logprobs * weights.
+                        "weights": -logprob.grad,
+                    },
+                )
+            )
+
+        backward_future = await self.forward_backward_async(
+            linear_loss_data,
+            "cross_entropy",
+            None,
+        )
+
+        def add_custom_metrics(
+            result: types.ForwardBackwardOutput,
+        ) -> types.ForwardBackwardOutput:
+            result.metrics.update(metrics)
+            return result
+
+        return _MappedAPIFuture(backward_future, add_custom_metrics)
+
     def forward_backward_custom(
         self,
         data: list[types.Datum],
@@ -1957,8 +2111,9 @@ class FiretitanTrainingClient(TrainingClient):
         loss_type_input: Literal["logprobs"] = "logprobs",
         output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
+        precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        if output == "logprobs":
+        if output == "logprobs" and precomputed_forward is None:
             return super().forward_backward_custom(
                 data,
                 loss_fn,
@@ -1971,6 +2126,7 @@ class FiretitanTrainingClient(TrainingClient):
                 loss_type_input=loss_type_input,
                 output=output,
                 pooling=pooling,
+                precomputed_forward=precomputed_forward,
             )
         ).result()
 
@@ -2148,17 +2304,14 @@ class FiretitanTrainingClient(TrainingClient):
     ) -> str:
         """Resolve checkpoint input to a loadable checkpoint reference.
 
-        Handles two common cases:
+        Handles two supported cases:
 
-        1. *checkpoint_name* is already a full ``gs://`` or local path
-           -- returned as-is.
-        2. *source_job_id* is given -- returns an opaque cross-job
+        1. *source_job_id* is given -- returns an opaque cross-job
            checkpoint reference. The trainer resolves this server-side.
-        3. Otherwise -- returns checkpoint_name unchanged.
+        2. Otherwise -- validates and returns a logical checkpoint path.
 
         Args:
-            checkpoint_name: Checkpoint name (e.g. ``"step-4"``) or a
-                full GCS / local path.
+            checkpoint_name: Logical checkpoint path (e.g. ``"step-4"``).
             source_job_id: RLOR job ID that originally saved the
                 checkpoint. When provided, the returned value is an opaque
                 reference resolved on the trainer side.
@@ -2167,10 +2320,6 @@ class FiretitanTrainingClient(TrainingClient):
             Loadable checkpoint reference suitable for
             ``load_state_with_optimizer()``.
         """
-        # Already a full path -- nothing to resolve
-        if checkpoint_name.startswith("gs://") or checkpoint_name.startswith("/"):
-            return checkpoint_name
-
         if source_job_id:
             checkpoint_ref = make_cross_job_checkpoint_ref(
                 source_job_id=source_job_id,
@@ -2183,13 +2332,14 @@ class FiretitanTrainingClient(TrainingClient):
             )
             return checkpoint_ref
 
-        return checkpoint_name
+        return _validate_checkpoint_ref(checkpoint_name)
 
     def save_weights_for_sampler_ext(
         self,
         name: str,
         checkpoint_type: str | None = None,
         ttl_seconds: int | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> SaveSamplerResult:
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
@@ -2209,16 +2359,33 @@ class FiretitanTrainingClient(TrainingClient):
         adapter first via :meth:`load_adapter`; saving from a fresh LoRA session
         would export base-identical weights.
 
+        ``export_precision`` selects the precision of the final standalone
+        checkpoint and is only valid with ``checkpoint_type="merged_base"``.
+        It defaults to ``"source"``: the trainer discovers the base model's
+        storage format and re-encodes the merged weights. Explicit output
+        overrides are ``"bf16"``, ``"nvfp4"``, ``"mxfp8"``, and
+        ``"fp8_block128"``. No input-precision argument is required. Prefer
+        ``"source"`` whenever possible. Explicit conversion is an advanced,
+        use-at-your-own-risk override because its tensor/config layout may not
+        match the model architecture or downstream serving precision; validate
+        serving load and inference before promotion.
+
         Returns:
             :class:`SaveSamplerResult` with the trainer-returned public sampler
             identity in ``path`` and the requested snapshot name in
             ``snapshot_name``.
         """
+        resolved_checkpoint_type = self._next_sampler_checkpoint_type(checkpoint_type)
+        resolved_export_precision = resolve_export_precision(
+            checkpoint_type=resolved_checkpoint_type,
+            precision=export_precision,
+        )
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
-        resolved_checkpoint_type = self._next_sampler_checkpoint_type(checkpoint_type)
-        extra_body = {"checkpoint_type": resolved_checkpoint_type}
+        extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
+        if resolved_export_precision is not None:
+            extra_body["export_precision"] = resolved_export_precision
         request_id = self._get_request_id()
 
         async def _save():
@@ -2293,6 +2460,7 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         *,
         checkpoint_type: str | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         """Save sampler weights and return a FireTitan snapshot identity.
 
@@ -2302,12 +2470,20 @@ class FiretitanTrainingClient(TrainingClient):
         is not a resumable DCP checkpoint and must not be passed to
         ``load_state`` or ``create_training_client_from_state``; use the path
         returned by ``save_state`` for exact training continuation.
+
+        For ``checkpoint_type="merged_base"``, ``export_precision`` is an
+        optional final-output override. Omit it to preserve the source storage
+        format automatically. Prefer that default whenever possible. Explicit
+        conversion may mismatch the model's downstream serving contract and
+        should be validated before promotion.
         """
-        result = self.save_weights_for_sampler_ext(
-            name,
-            checkpoint_type=checkpoint_type,
-            ttl_seconds=ttl_seconds,
-        )
+        save_kwargs: dict[str, Any] = {
+            "checkpoint_type": checkpoint_type,
+            "ttl_seconds": ttl_seconds,
+        }
+        if export_precision is not None:
+            save_kwargs["export_precision"] = export_precision
+        result = self.save_weights_for_sampler_ext(name, **save_kwargs)
         return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.path))
 
     async def save_weights_for_sampler_async(
@@ -2316,13 +2492,15 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         *,
         checkpoint_type: str | None = None,
+        export_precision: ExportPrecision | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
-        return await asyncio.to_thread(
-            self.save_weights_for_sampler,
-            name,
-            ttl_seconds=ttl_seconds,
-            checkpoint_type=checkpoint_type,
-        )
+        save_kwargs: dict[str, Any] = {
+            "ttl_seconds": ttl_seconds,
+            "checkpoint_type": checkpoint_type,
+        }
+        if export_precision is not None:
+            save_kwargs["export_precision"] = export_precision
+        return await asyncio.to_thread(self.save_weights_for_sampler, name, **save_kwargs)
 
     def create_sampling_client(
         self,
@@ -2463,7 +2641,10 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient.load_state(weights_access_token=...) is not supported. "
                 "Load checkpoints that are accessible to the current Fireworks API key."
             )
-        return super().load_state(path, weights_access_token=weights_access_token)
+        return super().load_state(
+            _validate_checkpoint_ref(path),
+            weights_access_token=weights_access_token,
+        )
 
     async def load_state_async(
         self,
@@ -2482,7 +2663,10 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient.load_state_with_optimizer(weights_access_token=...) is not supported. "
                 "Load checkpoints that are accessible to the current Fireworks API key."
             )
-        return super().load_state_with_optimizer(path, weights_access_token=weights_access_token)
+        return super().load_state_with_optimizer(
+            _validate_checkpoint_ref(path),
+            weights_access_token=weights_access_token,
+        )
 
     async def load_state_with_optimizer_async(
         self,

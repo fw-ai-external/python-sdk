@@ -17,10 +17,12 @@ from fireworks.training.sdk.errors import (
     parse_api_error,
     format_sdk_error,
     parse_retry_after,
+    _tinker_source_error,
     request_with_retries,
     parse_training_api_error,
     _is_retryable_status_code,
     async_request_with_retries,
+    _serverless_gateway_source_error,
     format_checkpoint_promotion_error,
     format_session_checkpoint_promotion_error,
 )
@@ -41,9 +43,7 @@ class TestFormatSdkError:
         assert f"Agent debug: {AGENT_DEBUG_INSTRUCTIONS}" in result
 
     def test_with_docs_url(self):
-        result = format_sdk_error(
-            "Job failed", "bad model", "Fix it", docs_url="https://docs.example.com"
-        )
+        result = format_sdk_error("Job failed", "bad model", "Fix it", docs_url="https://docs.example.com")
         assert "Docs: https://docs.example.com" in result
 
     def test_without_docs_url(self):
@@ -202,7 +202,7 @@ class TestParseTrainingApiError:
         resp.json.return_value = body
         return resp
 
-    def test_parses_error_info_in_arbitrary_detail_order(self):
+    def test_public_compatibility_and_complete_status_are_independent(self):
         resp = self._resp(
             {
                 "code": 7,
@@ -212,7 +212,10 @@ class TestParseTrainingApiError:
                     {
                         "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                         "reason": "TIER_REQUIRED",
+                        "domain": "training.fireworks.ai",
                         "metadata": {
+                            "version": "1",
+                            "source": "lifecycle",
                             "quota_required": "8",
                             "authorization": "must-not-escape",
                         },
@@ -228,8 +231,63 @@ class TestParseTrainingApiError:
         assert err.status_code == 403
         assert err.reason == "TIER_REQUIRED"
         assert err.metadata == {"quota_required": "8"}
+        assert err._fireworks_training_error_status.source == "lifecycle"
+        assert err._fireworks_training_error_status.status == resp.json.return_value
         assert str(err) == "RLOR job creation failed (HTTP 403): changeable diagnostic"
         assert "authorization" not in str(err)
+
+    def test_attaches_private_carrier_from_canonical_error_info(self):
+        resp = self._resp(
+            {
+                "code": 8,
+                "message": "exact protobuf message",
+                "details": [
+                    {"@type": "type.googleapis.com/example.Unknown", "value": "ignored"},
+                    {
+                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                        "reason": "TIER_REQUIRED",
+                        "domain": "training.fireworks.ai",
+                        "metadata": {
+                            "version": "1",
+                            "source": "lifecycle",
+                            "quota_required": "8",
+                            "quota_available": "4",
+                        },
+                    },
+                ],
+            },
+            status_code=403,
+        )
+
+        err = parse_training_api_error(resp, context="RLOR job creation failed")
+
+        carrier = err._fireworks_training_error_status
+        assert carrier.source == "lifecycle"
+        assert carrier.grpc_code == 8
+        assert carrier.public_message == "exact protobuf message"
+        assert carrier.reason == "TIER_REQUIRED"
+        assert carrier.domain == "training.fireworks.ai"
+        assert carrier.metadata == {
+            "quota_required": "8",
+            "quota_available": "4",
+        }
+        assert carrier.status["code"] == 8
+        assert carrier.status["code"] != err.status_code
+        assert carrier.status["message"] == "exact protobuf message"
+        assert carrier.status["details"][1]["reason"] == "TIER_REQUIRED"
+        assert carrier.status["details"][1]["domain"] == "training.fireworks.ai"
+        assert carrier.status["details"][0] == {
+            "@type": "type.googleapis.com/example.Unknown",
+            "value": "ignored",
+        }
+        assert carrier.status["details"][1]["metadata"] == {
+            "version": "1",
+            "source": "lifecycle",
+            "quota_required": "8",
+            "quota_available": "4",
+        }
+        assert err.reason == "TIER_REQUIRED"
+        assert not hasattr(err, "training_error_reason")
 
     def test_nested_grpc_gateway_error(self):
         resp = self._resp(
@@ -241,6 +299,11 @@ class TestParseTrainingApiError:
                         {
                             "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                             "reason": "QUOTA_EXCEEDED",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {
+                                "version": "1",
+                                "source": "managed",
+                            },
                         }
                     ],
                 }
@@ -252,26 +315,143 @@ class TestParseTrainingApiError:
         assert err.reason == "QUOTA_EXCEEDED"
 
     @pytest.mark.parametrize(
-        "body",
+        ("body", "has_status"),
         [
-            {"code": 7, "message": "legacy only"},
-            {
-                "code": 7,
-                "message": "malformed",
-                "details": [
-                    {
-                        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-                        "reason": 7,
-                    }
-                ],
-            },
-            {"message": '{"error":"tier_required","message":"legacy nested JSON"}'},
+            ({"code": 7, "message": "legacy only"}, True),
+            (
+                {
+                    "code": 7,
+                    "message": "malformed",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": 7,
+                        }
+                    ],
+                },
+                True,
+            ),
+            ({"message": '{"error":"tier_required","message":"legacy nested JSON"}'}, False),
         ],
     )
-    def test_missing_or_malformed_details_do_not_infer_reason(self, body):
+    def test_missing_or_malformed_details_do_not_infer_reason(self, body, has_status):
         err = parse_training_api_error(self._resp(body))
 
         assert err.reason is None
+        assert hasattr(err, "_fireworks_training_error_status") is has_status
+
+    @pytest.mark.parametrize(
+        ("body", "expected_reason"),
+        [
+            (
+                {
+                    "code": 7,
+                    "message": "unknown reason",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "FUTURE_REASON",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {"version": "1", "source": "managed"},
+                        }
+                    ],
+                },
+                "FUTURE_REASON",
+            ),
+            (
+                {
+                    "code": 8,
+                    "message": "unversioned",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "QUOTA_EXCEEDED",
+                            "domain": "training.fireworks.ai",
+                            "metadata": {"source": "managed"},
+                        }
+                    ],
+                },
+                "QUOTA_EXCEEDED",
+            ),
+        ],
+    )
+    def test_public_reason_does_not_require_private_carrier(self, body, expected_reason):
+        err = parse_training_api_error(self._resp(body))
+
+        assert err.reason == expected_reason
+        assert err._fireworks_training_error_status.status == body
+
+    @pytest.mark.parametrize(
+        "details",
+        [
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "2", "source": "lifecycle"},
+                }
+            ],
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1"},
+                }
+            ],
+            [
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "INVALID_INPUT",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1", "source": "lifecycle"},
+                },
+                {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "DATASET_INVALID",
+                    "domain": "training.fireworks.ai",
+                    "metadata": {"version": "1", "source": "lifecycle"},
+                },
+            ],
+        ],
+    )
+    def test_legacy_carrier_projection_fails_closed(self, details):
+        carrier = parse_training_api_error(
+            self._resp(
+                {
+                    "code": 3,
+                    "message": "diagnostic",
+                    "details": details,
+                }
+            )
+        )._fireworks_training_error_status
+
+        assert carrier.reason is None
+        assert carrier.domain is None
+        assert carrier.source is None
+        assert carrier.metadata == {}
+
+
+def test_invalid_unicode_source_fields_fail_closed() -> None:
+    invalid = "\ud800"
+
+    tinker_source = _tinker_source_error(error=invalid, category=invalid, error_class=invalid)
+    gateway_source = _serverless_gateway_source_error({"error": {"code": invalid, "type": "error"}})
+
+    assert tinker_source is not None and tinker_source.malformed
+    assert gateway_source is not None and gateway_source.malformed
+
+
+def test_serverless_gateway_source_fields_are_independently_optional() -> None:
+    code_only = _serverless_gateway_source_error({"error": {"code": "BAD_REQUEST"}})
+    type_only = _serverless_gateway_source_error({"error": {"type": "error"}})
+
+    assert code_only is not None
+    assert (code_only.code, code_only.type) == ("BAD_REQUEST", None)
+    assert type_only is not None
+    assert (type_only.code, type_only.type) == (None, "error")
+    assert _serverless_gateway_source_error({"error": {}}) is None
 
 
 # ---------------------------------------------------------------------------
@@ -406,9 +586,7 @@ class TestAsyncRequestWithRetries:
             calls["n"] += 1
             return self._resp(503)
 
-        resp = asyncio.run(
-            async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
-        )
+        resp = asyncio.run(async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=()))
         assert resp.status_code == 503
         assert calls["n"] == 1  # no transport-level retry (sampling opts out here)
 
@@ -417,9 +595,7 @@ class TestAsyncRequestWithRetries:
             raise httpx.ConnectError("down")
 
         with pytest.raises(httpx.ConnectError):
-            asyncio.run(
-                async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=())
-            )
+            asyncio.run(async_request_with_retries(_func, retry_status_codes=(), retry_exceptions=()))
 
 
 class TestParseRetryAfter:

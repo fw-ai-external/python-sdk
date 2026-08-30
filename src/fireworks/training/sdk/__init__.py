@@ -72,6 +72,10 @@ from fireworks.training.sdk.training_spec import (
     normalize_lr_scheduler_spec,
 )
 from fireworks.training.sdk.weight_syncer import WeightSyncer
+from fireworks.training.sdk._snapshot_chain import (
+    DEFAULT_MERGED_BASE_EXPORT_PRECISION,
+    ExportPrecision,
+)
 from fireworks.training.sdk.fireworks_client import (
     FireworksClient,
     TrainingShapeProfile,
@@ -93,6 +97,8 @@ __all__ = [
     "GradAccNormalization",
     "GradNormMetricsMode",
     "SaveSamplerResult",
+    "ExportPrecision",
+    "DEFAULT_MERGED_BASE_EXPORT_PRECISION",
     "WeightSyncer",
     "install_tinker_service_client",
     "patched_tinker_service_client",

@@ -2010,7 +2010,12 @@ class TestServerMetrics:
             "prompt-tokens": "256",
             "server-processing-time": "2.500",
         }
-        m = ServerMetrics.from_headers(headers, client_ttft=0.4)
+        m = ServerMetrics.from_headers(
+            headers,
+            client_ttft=0.4,
+            http_status_code=200,
+            retry_attempt=2,
+        )
         assert m.num_concurrent_requests == 12
         assert m.prefill_queue_duration == pytest.approx(0.25)
         assert m.generation_queue_duration == pytest.approx(1.1)
@@ -2019,6 +2024,8 @@ class TestServerMetrics:
         assert m.prompt_tokens == 256
         assert m.server_processing_time == pytest.approx(2.5)
         assert m.client_ttft == pytest.approx(0.4)
+        assert m.http_status_code == 200
+        assert m.retry_attempt == 2
 
     def test_from_headers_empty(self):
         m = ServerMetrics.from_headers({})
@@ -2047,18 +2054,66 @@ class TestAdaptiveConcurrencyController:
         ctrl = AdaptiveConcurrencyController(initial_window=16)
         assert ctrl.window_size == 16
 
+    def test_initial_window_clamped_to_max_before_first_resize(self):
+        """Admission uses window_size, so an unclamped start (e.g. 8 * replica_count)
+        would admit more in-flight requests than max_window until the first resize.
+        """
+        ctrl = AdaptiveConcurrencyController(initial_window=32, max_window=8)
+        assert ctrl.window_size == 8
+        assert ctrl._window == 8.0
+
+        async def _test() -> None:
+            for _ in range(8):
+                await ctrl.acquire()
+            blocked = asyncio.create_task(ctrl.acquire())
+            await asyncio.sleep(0)
+            assert not blocked.done()
+            assert ctrl.in_flight == 8
+            blocked.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await blocked
+
+        asyncio.run(_test())
+
+    def test_initial_window_clamped_to_min(self):
+        ctrl = AdaptiveConcurrencyController(initial_window=1, min_window=4)
+        assert ctrl.window_size == 4
+
     def test_acquire_release_basic(self):
         ctrl = AdaptiveConcurrencyController(initial_window=2)
 
         async def _test():
             await ctrl.acquire()
             await ctrl.acquire()
-            assert ctrl._semaphore._value == 0
+            assert ctrl.in_flight == 2
             ctrl.release()
             ctrl.release()
-            assert ctrl._semaphore._value == 2
+            assert ctrl.in_flight == 0
 
         asyncio.run(_test())
+
+    def test_acquire_from_a_different_loop_than_construction(self):
+        """Built on the trainer's loop, acquired on the sampler's.
+
+        A loop-bound primitive created in __init__ raises "bound to a different
+        event loop" on every acquire, which surfaces as a gateway 500.
+        """
+        box = {}
+
+        async def _build():
+            box["ctrl"] = AdaptiveConcurrencyController(initial_window=2)
+
+        asyncio.run(_build())
+        ctrl = box["ctrl"]
+
+        async def _use():
+            await ctrl.acquire()
+            await ctrl.acquire()
+            assert ctrl.in_flight == 2
+            ctrl.release()
+            ctrl.release()
+
+        asyncio.run(_use())
 
     def test_release_collects_but_does_not_adjust(self):
         """release() collects metrics but does NOT change the window."""
@@ -2083,7 +2138,13 @@ class TestAdaptiveConcurrencyController:
         assert summary["window"] == 5
         assert "avg_pq" not in summary
 
-    def test_adjustment_interval_does_not_shrink_below_in_flight_requests(self):
+    def test_shrink_target_applies_immediately_and_debt_drains(self):
+        """Shrinking must reach its target even when every slot is in flight.
+
+        Slots that cannot be reclaimed now are recorded as debt and paid off by
+        subsequent releases; otherwise the window stalls exactly when the server
+        is most overloaded.
+        """
         ctrl = AdaptiveConcurrencyController(
             initial_window=4,
             prefill_queue_target=0.5,
@@ -2097,13 +2158,20 @@ class TestAdaptiveConcurrencyController:
                 await ctrl.acquire()
 
             ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
-            assert ctrl.window_size == 3
-            assert ctrl._semaphore._value == 0
+            # Target halves to 2 right away rather than stalling at 3.
+            assert ctrl.window_size == 2
+            assert ctrl._pending_decrease == 1
 
             blocked_acquire = asyncio.create_task(ctrl.acquire())
             await asyncio.sleep(0)
             assert not blocked_acquire.done()
 
+            # Pays off the debt; still no free slot for the waiter.
+            ctrl.release()
+            await asyncio.sleep(0)
+            assert ctrl._pending_decrease == 0
+
+            # Now a slot frees up and the waiter is admitted.
             ctrl.release()
             await asyncio.wait_for(blocked_acquire, timeout=1.0)
 
@@ -2170,6 +2238,112 @@ class TestAdaptiveConcurrencyController:
         ctrl.step_completed()
         assert ctrl.window_size == 8
         assert ctrl.ema_prefill_queue is None
+
+    def test_missing_prefill_queue_warns_once_and_uses_success_status(self, caplog):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=8,
+            additive_increase=2.0,
+            adjustment_interval=0,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            ctrl.release(ServerMetrics(http_status_code=200))
+            ctrl.release(ServerMetrics(http_status_code=200))
+        summary = ctrl.step_completed()
+
+        assert ctrl.window_size == 10
+        assert summary["status_responses"] == 2
+        assert summary["congestion_responses"] == 0
+        assert caplog.text.count("prefill_queue_duration is unavailable") == 1
+
+    @pytest.mark.parametrize("status_code", [429, 503])
+    def test_missing_prefill_queue_decreases_on_congestion_status(self, status_code):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            multiplicative_decrease=0.5,
+            adjustment_interval=0,
+        )
+        ctrl.release(ServerMetrics(http_status_code=200))
+        ctrl.release(ServerMetrics(http_status_code=status_code))
+
+        summary = ctrl.step_completed()
+
+        assert ctrl.window_size == 5
+        assert summary["status_responses"] == 2
+        assert summary["congestion_responses"] == 1
+        assert summary["congestion_rate"] == pytest.approx(0.5)
+
+    def test_retry_exhaustion_does_not_shrink_serverless_twice(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=64,
+            multiplicative_decrease=0.5,
+            adjustment_interval=0,
+        )
+        final_metrics = ServerMetrics(http_status_code=503, retry_attempt=5)
+
+        ctrl.release(final_metrics)
+        assert ctrl.window_size == 16
+        ctrl.note_retry_exhausted(final_metrics)
+        summary = ctrl.step_completed()
+
+        assert ctrl.window_size == 16
+        assert summary["congestion_events"] == 1
+        assert summary["retry_exhaustions"] == 1
+
+    def test_retry_exhaustion_does_not_shrink_dedicated_or_sse(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=64,
+            adjustment_interval=0,
+            ema_alpha=1.0,
+            prefill_queue_target=0.5,
+        )
+        dedicated_metrics = ServerMetrics(
+            prefill_queue_duration=0.1,
+            http_status_code=503,
+            retry_attempt=5,
+        )
+
+        ctrl.release(dedicated_metrics)
+        ctrl.note_retry_exhausted(dedicated_metrics)
+        ctrl.note_retry_exhausted(None)
+        summary = ctrl.step_completed()
+
+        assert ctrl.window_size == 68
+        assert "retry_exhaustions" not in summary
+
+    def test_congestion_status_with_prefill_queue_stays_on_prefill_aimd(self):
+        """Dedicated 429/503 still carry prefill-queue headers; those must not
+        take the serverless immediate-shrink path."""
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=10,
+            additive_increase=1.0,
+            multiplicative_decrease=0.5,
+            adjustment_interval=0,
+            ema_alpha=1.0,
+            prefill_queue_target=0.5,
+        )
+        ctrl.release(
+            ServerMetrics(
+                http_status_code=429,
+                prefill_queue_duration=0.1,
+                retry_attempt=1,
+            )
+        )
+        assert ctrl.window_size == 10
+        summary = ctrl.step_completed()
+        assert "avg_pq" in summary
+        assert "congestion_responses" not in summary
+        assert ctrl.window_size == 14
+
+    def test_missing_prefill_queue_ignores_other_error_statuses(self):
+        ctrl = AdaptiveConcurrencyController(
+            initial_window=8,
+            adjustment_interval=0,
+        )
+        ctrl.release(ServerMetrics(http_status_code=500))
+        ctrl.step_completed()
+
+        assert ctrl.window_size == 8
 
     def test_ema_smoothing_across_steps(self):
         ctrl = AdaptiveConcurrencyController(initial_window=10, ema_alpha=0.5, prefill_queue_target=1.0)
