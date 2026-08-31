@@ -1177,3 +1177,12 @@ from fireworks.training.sdk.concurrency import (  # noqa: F401,E402
     AdaptiveConcurrencyController,
     SamplingConcurrencyController,
 )
+
+
+def __getattr__(name: str):
+    """Preserve the historical sampling-client re-export without a cycle."""
+    if name == "FiretitanSamplingClient":
+        from fireworks.training.sdk.client import FiretitanSamplingClient
+
+        return FiretitanSamplingClient
+    raise AttributeError(name)

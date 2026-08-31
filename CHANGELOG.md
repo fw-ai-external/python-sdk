@@ -5,6 +5,8 @@
 Full Changelog: [v1.2.10...v1.2.11](https://github.com/fw-ai-external/python-sdk/compare/v1.2.10...v1.2.11)
 
 ### Features
+* **training-sdk:** add environment-local TITO sidecars with full-history prompt construction by default and an experimental incremental renderer protocol
+* **training-sdk:** preserve and attribute completion serving metrics when merging response headers with final performance metrics
 * **training:** support explicit reservation targeting for dedicated and managed training jobs
 
 ## 1.2.10 (2026-08-30)

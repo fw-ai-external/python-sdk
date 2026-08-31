@@ -10,7 +10,7 @@ import asyncio
 import logging
 import warnings
 from math import ceil
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, Literal, Mapping
 from dataclasses import dataclass
 
 import httpx
@@ -68,6 +68,10 @@ class ServerMetrics:
     cached_prompt_tokens: int | None = None
     prompt_tokens: int | None = None
     server_processing_time: float | None = None
+    tokenizer_queue_duration: float | None = None
+    tokenizer_duration: float | None = None
+    prefill_duration: float | None = None
+    generation_duration: float | None = None
     client_ttft: float | None = None
     """Client-measured time-to-first-token (seconds).  Only set for streaming."""
     http_status_code: int | None = None
@@ -75,18 +79,34 @@ class ServerMetrics:
     """True when the attempt failed below HTTP (connect/read/write error)."""
     retry_attempt: int | None = None
     """1-based attempt index that produced this observation."""
+    response_request_id: str | None = None
+    """Request ID returned by the inference gateway for log correlation."""
+    backend_host: str | None = None
+    """Serving pod selected for this request, when exposed by the deployment."""
+    deployment: str | None = None
+    """Resolved deployment resource returned by the serving stack."""
+    pod_template_hash: str | None = None
+    """Selected serving replica-set hash, when exposed by the deployment."""
 
     @staticmethod
     def from_headers(
-        headers: dict[str, str],
+        headers: Mapping[str, object],
         client_ttft: float | None = None,
         http_status_code: int | None = None,
         retry_attempt: int | None = None,
     ) -> "ServerMetrics":
         """Parse server metrics from HTTP response headers."""
 
+        normalized = {str(key).lower(): value for key, value in headers.items()}
+
+        def _value(key: str) -> object | None:
+            value = normalized.get(key)
+            if value is not None and value != "":
+                return value
+            return normalized.get(f"fireworks-{key}")
+
         def _float(key: str) -> float | None:
-            v = headers.get(key)
+            v = _value(key)
             if v is None:
                 return None
             try:
@@ -95,13 +115,17 @@ class ServerMetrics:
                 return None
 
         def _int(key: str) -> int | None:
-            v = headers.get(key)
+            v = _value(key)
             if v is None:
                 return None
             try:
                 return int(v)
             except (ValueError, TypeError):
                 return None
+
+        def _string(key: str) -> str | None:
+            value = _value(key)
+            return str(value) if value not in (None, "") else None
 
         return ServerMetrics(
             num_concurrent_requests=_int("num-concurrent-requests"),
@@ -111,9 +135,17 @@ class ServerMetrics:
             cached_prompt_tokens=_int("cached-prompt-tokens"),
             prompt_tokens=_int("prompt-tokens"),
             server_processing_time=_float("server-processing-time"),
+            tokenizer_queue_duration=_float("tokenizer-queue-duration"),
+            tokenizer_duration=_float("tokenizer-duration"),
+            prefill_duration=_float("prefill-duration"),
+            generation_duration=_float("generation-duration"),
             client_ttft=client_ttft,
             http_status_code=http_status_code,
             retry_attempt=retry_attempt,
+            response_request_id=_string("x-request-id"),
+            backend_host=_string("backend-host"),
+            deployment=_string("deployment"),
+            pod_template_hash=_string("pod-template-hash"),
         )
 
 
@@ -139,6 +171,33 @@ class SampledCompletion:
     """True when echo=True was used: logprob lists have P+C-1 entries
     (training-aligned).  False: completion-only."""
     routing_matrices: List[str] | None = None
+
+
+@dataclass(frozen=True)
+class SampledServerAttempt:
+    """One transport attempt inside a logical deployment-sampling call."""
+
+    index: int
+    outcome: Literal["succeeded", "retryable_error", "failed", "cancelled"]
+    status_code: int | None = None
+    error_kind: str | None = None
+    response_request_id: str | None = None
+    upstream_response_id: str | None = None
+    server_metrics: ServerMetrics | None = None
+
+
+@dataclass
+class SampledRequestResult:
+    """One logical deployment-sampling call and its attributable facts."""
+
+    completions: List[SampledCompletion]
+    server_metrics: ServerMetrics | None
+    logical_request_id: str
+    attempts: int
+    wall_seconds: float
+    upstream_response_id: str | None = None
+    """Top-level completion response ID emitted by the upstream inference API."""
+    server_attempts: tuple[SampledServerAttempt, ...] = ()
 
 
 class DeploymentSampler(_RestClient):
@@ -222,8 +281,16 @@ class DeploymentSampler(_RestClient):
     ) -> None:
         self._concurrency_controller = controller
 
-    def _inference_headers(self) -> dict[str, str]:
+    def _inference_headers(
+        self,
+        additional_headers_snapshot: Mapping[str, str] | None = None,
+    ) -> dict[str, str]:
         """Headers for inference completions requests."""
+        if additional_headers_snapshot is not None:
+            return self._headers_from_additional(
+                additional_headers_snapshot,
+                Authorization=f"Bearer {self.api_key}",
+            )
         return self._headers(Authorization=f"Bearer {self.api_key}")
 
     _HOTLOAD_RETRY_INTERVAL_S = 5.0
@@ -237,6 +304,8 @@ class DeploymentSampler(_RestClient):
         hotload_retry_interval: float = _HOTLOAD_RETRY_INTERVAL_S,
         hotload_max_retries: int = _HOTLOAD_MAX_RETRIES,
         logical_request_id: str | None = None,
+        prompt_cache_key: str | None = None,
+        additional_headers_snapshot: Mapping[str, str] | None = None,
         **kwargs: Any,
     ) -> tuple[dict[str, Any], ServerMetrics]:
         """Streaming n=1 async completions request.
@@ -267,6 +336,8 @@ class DeploymentSampler(_RestClient):
             "perf_metrics_in_response": True,
             **kwargs,
         }
+        if prompt_cache_key is not None:
+            payload["prompt_cache_key"] = prompt_cache_key
         # Default to full-distribution sampling for on-policy RL rollouts.
         # Without this the serving stack falls back to the model's
         # generation_config.json sampling defaults (e.g. Qwen3.5 ships
@@ -275,7 +346,7 @@ class DeploymentSampler(_RestClient):
         payload.setdefault("top_p", 1.0)
         payload.setdefault("top_k", 0)
         url = f"{self.base_url}/inference/v1/completions"
-        headers = self._inference_headers()
+        headers = self._inference_headers(additional_headers_snapshot)
         if logical_request_id:
             # Send the SDK's stable correlation id; the gateway/fw-proxy echoes
             # it back on the response so a failure is searchable in server logs.
@@ -321,6 +392,7 @@ class DeploymentSampler(_RestClient):
             raw_output = None
             perf_metrics_dict: dict[str, str] | None = None
             first_token_time: float | None = None
+            upstream_response_id: str | None = None
 
             # Track whether the stream ended cleanly. A well-formed completion
             # must close with [DONE] and/or set finish_reason. A clean TCP close
@@ -338,6 +410,9 @@ class DeploymentSampler(_RestClient):
                     chunk = json.loads(sse.data)
                 except (ValueError, TypeError):
                     continue
+
+                if upstream_response_id is None and chunk.get("id"):
+                    upstream_response_id = str(chunk["id"])
 
                 for choice in chunk.get("choices", []):
                     text_delta = choice.get("text", "")
@@ -382,7 +457,10 @@ class DeploymentSampler(_RestClient):
 
             # Build ServerMetrics: prefer perf_metrics from final chunk
             # (has complete timing), fall back to HTTP headers (partial).
-            metrics_source = perf_metrics_dict or dict(resp.headers)
+            # The final perf-metrics event contains the most complete timing
+            # values, while gateway correlation facts such as x-request-id are
+            # response-header-only. Preserve both in one attributable record.
+            metrics_source = {**dict(resp.headers), **(perf_metrics_dict or {})}
             server_metrics = ServerMetrics.from_headers(
                 metrics_source,
                 client_ttft=client_ttft,
@@ -398,6 +476,8 @@ class DeploymentSampler(_RestClient):
             if raw_output:
                 assembled_choice["raw_output"] = raw_output
             result: dict[str, Any] = {"choices": [assembled_choice]}
+            if upstream_response_id is not None:
+                result["id"] = upstream_response_id
             if usage_info:
                 result["usage"] = usage_info
 
@@ -520,6 +600,8 @@ class DeploymentSampler(_RestClient):
         temperature: float = 1.0,
         max_seq_len: int | None = None,
         stop: list[str] | list[int] | None = None,
+        prompt_cache_key: str | None = None,
+        additional_headers_snapshot: Mapping[str, str] | None = None,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
         """Sample n completions from a pre-tokenized prompt.
@@ -548,18 +630,9 @@ class DeploymentSampler(_RestClient):
         user_requested_logprobs = kwargs.get("logprobs", False)
         routing_requested = kwargs.get("include_routing_matrix", False)
         echo_mode = kwargs.get("echo", False)
-        if stop is not None:
-            if all(type(s) is str for s in stop):
-                kwargs["stop"] = stop
-            elif all(type(s) is int for s in stop):
-                if self.tokenizer is None:
-                    raise ValueError(
-                        "Tokenizer is required to convert integer stop token IDs "
-                        "to string stop sequences for the completions API"
-                    )
-                kwargs["stop"] = [self.tokenizer.decode([token_id], skip_special_tokens=False) for token_id in stop]
-            else:
-                raise ValueError("stop must be list[str] or list[int]")
+        normalized_stop = self._normalize_stop(stop)
+        if normalized_stop is not None:
+            kwargs["stop"] = normalized_stop
 
         async def _one(_idx: int) -> List[SampledCompletion]:
             return await self._do_one_completion(
@@ -570,11 +643,77 @@ class DeploymentSampler(_RestClient):
                 user_requested_logprobs,
                 routing_requested,
                 echo_mode,
+                prompt_cache_key=prompt_cache_key,
+                additional_headers_snapshot=additional_headers_snapshot,
                 **kwargs,
             )
 
         results = await asyncio.gather(*[_one(i) for i in range(n)])
         return [c for batch in results for c in batch]
+
+    async def sample_with_prompt_tokens_result(
+        self,
+        prompt_token_ids: list[int],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 1.0,
+        max_seq_len: int | None = None,
+        stop: list[str] | list[int] | None = None,
+        prompt_cache_key: str | None = None,
+        additional_headers_snapshot: Mapping[str, str] | None = None,
+        logical_request_id: str | None = None,
+        **kwargs: Any,
+    ) -> SampledRequestResult:
+        """Sample one exact prompt and return request-attributed facts."""
+        if max_seq_len is not None and len(prompt_token_ids) >= max_seq_len:
+            raise ValueError("prompt_token_ids already exhaust max_seq_len")
+        normalized_stop = self._normalize_stop(stop)
+        if normalized_stop is not None:
+            kwargs["stop"] = normalized_stop
+
+        return await self._do_one_completion_result(
+            prompt_token_ids,
+            max_tokens,
+            temperature,
+            max_seq_len,
+            kwargs.get("logprobs", False),
+            kwargs.get("include_routing_matrix", False),
+            kwargs.get("echo", False),
+            prompt_cache_key=prompt_cache_key,
+            additional_headers_snapshot=additional_headers_snapshot,
+            logical_request_id=logical_request_id,
+            **kwargs,
+        )
+
+    def _normalize_stop(
+        self,
+        stop: list[str] | list[int] | None,
+    ) -> list[str] | None:
+        """Normalize completions stop values once for both exact-token APIs."""
+        if stop is None:
+            return None
+        if all(type(item) is str for item in stop):
+            return list(stop)
+        if all(type(item) is int for item in stop):
+            if self.tokenizer is None:
+                raise ValueError(
+                    "Tokenizer is required to convert integer stop token IDs "
+                    "to string stop sequences for the completions API"
+                )
+            return [self.tokenizer.decode([token_id], skip_special_tokens=False) for token_id in stop]
+        raise ValueError("stop must be list[str] or list[int]")
+
+    @staticmethod
+    def _attach_attempt_context(
+        error: BaseException,
+        logical_request_id: str,
+        attempts: int,
+        server_attempts: list[SampledServerAttempt],
+    ) -> None:
+        """Attach payload-free retry attribution to a propagated exception."""
+        error.logical_request_id = logical_request_id  # type: ignore[attr-defined]
+        error.attempts = attempts  # type: ignore[attr-defined]
+        error.server_attempts = tuple(server_attempts)  # type: ignore[attr-defined]
 
     async def _acquire_concurrency(self) -> None:
         """Acquire a concurrency slot from the controller."""
@@ -867,13 +1006,39 @@ class DeploymentSampler(_RestClient):
         echo_mode: bool,
         **kwargs: Any,
     ) -> List[SampledCompletion]:
+        result = await self._do_one_completion_result(
+            prompt_ids,
+            max_tokens,
+            temperature,
+            max_seq_len,
+            user_requested_logprobs,
+            routing_requested,
+            echo_mode,
+            **kwargs,
+        )
+        return result.completions
+
+    async def _do_one_completion_result(
+        self,
+        prompt_ids: list[int],
+        max_tokens: int,
+        temperature: float,
+        max_seq_len: int | None,
+        user_requested_logprobs: bool,
+        routing_requested: bool,
+        echo_mode: bool,
+        logical_request_id: str | None = None,
+        **kwargs: Any,
+    ) -> SampledRequestResult:
+        request_started = time.monotonic()
+        server_attempts: list[SampledServerAttempt] = []
         backoff = self._RETRY_BASE_BACKOFF_S
         diagnostic_context = kwargs.pop("timeout_diagnostic_context", None)
         sampling_context = kwargs.pop("sampling_context", None)
         raw_logprobs_match_sampling = self._raw_logprobs_match_sampling_params(temperature, kwargs)
         # One stable id for this logical request, constant across every retry and
         # sent as X-Request-Id so a failure is searchable in server logs.
-        logical_request_id = uuid.uuid4().hex
+        logical_request_id = logical_request_id or uuid.uuid4().hex
         context = self._build_context(sampling_context)
 
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
@@ -897,6 +1062,17 @@ class DeploymentSampler(_RestClient):
                     # Non-retryable (e.g. 400/401/403/404/409/422): fail fast
                     # with the same raw HTTP error and additive private context.
                     self._attach_serverless_gateway_source(e, e)
+                    server_attempts.append(
+                        SampledServerAttempt(
+                            index=attempt,
+                            outcome="failed",
+                            status_code=e.response.status_code,
+                            error_kind=self._classify_transient(e),
+                            response_request_id=extract_request_id(e.response.headers),
+                            server_metrics=ServerMetrics.from_headers(dict(e.response.headers)),
+                        )
+                    )
+                    self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
                     raise
                 server_metrics = ServerMetrics.from_headers(
                     dict(e.response.headers),
@@ -907,6 +1083,20 @@ class DeploymentSampler(_RestClient):
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
                 server_metrics = ServerMetrics(transport_error=True, retry_attempt=attempt)
                 transient, label = e, type(e).__name__
+            except asyncio.CancelledError as e:
+                server_attempts.append(SampledServerAttempt(index=attempt, outcome="cancelled"))
+                self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
+                raise
+            except Exception as e:
+                server_attempts.append(
+                    SampledServerAttempt(
+                        index=attempt,
+                        outcome="failed",
+                        error_kind=type(e).__name__,
+                    )
+                )
+                self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
+                raise
             finally:
                 # A caller may cancel a live stream (for example, a bounded
                 # rollout timeout or scheduler shutdown), and contract/parser
@@ -915,14 +1105,54 @@ class DeploymentSampler(_RestClient):
                 self._release_concurrency(server_metrics)
 
             if transient is None:
-                return self._parse_completions_result(
-                    result,
-                    prompt_ids,
-                    max_seq_len,
-                    user_requested_logprobs,
-                    routing_requested,
-                    echo_mode,
-                    raw_logprobs_match_sampling,
+                try:
+                    completions = self._parse_completions_result(
+                        result,
+                        prompt_ids,
+                        max_seq_len,
+                        user_requested_logprobs,
+                        routing_requested,
+                        echo_mode,
+                        raw_logprobs_match_sampling,
+                    )
+                except Exception as e:
+                    upstream_response_id = str(result["id"]) if result.get("id") else None
+                    server_attempts.append(
+                        SampledServerAttempt(
+                            index=attempt,
+                            outcome="failed",
+                            status_code=200,
+                            error_kind=type(e).__name__,
+                            response_request_id=(
+                                server_metrics.response_request_id if server_metrics is not None else None
+                            ),
+                            upstream_response_id=upstream_response_id,
+                            server_metrics=server_metrics,
+                        )
+                    )
+                    self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
+                    raise
+                upstream_response_id = str(result["id"]) if result.get("id") else None
+                server_attempts.append(
+                    SampledServerAttempt(
+                        index=attempt,
+                        outcome="succeeded",
+                        status_code=200,
+                        response_request_id=(
+                            server_metrics.response_request_id if server_metrics is not None else None
+                        ),
+                        upstream_response_id=upstream_response_id,
+                        server_metrics=server_metrics,
+                    )
+                )
+                return SampledRequestResult(
+                    completions=completions,
+                    server_metrics=server_metrics,
+                    logical_request_id=logical_request_id,
+                    attempts=attempt,
+                    wall_seconds=time.monotonic() - request_started,
+                    upstream_response_id=upstream_response_id,
+                    server_attempts=tuple(server_attempts),
                 )
 
             # Extract payload-free failure facts for this attempt.
@@ -931,12 +1161,22 @@ class DeploymentSampler(_RestClient):
             request_id = extract_request_id(getattr(response, "headers", None))
             error_kind = self._classify_transient(transient)
             retry_after_s = parse_retry_after(response) if response is not None else None
+            server_attempts.append(
+                SampledServerAttempt(
+                    index=attempt,
+                    outcome="retryable_error",
+                    status_code=status,
+                    error_kind=error_kind,
+                    response_request_id=request_id,
+                    server_metrics=server_metrics,
+                )
+            )
 
             if attempt == self._RETRY_MAX_ATTEMPTS:
                 notify = getattr(self._concurrency_controller, "note_retry_exhausted", None)
                 if callable(notify):
                     notify(server_metrics)
-                raise self._terminal_error(
+                terminal = self._terminal_error(
                     transient,
                     attempts=attempt,
                     final_status=status,
@@ -949,7 +1189,9 @@ class DeploymentSampler(_RestClient):
                     max_tokens=max_tokens,
                     kwargs=kwargs,
                     diagnostic_context=diagnostic_context,
-                ) from transient
+                )
+                self._attach_attempt_context(terminal, logical_request_id, attempt, server_attempts)
+                raise terminal from transient
 
             diagnostic = (
                 self._timeout_diagnostic(
