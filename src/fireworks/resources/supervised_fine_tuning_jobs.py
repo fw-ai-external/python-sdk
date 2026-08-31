@@ -122,6 +122,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        reservation_target: str | Omit = omit,
         use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
@@ -181,6 +182,8 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
 
+          reservation_target: The reservation resource this job consumes from.
+
           use_reservation: Whether to try the account's reservation capacity before falling back to
               shared trainer capacity.
 
@@ -234,6 +237,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "reservation_target": reservation_target,
                     "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,
@@ -567,6 +571,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         ]
         | Omit = omit,
         use_purpose: str | Omit = omit,
+        reservation_target: str | Omit = omit,
         use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         warm_start_from: str | Omit = omit,
@@ -626,6 +631,8 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
           use_purpose: Use dedicated resources for the job. The only supported value currently is
               "pilot". Defaults to empty.
 
+          reservation_target: The reservation resource this job consumes from.
+
           use_reservation: Whether to try the account's reservation capacity before falling back to
               shared trainer capacity.
 
@@ -679,6 +686,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "region": region,
                     "use_purpose": use_purpose,
+                    "reservation_target": reservation_target,
                     "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
                     "warm_start_from": warm_start_from,

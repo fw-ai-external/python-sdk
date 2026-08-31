@@ -310,6 +310,16 @@ class TestManagedProvisioning:
 
         assert trainer_config.use_reservation is True
 
+    def test_reservation_target_flows_to_trainer_config(self):
+        target = "accounts/test/reservations/team-training"
+        trainer_config = managed_module._build_trainer_job_config(
+            _policy_config(reservation_target=target),
+            max_context_length=32768,
+            profile_training_shape="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+
+        assert trainer_config.reservation_target == target
+
     def test_max_lora_rank_sets_trainer_capacity(self):
         trainer_config = managed_module._build_trainer_job_config(
             _policy_config(

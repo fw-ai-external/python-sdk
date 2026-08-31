@@ -38,6 +38,9 @@ class DpoJobCreateParams(TypedDict, total=False):
     renderer_hugging_face_repo_id: Annotated[str, PropertyInfo(alias="rendererHuggingFaceRepoId")]
     """Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering."""
 
+    reservation_target: Annotated[str, PropertyInfo(alias="reservationTarget")]
+    """The reservation resource this job consumes from."""
+
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 

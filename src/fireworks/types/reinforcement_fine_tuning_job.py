@@ -177,6 +177,9 @@ class ReinforcementFineTuningJob(BaseModel):
     default is 1.
     """
 
+    reservation_target: Optional[str] = FieldInfo(alias="reservationTarget", default=None)
+    """The reservation resource this job consumes from."""
+
     output_metrics: Optional[str] = FieldInfo(alias="outputMetrics", default=None)
 
     output_stats: Optional[str] = FieldInfo(alias="outputStats", default=None)

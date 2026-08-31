@@ -114,6 +114,9 @@ class DpoJob(BaseModel):
     training_config: Optional[TrainingConfig] = FieldInfo(alias="trainingConfig", default=None)
     """Common training configurations."""
 
+    reservation_target: Optional[str] = FieldInfo(alias="reservationTarget", default=None)
+    """The reservation resource this job consumes from."""
+
     use_reservation: Optional[bool] = FieldInfo(alias="useReservation", default=None)
     """Whether to try the account's reservation capacity before falling back to shared
     trainer capacity.

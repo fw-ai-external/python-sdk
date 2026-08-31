@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.11 (2026-08-31)
+
+Full Changelog: [v1.2.10...v1.2.11](https://github.com/fw-ai-external/python-sdk/compare/v1.2.10...v1.2.11)
+
+### Features
+* **training:** support explicit reservation targeting for dedicated and managed training jobs
+
 ## 1.2.10 (2026-08-30)
 
 Full Changelog: [v1.2.9...v1.2.10](https://github.com/fw-ai-external/python-sdk/compare/v1.2.9...v1.2.10)
