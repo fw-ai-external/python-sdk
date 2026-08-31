@@ -57,6 +57,7 @@ class DpoJobsResource(SyncAPIResource):
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         renderer_hugging_face_repo_id: str | Omit = omit,
+        reservation_target: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -81,6 +82,8 @@ class DpoJobsResource(SyncAPIResource):
               Set method to ORPO for ORPO training.
 
           renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
+
+          reservation_target: The reservation resource this job consumes from.
 
           training_config: Common training configurations.
 
@@ -112,6 +115,7 @@ class DpoJobsResource(SyncAPIResource):
                     "display_name": display_name,
                     "loss_config": loss_config,
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
+                    "reservation_target": reservation_target,
                     "training_config": training_config,
                     "use_reservation": use_reservation,
                     "wandb_config": wandb_config,
@@ -403,6 +407,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         display_name: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         renderer_hugging_face_repo_id: str | Omit = omit,
+        reservation_target: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         use_reservation: bool | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
@@ -427,6 +432,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
               Set method to ORPO for ORPO training.
 
           renderer_hugging_face_repo_id: Curated renderer Hugging Face repo ID used by Training V2 for chat-template rendering.
+
+          reservation_target: The reservation resource this job consumes from.
 
           training_config: Common training configurations.
 
@@ -458,6 +465,7 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     "display_name": display_name,
                     "loss_config": loss_config,
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
+                    "reservation_target": reservation_target,
                     "training_config": training_config,
                     "use_reservation": use_reservation,
                     "wandb_config": wandb_config,

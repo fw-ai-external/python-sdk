@@ -72,6 +72,9 @@ class ReinforcementFineTuningJobCreateParams(TypedDict, total=False):
     default is 1.
     """
 
+    reservation_target: Annotated[str, PropertyInfo(alias="reservationTarget")]
+    """The reservation resource this job consumes from."""
+
     training_config: Annotated[TrainingConfig, PropertyInfo(alias="trainingConfig")]
     """Common training configurations."""
 

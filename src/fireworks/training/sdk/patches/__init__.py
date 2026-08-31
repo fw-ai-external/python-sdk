@@ -1,6 +1,8 @@
-"""Monkey-patches for tinker types.
+"""Opt-in monkey-patches for tinker types.
 
-All patches are applied at import time and are idempotent.
+Importing this package applies all patches; the operation is idempotent. The
+Fireworks training client imports it automatically, while applications that
+use Tinker directly must import this package themselves.
 Remove individual patch files when tinker adds native support.
 """
 

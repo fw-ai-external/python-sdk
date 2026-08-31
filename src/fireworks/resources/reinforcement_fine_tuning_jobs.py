@@ -71,6 +71,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
         max_inference_replica_count: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
+        reservation_target: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -114,6 +115,8 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
 
+          reservation_target: The reservation resource this job consumes from.
+
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -150,6 +153,7 @@ class ReinforcementFineTuningJobsResource(SyncAPIResource):
                     "max_inference_replica_count": max_inference_replica_count,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
+                    "reservation_target": reservation_target,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },
@@ -482,6 +486,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
         max_inference_replica_count: int | Omit = omit,
         mcp_server: str | Omit = omit,
         node_count: int | Omit = omit,
+        reservation_target: str | Omit = omit,
         training_config: TrainingConfig | Omit = omit,
         wandb_config: WandbConfig | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
@@ -525,6 +530,8 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
           node_count: The number of nodes to use for the fine-tuning job. If not specified, the
               default is 1.
 
+          reservation_target: The reservation resource this job consumes from.
+
           training_config: Common training configurations.
 
           wandb_config: The Weights & Biases team/user account for logging training progress.
@@ -561,6 +568,7 @@ class AsyncReinforcementFineTuningJobsResource(AsyncAPIResource):
                     "max_inference_replica_count": max_inference_replica_count,
                     "mcp_server": mcp_server,
                     "node_count": node_count,
+                    "reservation_target": reservation_target,
                     "training_config": training_config,
                     "wandb_config": wandb_config,
                 },

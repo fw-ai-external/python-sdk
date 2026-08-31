@@ -127,6 +127,18 @@ class TestCreate:
         assert mgr._build_trainer_create_payload(default)["useReservation"] is True
         assert mgr._build_trainer_create_payload(disabled)["useReservation"] is False
 
+    def test_reservation_target_overrides_default_use_reservation(self, mgr):
+        target = "accounts/test/reservations/team-training"
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/qwen3-1p7b",
+            reservation_target=target,
+        )
+
+        payload = mgr._build_trainer_create_payload(config)
+
+        assert payload["reservationTarget"] == target
+        assert payload["useReservation"] is False
+
     def test_auto_requested_job_id_query_param_when_unset(self, mgr, basic_config):
         resp = MagicMock()
         resp.is_success = True

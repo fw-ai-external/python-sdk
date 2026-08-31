@@ -55,7 +55,10 @@ def _http_error(
 
 
 _SUCCESS = (
-    {"choices": [{"text": "hi", "finish_reason": "stop", "raw_output": {"completion_token_ids": [40, 50]}}]},
+    {
+        "id": "cmpl-upstream-test",
+        "choices": [{"text": "hi", "finish_reason": "stop", "raw_output": {"completion_token_ids": [40, 50]}}],
+    },
     ServerMetrics(),
 )
 
@@ -151,6 +154,25 @@ class TestSamplingRetryLoop:
         assert err.model == "m"
         assert err.request_id == "gw-x"  # server id of the last attempt, for log search
         assert not isinstance(err, DeploymentSamplerTimeoutError)
+        assert len(err.server_attempts) == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert all(attempt.response_request_id == "gw-x" for attempt in err.server_attempts)
+
+    def test_transport_failures_retain_attempt_metrics(self, no_sleep, no_jitter):
+        sampler = _make_sampler()
+        request = httpx.Request("POST", _URL)
+        _install_stream(
+            sampler,
+            [httpx.ConnectError("connection refused", request=request)],
+        )
+
+        with pytest.raises(SamplingRequestError) as excinfo:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+
+        assert len(excinfo.value.server_attempts) == DeploymentSampler._RETRY_MAX_ATTEMPTS
+        assert all(
+            attempt.server_metrics is not None and attempt.server_metrics.transport_error
+            for attempt in excinfo.value.server_attempts
+        )
 
     def test_retry_exhaustion_reports_final_released_metrics(self, no_sleep, no_jitter):
         controller = _CountingController()
@@ -394,7 +416,7 @@ class TestContextAndRedaction:
 
 
 def _sse_success_bytes() -> bytes:
-    chunk = '{"choices":[{"text":"hi","finish_reason":"stop","raw_output":{"completion_token_ids":[40,50]}}]}'
+    chunk = '{"id":"cmpl-upstream-test","choices":[{"text":"hi","finish_reason":"stop","raw_output":{"completion_token_ids":[40,50]}}]}'
     return f"data: {chunk}\n\ndata: [DONE]\n\n".encode("utf-8")
 
 
@@ -404,15 +426,29 @@ class TestTransportLevel:
 
         def _handler(request: httpx.Request) -> httpx.Response:
             seen["x-request-id"] = request.headers.get("x-request-id")
-            return httpx.Response(200, content=_sse_success_bytes())
+            return httpx.Response(
+                200,
+                content=_sse_success_bytes(),
+                headers={
+                    "x-request-id": "lr-xyz-cmpl-server",
+                    "fireworks-backend-host": "serving-pod-1",
+                    "fireworks-deployment": "accounts/a/deployments/d",
+                    "fireworks-pod-template-hash": "abc123",
+                },
+            )
 
         sampler = _make_sampler()
         sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
-        result, _ = asyncio.run(
+        result, metrics = asyncio.run(
             sampler.async_completions_stream(prompt=[1, 2, 3], raw_output=True, logical_request_id="lr-xyz")
         )
         assert result["choices"][0]["raw_output"]["completion_token_ids"] == [40, 50]
+        assert result["id"] == "cmpl-upstream-test"
         assert seen["x-request-id"] == "lr-xyz"
+        assert metrics.response_request_id == "lr-xyz-cmpl-server"
+        assert metrics.backend_host == "serving-pod-1"
+        assert metrics.deployment == "accounts/a/deployments/d"
+        assert metrics.pod_template_hash == "abc123"
         sampler.close()
 
     def test_no_layer1_status_retry_single_post(self):
@@ -429,3 +465,157 @@ class TestTransportLevel:
         # errors.py opt-out means the transport is hit exactly once per stream call.
         assert posts["n"] == 1
         sampler.close()
+
+    def test_typed_prompt_cache_key_and_header_snapshot(self):
+        seen: dict = {}
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            seen["body"] = __import__("json").loads(request.content)
+            seen["custom"] = request.headers.get("x-custom")
+            return httpx.Response(200, content=_sse_success_bytes())
+
+        source = {"X-Custom": "mutable"}
+        sampler = _make_sampler(additional_headers=source)
+        sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
+        snapshot = {"x-custom": "frozen"}
+        result, _ = asyncio.run(
+            sampler.async_completions_stream(
+                prompt=[1, 2, 3],
+                raw_output=True,
+                prompt_cache_key="affinity-1",
+                additional_headers_snapshot=snapshot,
+            )
+        )
+        assert result["choices"]
+        assert seen["body"]["prompt_cache_key"] == "affinity-1"
+        assert seen["custom"] == "frozen"
+        sampler.close()
+
+    def test_header_snapshot_keeps_auth_and_sdk_session_headers_request_local(self, monkeypatch):
+        seen: list[dict[str, str]] = []
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            seen.append(dict(request.headers))
+            return httpx.Response(200, content=_sse_success_bytes())
+
+        source = {"X-Fireworks-Gateway-Secret": "fixed", "X-Custom": "original"}
+        sampler = _make_sampler(additional_headers=source)
+        sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
+        snapshot = dict(source)
+        first_session = str(uuid.uuid4())
+        second_session = str(uuid.uuid4())
+        monkeypatch.setenv("FIREWORKS_SESSION_ID", first_session)
+        asyncio.run(
+            sampler.async_completions_stream(
+                prompt=[1, 2, 3],
+                raw_output=True,
+                additional_headers_snapshot=snapshot,
+            )
+        )
+
+        sampler.api_key = "rotated-key"
+        sampler.additional_headers = {"X-Custom": "replaced"}
+        source["X-Custom"] = "mutated"
+        monkeypatch.setenv("FIREWORKS_SESSION_ID", second_session)
+        asyncio.run(
+            sampler.async_completions_stream(
+                prompt=[1, 2, 3],
+                raw_output=True,
+                additional_headers_snapshot=snapshot,
+            )
+        )
+
+        assert seen[0]["authorization"] == "Bearer secret-key"
+        assert seen[1]["authorization"] == "Bearer rotated-key"
+        assert seen[0]["x-api-key"] == "secret-key"
+        assert seen[1]["x-api-key"] == "rotated-key"
+        assert seen[0]["x-fireworks-session-id"] == first_session
+        assert seen[1]["x-fireworks-session-id"] == second_session
+        assert [headers["x-fireworks-gateway-secret"] for headers in seen] == [
+            "fixed",
+            "fixed",
+        ]
+        assert [headers["x-custom"] for headers in seen] == ["original", "original"]
+        sampler.close()
+
+    def test_request_result_owns_attempt_and_metrics(self, no_sleep, no_jitter):
+        sampler = _make_sampler()
+        calls = _install_stream(
+            sampler,
+            [
+                _http_error(429, {"x-request-id": "retry-attempt-1"}),
+                (
+                    _SUCCESS[0],
+                    ServerMetrics(
+                        prompt_tokens=3,
+                        cached_prompt_tokens=2,
+                        response_request_id="success-attempt-2",
+                    ),
+                ),
+            ],
+        )
+
+        result = asyncio.run(
+            sampler.sample_with_prompt_tokens_result([1, 2, 3], logical_request_id="gateway-logical-id")
+        )
+        assert len(calls) == 2
+        assert result.attempts == 2
+        assert result.logical_request_id == "gateway-logical-id"
+        assert result.upstream_response_id == "cmpl-upstream-test"
+        assert {call["logical_request_id"] for call in calls} == {"gateway-logical-id"}
+        assert result.server_metrics.cached_prompt_tokens == 2
+        assert len(result.completions) == 1
+        assert [attempt.outcome for attempt in result.server_attempts] == [
+            "retryable_error",
+            "succeeded",
+        ]
+        assert [attempt.response_request_id for attempt in result.server_attempts] == [
+            "retry-attempt-1",
+            "success-attempt-2",
+        ]
+        assert result.server_attempts[1].upstream_response_id == "cmpl-upstream-test"
+
+
+class TestServerMetricsNormalization:
+    def test_prefixed_headers_and_unprefixed_perf_metrics_match(self):
+        values = {
+            "prompt-tokens": "12",
+            "cached-prompt-tokens": "9",
+            "server-processing-time": "1.25",
+            "tokenizer-queue-duration": "0.1",
+            "tokenizer-duration": "0.2",
+            "prefill-queue-duration": "0.3",
+            "prefill-duration": "0.4",
+            "generation-queue-duration": "0.5",
+            "generation-duration": "0.6",
+        }
+        unprefixed = ServerMetrics.from_headers(values)
+        prefixed = ServerMetrics.from_headers({f"fireworks-{key}": value for key, value in values.items()})
+        assert unprefixed == prefixed
+        assert prefixed.prompt_tokens == 12
+        assert prefixed.generation_duration == 0.6
+
+    def test_header_only_correlation_fields_survive_perf_metric_merge(self):
+        response_headers = {
+            "x-request-id": "request-cmpl-1",
+            "fireworks-backend-host": "pod-1",
+            "fireworks-deployment": "accounts/a/deployments/d",
+            "fireworks-pod-template-hash": "hash-1",
+        }
+        perf_metrics = {"prompt-tokens": "12", "cached-prompt-tokens": "9"}
+        metrics = ServerMetrics.from_headers({**response_headers, **perf_metrics})
+        assert metrics.response_request_id == "request-cmpl-1"
+        assert metrics.backend_host == "pod-1"
+        assert metrics.deployment == "accounts/a/deployments/d"
+        assert metrics.pod_template_hash == "hash-1"
+        assert metrics.cached_prompt_tokens == 9
+
+    def test_numeric_zero_perf_metrics_are_not_dropped(self):
+        metrics = ServerMetrics.from_headers(
+            {
+                "cached-prompt-tokens": 0,
+                "prefill-queue-duration": 0.0,
+            }
+        )
+        assert metrics.cached_prompt_tokens == 0
+        assert metrics.prefill_queue_duration == 0.0

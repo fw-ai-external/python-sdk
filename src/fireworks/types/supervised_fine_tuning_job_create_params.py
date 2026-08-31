@@ -144,6 +144,9 @@ class SupervisedFineTuningJobCreateParams(TypedDict, total=False):
     The only supported value currently is "pilot". Defaults to empty.
     """
 
+    reservation_target: Annotated[str, PropertyInfo(alias="reservationTarget")]
+    """The reservation resource this job consumes from."""
+
     use_reservation: Annotated[bool, PropertyInfo(alias="useReservation")]
     """Whether to try the account's reservation capacity before falling back to shared
     trainer capacity.

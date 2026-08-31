@@ -203,6 +203,9 @@ class FiretitanProvisioningConfig:
     Accounts without a reservation for the selected accelerator use shared capacity.
     """
 
+    reservation_target: str | None = None
+    """Pin the trainer to a named reservation resource or reservation group."""
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -796,6 +799,7 @@ def _build_trainer_job_config(
         purpose=config.purpose,
         preemptible=config.preemptible,
         use_reservation=config.use_reservation,
+        reservation_target=config.reservation_target,
         managed_by=config.managed_by,
         forward_only=config.forward_only,
         inactivity_timeout=config.inactivity_timeout,

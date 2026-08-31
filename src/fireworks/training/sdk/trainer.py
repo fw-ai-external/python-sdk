@@ -339,6 +339,12 @@ class TrainerJobConfig:
 
     Accounts without a reservation for the selected accelerator use shared capacity.
     """
+    reservation_target: str | None = None
+    """Pin the trainer to a named reservation resource or reservation group.
+
+    When set, this exact target takes precedence over ``use_reservation`` and
+    shared/on-demand spillover is disabled by the control plane.
+    """
 
     def validate(self) -> None:
         """Self-contained pre-flight check. Call before ``_create()``.
@@ -544,7 +550,9 @@ class TrainerJobManager(FireworksClient):
         # Run-level HSDP knob, valid on both shape and manual paths.
         if config.trainer_replica_count is not None:
             payload["trainerReplicaCount"] = config.trainer_replica_count
-        payload["useReservation"] = config.use_reservation
+        payload["useReservation"] = config.use_reservation and not config.reservation_target
+        if config.reservation_target:
+            payload["reservationTarget"] = config.reservation_target
         if config.max_context_length is not None and not is_shape_path:
             training_config["maxContextLength"] = config.max_context_length
         if config.custom_image_tag:

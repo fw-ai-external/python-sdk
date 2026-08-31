@@ -17,6 +17,7 @@ import re
 import uuid
 import logging
 import ipaddress
+from typing import Mapping
 from urllib.parse import urlparse
 
 import httpx
@@ -99,9 +100,7 @@ class _RestClient:
         self.base_url = base_url.rstrip("/")
         self.additional_headers = additional_headers
         self._verify_ssl_override = verify_ssl
-        self._base_verify = (
-            verify_ssl if verify_ssl is not None else _should_verify_ssl(base_url)
-        )
+        self._base_verify = verify_ssl if verify_ssl is not None else _should_verify_ssl(base_url)
         self._sync_client = _make_sync_client(self._base_verify)
         self._async_client: httpx.AsyncClient | None = None
 
@@ -126,16 +125,12 @@ class _RestClient:
         if len(accounts) > 1:
             ids = [a.get("name", "").removeprefix("accounts/") for a in accounts]
             raise ValueError(
-                f"API key has access to multiple accounts: {ids}. "
-                "This is not supported for firetitan training."
+                f"API key has access to multiple accounts: {ids}. This is not supported for firetitan training."
             )
         name = accounts[0].get("name", "")
         account_id = name.removeprefix("accounts/")
         if not account_id:
-            raise ValueError(
-                "Could not parse account ID from API response. "
-                f"Got account name: '{name}'"
-            )
+            raise ValueError(f"Could not parse account ID from API response. Got account name: '{name}'")
         logger.info("Auto-resolved account ID: %s", account_id)
         return account_id
 
@@ -157,7 +152,18 @@ class _RestClient:
                 return request_with_retries(client.request, kwargs.pop("method", "GET"), url, **kwargs)
         return request_with_retries(self._sync_client.request, kwargs.pop("method", "GET"), url, **kwargs)
 
-    def _headers(self, **extra: str) -> dict[str, str]:
+    def _headers_from_additional(
+        self,
+        additional_headers: Mapping[str, str] | None,
+        **extra: str,
+    ) -> dict[str, str]:
+        """Build request headers from an explicit caller-header snapshot.
+
+        ``_headers`` remains the ordinary mutable-client path. Stateful
+        facades can capture caller-supplied backend headers once and pass that
+        immutable snapshot here without freezing authentication or the SDK's
+        standard environment-derived headers.
+        """
         headers: dict[str, str] = {
             "Content-Type": "application/json",
             "X-Api-Key": self.api_key,
@@ -168,14 +174,17 @@ class _RestClient:
         session_id = _validated_session_id(os.environ.get("FIREWORKS_SESSION_ID"))
         if session_id:
             headers["X-Fireworks-Session-Id"] = session_id
-        if self.additional_headers:
+        if additional_headers:
             # Explicit caller headers win, including case-insensitive duplicates.
-            explicit_names = {name.lower() for name in self.additional_headers}
+            explicit_names = {name.lower() for name in additional_headers}
             headers = {name: value for name, value in headers.items() if name.lower() not in explicit_names}
-            headers.update(self.additional_headers)
+            headers.update(additional_headers)
         if extra:
             headers.update(extra)
         return headers
+
+    def _headers(self, **extra: str) -> dict[str, str]:
+        return self._headers_from_additional(self.additional_headers, **extra)
 
     # -- Sync HTTP verbs (control-plane) ---------------------------------------
 
@@ -212,6 +221,7 @@ class _RestClient:
         if ac and not ac.is_closed:
             try:
                 import asyncio
+
                 try:
                     loop = asyncio.get_running_loop()
                 except RuntimeError:
