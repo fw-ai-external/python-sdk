@@ -3992,7 +3992,8 @@ class FiretitanServiceClient(ServiceClient):
 
         * LoRA policy without a ``reference_training_shape_id`` → the reference
           reuses the policy trainer session with the adapter disabled (base
-          weights). No second trainer is provisioned.
+          weights). No second trainer is provisioned. Supplying an explicit
+          reference shape for a LoRA policy is deprecated.
         * Full-parameter policies use a separate frozen reference trainer that
           the SDK owns and tears down on :meth:`close` (or early via
           :meth:`release_references`). If ``reference_training_shape_id`` is not
