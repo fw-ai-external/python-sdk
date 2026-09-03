@@ -139,9 +139,9 @@ class FiretitanProvisioningConfig:
     managed behavior.
     """
     training_shape_id: str | None = None
-    # Optional separate reference trainer shape. Rank-0 references accept
-    # LORA_TRAINER (preferred) or FORWARD_ONLY. Without this, the backend
-    # auto-selects a LoRA-capable shape.
+    # Optional separate reference trainer shape for rank-0 policies. Rank-0
+    # references accept LORA_TRAINER (preferred) or FORWARD_ONLY. For LoRA
+    # policies this is deprecated; omit it to share the policy trainer.
     reference_training_shape_id: str | None = None
     # Optional existing reference trainer to reattach to. When set, it disables
     # LoRA shared-reference and is never cleaned up on close.
@@ -225,6 +225,16 @@ class FiretitanProvisioningConfig:
             raise ValueError(
                 "max_lora_rank cannot be combined with service-level lora_rank or lora_alpha; "
                 "pass model rank/alpha to create_training_client"
+            )
+
+        lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
+        if self.reference_required and self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
+            warnings.warn(
+                "reference_training_shape_id for a LoRA policy is deprecated and will be rejected "
+                "in a future release. Omit it to reuse the policy trainer with its adapter disabled; "
+                "explicit reference shapes remain supported for rank-0 policies.",
+                DeprecationWarning,
+                stacklevel=3,
             )
 
         for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
@@ -685,10 +695,11 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
 
     A LoRA policy without an explicit reference shape or reference job gets its
     frozen base for free by disabling the adapter on the policy session — no
-    second trainer. Full-parameter references provision a separate trainer; when
-    no reference shape is pinned, backend trainer creation auto-selects a
-    LoRA-capable shape for that frozen reference runtime. An explicitly pinned
-    rank-0 reference may instead use a FORWARD_ONLY shape.
+    second trainer. Explicit reference shapes for LoRA policies are deprecated.
+    Full-parameter references provision a separate trainer; when no reference
+    shape is pinned, backend trainer creation auto-selects a LoRA-capable shape
+    for that frozen reference runtime. An explicitly pinned rank-0 reference may
+    instead use a FORWARD_ONLY shape.
     """
     return (
         config.reference_training_shape_id is None and config.reference_trainer_job_id is None and policy_lora_rank > 0
@@ -704,13 +715,14 @@ def _reference_managed_config(
 
     ``reference_training_shape_id`` selects a fresh reference trainer shape;
     ``reference_trainer_job_id`` reattaches an existing reference and leaves
-    ownership with the caller. A LoRA reference with an explicit shape loads the
-    adapter on top of the base; otherwise the reference forwards the frozen base
-    directly. When no explicit reference shape is provided, backend trainer
-    creation auto-selects a LoRA-capable shape. An explicitly pinned rank-0
-    reference may use either LORA_TRAINER (preferred) or FORWARD_ONLY. Fresh
-    SDK-created references are cleaned by default unless the parent config
-    explicitly keeps them for a later reattach phase.
+    ownership with the caller. The legacy explicit-shape path for a LoRA policy
+    loads an adapter on top of the base, but is deprecated in favor of sharing
+    the policy trainer with its adapter disabled. Otherwise the reference
+    forwards the frozen base directly. When no explicit reference shape is
+    provided, backend trainer creation auto-selects a LoRA-capable shape. An
+    explicitly pinned rank-0 reference may use either LORA_TRAINER (preferred)
+    or FORWARD_ONLY. Fresh SDK-created references are cleaned by default unless
+    the parent config explicitly keeps them for a later reattach phase.
     """
     reference_shape = config.reference_training_shape_id
     reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
