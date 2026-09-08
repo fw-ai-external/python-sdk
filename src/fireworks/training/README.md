@@ -9,15 +9,30 @@ Infrastructure and orchestration primitives for training on [Fireworks](https://
 
 ## Install
 
-```bash
-pip install -e ".[training]"
+Use **Python 3.11+**:
 
-export FIREWORKS_API_KEY="..."
+```bash
+python -m pip install --upgrade 'fireworks-ai[training]>=1.2.11,<2'
+export FIREWORKS_API_KEY="..."  # Training-scoped API key
 ```
 
-Training APIs require a training-scoped Fireworks API key. Inference-only keys
-can still work for deployment inference, but they will return HTTP 401 for
-trainer lifecycle and training-shape calls.
+The legacy `0.19.20` package has no `fireworks.training` module; upgrade with
+the command above. Stable training releases do not require `--pre`.
+
+Verify the installation:
+
+```bash
+python - <<'PYTHON'
+import fireworks
+from fireworks.training.sdk import FiretitanServiceClient
+
+print(f"Fireworks SDK {fireworks.__version__}: {FiretitanServiceClient.__name__} is available")
+PYTHON
+```
+
+For runnable recipes, follow the [Training Cookbook setup](https://github.com/fw-ai/cookbook/blob/main/training/README.md#getting-started).
+Advanced: API-only environments can use the smaller `[training-sdk]` extra,
+which omits local ML dependencies such as PyTorch and W&B.
 
 ## Quick start
 
