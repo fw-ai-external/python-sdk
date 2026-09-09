@@ -168,6 +168,10 @@ class DeploymentConfig:
     """
     skip_shape_validation: bool = False
     disable_speculative_decoding: bool = False
+    draft_model: str | None = None
+    """Speculative-decoding draft model at create time (e.g. ``\"mtp\"``)."""
+    draft_token_count: int | None = None
+    enable_session_affinity: bool | None = None
     extra_args: list[str] | None = None
     extra_values: dict[str, str] | None = None
     annotations: dict[str, str] | None = None
@@ -351,7 +355,7 @@ class DeploymentManager(_RestClient):
         path = f"/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
         if config.skip_shape_validation:
             path = f"{path}&skipShapeValidation=true"
-        if config.disable_speculative_decoding:
+        if config.disable_speculative_decoding and not config.draft_model:
             path = f"{path}&disableSpeculativeDecoding=true"
 
         body = self._build_deployment_body(config)
@@ -433,6 +437,12 @@ class DeploymentManager(_RestClient):
             body["annotations"] = config.annotations
         if config.preemptible:
             body["preemptible"] = True
+        if config.draft_model:
+            body["draftModel"] = config.draft_model
+        if config.draft_token_count is not None:
+            body["draftTokenCount"] = config.draft_token_count
+        if config.enable_session_affinity is not None:
+            body["enableSessionAffinity"] = config.enable_session_affinity
         return body
 
     def _parse_deployment_info(

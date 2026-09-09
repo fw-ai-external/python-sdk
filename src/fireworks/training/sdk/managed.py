@@ -206,6 +206,19 @@ class FiretitanProvisioningConfig:
     reservation_target: str | None = None
     """Pin the trainer to a named reservation resource or reservation group."""
 
+    wait_for_trainer_before_deployment: bool = False
+    """Wait for trainer READY before creating the rollout deployment.
+
+    Default overlaps trainer boot with deployment creation. Set true so a
+    queued trainer does not hold serving replicas idle.
+    """
+    draft_model: str | None = None
+    """Speculative-decoding draft model at deploy create (e.g. ``\"mtp\"``)."""
+    draft_token_count: int | None = None
+    """Tokens drafted per step (paired with ``draft_model``)."""
+    enable_session_affinity: bool | None = None
+    """If set, configure session affinity at deploy create time."""
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -548,17 +561,6 @@ def _create_managed_tinker_client(
             started_trainer.job,
             config,
         )
-        deployment_future = None
-        if config.create_deployment:
-            deployment_future = executor.submit(
-                _attach_managed_deployment,
-                deploy_mgr,
-                config,
-                trainer_job_name=started_trainer.job.job_name,
-                deployment_shape=deployment_shape,
-                cmek_resource=cmek_resource,
-            )
-
         reference_future = None
         if reference_config is not None:
             reference_future = executor.submit(
@@ -571,6 +573,18 @@ def _create_managed_tinker_client(
                 hotload_api_url=hotload_api_url,
                 additional_headers=additional_headers,
                 verify_ssl=verify_ssl,
+            )
+        if config.create_deployment and config.wait_for_trainer_before_deployment:
+            trainer_future.result()
+        deployment_future = None
+        if config.create_deployment:
+            deployment_future = executor.submit(
+                _attach_managed_deployment,
+                deploy_mgr,
+                config,
+                trainer_job_name=started_trainer.job.job_name,
+                deployment_shape=deployment_shape,
+                cmek_resource=cmek_resource,
             )
 
         endpoint = trainer_future.result()
@@ -973,6 +987,9 @@ def _create_or_reattach_deployment_result(
         extra_values=config.deployment_extra_values,
         annotations={SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"},
         preemptible=config.preemptible,
+        draft_model=config.draft_model,
+        draft_token_count=config.draft_token_count,
+        enable_session_affinity=config.enable_session_affinity,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)
     if deployment.state not in DEPLOYMENT_SERVING_STATES:

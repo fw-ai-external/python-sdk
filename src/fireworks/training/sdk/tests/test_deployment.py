@@ -798,6 +798,20 @@ class TestHotLoadTransitionType:
     def test_preemptible_omitted_when_false(self, deploy_config):
         assert "preemptible" not in DeploymentManager._build_deployment_body(deploy_config)
 
+    def test_speculation_fields_serialized_in_body(self, deploy_config):
+        body = DeploymentManager._build_deployment_body(
+            replace(
+                deploy_config,
+                draft_model="mtp",
+                draft_token_count=3,
+                enable_session_affinity=False,
+            )
+        )
+
+        assert body["draftModel"] == "mtp"
+        assert body["draftTokenCount"] == 3
+        assert body["enableSessionAffinity"] is False
+
     @pytest.mark.parametrize(
         ("configured", "expected"),
         [("ASYNC", "ASYNC"), ("SYNC", "SYNC"), ("sync", "SYNC"), (" async ", "ASYNC")],
