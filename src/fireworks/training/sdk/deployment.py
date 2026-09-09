@@ -123,10 +123,15 @@ class DeploymentConfig:
 
     * **Shape path** (``deployment_shape`` set): accelerator type, count,
       precision, and world size are derived from the shape.  Do not set
-      ``accelerator_type`` -- the server rejects it.
+      ``accelerator_type`` -- the server rejects it.  Always use this path
+      when a compatible shape exists: shapes are pre-validated by Fireworks,
+      while deployments without a shape skip validation and are the most
+      common cause of failed deployment creations, and the unshaped path may
+      be deprecated in the future.
     * **Manual path** (``deployment_shape`` is ``None``): ``accelerator_type``
       is required (server rejects ``UNSPECIFIED``).  Defaults to
-      ``NVIDIA_H200_141GB``.
+      ``NVIDIA_H200_141GB``.  Last resort -- only use this when no compatible
+      shape exists for the model.
     """
 
     deployment_id: str

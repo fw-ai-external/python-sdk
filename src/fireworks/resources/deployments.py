@@ -175,6 +175,16 @@ class DeploymentsResource(SyncAPIResource):
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
 
+              Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
+              the hardware, precision, and serving configuration are known to work
+              together. Omitting `deployment_shape` — whether or not you set
+              `accelerator_type`, `accelerator_count`, or `precision` — creates the
+              deployment without a shape, which skips validation. Deployments without a
+              shape are the most common cause of failed deployment creations, and the
+              unshaped path may be deprecated in the future: always pass
+              `deployment_shape`. If no existing shape fits your workload, contact us
+              and we'll help you find or add one.
+
           deployment_template: The name of the deployment template to use for this deployment. Only available
               to enterprise accounts.
 
@@ -413,6 +423,16 @@ class DeploymentsResource(SyncAPIResource):
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
+
+              Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
+              the hardware, precision, and serving configuration are known to work
+              together. Omitting `deployment_shape` — whether or not you set
+              `accelerator_type`, `accelerator_count`, or `precision` — creates the
+              deployment without a shape, which skips validation. Deployments without a
+              shape are the most common cause of failed deployment creations, and the
+              unshaped path may be deprecated in the future: always pass
+              `deployment_shape`. If no existing shape fits your workload, contact us
+              and we'll help you find or add one.
 
           deployment_template: The name of the deployment template to use for this deployment. Only available
               to enterprise accounts.
@@ -972,6 +992,16 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
 
+              Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
+              the hardware, precision, and serving configuration are known to work
+              together. Omitting `deployment_shape` — whether or not you set
+              `accelerator_type`, `accelerator_count`, or `precision` — creates the
+              deployment without a shape, which skips validation. Deployments without a
+              shape are the most common cause of failed deployment creations, and the
+              unshaped path may be deprecated in the future: always pass
+              `deployment_shape`. If no existing shape fits your workload, contact us
+              and we'll help you find or add one.
+
           deployment_template: The name of the deployment template to use for this deployment. Only available
               to enterprise accounts.
 
@@ -1210,6 +1240,16 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
+
+              Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
+              the hardware, precision, and serving configuration are known to work
+              together. Omitting `deployment_shape` — whether or not you set
+              `accelerator_type`, `accelerator_count`, or `precision` — creates the
+              deployment without a shape, which skips validation. Deployments without a
+              shape are the most common cause of failed deployment creations, and the
+              unshaped path may be deprecated in the future: always pass
+              `deployment_shape`. If no existing shape fits your workload, contact us
+              and we'll help you find or add one.
 
           deployment_template: The name of the deployment template to use for this deployment. Only available
               to enterprise accounts.
