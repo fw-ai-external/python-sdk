@@ -69,7 +69,7 @@ into a `Datum`:
 ```python
 import torch
 from tinker.types.model_input import ModelInput
-from tinker_cookbook.supervised.common import datum_from_model_input_weights
+from training.renderer.supervised import datum_from_model_input_weights
 
 tokens = [151644, 8948, 198, 151645]
 weights = torch.tensor([0.0, 0.0, 1.0, 1.0], dtype=torch.float32)
