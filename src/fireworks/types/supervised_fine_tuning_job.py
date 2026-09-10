@@ -123,6 +123,16 @@ class SupervisedFineTuningJob(BaseModel):
     batch_size_samples: Optional[int] = FieldInfo(alias="batchSizeSamples", default=None)
     """The number of samples per gradient batch."""
 
+    sampler_checkpoint_save_interval_steps: Optional[int] = FieldInfo(
+        alias="samplerCheckpointSaveIntervalSteps", default=None
+    )
+    """
+    Step interval for promotable sampler checkpoints. A positive value enables
+    periodic sampler checkpoints. When omitted or set to 0, no intermediate
+    sampler checkpoints are saved. Resumable DCP checkpoints use a separate
+    server-managed cadence.
+    """
+
     completed_time: Optional[datetime] = FieldInfo(alias="completedTime", default=None)
 
     created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
