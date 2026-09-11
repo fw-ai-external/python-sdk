@@ -664,15 +664,6 @@ class DeploymentManager(_RestClient):
         resp.raise_for_status()
         return self._parse_deployment_info(deployment_id, resp.json())
 
-    def _read_replica_identity(self, deployment_id: str, base_model: str) -> str | None:
-        """Return the first replica identity from hotload status, or None if no replica is up."""
-        status = self.hotload_check_status(deployment_id, base_model)
-        replicas = status.get("replicas") or []
-        if not replicas:
-            return None
-        replica = replicas[0]
-        return replica.get("identity") or replica.get("current_snapshot_identity")
-
     def reattach_trainer(
         self,
         deployment: DeploymentInfo | str,
@@ -683,7 +674,7 @@ class DeploymentManager(_RestClient):
         poll_interval_s: float = HOTLOAD_WAIT_POLL_S,
         hot_load_transition_type: str | None = None,
     ) -> DeploymentInfo:
-        """Point an existing deployment at a trainer bucket and wait for the serving pod to roll.
+        """Point an existing deployment at a trainer bucket and wait for the update to settle.
 
         ``hot_load_transition_type`` is reconciled in the same PATCH so a
         reattach that also changes the transition type costs one pod roll
@@ -691,14 +682,36 @@ class DeploymentManager(_RestClient):
         """
         if isinstance(deployment, str):
             deployment_id = deployment
-            deployment_info = self.get(deployment_id)
-            if deployment_info is None:
-                raise RuntimeError(f"Deployment {deployment_id!r} does not exist")
         else:
-            deployment_info = deployment
             deployment_id = deployment.deployment_id
 
+        deployment_info = self.get(deployment_id)
+        if deployment_info is None:
+            raise RuntimeError(f"Deployment {deployment_id!r} does not exist")
+
+        deadline = time.time() + max(timeout_s, 1)
         hot_load_transition_type = normalize_hot_load_transition_type(hot_load_transition_type)
+        while deployment_info.state != "READY":
+            if deployment_info.state in ("FAILED", "DELETED", "DELETING"):
+                raise RuntimeError(
+                    f"Deployment {deployment_id!r} entered bad state "
+                    f"{deployment_info.state!r} before trainer re-attach."
+                )
+            if time.time() >= deadline:
+                raise TimeoutError(
+                    f"Deployment {deployment_id!r} did not reach READY before trainer "
+                    f"re-attach within {timeout_s}s (last_state={deployment_info.state!r})."
+                )
+            logger.info(
+                "Waiting for deployment %s to reach READY before trainer re-attach (state=%s)",
+                deployment_id,
+                deployment_info.state,
+            )
+            time.sleep(poll_interval_s)
+            deployment_info = self.get(deployment_id)
+            if deployment_info is None:
+                raise RuntimeError(f"Deployment {deployment_id!r} no longer exists")
+
         body: dict[str, Any] = {}
         update_mask: list[str] = []
         if _deployment_hot_load_trainer_job(deployment_info) != trainer_job_name:
@@ -726,33 +739,39 @@ class DeploymentManager(_RestClient):
             trainer_job_name,
             ", ".join(update_mask),
         )
-        prev_identity = self._read_replica_identity(deployment_id, base_model)
-        updated = self.update(
+        self.update(
             deployment_id,
             body=body,
             update_mask=",".join(update_mask),
         )
 
         deadline = time.time() + max(timeout_s, 1)
-        saw_pod_gone = prev_identity is None
         while time.time() < deadline:
-            current = self._read_replica_identity(deployment_id, base_model)
-            if prev_identity is None:
-                if current is not None:
-                    logger.info("Re-attach settled: hotload manager up on pod %s", current)
-                    return updated
-            elif current is None:
-                if not saw_pod_gone:
-                    logger.info("Old pod %s has gone; waiting for new pod...", prev_identity)
-                saw_pod_gone = True
-            elif current != prev_identity:
-                logger.info("Re-attach settled: new pod %s replaced %s", current, prev_identity)
-                return updated
+            current = self.get(deployment_id)
+            if current is None:
+                raise RuntimeError(f"Deployment {deployment_id!r} no longer exists")
+            transition_type_matches = (
+                hot_load_transition_type is None
+                or _effective_hot_load_transition_type(current.hot_load_transition_type) == hot_load_transition_type
+            )
+            if (
+                current.state == "READY"
+                and _deployment_hot_load_trainer_job(current) == trainer_job_name
+                and transition_type_matches
+            ):
+                logger.info(
+                    "Trainer re-attach settled: deployment %s is READY",
+                    deployment_id,
+                )
+                return current
+            if current.state in ("FAILED", "DELETED", "DELETING"):
+                raise RuntimeError(
+                    f"Deployment {deployment_id!r} entered bad state {current.state!r} during trainer re-attach."
+                )
             time.sleep(poll_interval_s)
 
         raise TimeoutError(
-            f"Re-attach for deployment {deployment_id!r} did not produce a fresh pod "
-            f"within {timeout_s}s (prev_identity={prev_identity!r})."
+            f"Trainer re-attach for deployment {deployment_id!r} did not settle in READY within {timeout_s}s."
         )
 
     # -- Hotload operations ----------------------------------------------------

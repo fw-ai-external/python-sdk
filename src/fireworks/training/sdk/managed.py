@@ -946,16 +946,19 @@ def _create_or_reattach_deployment_result(
             != config.hot_load_transition_type
         )
         reattached = trainer_job_changed or transition_type_changed
+        reattach_timeout_s = (
+            config.reattach_settle_timeout_s
+            if existing.state in DEPLOYMENT_SERVING_STATES
+            else config.deployment_timeout_s
+        )
         deployment = deploy_mgr.reattach_trainer(
             existing,
             base_model=config.base_model,
             trainer_job_name=trainer_job_name,
-            timeout_s=config.reattach_settle_timeout_s,
+            timeout_s=reattach_timeout_s,
             poll_interval_s=config.reattach_poll_interval_s,
             hot_load_transition_type=config.hot_load_transition_type,
         )
-        if existing.state not in DEPLOYMENT_SERVING_STATES:
-            deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
         return _DeploymentAttachResult(deployment=deployment, reattached=reattached, created=False)
 
     replica_count = max(config.replica_count, 0)
