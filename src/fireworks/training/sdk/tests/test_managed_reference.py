@@ -16,6 +16,7 @@ recipe-facing wrapper is tested in the cookbook suite.
 
 from __future__ import annotations
 
+import warnings
 import threading
 from types import SimpleNamespace
 from datetime import timedelta
@@ -108,6 +109,31 @@ def _policy_config(**overrides) -> _ManagedTinkerConfig:
 
 class TestUseSharedBaseReference:
     """Only LoRA without an explicit reference shape reuses the policy session."""
+
+    def test_explicit_reference_shape_for_lora_policy_is_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+            _policy_config(
+                lora_rank=16,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
+
+    def test_explicit_reference_shape_for_multi_model_lora_policy_is_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+            _policy_config(
+                max_lora_rank=16,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
+
+    def test_explicit_reference_shape_for_full_param_policy_is_not_deprecated(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            _policy_config(
+                lora_rank=0,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
 
     def test_lora_without_reference_shape_shares(self):
         config = _policy_config(reference_training_shape_id=None)

@@ -184,6 +184,36 @@ def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():
     assert result.created is False
 
 
+def test_managed_reattach_uses_strict_result_without_probe_fallback():
+    deploy_mgr = MagicMock()
+    existing = DeploymentInfo(
+        deployment_id="dep-1",
+        name="dep-1",
+        state="CREATING",
+        hot_load_trainer_job="accounts/acct/rlorTrainerJobs/old-job",
+    )
+    ready = DeploymentInfo(
+        deployment_id="dep-1",
+        name="dep-1",
+        state="READY",
+        hot_load_trainer_job="accounts/acct/rlorTrainerJobs/new-job",
+    )
+    deploy_mgr.get.return_value = existing
+    deploy_mgr.reattach_trainer.return_value = ready
+    config = _ManagedTinkerConfig(base_model="accounts/acct/models/base", deployment_id="dep-1")
+
+    result = _create_or_reattach_deployment_result(
+        deploy_mgr,
+        config,
+        trainer_job_name="accounts/acct/rlorTrainerJobs/new-job",
+        deployment_shape=None,
+    )
+
+    assert result.deployment is ready
+    assert deploy_mgr.reattach_trainer.call_args.kwargs["timeout_s"] == config.deployment_timeout_s
+    deploy_mgr.wait_for_ready.assert_not_called()
+
+
 def test_reattach_result_does_not_mark_already_attached_deployment():
     deploy_mgr = MagicMock()
     existing = DeploymentInfo(

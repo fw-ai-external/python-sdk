@@ -61,6 +61,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
+        sampler_checkpoint_save_interval_steps: int | Omit = omit,
         display_name: str | Omit = omit,
         early_stop: bool | Omit = omit,
         epochs: int | Omit = omit,
@@ -151,6 +152,11 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
 
           batch_size_samples: The number of samples per gradient batch.
 
+          sampler_checkpoint_save_interval_steps: Step interval for promotable sampler checkpoints. A positive value
+              enables periodic sampler checkpoints. When omitted or set to 0, no
+              intermediate sampler checkpoints are saved. Resumable DCP checkpoints
+              use a separate server-managed cadence.
+
           early_stop: Whether to stop training early if the validation loss does not improve.
 
           epochs: The number of epochs to train for.
@@ -215,6 +221,7 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,
+                    "sampler_checkpoint_save_interval_steps": sampler_checkpoint_save_interval_steps,
                     "display_name": display_name,
                     "early_stop": early_stop,
                     "epochs": epochs,
@@ -510,6 +517,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
         base_model: str | Omit = omit,
         batch_size: int | Omit = omit,
         batch_size_samples: int | Omit = omit,
+        sampler_checkpoint_save_interval_steps: int | Omit = omit,
         display_name: str | Omit = omit,
         early_stop: bool | Omit = omit,
         epochs: int | Omit = omit,
@@ -600,6 +608,11 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
 
           batch_size_samples: The number of samples per gradient batch.
 
+          sampler_checkpoint_save_interval_steps: Step interval for promotable sampler checkpoints. A positive value
+              enables periodic sampler checkpoints. When omitted or set to 0, no
+              intermediate sampler checkpoints are saved. Resumable DCP checkpoints
+              use a separate server-managed cadence.
+
           early_stop: Whether to stop training early if the validation loss does not improve.
 
           epochs: The number of epochs to train for.
@@ -664,6 +677,7 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
                     "base_model": base_model,
                     "batch_size": batch_size,
                     "batch_size_samples": batch_size_samples,
+                    "sampler_checkpoint_save_interval_steps": sampler_checkpoint_save_interval_steps,
                     "display_name": display_name,
                     "early_stop": early_stop,
                     "epochs": epochs,

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import asyncio
 import logging
 import ipaddress
 from typing import Mapping
@@ -103,6 +104,7 @@ class _RestClient:
         self._base_verify = verify_ssl if verify_ssl is not None else _should_verify_ssl(base_url)
         self._sync_client = _make_sync_client(self._base_verify)
         self._async_client: httpx.AsyncClient | None = None
+        self._async_client_loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def account_id(self) -> str:
@@ -140,8 +142,23 @@ class _RestClient:
         return _should_verify_ssl(url)
 
     def _get_async_client(self) -> httpx.AsyncClient:
+        # The cached client's pooled connections are bound to the event loop
+        # they were created on, and the client does not report is_closed when
+        # that loop closes. Callers that drive requests via asyncio.run() per
+        # call (fresh loop each time, e.g. a sync adapter in a worker thread)
+        # would get the stale client back and die with "RuntimeError: Event
+        # loop is closed" on connection cleanup. Rebuild when the loop changes.
+        loop = asyncio.get_running_loop()
         if self._async_client is None or self._async_client.is_closed:
             self._async_client = _make_async_client(self._base_verify)
+            self._async_client_loop = loop
+        elif self._async_client_loop is None:
+            # Externally-set client (tests inject MockTransport): adopt it on
+            # the current loop instead of discarding it with a rebuild.
+            self._async_client_loop = loop
+        elif self._async_client_loop is not loop:
+            self._async_client = _make_async_client(self._base_verify)
+            self._async_client_loop = loop
         return self._async_client
 
     def _sync_request(self, url: str, **kwargs) -> httpx.Response:
