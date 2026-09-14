@@ -554,7 +554,7 @@ def _create_managed_tinker_client(
         trainer_mgr,
         config,
         max_context_length=max_context_length,
-        profile_training_shape=profile.training_shape_version if profile else None,
+        profile_training_shape=_trainer_create_shape_ref(config.training_shape_id, profile),
     )
     deployment_shape = config.deployment_shape or (profile.deployment_shape if profile else None)
     with ThreadPoolExecutor(max_workers=3, thread_name_prefix="firetitan-provision") as executor:
@@ -773,6 +773,40 @@ _RESUMABLE_TRAINER_STATES = frozenset(
         "JOB_STATE_COMPLETED",
     }
 )
+
+
+def _is_exact_training_shape_version_pin(ref: str | None) -> bool:
+    """True when ``ref`` names a concrete training-shape version, not latest."""
+    if not ref or "/versions/" not in ref:
+        return False
+    version_id = ref.rsplit("/versions/", 1)[-1].strip()
+    return bool(version_id) and version_id != "latest"
+
+
+def _parent_training_shape_name(ref: str | None) -> str | None:
+    if not ref:
+        return None
+    if "/versions/" not in ref:
+        return ref
+    return ref.split("/versions/", 1)[0]
+
+
+def _trainer_create_shape_ref(requested_shape_id: str | None, profile: Any) -> str | None:
+    """Shape selector to POST on trainer create.
+
+    Callers that already pinned ``.../versions/<id>`` keep that pin. Otherwise
+    POST the parent shape so the control plane resolves latest-validated at
+    launch instead of freezing whatever version ``resolve_training_profile``
+    returned.
+    """
+    if _is_exact_training_shape_version_pin(requested_shape_id):
+        return requested_shape_id
+    if profile is None:
+        return None
+    training_shape = getattr(profile, "training_shape", None)
+    if training_shape:
+        return _parent_training_shape_name(training_shape)
+    return _parent_training_shape_name(getattr(profile, "training_shape_version", None))
 
 
 def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:

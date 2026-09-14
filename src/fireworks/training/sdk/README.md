@@ -123,7 +123,7 @@ profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
 config = TrainerJobConfig(
     base_model="accounts/fireworks/models/qwen3-8b",
     display_name="my-trainer",
-    training_shape_ref=profile.training_shape_version,
+    training_shape_ref=profile.training_shape,
 )
 
 if profile.supports_lora:

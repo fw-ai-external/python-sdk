@@ -288,10 +288,11 @@ class TrainerJobConfig:
         accounts/<account>/trainingShapes/<shape>/versions/<version>
 
     Use :meth:`TrainerJobManager.resolve_training_profile` to resolve a
-    short shape ID to a full versioned reference::
+    short shape ID, then pass the parent shape so launch follows latest
+    validated::
 
         profile = mgr.resolve_training_profile("my-shape")
-        config = TrainerJobConfig(..., training_shape_ref=profile.training_shape_version)
+        config = TrainerJobConfig(..., training_shape_ref=profile.training_shape)
 
     When set, the config is on the **shape path** and infra fields
     (accelerator_type, accelerator_count, node_count) must not be set.
@@ -461,7 +462,7 @@ class TrainerJobManager(FireworksClient):
                     "Expected: accounts/<account>/trainingShapes/<shape>[/versions/<version>]\n"
                     "  Use resolve_training_profile(<short_id>) to get the full resource name:\n"
                     "    profile = mgr.resolve_training_profile('my-shape')\n"
-                    "    config = TrainerJobConfig(..., training_shape_ref=profile.training_shape_version)",
+                    "    config = TrainerJobConfig(..., training_shape_ref=profile.training_shape)",
                 )
             )
 

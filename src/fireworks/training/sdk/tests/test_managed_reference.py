@@ -260,6 +260,56 @@ class TestReferenceManagedConfig:
         assert reference.extra_args == ["--pp=2", ""]
 
 
+class TestTrainerCreateShapeRef:
+    def test_strips_resolved_profile_version(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_strips_version_when_profile_only_has_versioned_name(self):
+        profile = SimpleNamespace(
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_keeps_exact_version_pin_from_caller(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v2",
+        )
+        pinned = "accounts/fireworks/trainingShapes/shape/versions/v1"
+        assert managed_module._trainer_create_shape_ref(pinned, profile) == pinned
+
+    def test_treats_latest_alias_as_unpinned(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape/versions/latest",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_none_without_profile(self):
+        assert managed_module._trainer_create_shape_ref(None, None) is None
+
+
 class TestManagedProvisioning:
     def test_trainer_create_keeps_region_unset_when_user_does_not_set_it(self):
         created_configs = []
