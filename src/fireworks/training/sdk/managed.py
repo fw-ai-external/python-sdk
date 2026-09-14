@@ -206,6 +206,13 @@ class FiretitanProvisioningConfig:
     reservation_target: str | None = None
     """Pin the trainer to a named reservation resource or reservation group."""
 
+    wait_for_trainer_before_deployment: bool = False
+    """Wait for trainer READY before creating the rollout deployment.
+
+    Default overlaps trainer boot with deployment creation. Set true so a
+    queued trainer does not hold serving replicas idle.
+    """
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -558,17 +565,6 @@ def _create_managed_tinker_client(
             started_trainer.job,
             config,
         )
-        deployment_future = None
-        if config.create_deployment:
-            deployment_future = executor.submit(
-                _attach_managed_deployment,
-                deploy_mgr,
-                config,
-                trainer_job_name=started_trainer.job.job_name,
-                deployment_shape=deployment_shape,
-                cmek_resource=cmek_resource,
-            )
-
         reference_future = None
         if reference_config is not None:
             reference_future = executor.submit(
@@ -581,6 +577,18 @@ def _create_managed_tinker_client(
                 hotload_api_url=hotload_api_url,
                 additional_headers=additional_headers,
                 verify_ssl=verify_ssl,
+            )
+        if config.create_deployment and config.wait_for_trainer_before_deployment:
+            trainer_future.result()
+        deployment_future = None
+        if config.create_deployment:
+            deployment_future = executor.submit(
+                _attach_managed_deployment,
+                deploy_mgr,
+                config,
+                trainer_job_name=started_trainer.job.job_name,
+                deployment_shape=deployment_shape,
+                cmek_resource=cmek_resource,
             )
 
         endpoint = trainer_future.result()
