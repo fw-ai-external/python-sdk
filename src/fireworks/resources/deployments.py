@@ -177,7 +177,10 @@ class DeploymentsResource(SyncAPIResource):
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
-              together. Omitting `deployment_shape` — whether or not you set
+              together. Use
+              `client.deployment_shape_versions.match_for_model(base_model)` to find
+              the shapes your account can deploy this model on, then pass one here.
+              Omitting `deployment_shape` — whether or not you set
               `accelerator_type`, `accelerator_count`, or `precision` — creates the
               deployment without a shape, which skips validation. Deployments without a
               shape are the most common cause of failed deployment creations, and the
@@ -426,7 +429,10 @@ class DeploymentsResource(SyncAPIResource):
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
-              together. Omitting `deployment_shape` — whether or not you set
+              together. Use
+              `client.deployment_shape_versions.match_for_model(base_model)` to find
+              the shapes your account can deploy this model on, then pass one here.
+              Omitting `deployment_shape` — whether or not you set
               `accelerator_type`, `accelerator_count`, or `precision` — creates the
               deployment without a shape, which skips validation. Deployments without a
               shape are the most common cause of failed deployment creations, and the
@@ -994,7 +1000,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
-              together. Omitting `deployment_shape` — whether or not you set
+              together. Use
+              `client.deployment_shape_versions.match_for_model(base_model)` to find
+              the shapes your account can deploy this model on, then pass one here.
+              Omitting `deployment_shape` — whether or not you set
               `accelerator_type`, `accelerator_count`, or `precision` — creates the
               deployment without a shape, which skips validation. Deployments without a
               shape are the most common cause of failed deployment creations, and the
@@ -1243,7 +1252,10 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
-              together. Omitting `deployment_shape` — whether or not you set
+              together. Use
+              `client.deployment_shape_versions.match_for_model(base_model)` to find
+              the shapes your account can deploy this model on, then pass one here.
+              Omitting `deployment_shape` — whether or not you set
               `accelerator_type`, `accelerator_count`, or `precision` — creates the
               deployment without a shape, which skips validation. Deployments without a
               shape are the most common cause of failed deployment creations, and the
