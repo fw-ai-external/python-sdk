@@ -5,6 +5,7 @@
 Full Changelog: [v1.2.11...v1.2.12](https://github.com/fw-ai-external/python-sdk/compare/v1.2.11...v1.2.12)
 
 ### Bug Fixes
+* **training-sdk:** stop sending the obsolete managed-rollout deployment annotation
 * **training-sdk:** wait for control-plane readiness when reattaching rollout deployments
 * **training-sdk:** deprecate explicit reference shapes for LoRA policies in favor of shared-session base references
 

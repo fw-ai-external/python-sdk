@@ -17,7 +17,6 @@ from fireworks.training.sdk.managed import (
     _create_or_reattach_deployment,
     _create_or_reattach_deployment_result,
 )
-from fireworks.training.sdk._constants import SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION
 from fireworks.training.sdk.deployment import DeploymentInfo
 
 SHAPE = "accounts/acct/deploymentShapes/rft-x"
@@ -103,9 +102,7 @@ def test_managed_deployment_does_not_inherit_trainer_skip_validations():
     deployment_config = deploy_mgr.create_or_get.call_args.args[0]
     assert deployment_config.skip_shape_validation is False
     assert deployment_config.for_training is True
-    assert deployment_config.annotations == {
-        SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"
-    }
+    assert deployment_config.annotations is None
 
 
 def test_generated_deployment_id_is_stored_for_retry(monkeypatch):

@@ -32,7 +32,6 @@ from fireworks.training.sdk._constants import (
     DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
-    SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION,
     DeploymentCleanupOnClose,
 )
 from fireworks.training.sdk.deployment import (
@@ -994,7 +993,6 @@ def _create_or_reattach_deployment_result(
         disable_speculative_decoding=config.disable_speculative_decoding,
         extra_args=config.deployment_extra_args,
         extra_values=config.deployment_extra_values,
-        annotations={SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"},
         preemptible=config.preemptible,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)

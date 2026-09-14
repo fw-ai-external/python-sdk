@@ -20,9 +20,6 @@ CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE: DeploymentCleanupOnClose = "delete"
 CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO: DeploymentCleanupOnClose = "scale_to_zero"
 """Scale the SDK-created deployment to zero replicas when the service client closes."""
 
-SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION = "fireworks-training-sdk/managed-rollout"
-"""Deployment annotation marking SDK-managed rollout infrastructure."""
-
 # -- Resource provisioning waits ---------------------------------------------
 
 DEFAULT_TRAINER_TIMEOUT_S: float = 3600.0
