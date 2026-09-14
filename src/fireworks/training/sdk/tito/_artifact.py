@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import zlib
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -21,10 +22,25 @@ from fireworks.training.sdk.tito._types import (
     TITOResponseAttempt,
     TITOTrajectoryArtifact,
     _freeze_json,
-    _canonical_bytes,
 )
 
 _MAGIC = b"TITOART\x01"
+_ENCODE_BUFFER_CHARACTERS = 64 * 1024
+_JSON_THREAD_YIELD_INTERVAL_SECONDS = 0.01
+
+
+def _load_artifact_json(payload: bytes | str) -> Any:
+    """Preserve standard JSON decoding while allowing other SDK threads to run."""
+    last_yield = time.monotonic()
+
+    def decoded_object(value: dict[str, Any]) -> dict[str, Any]:
+        nonlocal last_yield
+        if time.monotonic() - last_yield >= _JSON_THREAD_YIELD_INTERVAL_SECONDS:
+            time.sleep(0)
+            last_yield = time.monotonic()
+        return value
+
+    return json.loads(payload, object_hook=decoded_object)
 
 
 def _server_metrics_value(value: ServerMetrics | None) -> dict[str, Any] | None:
@@ -163,7 +179,28 @@ def _artifact_value(value: TITOTrajectoryArtifact) -> dict[str, Any]:
 
 def pack_trajectory_artifact(value: TITOTrajectoryArtifact) -> bytes:
     """Encode one artifact into the stable v1 wire representation."""
-    return _MAGIC + zlib.compress(_canonical_bytes(_artifact_value(value)), level=6)
+    encoder = json.JSONEncoder(
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    compressor = zlib.compressobj(level=6)
+    compressed = [_MAGIC]
+    pending: list[str] = []
+    characters = 0
+    # Do not retain a complete JSON string and its UTF-8 copy alongside every
+    # captured prompt. A late non-ASCII character can widen that entire string.
+    for fragment in encoder.iterencode(_artifact_value(value)):
+        pending.append(fragment)
+        characters += len(fragment)
+        if characters >= _ENCODE_BUFFER_CHARACTERS:
+            compressed.append(compressor.compress("".join(pending).encode("utf-8")))
+            pending.clear()
+            characters = 0
+    if pending:
+        compressed.append(compressor.compress("".join(pending).encode("utf-8")))
+    compressed.append(compressor.flush())
+    return b"".join(compressed)
 
 
 def _server_metrics(raw: Mapping[str, Any] | None) -> ServerMetrics | None:
@@ -187,7 +224,7 @@ def _request(raw: Mapping[str, Any]) -> TITOChatRequest:
     wire_request = raw.get("wire_request")
     if isinstance(wire_request_body, str):
         try:
-            decoded_wire_request = json.loads(wire_request_body)
+            decoded_wire_request = _load_artifact_json(wire_request_body)
         except json.JSONDecodeError:
             pass
         else:
@@ -254,7 +291,7 @@ def unpack_trajectory_artifact(payload: bytes) -> TITOTrajectoryArtifact:
     try:
         if not payload.startswith(_MAGIC):
             raise ValueError("missing TITO artifact magic/version")
-        raw = json.loads(zlib.decompress(payload[len(_MAGIC) :]))
+        raw = _load_artifact_json(zlib.decompress(payload[len(_MAGIC) :]))
         if raw.get("schema_version") != 1:
             raise ValueError(f"unsupported TITO artifact schema: {raw.get('schema_version')!r}")
         metrics = raw["metrics"]

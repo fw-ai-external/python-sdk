@@ -34,8 +34,9 @@ from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture
 
 import httpx
+import numpy as np
 from tinker import SamplingClient, types
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from tinker.lib.telemetry import Telemetry
 from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
@@ -54,6 +55,7 @@ from tinker.lib.public_interfaces.training_client import (
 # exists after ``_tinker_lora_alpha_patch`` runs; importing it here guarantees
 # the field is present whenever this module is loaded (the patch is idempotent).
 import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
+from fireworks.training.sdk._comms import Comms, comms_context
 from fireworks.training.sdk._constants import (
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
@@ -72,6 +74,7 @@ from fireworks.training.sdk._snapshot_chain import (
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
 )
+from fireworks.training.sdk.patches._tinker_result_validation_patch import CommsV2APIFuture
 
 
 class LoadAdapterResponse(BaseModel):
@@ -103,6 +106,19 @@ _TINKER_AUTH_PROVIDER_PATCH_LOCK = threading.Lock()
 
 class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
     base_only: bool = True
+
+
+class _CreateModelResponse(types.CreateModelResponse):
+    """Retain the selected trainer's optional communication capability."""
+
+    comms: Comms = "v1"
+    model_config = {"protected_namespaces": ()}
+
+    @field_validator("comms", mode="before")
+    @classmethod
+    def _known_value_type(cls, value: Any) -> Comms:
+        # Unknown optional capabilities must not break otherwise valid models.
+        return "v2" if value == "v2" else "v1"
 
 
 class FiretitanSamplingParams(types.SamplingParams):
@@ -991,17 +1007,17 @@ def _create_base_only_training_client(
                     user_metadata=user_metadata,
                 ),
             )
-        resp = await _APIFuture(
-            types.CreateModelResponse,
+        return await _APIFuture(
+            _CreateModelResponse,
             holder,
             future,
             request_start_time=start,
             request_type=request_type,
             queue_state_observer=QueueStateLogger(base_model, "Base model creation"),
         ).result_async()
-        return resp.model_id
 
-    model_id = holder.run_coroutine_threadsafe(_create()).result()
+    response = holder.run_coroutine_threadsafe(_create()).result()
+    model_id = response.model_id
     logger.info("Created base-only model %s (reference)", model_id)
     # Base-only reference models are not run-scoped (model_id is a base id), so
     # they have no run_name; the owning session lives on the service client.
@@ -1010,6 +1026,7 @@ def _create_base_only_training_client(
         model_seq_id=model_seq_id,
         model_id=model_id,
         lora_rank=0,
+        comms=response.comms,
     )
 
 
@@ -1129,6 +1146,12 @@ def qualify_snapshot_name(session_id: str, name: str) -> str:
     return f"{name}-{session_id}"
 
 
+def _tensor_value_count(tensor: types.TensorData) -> int:
+    if getattr(tensor, "sparse_crow_indices", None) is not None:
+        return len(tensor.data)
+    return int(tensor.to_numpy().size)
+
+
 def _count_response_tokens(data: list[types.Datum]) -> float:
     """Count response tokens in a cross-entropy batch.
 
@@ -1141,12 +1164,15 @@ def _count_response_tokens(data: list[types.Datum]) -> float:
         loss_fn_inputs = datum.loss_fn_inputs
         weights = loss_fn_inputs.get("weights")
         if weights is not None:
-            total += float(sum(1 for value in weights.data if value != 0))
+            if getattr(weights, "sparse_crow_indices", None) is not None:
+                total += float(sum(1 for value in weights.data if value != 0))
+            else:
+                total += float(np.count_nonzero(weights.to_numpy()))
             continue
 
         target_tokens = loss_fn_inputs.get("target_tokens")
         if target_tokens is not None:
-            total += float(len(target_tokens.data))
+            total += float(_tensor_value_count(target_tokens))
 
     return total
 
@@ -1242,8 +1268,7 @@ def _r3_request_issues(data: list[types.Datum]) -> list[str]:
     """Return missing/misaligned R3 data immediately before trainer send."""
     issues: list[str] = []
     for datum_index, datum in enumerate(data):
-        raw_datum = _dump_tinker_model(datum)
-        routing_matrices = raw_datum.get("model_input", {}).get("routing_matrices")
+        routing_matrices = getattr(datum.model_input, "routing_matrices", None)
         if routing_matrices is None:
             # No routing_matrices field means this is not an R3 datum.
             continue
@@ -1437,7 +1462,11 @@ class FiretitanTrainingClient(TrainingClient):
         lora_rank: int = 0,
         first_sampler_checkpoint_type: SamplerCheckpointType = "base",
         run_name: str | None = None,
+        comms: Comms = "v1",
     ):
+        if comms not in ("v1", "v2"):
+            raise ValueError("comms must be 'v1' or 'v2'")
+        self._comms = comms
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
@@ -1505,6 +1534,14 @@ class FiretitanTrainingClient(TrainingClient):
             explicit=checkpoint_type,
         )
 
+    @property
+    def comms(self) -> Comms:
+        """Communication version negotiated with this model's trainer."""
+        return getattr(self, "_comms", "v1")
+
+    def _comms_request_body(self) -> dict[str, str]:
+        return {"comms": "v2"} if self.comms == "v2" else {}
+
     def _parallel_chunks_enabled(self) -> bool:
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
@@ -1517,8 +1554,12 @@ class FiretitanTrainingClient(TrainingClient):
         return holder is not None and hasattr(holder, "estimate_bytes_count_in_model_input")
 
     def _estimate_bytes_count(self, datum: types.Datum) -> int:
-        """Include Fireworks' R3 payload in Tinker's chunk-size estimate."""
-        return super()._estimate_bytes_count(datum) + _routing_matrices_wire_bytes(datum.model_input)
+        """Preserve the size estimate without materializing tensor value lists."""
+        return (
+            self.holder.estimate_bytes_count_in_model_input(datum.model_input)
+            + sum(_tensor_value_count(value) * 10 for value in datum.loss_fn_inputs.values())
+            + _routing_matrices_wire_bytes(datum.model_input)
+        )
 
     async def _run_chunked_requests(
         self,
@@ -1547,7 +1588,8 @@ class FiretitanTrainingClient(TrainingClient):
                     request_id,
                     chunk,
                 )
-                return _APIFuture(
+                future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
+                return future_type(
                     types.ForwardBackwardOutput,
                     self.holder,
                     untyped_future,
@@ -1570,15 +1612,14 @@ class FiretitanTrainingClient(TrainingClient):
                 futures = []
                 for request_id, chunk in requests:
                     futures.append(await _submit_chunk(request_id, chunk))
-            else:
+            elif self.comms != "v2":
+                # Preserve the existing parallel submission order by default.
                 rest_semaphore = asyncio.Semaphore(concurrency - 1)
                 rest_tasks = [
                     asyncio.create_task(_submit_limited(rest_semaphore, request_id, chunk))
                     for request_id, chunk in requests[1:]
                 ]
                 try:
-                    # Let later chunks enter the transport queue first without
-                    # making the first/gate chunk wait for every later ack.
                     await asyncio.sleep(0)
                     first_request_id, first_chunk = requests[0]
                     first_future = await _submit_chunk(first_request_id, first_chunk)
@@ -1588,6 +1629,25 @@ class FiretitanTrainingClient(TrainingClient):
                     for task in rest_tasks:
                         task.cancel()
                     await asyncio.gather(*rest_tasks, return_exceptions=True)
+                    raise
+            else:
+                semaphore = asyncio.Semaphore(concurrency)
+                # The trainer consumes sequence IDs in order. Start the first
+                # chunk before serializing later chunks so it can reach the
+                # trainer while the rest of this logical request is prepared.
+                tasks = []
+                try:
+                    for request_id, chunk in requests:
+                        tasks.append(asyncio.create_task(_submit_limited(semaphore, request_id, chunk)))
+                        # Conversion before the first await is synchronous.
+                        # Let earlier requests continue toward the transport
+                        # before preparing another chunk on this event loop.
+                        await asyncio.sleep(0)
+                    futures = list(await asyncio.gather(*tasks))
+                except BaseException:
+                    for task in tasks:
+                        task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
                     raise
         else:
             futures = list(await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests]))
@@ -1610,8 +1670,9 @@ class FiretitanTrainingClient(TrainingClient):
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.training.forward(request=request)
+        with comms_context(self.comms), self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            kwargs = {"extra_body": self._comms_request_body()} if self.comms == "v2" else {}
+            return await client.training.forward(request=request, **kwargs)
 
     def forward(
         self,
@@ -1666,8 +1727,9 @@ class FiretitanTrainingClient(TrainingClient):
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.training.forward_backward(request=request)
+        with comms_context(self.comms), self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+            kwargs = {"extra_body": self._comms_request_body()} if self.comms == "v2" else {}
+            return await client.training.forward_backward(request=request, **kwargs)
 
     def optim_step(
         self,
@@ -1813,15 +1875,16 @@ class FiretitanTrainingClient(TrainingClient):
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
-        fwd_input_dict = _serialize_input_for_extra_body(fwd_input)
-        fwd_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
-        extra_body = {"forward_input": fwd_input_dict}
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.training.forward(
-                request=request,
-                extra_body=extra_body,
-            )
+        with comms_context(self.comms):
+            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+            fwd_input_dict = _serialize_input_for_extra_body(fwd_input)
+            fwd_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
+            extra_body = {**self._comms_request_body(), "forward_input": fwd_input_dict}
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                return await client.training.forward(
+                    request=request,
+                    extra_body=extra_body,
+                )
 
     async def _send_single_forward_backward_embedding_request(
         self,
@@ -1840,15 +1903,16 @@ class FiretitanTrainingClient(TrainingClient):
             model_id=self._guaranteed_model_id(),
             seq_id=request_id + 1,
         )
-        # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
-        fb_input_dict = _serialize_input_for_extra_body(fb_input)
-        fb_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
-        extra_body = {"forward_backward_input": fb_input_dict}
-        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-            return await client.training.forward_backward(
-                request=request,
-                extra_body=extra_body,
-            )
+        with comms_context(self.comms):
+            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+            fb_input_dict = _serialize_input_for_extra_body(fb_input)
+            fb_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
+            extra_body = {**self._comms_request_body(), "forward_backward_input": fb_input_dict}
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                return await client.training.forward_backward(
+                    request=request,
+                    extra_body=extra_body,
+                )
 
     def _build_embedding_requests(
         self,
@@ -2225,21 +2289,23 @@ class FiretitanTrainingClient(TrainingClient):
                 model_id=self._guaranteed_model_id(),
                 seq_id=request_id + 1,
             )
-            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
-            fb_input_dict = _serialize_input_for_extra_body(fb_input)
-            fb_input_dict["loss_fn_config"] = loss_fn_config
-            extra_body = {"forward_backward_input": fb_input_dict}
-            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-                return await client.training.forward_backward(
-                    request=request,
-                    extra_body=extra_body,
-                )
+            with comms_context(self.comms):
+                # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+                fb_input_dict = _serialize_input_for_extra_body(fb_input)
+                fb_input_dict["loss_fn_config"] = loss_fn_config
+                extra_body = {**self._comms_request_body(), "forward_backward_input": fb_input_dict}
+                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                    return await client.training.forward_backward(
+                        request=request,
+                        extra_body=extra_body,
+                    )
 
         start = time.time()
         async with self._take_turn(request_id):
             untyped_future = await self.holder.execute_with_retries(_send)
 
-        return _APIFuture(
+        future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
+        return future_type(
             types.ForwardBackwardOutput,
             self.holder,
             untyped_future,
@@ -2721,6 +2787,10 @@ class FiretitanServiceClient(ServiceClient):
 
     Managed instances are lazy: they do not create a Tinker holder until the
     SDK has provisioned or reattached a FireTitan trainer endpoint.
+
+    Each training client automatically selects optimized requests when its
+    model-creation response advertises ``comms="v2"``. Older trainers retain
+    the legacy request path. Inspect ``training_client.comms`` for the selected version.
     """
 
     def __init__(self, *args, api_key: str | None = None, **kwargs):
@@ -3380,17 +3450,17 @@ class FiretitanServiceClient(ServiceClient):
                         user_metadata=self._user_metadata(user_metadata),
                     ),
                 )
-            resp = await _APIFuture(
-                types.CreateModelResponse,
+            return await _APIFuture(
+                _CreateModelResponse,
                 self.holder,
                 future,
                 request_start_time=start,
                 request_type="CreateModel",
                 queue_state_observer=QueueStateLogger(base_model, "Model creation"),
             ).result_async()
-            return resp.model_id
 
-        model_id = self.holder.run_coroutine_threadsafe(_create()).result()
+        response = self.holder.run_coroutine_threadsafe(_create()).result()
+        model_id = response.model_id
         self._created_training_configs.add(config_key)
         logger.info("Created model %s (lora_rank=%d)", model_id, lora_rank)
 
@@ -3400,6 +3470,7 @@ class FiretitanServiceClient(ServiceClient):
             model_id=model_id,
             lora_rank=lora_rank,
             run_name=self._serverless_run_name(model_id),
+            comms=response.comms,
         )
 
     def create_lora_training_client(

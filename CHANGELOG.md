@@ -7,6 +7,8 @@ Full Changelog: [v1.2.11...v1.2.12](https://github.com/fw-ai-external/python-sdk
 ### Bug Fixes
 * **training-sdk:** stop sending the obsolete managed-rollout deployment annotation
 * **training-sdk:** wait for control-plane readiness when reattaching rollout deployments
+* **training-sdk:** avoid copying dense tensor values when sizing requests for every client
+* **training-sdk:** automatically negotiate optimized training requests for dedicated and serverless trainers advertising `comms="v2"`; missing or unknown capabilities preserve `comms="v1"` and its original request format without a manual flag
 * **training-sdk:** deprecate explicit reference shapes for LoRA policies in favor of shared-session base references
 
 ## 1.2.11 (2026-08-31)
