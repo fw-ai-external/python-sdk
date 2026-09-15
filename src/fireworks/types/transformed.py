@@ -13,8 +13,6 @@ __all__ = ["Transformed"]
 class Transformed(BaseModel):
     source_dataset_id: str = FieldInfo(alias="sourceDatasetId")
 
-    filter: Optional[str] = None
-
     original_format: Optional[Literal["FORMAT_UNSPECIFIED", "CHAT", "COMPLETION", "RL"]] = FieldInfo(
         alias="originalFormat", default=None
     )

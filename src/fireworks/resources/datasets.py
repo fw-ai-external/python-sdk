@@ -69,7 +69,6 @@ class DatasetsResource(SyncAPIResource):
         account_id: str | None = None,
         dataset: DatasetParam,
         dataset_id: str,
-        filter: str | Omit = omit,
         source_dataset_id: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -101,7 +100,6 @@ class DatasetsResource(SyncAPIResource):
                 {
                     "dataset": dataset,
                     "dataset_id": dataset_id,
-                    "filter": filter,
                     "source_dataset_id": source_dataset_id,
                 },
                 dataset_create_params.DatasetCreateParams,
@@ -587,7 +585,6 @@ class AsyncDatasetsResource(AsyncAPIResource):
         account_id: str | None = None,
         dataset: DatasetParam,
         dataset_id: str,
-        filter: str | Omit = omit,
         source_dataset_id: str | Omit = omit,
         # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
@@ -619,7 +616,6 @@ class AsyncDatasetsResource(AsyncAPIResource):
                 {
                     "dataset": dataset,
                     "dataset_id": dataset_id,
-                    "filter": filter,
                     "source_dataset_id": source_dataset_id,
                 },
                 dataset_create_params.DatasetCreateParams,
