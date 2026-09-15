@@ -21,7 +21,7 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 Fireworks-specific additions:
 
 - `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`. Merged-base output defaults to the source storage format; use `export_precision="bf16"`, `"nvfp4"`, `"mxfp8"`, or `"fp8_block128"` only for an explicit output override.
-- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save.
+- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save. Prefer a Fireworks PEFT model resource (`accounts/<acct>/models/<lora-id>`); a `gs://` PEFT directory also works.
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
 

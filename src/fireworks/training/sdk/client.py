@@ -2093,9 +2093,7 @@ class FiretitanTrainingClient(TrainingClient):
         try:
             import torch
         except ImportError as err:
-            raise ImportError(
-                "PyTorch is not installed. Cannot run custom forward_backward."
-            ) from err
+            raise ImportError("PyTorch is not installed. Cannot run custom forward_backward.") from err
 
         outputs = precomputed_forward.loss_fn_outputs
         if len(outputs) != len(data):
@@ -2110,9 +2108,7 @@ class FiretitanTrainingClient(TrainingClient):
             if target_tokens is None:
                 raise ValueError(f"Datum {index} is missing target_tokens")
             if "logprobs" not in out:
-                raise ValueError(
-                    f"precomputed_forward output {index} is missing logprobs"
-                )
+                raise ValueError(f"precomputed_forward output {index} is missing logprobs")
 
             logprob_data = out["logprobs"]
             if len(logprob_data.data) != len(target_tokens.data):
@@ -2126,22 +2122,16 @@ class FiretitanTrainingClient(TrainingClient):
                 try:
                     logprob = logprob.reshape(logprob_data.shape)
                 except (RuntimeError, ValueError) as err:
-                    raise ValueError(
-                        f"precomputed_forward output {index} has an invalid logprob shape"
-                    ) from err
+                    raise ValueError(f"precomputed_forward output {index} has an invalid logprob shape") from err
             logprobs_list.append(logprob.clone().detach().requires_grad_(True))
 
         loss, metrics = loss_fn(data, logprobs_list)
         loss.backward()
 
         linear_loss_data = []
-        for index, (datum, logprob) in enumerate(
-            zip(data, logprobs_list, strict=True)
-        ):
+        for index, (datum, logprob) in enumerate(zip(data, logprobs_list, strict=True)):
             if logprob.grad is None:
-                raise ValueError(
-                    f"No gradient computed for precomputed logprob tensor {index}"
-                )
+                raise ValueError(f"No gradient computed for precomputed logprob tensor {index}")
             linear_loss_data.append(
                 types.Datum(
                     model_input=datum.model_input,
@@ -2742,7 +2732,12 @@ class FiretitanTrainingClient(TrainingClient):
         return self.load_state_with_optimizer(path, weights_access_token=weights_access_token)
 
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
-        """Load HF PEFT adapter weights into a LoRA training session (weights-only)."""
+        """Load HF PEFT adapter weights into a LoRA training session (weights-only).
+
+        ``adapter_path`` is normally a Fireworks PEFT model resource
+        (``accounts/<acct>/models/<lora-id>``). A ``gs://`` PEFT directory also
+        works when you already have the adapter files.
+        """
         adapter_path = (adapter_path or "").strip()
         if not adapter_path:
             raise ValueError("adapter_path must be a non-empty string")
@@ -4003,7 +3998,9 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        model = (
+            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        )
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,
@@ -4104,7 +4101,9 @@ class FiretitanServiceClient(ServiceClient):
             if self._service_closed:
                 raise RuntimeError("FiretitanServiceClient is closed")
             if base_model is not None:
-                _warn_deprecated_override("create_reference_client", "base_model", base_model, managed_config.base_model)
+                _warn_deprecated_override(
+                    "create_reference_client", "base_model", base_model, managed_config.base_model
+                )
             max_lora_rank = getattr(managed_config, "max_lora_rank", None)
             if max_lora_rank is not None:
                 if policy_client is None:
