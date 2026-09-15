@@ -629,8 +629,8 @@ class TestCreate:
             display_name="valid-name",
         )
         body_message = (
-            "B200/B300 training requires a Tier 2 account or higher. "
-            "Add $50 in credits to unlock training quota automatically."
+            "B200/B300 training requires a payment method on file. "
+            "Add a payment method or $50 in credits to unlock training quota automatically."
         )
         resp = httpx.Response(
             403,
