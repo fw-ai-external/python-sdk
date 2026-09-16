@@ -1,9 +1,10 @@
-"""Unit tests for the session-scoped checkpoint methods on FireworksClient.
+"""Unit tests for scoped checkpoint methods on FireworksClient.
 
 These cover promote_session_checkpoint + list_training_session_checkpoints —
 the serverless analogs of promote_checkpoint / list_checkpoints used by the
-cookbook sft_loop serverless mode. They mock the HTTP layer so they assert the
-exact request path/body/parsing without a live gateway.
+cookbook sft_loop serverless mode — plus the managed SFT/DPO checkpoint
+helpers. They mock the HTTP layer so they assert the exact request
+path/body/parsing without a live gateway.
 """
 
 # Strict pyright flags the loosely-typed HTTP mocks below (untyped dict bodies,
@@ -34,7 +35,9 @@ class _FakeResp:
 
 
 def _client() -> FireworksClient:
-    return FireworksClient(api_key="fw_test", base_url="https://api.example")
+    client = FireworksClient(api_key="fw_test", base_url="https://api.example")
+    client._account_id = "acct1"
+    return client
 
 
 def test_promote_session_checkpoint_builds_request():
@@ -141,3 +144,91 @@ def test_list_training_session_checkpoints_raises_on_http_error():
     c._get = fake_get  # type: ignore[assignment]
     with pytest.raises(RuntimeError):
         c.list_training_session_checkpoints("accounts/a/trainingSessions/s")
+
+
+@pytest.mark.parametrize("collection", ["supervisedFineTuningJobs", "dpoJobs"])
+def test_list_training_job_checkpoints_paginates_and_parses(collection):
+    c = _client()
+    calls: list[str] = []
+    pages = [
+        {
+            "checkpoints": [
+                {
+                    "name": f"accounts/acct1/{collection}/sft-1/checkpoints/step-5",
+                    "promotable": True,
+                }
+            ],
+            "nextPageToken": "step-5",
+        },
+        {
+            "checkpoints": [
+                {
+                    "name": f"accounts/acct1/{collection}/sft-1/checkpoints/step-10",
+                    "promotable": False,
+                }
+            ]
+        },
+    ]
+
+    def fake_get(path, **_kwargs):
+        calls.append(path)
+        return _FakeResp(payload=pages[len(calls) - 1])
+
+    c._get = fake_get  # type: ignore[assignment]
+    rows = c.list_training_job_checkpoints(f"accounts/{c.account_id}/{collection}/sft-1", page_size=50)
+
+    assert calls[0] == (f"/v1/accounts/{c.account_id}/{collection}/sft-1/checkpoints?pageSize=50")
+    assert "pageToken=step-5" in calls[1]
+    assert [r["name"].rsplit("/", 1)[-1] for r in rows] == ["step-5", "step-10"]
+
+
+@pytest.mark.parametrize("collection", ["supervisedFineTuningJobs", "dpoJobs"])
+def test_promote_training_job_checkpoint_builds_request(collection):
+    c = _client()
+    captured: dict = {}
+
+    def fake_post(path, *, json, **_kwargs):
+        captured["path"] = path
+        captured["body"] = json
+        return _FakeResp(payload={"model": {"state": "READY", "kind": "HF_PEFT_ADDON"}})
+
+    c._post = fake_post  # type: ignore[assignment]
+    name = f"accounts/acct1/{collection}/job-1/checkpoints/step-5"
+    model = c.promote_training_job_checkpoint(
+        name=name,
+        output_model_id="my-out",
+        base_model="accounts/fireworks/models/qwen3-8b",
+    )
+
+    assert captured["path"] == f"/v1/{name}:promote"
+    assert captured["body"] == {
+        "output_model": "accounts/acct1/models/my-out",
+        "base_model": "accounts/fireworks/models/qwen3-8b",
+        "async_promotion": True,
+    }
+    assert "trainer_job_id" not in captured["body"]
+    assert "hot_load_deployment_id" not in captured["body"]
+    assert model["state"] == "READY"
+
+
+def test_promote_training_job_checkpoint_rejects_bad_name():
+    with pytest.raises(ValueError):
+        _client().promote_training_job_checkpoint(
+            name="accounts/a/rlorTrainerJobs/j/checkpoints/c",
+            output_model_id="x",
+            base_model="b",
+        )
+
+
+@pytest.mark.parametrize(
+    "parent",
+    [
+        "accounts/a/rlorTrainerJobs/j",
+        "accounts/a/trainingSessions/s",
+        "accounts/a/dpoJobs/",
+        "accounts/a/supervisedFineTuningJobs/j/extra",
+    ],
+)
+def test_list_training_job_checkpoints_rejects_bad_parent(parent):
+    with pytest.raises(ValueError):
+        _client().list_training_job_checkpoints(parent)

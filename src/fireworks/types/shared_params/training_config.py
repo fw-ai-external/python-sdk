@@ -22,6 +22,16 @@ class TrainingConfig(TypedDict, total=False):
     batch_size_samples: Annotated[int, PropertyInfo(alias="batchSizeSamples")]
     """The number of samples per gradient batch."""
 
+    sampler_checkpoint_save_interval_steps: Annotated[
+        int, PropertyInfo(alias="samplerCheckpointSaveIntervalSteps")
+    ]
+    """
+    Step interval for promotable sampler checkpoints in managed SFT/DPO jobs.
+    A positive value enables periodic sampler checkpoints. When omitted or set
+    to 0, no intermediate sampler checkpoints are saved. Resumable DCP
+    checkpoints use a separate server-managed cadence.
+    """
+
     epochs: int
     """The number of epochs to train for."""
 

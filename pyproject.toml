@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.11"
+version = "1.2.12"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -47,6 +47,9 @@ Repository = "https://github.com/fw-ai-external/python-sdk"
 # Use this for CI, deployment, and programmatic training job management.
 training-sdk = [
   "tinker==0.23.0 ; python_version >= '3.11'",
+  # Request validation uses FailFast; keep the control-plane runtime supported.
+  "pydantic>=2.9.2,<2.13",
+  "orjson>=3.10.0",
   # Tinker 0.23 constructs pyqwest.HTTPTransport() without opting into system
   # TLS roots. pyqwest 0.7 changed that constructor default, breaking HTTPS.
   "pyqwest==0.6.2 ; python_version >= '3.11'",

@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import time
+import zlib
 import asyncio
 import hashlib
 import threading
@@ -32,6 +33,7 @@ from fireworks.training.sdk.sampling import (
     SampledServerAttempt,
 )
 from fireworks.training.sdk.tito_debug import TITOLocalDebugSink, TITOLocalDebugConfig
+from fireworks.training.sdk.tito._types import _freeze_json, _copy_json_in_order
 from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
 
 
@@ -958,9 +960,47 @@ async def test_trajectory_engine_uses_real_deployment_sampler_request_path() -> 
     assert calls[0]["max_tokens"] == 16
 
 
+@pytest.mark.parametrize("copy", [_freeze_json, _copy_json_in_order])
+def test_json_copy_preserves_order_values_and_detaches_shared_containers(copy):
+    class FloatSubclass(float):
+        pass
+
+    values = [None, True, -0.0, FloatSubclass(0.125), "é🔥", float("nan"), float("inf"), 2**200]
+    shared = {"z": values, "a": (1, 2)}
+    source = MappingProxyType({"z": shared, "a": shared, 1: object(), "1": "valid surviving value"})
+    expected_shared = {"z": list(values), "a": [1, 2]}
+    expected = {"z": expected_shared, "a": expected_shared, "1": "valid surviving value"}
+    expected = json.loads(json.dumps(expected, sort_keys=copy is _freeze_json))
+    actual = copy(source)
+    # Comparing serialized output checks nested key order, NaN, and signed zero.
+    assert json.dumps(actual) == json.dumps(expected)
+    assert type(actual["z"]["z"][3]) is float
+    actual["z"]["z"].append("changed")
+    assert len(values) == len(actual["a"]["z"]) == 8
+
+
+@pytest.mark.parametrize("copy", [_freeze_json, _copy_json_in_order])
+@pytest.mark.parametrize("invalid", [object(), b"bytes", {1, 2}, complex(1, 2)])
+def test_json_copy_rejects_non_json_values(copy, invalid):
+    with pytest.raises(TITOError) as failure:
+        copy({"nested": [invalid]})
+    assert failure.value.code == "tito_invalid_request"
+
+
+@pytest.mark.parametrize("copy", [_freeze_json, _copy_json_in_order])
+def test_json_copy_preserves_integer_digit_limit(copy):
+    if not hasattr(sys, "get_int_max_str_digits") or not sys.get_int_max_str_digits():
+        pytest.skip("This Python runtime has no integer digit limit")
+    with pytest.raises(TITOError):
+        copy(10 ** (sys.get_int_max_str_digits() + 10))
+
+
 async def test_compact_trajectory_artifact_round_trip_is_versioned_and_exact() -> None:
     engine = _engine(FakeSampler(outputs=([197, 3],)))
-    trajectory_id = engine.create_trajectory(metadata={"task": "codec"})
+    # Exercise multiple UTF-8/compression buffers; small artifacts are covered by other sidecar tests.
+    trajectory_id = engine.create_trajectory(
+        metadata={"task": "codec", "unicode": "é🔥" * 40000, "tokens": list(range(20000))},
+    )
     wire_body = json.dumps(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -990,6 +1030,11 @@ async def test_compact_trajectory_artifact_round_trip_is_versioned_and_exact() -
     restored = type(artifact).unpack(packed)
 
     assert packed.startswith(b"TITOART\x01")
+    # Preserve the legacy v1 representation, including compression bytes, while
+    # allowing the encoder to avoid materializing the entire JSON document.
+    body = zlib.decompress(packed[len(b"TITOART\x01") :])
+    canonical = json.dumps(json.loads(body), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    assert packed == b"TITOART\x01" + zlib.compress(canonical, level=6)
     assert restored == artifact
     restored_parameters = restored.segments[0].turns[0].request.wire_value()["tools"][0]["function"]["parameters"]
     assert list(restored_parameters) == ["type", "properties", "required"]

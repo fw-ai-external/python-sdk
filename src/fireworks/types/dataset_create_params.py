@@ -17,6 +17,4 @@ class DatasetCreateParams(TypedDict, total=False):
 
     dataset_id: Required[Annotated[str, PropertyInfo(alias="datasetId")]]
 
-    filter: str
-
     source_dataset_id: Annotated[str, PropertyInfo(alias="sourceDatasetId")]

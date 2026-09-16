@@ -32,7 +32,6 @@ from fireworks.training.sdk._constants import (
     DEFAULT_TRAINER_PENDING_TIMEOUT_S,
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
-    SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION,
     DeploymentCleanupOnClose,
 )
 from fireworks.training.sdk.deployment import (
@@ -139,9 +138,9 @@ class FiretitanProvisioningConfig:
     managed behavior.
     """
     training_shape_id: str | None = None
-    # Optional separate reference trainer shape. Rank-0 references accept
-    # LORA_TRAINER (preferred) or FORWARD_ONLY. Without this, the backend
-    # auto-selects a LoRA-capable shape.
+    # Optional separate reference trainer shape for rank-0 policies. Rank-0
+    # references accept LORA_TRAINER (preferred) or FORWARD_ONLY. For LoRA
+    # policies this is deprecated; omit it to share the policy trainer.
     reference_training_shape_id: str | None = None
     # Optional existing reference trainer to reattach to. When set, it disables
     # LoRA shared-reference and is never cleaned up on close.
@@ -206,6 +205,13 @@ class FiretitanProvisioningConfig:
     reservation_target: str | None = None
     """Pin the trainer to a named reservation resource or reservation group."""
 
+    wait_for_trainer_before_deployment: bool = False
+    """Wait for trainer READY before creating the rollout deployment.
+
+    Default overlaps trainer boot with deployment creation. Set true so a
+    queued trainer does not hold serving replicas idle.
+    """
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -225,6 +231,16 @@ class FiretitanProvisioningConfig:
             raise ValueError(
                 "max_lora_rank cannot be combined with service-level lora_rank or lora_alpha; "
                 "pass model rank/alpha to create_training_client"
+            )
+
+        lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
+        if self.reference_required and self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
+            warnings.warn(
+                "reference_training_shape_id for a LoRA policy is deprecated and will be rejected "
+                "in a future release. Omit it to reuse the policy trainer with its adapter disabled; "
+                "explicit reference shapes remain supported for rank-0 policies.",
+                DeprecationWarning,
+                stacklevel=3,
             )
 
         for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
@@ -538,7 +554,7 @@ def _create_managed_tinker_client(
         trainer_mgr,
         config,
         max_context_length=max_context_length,
-        profile_training_shape=profile.training_shape_version if profile else None,
+        profile_training_shape=_trainer_create_shape_ref(config.training_shape_id, profile),
     )
     deployment_shape = config.deployment_shape or (profile.deployment_shape if profile else None)
     with ThreadPoolExecutor(max_workers=3, thread_name_prefix="firetitan-provision") as executor:
@@ -548,17 +564,6 @@ def _create_managed_tinker_client(
             started_trainer.job,
             config,
         )
-        deployment_future = None
-        if config.create_deployment:
-            deployment_future = executor.submit(
-                _attach_managed_deployment,
-                deploy_mgr,
-                config,
-                trainer_job_name=started_trainer.job.job_name,
-                deployment_shape=deployment_shape,
-                cmek_resource=cmek_resource,
-            )
-
         reference_future = None
         if reference_config is not None:
             reference_future = executor.submit(
@@ -571,6 +576,18 @@ def _create_managed_tinker_client(
                 hotload_api_url=hotload_api_url,
                 additional_headers=additional_headers,
                 verify_ssl=verify_ssl,
+            )
+        if config.create_deployment and config.wait_for_trainer_before_deployment:
+            trainer_future.result()
+        deployment_future = None
+        if config.create_deployment:
+            deployment_future = executor.submit(
+                _attach_managed_deployment,
+                deploy_mgr,
+                config,
+                trainer_job_name=started_trainer.job.job_name,
+                deployment_shape=deployment_shape,
+                cmek_resource=cmek_resource,
             )
 
         endpoint = trainer_future.result()
@@ -685,10 +702,11 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
 
     A LoRA policy without an explicit reference shape or reference job gets its
     frozen base for free by disabling the adapter on the policy session — no
-    second trainer. Full-parameter references provision a separate trainer; when
-    no reference shape is pinned, backend trainer creation auto-selects a
-    LoRA-capable shape for that frozen reference runtime. An explicitly pinned
-    rank-0 reference may instead use a FORWARD_ONLY shape.
+    second trainer. Explicit reference shapes for LoRA policies are deprecated.
+    Full-parameter references provision a separate trainer; when no reference
+    shape is pinned, backend trainer creation auto-selects a LoRA-capable shape
+    for that frozen reference runtime. An explicitly pinned rank-0 reference may
+    instead use a FORWARD_ONLY shape.
     """
     return (
         config.reference_training_shape_id is None and config.reference_trainer_job_id is None and policy_lora_rank > 0
@@ -704,13 +722,14 @@ def _reference_managed_config(
 
     ``reference_training_shape_id`` selects a fresh reference trainer shape;
     ``reference_trainer_job_id`` reattaches an existing reference and leaves
-    ownership with the caller. A LoRA reference with an explicit shape loads the
-    adapter on top of the base; otherwise the reference forwards the frozen base
-    directly. When no explicit reference shape is provided, backend trainer
-    creation auto-selects a LoRA-capable shape. An explicitly pinned rank-0
-    reference may use either LORA_TRAINER (preferred) or FORWARD_ONLY. Fresh
-    SDK-created references are cleaned by default unless the parent config
-    explicitly keeps them for a later reattach phase.
+    ownership with the caller. The legacy explicit-shape path for a LoRA policy
+    loads an adapter on top of the base, but is deprecated in favor of sharing
+    the policy trainer with its adapter disabled. Otherwise the reference
+    forwards the frozen base directly. When no explicit reference shape is
+    provided, backend trainer creation auto-selects a LoRA-capable shape. An
+    explicitly pinned rank-0 reference may use either LORA_TRAINER (preferred)
+    or FORWARD_ONLY. Fresh SDK-created references are cleaned by default unless
+    the parent config explicitly keeps them for a later reattach phase.
     """
     reference_shape = config.reference_training_shape_id
     reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
@@ -754,6 +773,40 @@ _RESUMABLE_TRAINER_STATES = frozenset(
         "JOB_STATE_COMPLETED",
     }
 )
+
+
+def _is_exact_training_shape_version_pin(ref: str | None) -> bool:
+    """True when ``ref`` names a concrete training-shape version, not latest."""
+    if not ref or "/versions/" not in ref:
+        return False
+    version_id = ref.rsplit("/versions/", 1)[-1].strip()
+    return bool(version_id) and version_id != "latest"
+
+
+def _parent_training_shape_name(ref: str | None) -> str | None:
+    if not ref:
+        return None
+    if "/versions/" not in ref:
+        return ref
+    return ref.split("/versions/", 1)[0]
+
+
+def _trainer_create_shape_ref(requested_shape_id: str | None, profile: Any) -> str | None:
+    """Shape selector to POST on trainer create.
+
+    Callers that already pinned ``.../versions/<id>`` keep that pin. Otherwise
+    POST the parent shape so the control plane resolves latest-validated at
+    launch instead of freezing whatever version ``resolve_training_profile``
+    returned.
+    """
+    if _is_exact_training_shape_version_pin(requested_shape_id):
+        return requested_shape_id
+    if profile is None:
+        return None
+    training_shape = getattr(profile, "training_shape", None)
+    if training_shape:
+        return _parent_training_shape_name(training_shape)
+    return _parent_training_shape_name(getattr(profile, "training_shape_version", None))
 
 
 def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
@@ -934,16 +987,19 @@ def _create_or_reattach_deployment_result(
             != config.hot_load_transition_type
         )
         reattached = trainer_job_changed or transition_type_changed
+        reattach_timeout_s = (
+            config.reattach_settle_timeout_s
+            if existing.state in DEPLOYMENT_SERVING_STATES
+            else config.deployment_timeout_s
+        )
         deployment = deploy_mgr.reattach_trainer(
             existing,
             base_model=config.base_model,
             trainer_job_name=trainer_job_name,
-            timeout_s=config.reattach_settle_timeout_s,
+            timeout_s=reattach_timeout_s,
             poll_interval_s=config.reattach_poll_interval_s,
             hot_load_transition_type=config.hot_load_transition_type,
         )
-        if existing.state not in DEPLOYMENT_SERVING_STATES:
-            deployment = deploy_mgr.wait_for_ready(deployment_id, timeout_s=config.deployment_timeout_s)
         return _DeploymentAttachResult(deployment=deployment, reattached=reattached, created=False)
 
     replica_count = max(config.replica_count, 0)
@@ -971,7 +1027,6 @@ def _create_or_reattach_deployment_result(
         disable_speculative_decoding=config.disable_speculative_decoding,
         extra_args=config.deployment_extra_args,
         extra_values=config.deployment_extra_values,
-        annotations={SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"},
         preemptible=config.preemptible,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)

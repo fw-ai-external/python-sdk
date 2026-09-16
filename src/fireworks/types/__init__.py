@@ -151,6 +151,11 @@ from .evaluator_get_upload_endpoint_params import EvaluatorGetUploadEndpointPara
 from .model_get_download_endpoint_response import ModelGetDownloadEndpointResponse as ModelGetDownloadEndpointResponse
 from .request_char_location_citation_param import RequestCharLocationCitationParam as RequestCharLocationCitationParam
 from .request_page_location_citation_param import RequestPageLocationCitationParam as RequestPageLocationCitationParam
+from .deployment_shape_version_match_params import (
+    DeploymentShapeVersionMatchParams as DeploymentShapeVersionMatchParams,
+    DeploymentShapeVersionMatchDeployment as DeploymentShapeVersionMatchDeployment,
+    DeploymentShapeVersionMatchCreateDeploymentRequest as DeploymentShapeVersionMatchCreateDeploymentRequest,
+)
 from .supervised_fine_tuning_job_get_params import SupervisedFineTuningJobGetParams as SupervisedFineTuningJobGetParams
 from .dataset_get_download_endpoint_response import (
     DatasetGetDownloadEndpointResponse as DatasetGetDownloadEndpointResponse,
@@ -160,6 +165,9 @@ from .evaluator_get_upload_endpoint_response import (
 )
 from .supervised_fine_tuning_job_list_params import (
     SupervisedFineTuningJobListParams as SupervisedFineTuningJobListParams,
+)
+from .deployment_shape_version_match_response import (
+    DeploymentShapeVersionMatchResponse as DeploymentShapeVersionMatchResponse,
 )
 from .evaluator_get_build_log_endpoint_params import (
     EvaluatorGetBuildLogEndpointParams as EvaluatorGetBuildLogEndpointParams,

@@ -16,6 +16,7 @@ recipe-facing wrapper is tested in the cookbook suite.
 
 from __future__ import annotations
 
+import warnings
 import threading
 from types import SimpleNamespace
 from datetime import timedelta
@@ -108,6 +109,31 @@ def _policy_config(**overrides) -> _ManagedTinkerConfig:
 
 class TestUseSharedBaseReference:
     """Only LoRA without an explicit reference shape reuses the policy session."""
+
+    def test_explicit_reference_shape_for_lora_policy_is_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+            _policy_config(
+                lora_rank=16,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
+
+    def test_explicit_reference_shape_for_multi_model_lora_policy_is_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+            _policy_config(
+                max_lora_rank=16,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
+
+    def test_explicit_reference_shape_for_full_param_policy_is_not_deprecated(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            _policy_config(
+                lora_rank=0,
+                reference_required=True,
+                reference_training_shape_id="ts-ref",
+            )
 
     def test_lora_without_reference_shape_shares(self):
         config = _policy_config(reference_training_shape_id=None)
@@ -232,6 +258,56 @@ class TestReferenceManagedConfig:
         reference = _reference_managed_config(config, policy_lora_rank=0)
 
         assert reference.extra_args == ["--pp=2", ""]
+
+
+class TestTrainerCreateShapeRef:
+    def test_strips_resolved_profile_version(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_strips_version_when_profile_only_has_versioned_name(self):
+        profile = SimpleNamespace(
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v1",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_keeps_exact_version_pin_from_caller(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+            training_shape_version="accounts/fireworks/trainingShapes/shape/versions/v2",
+        )
+        pinned = "accounts/fireworks/trainingShapes/shape/versions/v1"
+        assert managed_module._trainer_create_shape_ref(pinned, profile) == pinned
+
+    def test_treats_latest_alias_as_unpinned(self):
+        profile = SimpleNamespace(
+            training_shape="accounts/fireworks/trainingShapes/shape",
+        )
+        assert (
+            managed_module._trainer_create_shape_ref(
+                "accounts/fireworks/trainingShapes/shape/versions/latest",
+                profile,
+            )
+            == "accounts/fireworks/trainingShapes/shape"
+        )
+
+    def test_none_without_profile(self):
+        assert managed_module._trainer_create_shape_ref(None, None) is None
 
 
 class TestManagedProvisioning:
@@ -604,6 +680,84 @@ class TestManagedProvisioning:
         assert events.index("reference_create") < events.index("policy_wait_done")
         assert handle.trainer_endpoint.job_id == "policy-job"
         assert handle.reference_handle.trainer_endpoint.job_id == "reference-job"
+        assert handle.deployment.deployment_id == "deployment-1"
+
+    def test_wait_for_trainer_before_deployment_serializes_rollout_create(self, monkeypatch):
+        events: list[str] = []
+
+        class FakeTrainerManager:
+            account_id = "acct"
+
+            def resolve_training_profile(self, training_shape_id):
+                return SimpleNamespace(
+                    training_shape_version=f"{training_shape_id}/versions/v1",
+                    deployment_shape="deployment-shape/versions/v1",
+                    max_supported_context_length=32768,
+                    trainer_mode="POLICY_TRAINER",
+                )
+
+            def create(self, config):
+                events.append("policy_create")
+                return CreatedTrainerJob(
+                    job_name="accounts/acct/rlorTrainerJobs/policy-job",
+                    job_id="policy-job",
+                )
+
+            def try_get(self, job_id):
+                return None
+
+            def wait_for_ready(self, job_id, *, job_name, timeout_s, pending_timeout_s):
+                events.append("policy_wait_done")
+                return TrainerServiceEndpoint(
+                    job_name=job_name,
+                    job_id=job_id,
+                    base_url="https://trainer.test",
+                )
+
+        class FakeTrainingClient:
+            def _attach_sampler_backend(self, sampler_backend):
+                return None
+
+        class FakeServiceClient:
+            def __init__(self, *, base_url, api_key):
+                pass
+
+            def create_training_client(self, *, base_model, lora_rank, user_metadata):
+                return FakeTrainingClient()
+
+            def _attach_sampler_backend(self, sampler_backend):
+                return None
+
+        def fake_attach_deployment(
+            _deploy_mgr,
+            _config,
+            *,
+            trainer_job_name,
+            deployment_shape,
+            cmek_resource=None,
+        ):
+            events.append(f"deployment_start:{trainer_job_name}")
+            return SimpleNamespace(deployment_id="deployment-1"), object(), False, True
+
+        monkeypatch.setattr(
+            managed_module, "_build_resource_managers", lambda **_k: (FakeTrainerManager(), object())
+        )
+        monkeypatch.setattr(managed_module, "_attach_managed_deployment", fake_attach_deployment)
+        monkeypatch.setattr(managed_module, "FiretitanServiceClient", FakeServiceClient)
+
+        handle = managed_module._create_managed_tinker_client(
+            api_key="fw-key",
+            config=_policy_config(
+                trainer_job_id=None,
+                wait_for_trainer_before_deployment=True,
+            ),
+        )
+
+        assert events[:3] == [
+            "policy_create",
+            "policy_wait_done",
+            "deployment_start:accounts/acct/rlorTrainerJobs/policy-job",
+        ]
         assert handle.deployment.deployment_id == "deployment-1"
 
     def test_full_param_reference_without_shape_auto_selects_at_trainer_create(self):

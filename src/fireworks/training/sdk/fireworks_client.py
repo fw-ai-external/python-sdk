@@ -63,6 +63,12 @@ def _parse_checkpoint_name(name: str) -> tuple[str, str, str] | None:
 _SESSION_CHECKPOINT_NAME_RE = re.compile(
     r"^accounts/([^/]+)/trainingSessions/([^/]+)/checkpoints/([^/]+)$"
 )
+_TRAINING_JOB_PARENT_RE = re.compile(
+    r"accounts/([^/]+)/(?:supervisedFineTuningJobs|dpoJobs)/([^/]+)"
+)
+_TRAINING_JOB_CHECKPOINT_NAME_RE = re.compile(
+    _TRAINING_JOB_PARENT_RE.pattern + r"/checkpoints/([^/]+)"
+)
 
 
 def _parse_session_checkpoint_name(name: str) -> tuple[str, str, str] | None:
@@ -765,6 +771,111 @@ class FireworksClient(_RestClient):
                 or body.get("checkpoints")
                 or []
             )
+            rows.extend(page)
+            page_token = body.get("nextPageToken") or body.get("next_page_token")
+            if not page_token:
+                break
+        return rows
+
+    def promote_training_job_checkpoint(
+        self,
+        name: str,
+        output_model_id: str,
+        base_model: str,
+    ) -> dict:
+        """Promote an SFT or DPO/ORPO checkpoint from list_training_job_checkpoints."""
+        parsed = _TRAINING_JOB_CHECKPOINT_NAME_RE.fullmatch(name)
+        if parsed is None:
+            raise ValueError(
+                f"Invalid training job checkpoint name {name!r}. Expected "
+                "accounts/<account>/supervisedFineTuningJobs/<job>/checkpoints/<id> "
+                "or accounts/<account>/dpoJobs/<job>/checkpoints/<id>."
+            )
+        account_id, _, checkpoint_id = parsed.groups()
+        if not base_model:
+            raise ValueError("base_model is required")
+        errors = validate_output_model_id(output_model_id)
+        if errors:
+            raise ValueError("\n\n".join(errors))
+
+        output_model = f"accounts/{account_id}/models/{output_model_id}"
+        path = f"/v1/{name}:promote"
+        logger.info("Promoting managed checkpoint '%s' -> model '%s'", name, output_model)
+        body = {
+            "output_model": output_model,
+            "base_model": base_model,
+            "async_promotion": True,
+        }
+        resp = self._post(path, json=body, timeout=HTTP_LONG_WRITE_TIMEOUT_S)
+        if not resp.is_success:
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to promote checkpoint '{checkpoint_id}' (HTTP {resp.status_code})",
+                    parse_api_error(resp),
+                    "Verify the checkpoint is promotable and belongs to the managed training job.",
+                    docs_url=DOCS_SDK,
+                    show_support=True,
+                )
+            )
+        result = resp.json()
+        operation = result.get("operation")
+        if operation:
+            logger.info("Promotion operation started: %s", operation.get("name"))
+            operation = self._wait_for_operation(operation)
+            model = operation.get("response") or result.get("model")
+            if not model:
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to promote checkpoint '{checkpoint_id}'",
+                        "promotion operation completed without a model response",
+                        "Check the operation and output model in the Fireworks console.",
+                        docs_url=DOCS_SDK,
+                    )
+                )
+            model.pop("@type", None)
+            return self._log_promoted_model({"model": model})
+        return self._log_promoted_model(result)
+
+    def list_training_job_checkpoints(
+        self,
+        parent: str,
+        *,
+        page_size: int = 200,
+    ) -> list[dict]:
+        """List checkpoints for an SFT or DPO/ORPO parent resource name.
+
+        Pass ``accounts/<account>/supervisedFineTuningJobs/<job>`` or
+        ``accounts/<account>/dpoJobs/<job>``.
+        """
+        if _TRAINING_JOB_PARENT_RE.fullmatch(parent) is None:
+            raise ValueError(
+                f"Invalid training job parent {parent!r}. Expected "
+                "accounts/<account>/supervisedFineTuningJobs/<job> "
+                "or accounts/<account>/dpoJobs/<job>."
+            )
+        base_path = f"/v1/{parent}/checkpoints"
+        rows: list[dict] = []
+        page_token: str | None = None
+        while True:
+            query: dict[str, str] = {"pageSize": str(page_size)}
+            if page_token:
+                query["pageToken"] = page_token
+            resp = self._get(
+                f"{base_path}?{urlencode(query)}",
+                timeout=HTTP_READ_TIMEOUT_S,
+            )
+            if not resp.is_success:
+                raise RuntimeError(
+                    format_sdk_error(
+                        f"Failed to list checkpoints for training job '{parent}' "
+                        f"(HTTP {resp.status_code})",
+                        parse_api_error(resp),
+                        "Verify the job ID and that your API key resolves to the account that owns it.",
+                        docs_url=DOCS_SDK,
+                    )
+                )
+            body = resp.json() or {}
+            page = body.get("checkpoints") or []
             rows.extend(page)
             page_token = body.get("nextPageToken") or body.get("next_page_token")
             if not page_token:

@@ -517,6 +517,10 @@ class TestTransportLevel:
         sampler.additional_headers = {"X-Custom": "replaced"}
         source["X-Custom"] = "mutated"
         monkeypatch.setenv("FIREWORKS_SESSION_ID", second_session)
+        # Each asyncio.run() is a fresh loop; _get_async_client rebuilds on
+        # loop change, so re-inject the mock transport for the second call.
+        sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
+        sampler._async_client_loop = None
         asyncio.run(
             sampler.async_completions_stream(
                 prompt=[1, 2, 3],

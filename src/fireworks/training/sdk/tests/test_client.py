@@ -8,7 +8,7 @@ import logging
 import warnings
 from types import SimpleNamespace
 from threading import Event, RLock
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -25,9 +25,11 @@ from fireworks.training.sdk.client import (
     GradNormMetricsMode,
     FiretitanServiceClient,
     FiretitanTrainingClient,
+    _r3_request_issues,
     generate_session_id,
     _run_id_from_model_id,
     qualify_snapshot_name,
+    _count_response_tokens,
     _LazyManagedRestClient,
     _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
@@ -272,8 +274,14 @@ class TestForwardBackward:
         )
         return client
 
+    @pytest.mark.parametrize("weights", [
+        types.TensorData(data=[0.0, 1.0, 1.0, 0.0], dtype="float32", shape=[4]),
+        # Stored nonzeros must count separately even when duplicate sparse columns cancel.
+        types.TensorData(data=[0.25, -0.25, 0.0], dtype="float32", shape=[1, 2],
+                         sparse_crow_indices=[0, 3], sparse_col_indices=[0, 0, 1]),
+    ])
     @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_cross_entropy_adds_response_tokens_from_weights(self, mock_forward_backward):
+    def test_cross_entropy_adds_response_tokens_from_weights(self, mock_forward_backward, weights):
         client = self._make_client()
         future = MagicMock()
         future.result.return_value = types.ForwardBackwardOutput(
@@ -284,7 +292,7 @@ class TestForwardBackward:
         mock_forward_backward.return_value = future
         datum = MagicMock()
         datum.loss_fn_inputs = {
-            "weights": types.TensorData(data=[0.0, 1.0, 1.0, 0.0], dtype="float32", shape=[4]),
+            "weights": weights,
             "target_tokens": types.TensorData(data=[10, 11, 12, 13], dtype="int64", shape=[4]),
         }
 
@@ -494,6 +502,21 @@ class TestRoutingMatrixChunkSizing:
             loss_fn_inputs={},
         )
 
+    def test_dense_sizing_and_diagnostics_do_not_copy_tensor_lists(self):
+        client = self._make_client()
+        datum = types.Datum(
+            model_input=types.ModelInput.from_ints([1, 2, 3]),
+            loss_fn_inputs={
+                "target_tokens": types.TensorData(data=[2, 3, 4], dtype="int64"),
+                "weights": types.TensorData(data=[0.0, 0.25, -0.25], dtype="float32"),
+            },
+        )
+        with patch.object(types.TensorData, "data", new_callable=PropertyMock) as copied:
+            copied.side_effect = AssertionError("Dense values copied to a Python list")
+            assert client._estimate_bytes_count(datum) == 80
+            assert _r3_request_issues([datum]) == []
+            assert _count_response_tokens([datum]) == 2.0
+
     def test_estimator_counts_compact_json_wire_bytes(self):
         client = self._make_client()
         routing_matrices = ["AQIDBA==", "/+abc=="]
@@ -611,9 +634,16 @@ class TestParallelChunkSubmission:
             loss_fn_inputs={"target_tokens": types.TensorData(data=[token + 1], dtype="int64", shape=[1])},
         )
 
-    def _make_client(self, *, parallel: bool, send_order: list[int]):
+    @pytest.fixture(autouse=True)
+    def _mock_submission_futures(self, monkeypatch):
+        monkeypatch.setattr("fireworks.training.sdk.client.CommsV2APIFuture", self._FakeAPIFuture)
+        monkeypatch.setattr("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture)
+        monkeypatch.setattr("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture)
+
+    def _make_client(self, *, parallel: bool, send_order: list[int], comms: str = "v2"):
         client = _bare_training_client()
         client.model_id = "model"
+        client._comms = comms
         client._queue_state_logger = None
         client._turn_counter = 0
         client._turn_waiters = {}
@@ -621,12 +651,14 @@ class TestParallelChunkSubmission:
         client._chunked_requests = MagicMock(return_value=[(0, chunks[0]), (1, chunks[1]), (2, chunks[2])])
 
         class _Training:
-            async def forward(self, *, request):
+            async def forward(self, *, request, extra_body=None):
+                assert extra_body == ({"comms": "v2"} if comms == "v2" else None)
                 send_order.append(request.seq_id)
                 await asyncio.sleep(0)
                 return request.seq_id
 
-            async def forward_backward(self, *, request) -> int:
+            async def forward_backward(self, *, request, extra_body=None) -> int:
+                assert extra_body == ({"comms": "v2"} if comms == "v2" else None)
                 send_order.append(request.seq_id)
                 await asyncio.sleep(0)
                 return request.seq_id
@@ -647,30 +679,15 @@ class TestParallelChunkSubmission:
         client.holder = holder
         return client
 
-    def test_forward_parallel_chunks_send_rest_before_first(self):
+    @pytest.mark.parametrize("operation", ["forward", "forward_backward"])
+    @pytest.mark.parametrize("comms, expected_order", [("v1", [2, 3, 1]), ("v2", [1, 2, 3])])
+    def test_parallel_chunk_order_preserves_default_and_prioritizes_comms_first_chunk(
+        self, operation, comms, expected_order,
+    ):
         send_order: list[int] = []
-        client = self._make_client(parallel=True, send_order=send_order)
-
-        with (
-            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
-            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
-        ):
-            result = client.forward([self._datum()], "cross_entropy").result()
-
-        assert send_order == [2, 3, 1]
-        assert result == [1, 2, 3]
-
-    def test_forward_backward_parallel_chunks_send_rest_before_first(self) -> None:
-        send_order: list[int] = []
-        client = self._make_client(parallel=True, send_order=send_order)
-
-        with (
-            patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
-            patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
-        ):
-            result = client.forward_backward([self._datum()], "linear").result()
-
-        assert send_order == [2, 3, 1]
+        client = self._make_client(parallel=True, send_order=send_order, comms=comms)
+        result = getattr(client, operation)([self._datum()], "linear").result()
+        assert send_order == expected_order
         assert result == [1, 2, 3]
 
     def test_forward_respects_serial_chunk_flag(self):
@@ -738,7 +755,7 @@ class TestParallelChunkSubmission:
             result = asyncio.run(future.result_async())
 
         assert max_active <= 3
-        assert started[:3] == [1, 2, 0]
+        assert started[:3] == [0, 1, 2]
         assert result == [1, 2, 3, 4, 5, 6]
 
     def test_parallel_chunk_submission_cancels_rest_tasks(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -775,10 +792,59 @@ class TestParallelChunkSubmission:
             await asyncio.sleep(0)
             await asyncio.sleep(0)
 
-            assert started_before_release == [1, 0]
+            assert started_before_release == [0, 1]
             assert started == started_before_release
 
         asyncio.run(run_and_cancel())
+
+    def test_slow_first_ack_does_not_block_later_chunks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "2")
+        client = self._make_client(parallel=True, send_order=[])
+
+        async def run() -> None:
+            later_chunks_done = asyncio.Event()
+            completed = []
+
+            async def send_chunk(request_id, _chunk):
+                if request_id == 0:
+                    await asyncio.wait_for(later_chunks_done.wait(), timeout=1)
+                completed.append(request_id)
+                if request_id == 3:
+                    later_chunks_done.set()
+                return request_id
+
+            future = await client._run_chunked_requests(
+                [(i, [self._datum(i)]) for i in range(4)], send_chunk, request_type="Forward"
+            )
+            assert completed == [1, 2, 3, 0]
+            assert await future.result_async() == [0, 1, 2, 3]
+
+        asyncio.run(run())
+
+    def test_transport_progress_is_not_starved_by_chunk_preparation(self):
+        client = self._make_client(parallel=True, send_order=[])
+
+        async def run():
+            prepared = []
+            first_transport_progress = []
+
+            async def send_chunk(request_id, _chunk):
+                prepared.append(request_id)
+                # The HTTP client's initial asynchronous setup yields after
+                # synchronous request conversion, before sending the body.
+                await asyncio.sleep(0)
+                if not first_transport_progress:
+                    first_transport_progress.extend(prepared)
+                return request_id
+
+            result = await client._run_chunked_requests(
+                [(i, [self._datum(i)]) for i in range(20)], send_chunk, request_type="Forward"
+            )
+            assert len(first_transport_progress) < 20
+            assert first_transport_progress[0] == 0
+            assert await result.result_async() == list(range(20))
+
+        asyncio.run(run())
 
     def test_parallel_chunk_submission_env_one_sends_in_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV, "1")
@@ -827,7 +893,7 @@ class TestParallelChunkSubmission:
             )
             result = asyncio.run(future.result_async())
 
-        assert send_order == [2, 3, 1]
+        assert send_order == [1, 2, 3]
         assert result == [1, 2, 3]
 
     def test_embedding_custom_backward_uses_parallel_chunks(self):
@@ -863,7 +929,7 @@ class TestParallelChunkSubmission:
             )
             result = asyncio.run(future.result_async())
 
-        assert send_order == [2, 3, 1]
+        assert send_order == [1, 2, 3]
         assert result == [1, 2, 3]
 
 
@@ -3063,7 +3129,7 @@ class TestCreateTrainingClientDuplicate:
 
         class FakeFuture:
             def result(self):
-                return "model-id"
+                return SimpleNamespace(model_id="model-id", comms="v1")
 
         def run_coroutine_threadsafe(coro):
             coro.close()

@@ -21,7 +21,7 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 Fireworks-specific additions:
 
 - `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`. Merged-base output defaults to the source storage format; use `export_precision="bf16"`, `"nvfp4"`, `"mxfp8"`, or `"fp8_block128"` only for an explicit output override.
-- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save.
+- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save. Prefer a Fireworks PEFT model resource (`accounts/<acct>/models/<lora-id>`); a `gs://` PEFT directory also works.
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
 
@@ -123,7 +123,7 @@ profile = trainer_mgr.resolve_training_profile("ts-qwen3-8b-policy")
 config = TrainerJobConfig(
     base_model="accounts/fireworks/models/qwen3-8b",
     display_name="my-trainer",
-    training_shape_ref=profile.training_shape_version,
+    training_shape_ref=profile.training_shape,
 )
 
 if profile.supports_lora:
@@ -167,7 +167,7 @@ sequence plus weights tensor into a right-shifted training `Datum`:
 ```python
 import torch
 from tinker.types.model_input import ModelInput
-from tinker_cookbook.supervised.common import datum_from_model_input_weights
+from training.renderer.supervised import datum_from_model_input_weights
 
 tokens = [151644, 8948, 198, 151645]
 weights = torch.tensor([0.0, 0.0, 1.0, 1.0], dtype=torch.float32)

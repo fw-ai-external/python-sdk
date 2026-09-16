@@ -17,7 +17,6 @@ from fireworks.training.sdk.managed import (
     _create_or_reattach_deployment,
     _create_or_reattach_deployment_result,
 )
-from fireworks.training.sdk._constants import SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION
 from fireworks.training.sdk.deployment import DeploymentInfo
 
 SHAPE = "accounts/acct/deploymentShapes/rft-x"
@@ -103,9 +102,7 @@ def test_managed_deployment_does_not_inherit_trainer_skip_validations():
     deployment_config = deploy_mgr.create_or_get.call_args.args[0]
     assert deployment_config.skip_shape_validation is False
     assert deployment_config.for_training is True
-    assert deployment_config.annotations == {
-        SDK_MANAGED_ROLLOUT_DEPLOYMENT_ANNOTATION: "true"
-    }
+    assert deployment_config.annotations is None
 
 
 def test_generated_deployment_id_is_stored_for_retry(monkeypatch):
@@ -182,6 +179,36 @@ def test_reattach_result_marks_existing_deployment_moved_to_new_trainer():
     assert result.deployment is updated
     assert result.reattached is True
     assert result.created is False
+
+
+def test_managed_reattach_uses_strict_result_without_probe_fallback():
+    deploy_mgr = MagicMock()
+    existing = DeploymentInfo(
+        deployment_id="dep-1",
+        name="dep-1",
+        state="CREATING",
+        hot_load_trainer_job="accounts/acct/rlorTrainerJobs/old-job",
+    )
+    ready = DeploymentInfo(
+        deployment_id="dep-1",
+        name="dep-1",
+        state="READY",
+        hot_load_trainer_job="accounts/acct/rlorTrainerJobs/new-job",
+    )
+    deploy_mgr.get.return_value = existing
+    deploy_mgr.reattach_trainer.return_value = ready
+    config = _ManagedTinkerConfig(base_model="accounts/acct/models/base", deployment_id="dep-1")
+
+    result = _create_or_reattach_deployment_result(
+        deploy_mgr,
+        config,
+        trainer_job_name="accounts/acct/rlorTrainerJobs/new-job",
+        deployment_shape=None,
+    )
+
+    assert result.deployment is ready
+    assert deploy_mgr.reattach_trainer.call_args.kwargs["timeout_s"] == config.deployment_timeout_s
+    deploy_mgr.wait_for_ready.assert_not_called()
 
 
 def test_reattach_result_does_not_mark_already_attached_deployment():

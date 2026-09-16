@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import hashlib
 from types import MappingProxyType
 from typing import Any, Union, Literal, Mapping, Protocol, Sequence, runtime_checkable
@@ -28,6 +29,8 @@ TITOPromptMode = Literal["full_history", "incremental"]
 
 def _plain_json(value: Any) -> Any:
     """Recursively detach immutable SDK containers before JSON validation."""
+    if value is None or type(value) in (str, int, float, bool):
+        return value
     if isinstance(value, Mapping):
         return {str(key): _plain_json(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -35,10 +38,29 @@ def _plain_json(value: Any) -> Any:
     return value
 
 
+def _clone_json_value(value: Any, *, sort_keys: bool) -> Any:
+    """Copy detached JSON containers without encoding their immutable leaves."""
+    value_type = type(value)
+    if value is None or value_type is str or value_type is bool:
+        return value
+    if value_type is int and value.bit_length() <= 63:
+        return value
+    if value_type is float and math.isfinite(value):
+        return value
+    if value_type is dict:
+        keys = sorted(value) if sort_keys else value
+        return {key: _clone_json_value(value[key], sort_keys=sort_keys) for key in keys}
+    if value_type is list:
+        return [_clone_json_value(item, sort_keys=sort_keys) for item in value]
+    # Preserve JSON's validation, scalar-subclass normalization, nonfinite
+    # constants and large-integer limits for values outside the common path.
+    return json.loads(json.dumps(value))
+
+
 def _freeze_json(value: Any) -> Any:
     """Return a detached, JSON-compatible value with deterministic mappings."""
     try:
-        return json.loads(json.dumps(_plain_json(value), sort_keys=True, separators=(",", ":")))
+        return _clone_json_value(_plain_json(value), sort_keys=True)
     except (TypeError, ValueError) as exc:
         raise TITOError(
             "tito_invalid_request",
@@ -50,13 +72,7 @@ def _freeze_json(value: Any) -> Any:
 def _copy_json_in_order(value: Any) -> Any:
     """Return a detached JSON value while preserving admitted mapping order."""
     try:
-        return json.loads(
-            json.dumps(
-                _plain_json(value),
-                separators=(",", ":"),
-                ensure_ascii=False,
-            )
-        )
+        return _clone_json_value(_plain_json(value), sort_keys=False)
     except (TypeError, ValueError) as exc:
         raise TITOError(
             "tito_invalid_request",

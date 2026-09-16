@@ -19,22 +19,19 @@ The REST API documentation can be found on [docs.fireworks.ai](https://docs.fire
 pip install fireworks-ai
 ```
 
-For using our Tinker-compatible API for training (GRPO/DPO), install the optional extras:
+For training, use **Python 3.11+** and install:
 
 ```sh
-pip install 'fireworks-ai[training]'
+python -m pip install --upgrade 'fireworks-ai[training]>=1.2.11,<2'
 ```
 
-Training SDK calls require a training-scoped Fireworks API key. Inference-only
-keys can still work for completions, but they return HTTP 401 on trainer and
-training-shape endpoints.
+> The legacy `0.19.20` package has no `fireworks.training` module.
+> Training is available in stable releases; `--pre` is not required.
 
-On Python 3.11+, the training extra installs the pinned `tinker` runtime used by the SDK.
-On Python 3.9 and 3.10, the base SDK still installs, but Tinker-backed training
-dependencies are intentionally omitted because the pinned Tinker runtime no longer
-supports those Python versions.
-Cookbook packages that use recipe helpers should declare `tinker-cookbook`
-directly so SDK-only environments do not install cookbook-only dependencies.
+Training calls require a training-scoped Fireworks API key.
+See the [training setup and verification](src/fireworks/training/README.md#install)
+or the [Training Cookbook](https://github.com/fw-ai/cookbook/blob/main/training/README.md#getting-started)
+for runnable recipes.
 
 > **Note:** The training SDK source lives entirely in
 > [`src/fireworks/training/`](src/fireworks/training/). All other code in this

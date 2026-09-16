@@ -535,6 +535,7 @@ class TestReattachTrainer:
             state="READY",
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
         )
+        mgr.get = MagicMock(return_value=existing)
         mgr.update = MagicMock()
         mgr.hotload_check_status = MagicMock()
 
@@ -547,10 +548,11 @@ class TestReattachTrainer:
         )
 
         assert result is existing
+        mgr.get.assert_called_once_with("dep-1")
         mgr.update.assert_not_called()
         mgr.hotload_check_status.assert_not_called()
 
-    def test_patch_and_waits_for_new_replica(self, mgr, monkeypatch):
+    def test_patch_waits_for_strict_control_plane_ready(self, mgr, monkeypatch):
         existing = DeploymentInfo(
             deployment_id="dep-1",
             name="accounts/test-acct/deployments/dep-1",
@@ -560,17 +562,13 @@ class TestReattachTrainer:
         updated = DeploymentInfo(
             deployment_id="dep-1",
             name="accounts/test-acct/deployments/dep-1",
-            state="READY",
+            state="UPDATING",
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
         )
+        ready = replace(updated, state="READY")
         mgr.update = MagicMock(return_value=updated)
-        mgr.hotload_check_status = MagicMock(
-            side_effect=[
-                {"replicas": [{"current_snapshot_identity": "old-pod"}]},
-                {"replicas": []},
-                {"replicas": [{"current_snapshot_identity": "new-pod"}]},
-            ]
-        )
+        mgr.get = MagicMock(side_effect=[existing, existing, updated, ready])
+        mgr.hotload_check_status = MagicMock()
         monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
 
         result = mgr.reattach_trainer(
@@ -581,12 +579,128 @@ class TestReattachTrainer:
             poll_interval_s=0.01,
         )
 
-        assert result is updated
+        assert result is ready
         mgr.update.assert_called_once_with(
             "dep-1",
             body={"hotLoadTrainerJob": "accounts/test-acct/rlorTrainerJobs/job-1"},
             update_mask="hot_load_trainer_job",
         )
+        assert mgr.get.call_count == 4
+        mgr.hotload_check_status.assert_not_called()
+
+    def test_stale_ready_input_observes_in_flight_attach_without_patching(self, mgr, monkeypatch):
+        stale = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
+        )
+        updating = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="UPDATING",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+        ready = replace(updating, state="READY")
+        mgr.get = MagicMock(side_effect=[updating, ready])
+        mgr.update = MagicMock()
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+
+        result = mgr.reattach_trainer(
+            stale,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=5,
+            poll_interval_s=0.01,
+        )
+
+        assert result is ready
+        mgr.update.assert_not_called()
+        assert mgr.get.call_count == 2
+
+    def test_fails_if_deployment_becomes_terminal_before_reattach(self, mgr):
+        stale = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="READY",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
+        )
+        mgr.get = MagicMock(return_value=replace(stale, state="FAILED"))
+        mgr.update = MagicMock()
+
+        with pytest.raises(RuntimeError, match="entered bad state 'FAILED' before trainer re-attach"):
+            mgr.reattach_trainer(
+                stale,
+                base_model="accounts/test-acct/models/base",
+                trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+                timeout_s=5,
+                poll_interval_s=0.01,
+            )
+
+        mgr.update.assert_not_called()
+
+    def test_times_out_waiting_for_ready_before_reattach(self, mgr, monkeypatch):
+        updating = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="UPDATING",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+        mgr.get = MagicMock(return_value=updating)
+        mgr.update = MagicMock()
+        monkeypatch.setattr(
+            "fireworks.training.sdk.deployment.time.time",
+            MagicMock(side_effect=[0, 2]),
+        )
+
+        with pytest.raises(TimeoutError, match="did not reach READY before trainer re-attach"):
+            mgr.reattach_trainer(
+                updating,
+                base_model="accounts/test-acct/models/base",
+                trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+                timeout_s=1,
+                poll_interval_s=0.01,
+            )
+
+        mgr.update.assert_not_called()
+
+    def test_waits_for_existing_update_with_fresh_patch_timeout(self, mgr, monkeypatch):
+        existing = DeploymentInfo(
+            deployment_id="dep-1",
+            name="accounts/test-acct/deployments/dep-1",
+            state="CREATING",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
+        )
+        ready_old = replace(existing, state="READY")
+        updating_new = replace(
+            existing,
+            state="UPDATING",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+        )
+        ready_new = replace(updating_new, state="READY")
+        mgr.get = MagicMock(side_effect=[existing, ready_old, updating_new, ready_new])
+        mgr.update = MagicMock(return_value=updating_new)
+        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr(
+            "fireworks.training.sdk.deployment.time.time",
+            MagicMock(side_effect=[0, 0.75, 0.9, 1.5, 1.75]),
+        )
+
+        result = mgr.reattach_trainer(
+            existing,
+            base_model="accounts/test-acct/models/base",
+            trainer_job_name="accounts/test-acct/rlorTrainerJobs/job-1",
+            timeout_s=1,
+            poll_interval_s=0.01,
+        )
+
+        assert result is ready_new
+        mgr.update.assert_called_once_with(
+            "dep-1",
+            body={"hotLoadTrainerJob": "accounts/test-acct/rlorTrainerJobs/job-1"},
+            update_mask="hot_load_trainer_job",
+        )
+        assert mgr.get.call_count == 4
 
     def test_transition_type_change_rides_the_trainer_patch(self, mgr, monkeypatch):
         existing = DeploymentInfo(
@@ -596,21 +710,14 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/old-job",
             hot_load_transition_type="ASYNC",
         )
-        mgr.update = MagicMock(return_value=existing)
-        mgr.hotload_check_status = MagicMock(
-            side_effect=[
-                {
-                    "replicas": [
-                        {"current_snapshot_identity": "same-snapshot", "identity": "old-pod"}
-                    ]
-                },
-                {
-                    "replicas": [
-                        {"current_snapshot_identity": "same-snapshot", "identity": "new-pod"}
-                    ]
-                },
-            ]
+        updated = replace(
+            existing,
+            state="UPDATING",
+            hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
+            hot_load_transition_type="SYNC",
         )
+        mgr.update = MagicMock(return_value=updated)
+        mgr.get = MagicMock(side_effect=[existing, updated, replace(updated, state="READY")])
         monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
 
         mgr.reattach_trainer(
@@ -639,13 +746,9 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
             hot_load_transition_type="ASYNC",
         )
-        mgr.update = MagicMock(return_value=existing)
-        mgr.hotload_check_status = MagicMock(
-            side_effect=[
-                {"replicas": [{"current_snapshot_identity": "old-pod"}]},
-                {"replicas": [{"current_snapshot_identity": "new-pod"}]},
-            ]
-        )
+        updated = replace(existing, state="UPDATING", hot_load_transition_type="SYNC")
+        mgr.update = MagicMock(return_value=updated)
+        mgr.get = MagicMock(side_effect=[existing, updated, replace(updated, state="READY")])
         monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
 
         mgr.reattach_trainer(
@@ -671,6 +774,7 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
             hot_load_transition_type="SYNC",
         )
+        mgr.get = MagicMock(return_value=existing)
         mgr.update = MagicMock()
         mgr.hotload_check_status = MagicMock()
 
@@ -684,6 +788,7 @@ class TestReattachTrainer:
         )
 
         assert result is existing
+        mgr.get.assert_called_once_with("dep-1")
         mgr.update.assert_not_called()
 
     def test_unset_transition_type_matches_async_default(self, mgr):
@@ -694,6 +799,7 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
             hot_load_transition_type=None,
         )
+        mgr.get = MagicMock(return_value=existing)
         mgr.update = MagicMock()
         mgr.hotload_check_status = MagicMock()
 
@@ -707,6 +813,7 @@ class TestReattachTrainer:
         )
 
         assert result is existing
+        mgr.get.assert_called_once_with("dep-1")
         mgr.update.assert_not_called()
         mgr.hotload_check_status.assert_not_called()
 
@@ -718,6 +825,7 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
             hot_load_transition_type="HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED",
         )
+        mgr.get = MagicMock(return_value=existing)
         mgr.update = MagicMock()
         mgr.hotload_check_status = MagicMock()
 
@@ -731,6 +839,7 @@ class TestReattachTrainer:
         )
 
         assert result is existing
+        mgr.get.assert_called_once_with("dep-1")
         mgr.update.assert_not_called()
         mgr.hotload_check_status.assert_not_called()
 
@@ -742,21 +851,9 @@ class TestReattachTrainer:
             hot_load_trainer_job="accounts/test-acct/rlorTrainerJobs/job-1",
             hot_load_transition_type="HOT_LOAD_TRANSITION_TYPE_UNSPECIFIED",
         )
-        mgr.update = MagicMock(return_value=existing)
-        mgr.hotload_check_status = MagicMock(
-            side_effect=[
-                {
-                    "replicas": [
-                        {"current_snapshot_identity": "same-snapshot", "identity": "old-pod"}
-                    ]
-                },
-                {
-                    "replicas": [
-                        {"current_snapshot_identity": "same-snapshot", "identity": "new-pod"}
-                    ]
-                },
-            ]
-        )
+        updated = replace(existing, state="UPDATING", hot_load_transition_type="SYNC")
+        mgr.update = MagicMock(return_value=updated)
+        mgr.get = MagicMock(side_effect=[existing, updated, replace(updated, state="READY")])
         monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
 
         mgr.reattach_trainer(

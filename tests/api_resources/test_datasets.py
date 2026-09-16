@@ -49,13 +49,11 @@ class TestDatasets:
                 "splitted": {"source_dataset_id": "sourceDatasetId"},
                 "transformed": {
                     "source_dataset_id": "sourceDatasetId",
-                    "filter": "filter",
                     "original_format": "FORMAT_UNSPECIFIED",
                 },
                 "user_uploaded": {},
             },
             dataset_id="datasetId",
-            filter="filter",
             source_dataset_id="sourceDatasetId",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
@@ -125,7 +123,6 @@ class TestDatasets:
             splitted={"source_dataset_id": "sourceDatasetId"},
             transformed={
                 "source_dataset_id": "sourceDatasetId",
-                "filter": "filter",
                 "original_format": "FORMAT_UNSPECIFIED",
             },
             user_uploaded={},
@@ -626,13 +623,11 @@ class TestAsyncDatasets:
                 "splitted": {"source_dataset_id": "sourceDatasetId"},
                 "transformed": {
                     "source_dataset_id": "sourceDatasetId",
-                    "filter": "filter",
                     "original_format": "FORMAT_UNSPECIFIED",
                 },
                 "user_uploaded": {},
             },
             dataset_id="datasetId",
-            filter="filter",
             source_dataset_id="sourceDatasetId",
         )
         assert_matches_type(Dataset, dataset, path=["response"])
@@ -702,7 +697,6 @@ class TestAsyncDatasets:
             splitted={"source_dataset_id": "sourceDatasetId"},
             transformed={
                 "source_dataset_id": "sourceDatasetId",
-                "filter": "filter",
                 "original_format": "FORMAT_UNSPECIFIED",
             },
             user_uploaded={},
