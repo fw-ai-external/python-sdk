@@ -131,7 +131,8 @@ class DeploymentConfig:
     * **Manual path** (``deployment_shape`` is ``None``): ``accelerator_type``
       is required (server rejects ``UNSPECIFIED``).  Defaults to
       ``NVIDIA_H200_141GB``.  Last resort -- only use this when no compatible
-      shape exists for the model.
+      shape exists for the model; set ``accept_shapeless_risk=True`` to
+      acknowledge the risk of creating without a shape.
     """
 
     deployment_id: str
@@ -172,6 +173,14 @@ class DeploymentConfig:
     within a single generation.
     """
     skip_shape_validation: bool = False
+    accept_shapeless_risk: bool = False
+    """Explicit opt-out of deployment shapes, allowing a custom config directly.
+
+    Mutually exclusive with ``deployment_shape`` (the server rejects the
+    combination). Warning: shapeless deployments skip pre-validated
+    configurations and are much more likely to fail at creation. Leave false
+    unless no compatible shape exists for the model.
+    """
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
     extra_values: dict[str, str] | None = None
@@ -214,6 +223,11 @@ class DeploymentConfig:
 
     def validate(self) -> None:
         """Validate client-side invariants before sending a deployment request."""
+        if self.accept_shapeless_risk and (self.deployment_shape or "").strip():
+            raise ValueError(
+                "accept_shapeless_risk cannot be combined with deployment_shape "
+                f"{self.deployment_shape!r}: it is an explicit opt-out of deployment shapes"
+            )
         expected_shape = (self.expected_deployment_shape or "").strip()
         if not expected_shape:
             return
@@ -356,6 +370,8 @@ class DeploymentManager(_RestClient):
         path = f"/v1/accounts/{self.account_id}/deployments?deploymentId={config.deployment_id}"
         if config.skip_shape_validation:
             path = f"{path}&skipShapeValidation=true"
+        if config.accept_shapeless_risk:
+            path = f"{path}&acceptShapelessRisk=true"
         if config.disable_speculative_decoding:
             path = f"{path}&disableSpeculativeDecoding=true"
 
