@@ -86,15 +86,18 @@ def connect(monkeypatch):
 
 
 @pytest.mark.parametrize("route", ["dedicated", "serverless"])
-@pytest.mark.parametrize("capability,enabled", [
-    ({"comms": "v2"}, True),
-    ({}, False),
-    ({"comms": "v1"}, False),
-    ({"comms": "v3"}, False),
-    ({"comms": None}, False),
-    ({"comms": True}, False),
-    ({"comms": {"v2": True}}, False),
-])
+@pytest.mark.parametrize(
+    "capability,enabled",
+    [
+        ({"comms": "v2"}, True),
+        ({}, False),
+        ({"comms": "v1"}, False),
+        ({"comms": "v3"}, False),
+        ({"comms": None}, False),
+        ({"comms": True}, False),
+        ({"comms": {"v2": True}}, False),
+    ],
+)
 def test_negotiation_controls_first_fb_request(connect, route, capability, enabled):
     service, calls = connect(route, [capability])
     client = service.create_training_client("test/model", lora_rank=8 if route == "serverless" else 0)
@@ -110,7 +113,11 @@ def test_negotiation_controls_first_fb_request(connect, route, capability, enabl
     assert result.loss_fn_outputs[0]["logprobs"].data == [-1.0, -2.0]
     training_calls = [(op, body) for op, body in calls if op not in ("telemetry", "session_heartbeat")]
     assert [op for op, _ in training_calls] == [
-        "create_session", "create_model", "retrieve_future", "forward_backward", "retrieve_future",
+        "create_session",
+        "create_model",
+        "retrieve_future",
+        "forward_backward",
+        "retrieve_future",
     ]
     body = training_calls[3][1]
     assert body.get("comms", "v1") == ("v2" if enabled else "v1")
@@ -145,7 +152,8 @@ def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch
 
     monkeypatch.setattr(managed, "_build_resource_managers", lambda **_: (object(), object()))
     endpoint = TrainerServiceEndpoint(
-        job_name="accounts/test/rlorTrainerJobs/trainer", job_id="trainer",
+        job_name="accounts/test/rlorTrainerJobs/trainer",
+        job_id="trainer",
         base_url="https://training.invalid/training/v1/rlorTrainerJobs/test/trainer",
     )
     monkeypatch.setattr(managed, "_start_or_reuse_trainer", lambda *_, **__: SimpleNamespace(created=False, job=endpoint))
@@ -182,7 +190,12 @@ def test_resume_negotiates_with_new_trainer(connect, route, with_optimizer, use_
     assert client.comms == "v2"
     operations = [op for op, _ in calls if op not in ("telemetry", "session_heartbeat")]
     assert operations == [
-        "create_session", "weights_info", "create_model", "retrieve_future", "load_weights", "retrieve_future",
+        "create_session",
+        "weights_info",
+        "create_model",
+        "retrieve_future",
+        "load_weights",
+        "retrieve_future",
     ]
 
 
@@ -196,3 +209,199 @@ def test_capability_does_not_weaken_model_validation(connect):
     service, _ = connect("serverless", [{"model_id": None, "comms": "v2"}])
     with pytest.raises(ValueError, match="model_id"):
         service.create_lora_training_client("test/model", rank=8)
+
+
+@pytest.mark.parametrize(
+    "probe_status,message,restored_binding",
+    [
+        (200, "", False),
+        (400, "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'", False),
+        (400, "temperature must be between 0 and 2", False),
+        (400, "R3 shared storage domain mismatch", False),
+        (429, "rate limit", False),
+        (500, "internal error", False),
+        (200, "", True),
+        (400, "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'", True),
+    ],
+)
+def test_r3_probe_is_lazy_shared_and_only_unknown_format_falls_back(
+    monkeypatch, probe_status, message, restored_binding
+):
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    calls = []
+    error = {"error": {"code": "invalid_request_error", "message": message}}
+    fallback = probe_status == 400 and message.startswith("Extra inputs are not permitted,")
+
+    async def receive(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        assert request.url.path == "/inference/v1/completions"
+        if body.get("stream") is False:
+            await asyncio.sleep(0.01)  # All concurrent callers must share this probe.
+            assert body["max_tokens"] == 0 and body["echo"] is True
+            assert body["logprobs"] is True and "use_new_logprobs" not in body
+            assert request.headers["x-fireworks-r3-store-id"] == "nfs-test"
+            return httpx.Response(probe_status, json=_r3_probe_result() if probe_status == 200 else error)
+        assert body.get("routing_matrix_format") == ("parquet_v1" if probe_status == 200 else None)
+        assert bool(body.get("include_routing_matrix")) == (probe_status != 200)
+        return httpx.Response(200, text='data: {"choices":[{"text":"ok","finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+
+    def unexpected_probe(request):
+        raise AssertionError(f"Binding must not call {request.url}")
+
+    monkeypatch.setattr(
+        "fireworks.training.sdk._rest_client._make_sync_client",
+        lambda _verify: httpx.Client(transport=httpx.MockTransport(unexpected_probe)),
+    )
+    sampler = DeploymentSampler("https://inference.invalid", "test/model", "fw-test")
+    if restored_binding:
+        # A sidecar restores the trainer's store before the parent's first R3 request.
+        sampler.r3_store_id = "nfs-test"
+    else:
+        sampler.negotiate_routing_matrix_format("parquet_v1", "nfs-test")
+    assert calls == []
+    sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(receive))
+
+    async def run():
+        results = await asyncio.gather(
+            *(sampler.async_completions_stream([1, 2], include_routing_matrix=True) for _ in range(256)),
+            return_exceptions=True,
+        )
+        assert len([body for body in calls if body.get("stream") is False]) == 1
+        if probe_status == 200 or fallback:
+            assert all(not isinstance(result, BaseException) for result in results)
+            assert len(calls) == 257
+        else:
+            assert all(isinstance(result, httpx.HTTPStatusError) for result in results)
+            assert len(calls) == 1
+        await sampler._async_client.aclose()
+
+    try:
+        asyncio.run(run())
+    finally:
+        sampler.close()
+
+
+def _r3_probe_result():
+    return {
+        "choices": [
+            {
+                "routing_matrix_format": "parquet_v1",
+                "r3_store_id": "nfs-test",
+                "routing_references": {
+                    "length": 2,
+                    "files": [
+                        {
+                            "store_id": "nfs-test",
+                            "file_id": "00000000-0000-0000-0000-000000000001",
+                            "format": "parquet_v1",
+                            "row_count": 2,
+                        }
+                    ],
+                    "spans": [{"input_token_start": 0, "count": 2, "file_index": 0, "file_row_start": 0}],
+                },
+            }
+        ]
+    }
+
+
+def test_old_replica_after_successful_probe_retries_inline_once():
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    calls = []
+
+    async def receive(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        if not body["stream"]:
+            return httpx.Response(200, json=_r3_probe_result())
+        if "routing_matrix_format" in body:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "code": "invalid_request_error",
+                        "message": "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'",
+                    }
+                },
+            )
+        assert body["include_routing_matrix"] is True
+        assert "x-fireworks-r3-store-id" not in request.headers
+        return httpx.Response(200, text='data: {"choices":[{"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+
+    sampler = DeploymentSampler("https://inference.invalid", "test/model", "fw-test")
+    sampler.negotiate_routing_matrix_format("parquet_v1", "nfs-test")
+    sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(receive))
+
+    async def run():
+        for _ in range(2):
+            await sampler.async_completions_stream([1, 2], include_routing_matrix=True)
+        assert len(calls) == 4  # One probe, one rejected request, two inline requests.
+        assert sampler.routing_matrix_format == "base64_inline"
+        await sampler._async_client.aclose()
+
+    try:
+        asyncio.run(run())
+    finally:
+        sampler.close()
+
+
+@pytest.mark.parametrize("comms", ["v1", "v2"])
+@pytest.mark.parametrize(
+    "inference_new",
+    [False, True],
+)
+@pytest.mark.parametrize("route", ["dedicated", "serverless"])
+@pytest.mark.parametrize("use_async", [False, True])
+def test_sampler_binding_is_independent_for_reused_deployment(
+    connect, monkeypatch, comms, inference_new, route, use_async
+):
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    service, _ = connect(route, [{"comms": comms, "routing_matrix_format": "parquet_v1", "r3_store_id": "nfs-test"}])
+    training = service.create_training_client("test/model", lora_rank=8 if route == "serverless" else 0)
+    async def receive(request):
+        assert request.url.path.endswith("/inference/v1/completions")
+        if json.loads(request.content).get("stream") is False:
+            return (
+                httpx.Response(200, json=_r3_probe_result())
+                if inference_new
+                else httpx.Response(
+                    400,
+                    json={
+                        "error": {
+                            "code": "invalid_request_error",
+                            "message": "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'",
+                        }
+                    },
+                )
+            )
+        return httpx.Response(200, text='data: {"choices":[{"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+
+    monkeypatch.setattr(
+        "fireworks.training.sdk._rest_client._make_async_client",
+        lambda _verify: httpx.AsyncClient(transport=httpx.MockTransport(receive)),
+    )
+    backend = DeploymentSampler("https://inference.invalid", "test/model", "fw-test")
+    first = (
+        asyncio.run(service.create_sampling_client_async(deployment_sampler=backend, training_client=training))
+        if use_async
+        else service.create_sampling_client(deployment_sampler=backend, training_client=training)
+    )
+    old = SimpleNamespace(comms="v2", routing_matrix_format="base64_inline", r3_store_id=None)
+    second = service.create_sampling_client(deployment_sampler=backend, training_client=old)
+    assert first.deployment_sampler.routing_matrix_format == "base64_inline"
+    asyncio.run(first.deployment_sampler.async_completions_stream([1, 2], include_routing_matrix=True))
+    enabled = inference_new
+    assert first.deployment_sampler.r3_store_id == "nfs-test"
+    assert second.deployment_sampler.r3_store_id is None
+    assert first.deployment_sampler.routing_matrix_format == ("parquet_v1" if enabled else "base64_inline")
+    assert second.deployment_sampler.routing_matrix_format == "base64_inline"
+    assert backend.r3_store_id is None
+    backend.close()
+    second.close()
+    assert not first.deployment_sampler._sync_client.is_closed
+    asyncio.run(first.deployment_sampler.async_completions_stream([1, 2], include_routing_matrix=True))
+    assert first.deployment_sampler.routing_matrix_format == ("parquet_v1" if enabled else "base64_inline")
+    first.close()

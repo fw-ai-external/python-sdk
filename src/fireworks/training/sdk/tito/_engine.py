@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 import asyncio
@@ -10,9 +11,10 @@ import secrets
 from types import MappingProxyType
 from typing import Any, Literal, Mapping, Callable, Protocol, Sequence
 from functools import partial
-from dataclasses import field, dataclass
+from dataclasses import field, replace, dataclass
 from concurrent.futures import ThreadPoolExecutor
 
+from fireworks.training.sdk.routing import RoutingReferences, freeze_routing, routing_to_wire
 from fireworks.training.sdk.sampling import (
     ServerMetrics,
     SampledCompletion,
@@ -202,6 +204,7 @@ class _LinearTrajectoryCore:
         self.max_output_tokens = max_output_tokens
         self.call_classifier = call_classifier
         defaults = dict(sampling_defaults or {})
+        self.incremental_prompt_routing = bool(defaults.pop("incremental_prompt_routing", False))
         default_temperature = defaults.pop("temperature", None)
         self.default_temperature = None if default_temperature is None else float(default_temperature)
         reserved_defaults = sorted(
@@ -1192,7 +1195,11 @@ class _LinearTrajectoryCore:
                 if completion.sampling_logprobs is not None:
                     sampled_arrays[f"{prefix}_sampling_logprobs"] = completion.sampling_logprobs
                 if completion.routing_matrices is not None:
-                    sampled_arrays[f"{prefix}_routing_matrices"] = completion.routing_matrices
+                    sampled_arrays[f"{prefix}_routing_matrices"] = (
+                        json.dumps(routing_to_wire(completion.routing_matrices))
+                        if isinstance(completion.routing_matrices, RoutingReferences)
+                        else completion.routing_matrices
+                    )
         try:
             await self._record_async(
                 state,
@@ -1645,6 +1652,19 @@ class _LinearTrajectoryCore:
             phase = "sampling_admission"
             sampling_kwargs = self._sampling_kwargs(state, request)
             include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
+            if include_routing and self.incremental_prompt_routing:
+                retained = 0
+                if plan.segment is not None:
+                    if plan.prompt_disposition == "realign":
+                        retained = plan.realign_from_token or 0
+                    else:
+                        prior_ids = plan.segment.turns[-1].exact_checkpoint_ids
+                        retained = min(len(prior_ids), len(plan.prepared_prompt_ids))
+                        if prior_ids[:retained] != plan.prepared_prompt_ids[:retained]:
+                            retained = next(
+                                i for i, (a, b) in enumerate(zip(prior_ids, plan.prepared_prompt_ids)) if a != b
+                            )
+                sampling_kwargs["echo_last"] = len(plan.prepared_prompt_ids) - retained
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")
             state.sampler_calls += 1
@@ -1686,6 +1706,31 @@ class _LinearTrajectoryCore:
                 **sampling_kwargs,
             )
             phase = "completion_validation"
+            prompt_routes = None
+            prompt_route_start = None
+            if include_routing and self.incremental_prompt_routing:
+                original = sampled.completions[0]
+                count = original.echoed_prompt_logprob_count
+                expected_count = min(sampling_kwargs["echo_last"], max(0, original.prompt_len - 1))
+                if count != expected_count or original.routing_matrices is None:
+                    raise TITOError(
+                        "tito_completion_alignment_error", 502, "incremental prompt routing length mismatch"
+                    )
+                prompt_routes = freeze_routing(original.routing_matrices[:count])
+                prompt_route_start = original.prompt_len - 1 - count
+                normalized = replace(
+                    original,
+                    inference_logprobs=(
+                        None if original.inference_logprobs is None else original.inference_logprobs[count:]
+                    ),
+                    sampling_logprobs=(
+                        None if original.sampling_logprobs is None else original.sampling_logprobs[count:]
+                    ),
+                    routing_matrices=original.routing_matrices[count:],
+                    logprobs_echoed=False,
+                    echoed_prompt_logprob_count=0,
+                )
+                sampled = replace(sampled, completions=[normalized])
             completion = self._validate_completion(plan, sampled, include_routing)
             phase = "parser"
             parsed = self._parse(request, completion)
@@ -1721,8 +1766,10 @@ class _LinearTrajectoryCore:
                 sampling_logprobs=(
                     tuple(completion.sampling_logprobs) if completion.sampling_logprobs is not None else None
                 ),
+                prompt_routing_start=prompt_route_start,
+                prompt_routing_matrices=prompt_routes,
                 routing_matrices=(
-                    tuple(completion.routing_matrices) if completion.routing_matrices is not None else None
+                    freeze_routing(completion.routing_matrices) if completion.routing_matrices is not None else None
                 ),
                 response_id=str(response["id"]),
                 finish_reason=completion.finish_reason,
@@ -1790,7 +1837,9 @@ class _LinearTrajectoryCore:
                     else {}
                 ),
                 **(
-                    {"routing_matrices": completion.routing_matrices} if completion.routing_matrices is not None else {}
+                    {"routing_matrices": routing_to_wire(completion.routing_matrices)}
+                    if completion.routing_matrices is not None
+                    else {}
                 ),
             }
 
@@ -2135,7 +2184,7 @@ class _LinearTrajectoryCore:
                         else {}
                     ),
                     **(
-                        {"routing_matrices": completion.routing_matrices}
+                        {"routing_matrices": routing_to_wire(completion.routing_matrices)}
                         if completion.routing_matrices is not None
                         else {}
                     ),

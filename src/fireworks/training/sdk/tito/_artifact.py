@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 from dataclasses import fields
 
+from fireworks.training.sdk.routing import routing_to_wire, routing_from_wire
 from fireworks.training.sdk.sampling import ServerMetrics, SampledServerAttempt
 from fireworks.training.sdk.tito._types import (
     TITOTurn,
@@ -89,7 +90,9 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
         "exact_completion_ids": list(value.exact_completion_ids),
         "inference_logprobs": value.inference_logprobs,
         "sampling_logprobs": value.sampling_logprobs,
-        "routing_matrices": value.routing_matrices,
+        "routing_matrices": routing_to_wire(value.routing_matrices),
+        "prompt_routing_start": value.prompt_routing_start,
+        "prompt_routing_matrices": routing_to_wire(value.prompt_routing_matrices),
         "response_id": value.response_id,
         "finish_reason": value.finish_reason,
         "prompt_disposition": value.prompt_disposition,
@@ -261,7 +264,9 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
         exact_completion_ids=tuple(raw["exact_completion_ids"]),
         inference_logprobs=(None if raw.get("inference_logprobs") is None else tuple(raw["inference_logprobs"])),
         sampling_logprobs=(None if raw.get("sampling_logprobs") is None else tuple(raw["sampling_logprobs"])),
-        routing_matrices=(None if raw.get("routing_matrices") is None else tuple(raw["routing_matrices"])),
+        routing_matrices=routing_from_wire(raw.get("routing_matrices")),
+        prompt_routing_start=raw.get("prompt_routing_start"),
+        prompt_routing_matrices=routing_from_wire(raw.get("prompt_routing_matrices")),
         response_id=str(raw["response_id"]),
         finish_reason=str(raw["finish_reason"]),
         prompt_disposition=raw["prompt_disposition"],
