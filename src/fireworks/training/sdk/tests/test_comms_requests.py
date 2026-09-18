@@ -37,14 +37,16 @@ def test_managed_service_leaves_negotiation_to_each_model(monkeypatch):
     assert not hasattr(received[0]["config"], "comms")
 
 
-@pytest.mark.parametrize("value", [True, "v3", None])
+@pytest.mark.parametrize("value", [True, "v4", None])
 def test_training_client_rejects_unknown_comms(value):
     with pytest.raises(ValueError, match="comms must be"):
         FiretitanTrainingClient(None, 0, "model", comms=value)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["forward", "backward", "embedding_forward", "embedding_backward", "contrastive"])
+@pytest.mark.parametrize(
+    "operation", ["forward", "backward", "embedding_forward", "embedding_backward", "contrastive"]
+)
 @pytest.mark.parametrize("comms", ["v1", "v2"])
 async def test_sdk_marks_only_comms_training_requests(operation, comms, monkeypatch):
     bodies = []
@@ -87,8 +89,8 @@ async def test_sdk_marks_only_comms_training_requests(operation, comms, monkeypa
         assert len(bodies) == 2
         assert all(body == bodies[0] for body in bodies)
         body = bodies[0]
-        if comms == "v2":
-            assert body["comms"] == "v2"
+        if comms != "v1":
+            assert body["comms"] == comms
         else:
             assert "comms" not in body
         assert body["model_id"] == "model" and body["seq_id"] == 1

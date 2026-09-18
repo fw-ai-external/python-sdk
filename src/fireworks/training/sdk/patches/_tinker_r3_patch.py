@@ -7,11 +7,14 @@ Safe to import multiple times -- patches are applied only once.
 Remove this file when tinker adds native routing_matrices support.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import List, Optional
 
 from pydantic.fields import FieldInfo
 
+from fireworks.training.sdk.routing import RoutingReferences, RoutingMatrixFormat, routing_model_input_kwargs
 from fireworks.training.sdk.patches._model_utils import rebuild_model
 
 logger = logging.getLogger(__name__)
@@ -55,7 +58,7 @@ def _rebuild_wire_models() -> None:
 def _apply_r3_patch() -> None:
     from tinker.types.model_input import ModelInput
 
-    if "routing_matrices" in ModelInput.model_fields:
+    if "routing_matrix_format" in ModelInput.model_fields:
         _rebuild_wire_models()
         return
 
@@ -63,6 +66,10 @@ def _apply_r3_patch() -> None:
         default=None, annotation=Optional[List[str]]
     )
     ModelInput.__annotations__["routing_matrices"] = Optional[List[str]]
+    ModelInput.model_fields["routing_references"] = FieldInfo(default=None, annotation=Optional[dict])
+    ModelInput.__annotations__["routing_references"] = Optional[dict]
+    ModelInput.model_fields["routing_matrix_format"] = FieldInfo(default=None, annotation=Optional[RoutingMatrixFormat])
+    ModelInput.__annotations__["routing_matrix_format"] = Optional[RoutingMatrixFormat]
     rebuild_model(ModelInput)
 
     from tinker.types.datum import Datum
@@ -79,12 +86,9 @@ def _apply_r3_patch() -> None:
     from tinker.types.encoded_text_chunk import EncodedTextChunk
 
     @classmethod  # type: ignore[misc]
-    def from_ints(
-        cls, tokens: List[int], routing_matrices: Optional[List[str]] = None
-    ) -> ModelInput:
+    def from_ints(cls, tokens: List[int], routing_matrices: List[str] | RoutingReferences | None = None) -> ModelInput:
         kwargs: dict = {"chunks": [EncodedTextChunk(tokens=tokens)]}
-        if routing_matrices is not None:
-            kwargs["routing_matrices"] = routing_matrices
+        kwargs.update(routing_model_input_kwargs(routing_matrices))
         return cls(**kwargs)
 
     ModelInput.from_ints = from_ints  # type: ignore[assignment]

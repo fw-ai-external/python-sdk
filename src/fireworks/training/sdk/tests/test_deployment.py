@@ -1859,7 +1859,8 @@ class TestFiretitanSamplingClient:
         assert captured["seed"] == 123
         assert captured["logprobs"] is True
 
-    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, fake_tinker):
+    @pytest.mark.parametrize("ttl", [None, 60, 604800])
+    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, fake_tinker, ttl):
         sampler = _make_sampler()
         captured = {}
 
@@ -1898,12 +1899,14 @@ class TestFiretitanSamplingClient:
                 sampling_params=FiretitanSamplingParams(
                     max_tokens=2,
                     include_routing_matrix=True,
+                    r3_ttl_seconds=ttl,
                 ),
             ).result(timeout=5)
         finally:
             client.close()
 
         assert captured["include_routing_matrix"] is True
+        assert captured.get("r3_ttl_seconds") == ttl
         assert isinstance(response, FiretitanSampleResponse)
         assert isinstance(response, tinker_types.SampleResponse)
         assert isinstance(response.sequences[0], FiretitanSampledSequence)

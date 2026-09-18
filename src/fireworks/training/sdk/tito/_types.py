@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Any, Union, Literal, Mapping, Protocol, Sequence, runtime_checkable
 from dataclasses import field, dataclass
 
+from fireworks.training.sdk.routing import RoutingReferences
 from fireworks.training.sdk.sampling import ServerMetrics, SampledServerAttempt
 
 TITOCallKind = Literal["policy", "auxiliary"]
@@ -132,6 +133,8 @@ def _chat_normalization_steps(
     """Describe every protocol-level rewrite made at request admission."""
     steps: list[str] = []
     for message_index, (wire_message, canonical_message) in enumerate(zip(wire_messages, canonical_messages)):
+        if "provider_specific_fields" in wire_message and "provider_specific_fields" not in canonical_message:
+            steps.append(f"messages[{message_index}].provider_specific_fields:empty_refusal_removed")
         wire_calls = wire_message.get("tool_calls") or []
         canonical_calls = canonical_message.get("tool_calls") or []
         wire_content = wire_message.get("content")
@@ -286,8 +289,15 @@ class TITOChatRequest:
         if max_tokens is None:
             max_tokens = payload.get("max_tokens")
         wire_request = _copy_json_in_order(payload)
+        messages = [dict(message) for message in payload.get("messages") or ()]
+        for message in messages:
+            # Compatible clients add this empty response marker on roundtrip.
+            # Normalize admission only: decoding old artifacts must preserve
+            # their already canonical messages and request fingerprints.
+            if message.get("role") == "assistant" and message.get("provider_specific_fields") == {"refusal": None}:
+                del message["provider_specific_fields"]
         normalized = cls(
-            messages=tuple(payload.get("messages") or ()),
+            messages=tuple(messages),
             tools=tuple(payload.get("tools") or ()),
             model=str(payload.get("model") or "policy"),
             max_tokens=int(max_tokens) if max_tokens is not None else None,
@@ -513,7 +523,7 @@ class TITOTurn:
     exact_completion_ids: tuple[int, ...]
     inference_logprobs: tuple[float, ...] | None
     sampling_logprobs: tuple[float | None, ...] | None
-    routing_matrices: tuple[str, ...] | None
+    routing_matrices: tuple[str, ...] | RoutingReferences | None
     response_id: str
     finish_reason: str
     prompt_disposition: TITOPromptDisposition
@@ -528,6 +538,8 @@ class TITOTurn:
     logical_request_id: str
     upstream_response_id: str | None
     upstream_attempts: int
+    prompt_routing_start: int | None = None
+    prompt_routing_matrices: tuple[str, ...] | RoutingReferences | None = None
     prompt_mode: TITOPromptMode = "full_history"
     incremental_contract_id: str | None = None
     incremental_junction_kind: str | None = None

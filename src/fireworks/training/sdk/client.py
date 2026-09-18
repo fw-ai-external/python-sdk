@@ -36,7 +36,7 @@ from concurrent.futures import Future as ConcurrentFuture
 import httpx
 import numpy as np
 from tinker import SamplingClient, types
-from pydantic import BaseModel, field_validator
+from pydantic import Field, BaseModel, field_validator
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from tinker.lib.telemetry import Telemetry
 from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
@@ -56,6 +56,7 @@ from tinker.lib.public_interfaces.training_client import (
 # the field is present whenever this module is loaded (the patch is idempotent).
 import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
 from fireworks.training.sdk._comms import Comms, comms_context
+from fireworks.training.sdk.routing import RoutingReferences, RoutingMatrixFormat
 from fireworks.training.sdk._constants import (
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
@@ -112,6 +113,8 @@ class _CreateModelResponse(types.CreateModelResponse):
     """Retain the selected trainer's optional communication capability."""
 
     comms: Comms = "v1"
+    routing_matrix_format: RoutingMatrixFormat = "base64_inline"
+    r3_store_id: str | None = None
     model_config = {"protected_namespaces": ()}
 
     @field_validator("comms", mode="before")
@@ -120,18 +123,25 @@ class _CreateModelResponse(types.CreateModelResponse):
         # Unknown optional capabilities must not break otherwise valid models.
         return "v2" if value == "v2" else "v1"
 
+    @field_validator("routing_matrix_format", mode="before")
+    @classmethod
+    def _known_routing_matrix_format(cls, value):
+        return "parquet_v1" if value == "parquet_v1" else "base64_inline"
+
 
 class FiretitanSamplingParams(types.SamplingParams):
     """Tinker sampling parameters with optional FireTitan response fields."""
 
     include_routing_matrix: bool = False
+    # Parquet R3 retention from file creation. None uses the serving default (6h).
+    r3_ttl_seconds: int | None = Field(default=None, gt=0, strict=True)
 
 
 @dataclass(frozen=True)
 class FiretitanSampledSequence(types.SampledSequence):
     """A Tinker sampled sequence with FireTitan-specific token metadata."""
 
-    routing_matrices: list[str] | None = None
+    routing_matrices: list[str] | RoutingReferences | None = None
 
 
 @dataclass(frozen=True)
@@ -252,6 +262,8 @@ class FiretitanSamplingClient(SamplingClient):
 
         if isinstance(sampling_params, FiretitanSamplingParams) and sampling_params.include_routing_matrix:
             kwargs["include_routing_matrix"] = True
+            if sampling_params.r3_ttl_seconds is not None:
+                kwargs["r3_ttl_seconds"] = sampling_params.r3_ttl_seconds
 
         return kwargs
 
@@ -1027,6 +1039,8 @@ def _create_base_only_training_client(
         model_id=model_id,
         lora_rank=0,
         comms=response.comms,
+        r3_store_id=response.r3_store_id,
+        routing_matrix_format=response.routing_matrix_format,
     )
 
 
@@ -1097,8 +1111,7 @@ def _validate_checkpoint_ref(checkpoint_ref: str) -> str:
     if len(segments) >= 3 and _CHECKPOINT_RUN_ID_RE.fullmatch(segments[1]):
         return normalized_path
     raise ValueError(
-        "checkpoint path must be a bare logical name, "
-        "'<account>/<run>/<checkpoint>', or opaque cross_job:// reference"
+        "checkpoint path must be a bare logical name, '<account>/<run>/<checkpoint>', or opaque cross_job:// reference"
     )
 
 
@@ -1401,6 +1414,13 @@ def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
     ``ModelInput`` always serializes ``chunks`` before this patched field, hence
     the leading comma in the wire fragment.
     """
+    references = getattr(model_input, "routing_references", None)
+    if references is not None:
+        return len(
+            json.dumps(
+                {"routing_matrix_format": "parquet_v1", "routing_references": references}, separators=(",", ":")
+            ).encode()
+        )
     routing_matrices = getattr(model_input, "routing_matrices", None)
     if routing_matrices is None:
         return 0
@@ -1463,10 +1483,14 @@ class FiretitanTrainingClient(TrainingClient):
         first_sampler_checkpoint_type: SamplerCheckpointType = "base",
         run_name: str | None = None,
         comms: Comms = "v1",
+        r3_store_id: str | None = None,
+        routing_matrix_format: RoutingMatrixFormat = "base64_inline",
     ):
         if comms not in ("v1", "v2"):
             raise ValueError("comms must be 'v1' or 'v2'")
         self._comms = comms
+        self.routing_matrix_format = "parquet_v1" if routing_matrix_format == "parquet_v1" else "base64_inline"
+        self.r3_store_id = r3_store_id if self.routing_matrix_format == "parquet_v1" else None
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
@@ -2191,6 +2215,22 @@ class FiretitanTrainingClient(TrainingClient):
         operation: str,
     ) -> None:
         """Log one client-side error when an R3 trainer request is invalid."""
+        for datum in data:
+            model_input = datum.model_input
+            raw = getattr(model_input, "routing_references", None)
+            if raw is None:
+                continue
+            if self.routing_matrix_format != "parquet_v1" or not self.r3_store_id:
+                raise ValueError("Parquet R3 requires trainer parquet_v1 support and shared storage")
+            if getattr(model_input, "routing_matrix_format", "base64_inline") != "parquet_v1":
+                raise ValueError("Parquet R3 references require routing_matrix_format=parquet_v1")
+            references = RoutingReferences.from_dict(raw)
+            if getattr(model_input, "routing_matrices", None) is not None:
+                raise ValueError("Supply either inline routing matrices or references, not both")
+            if references.length != model_input.length:
+                raise ValueError("R3 references must match the model input token length")
+            if any(file["store_id"] != self.r3_store_id for file in references.files):
+                raise ValueError("R3 reference belongs to a different shared storage domain")
         if getattr(self, "_r3_request_error_logged", False):
             return
         issues = _r3_request_issues(data)
@@ -2575,7 +2615,11 @@ class FiretitanTrainingClient(TrainingClient):
         sampler_backend = self._require_sampler_backend()
         if not sampler_backend.hotload_saved_snapshot(model_path):
             raise RuntimeError(f"Hotload failed for sampler snapshot {model_path!r}")
-        return sampler_backend.get_sampling_client()
+        sampler = sampler_backend.get_sampling_client()
+        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding()
+        sampler.deployment_sampler._r3_binding_required = False
+        sampler.deployment_sampler.negotiate_routing_matrix_format(self.routing_matrix_format, self.r3_store_id)
+        return sampler
 
     async def create_sampling_client_async(
         self,
@@ -2806,6 +2850,7 @@ class FiretitanServiceClient(ServiceClient):
         self._service_closed = False
         self._fireworks_api_key = api_key if api_key and not api_key.startswith("tml-") else None
         self._created_training_configs: set[_TrainingKey] = set()
+        self._training_clients: list[FiretitanTrainingClient] = []
         self._allow_duplicate_training_configs = False
         self._sampler_backend: Any | None = None
         self._reference_handle: Any | None = None
@@ -3370,8 +3415,7 @@ class FiretitanServiceClient(ServiceClient):
                 )
             if not 1 <= lora_rank <= managed_config.max_lora_rank:
                 raise ValueError(
-                    f"lora_rank must be between 1 and max_lora_rank={managed_config.max_lora_rank}, "
-                    f"got {lora_rank}"
+                    f"lora_rank must be between 1 and max_lora_rank={managed_config.max_lora_rank}, got {lora_rank}"
                 )
             with self._ensure_managed_lifecycle_state():
                 if self._service_closed:
@@ -3459,14 +3503,18 @@ class FiretitanServiceClient(ServiceClient):
         self._created_training_configs.add(config_key)
         logger.info("Created model %s (lora_rank=%d)", model_id, lora_rank)
 
-        return FiretitanTrainingClient(
+        training_client = FiretitanTrainingClient(
             holder=self.holder,
             model_seq_id=model_seq_id,
             model_id=model_id,
             lora_rank=lora_rank,
             run_name=self._serverless_run_name(model_id),
             comms=response.comms,
+            r3_store_id=response.r3_store_id,
+            routing_matrix_format=response.routing_matrix_format,
         )
+        self._training_clients.append(training_client)
+        return training_client
 
     def create_lora_training_client(
         self,
@@ -3757,7 +3805,28 @@ class FiretitanServiceClient(ServiceClient):
             request_type="CreateModel",
         )
 
-    def create_sampling_client(
+    def create_sampling_client(self, *args, training_client: FiretitanTrainingClient | None = None, **kwargs):
+        sampler = self._create_sampling_client(*args, **kwargs)
+        # A reused deployment backend must not change an earlier handle's protocol.
+        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding()
+        sampler.deployment_sampler._r3_binding_required = False
+        if training_client is None:
+            handle = getattr(self, "_managed_handle", None)
+            clients = getattr(handle, "training_clients", None) or getattr(self, "_training_clients", [])
+            single = getattr(handle, "training_client", None)
+            if single is not None:
+                clients = [single]
+            if len(clients) == 1:
+                training_client = clients[0]
+            elif len(clients) > 1 and any(client.routing_matrix_format == "parquet_v1" for client in clients):
+                sampler.deployment_sampler._r3_binding_required = True
+        if training_client is not None:
+            sampler.deployment_sampler.negotiate_routing_matrix_format(
+                training_client.routing_matrix_format, training_client.r3_store_id
+            )
+        return sampler
+
+    def _create_sampling_client(
         self,
         model_path=None,
         base_model=None,
@@ -4014,6 +4083,8 @@ class FiretitanServiceClient(ServiceClient):
         base_model=None,
         retry_config=None,
         deployment_sampler: DeploymentSampler | None = None,
+        *,
+        training_client: FiretitanTrainingClient | None = None,
     ) -> FiretitanSamplingClient:
         return await asyncio.to_thread(
             self.create_sampling_client,
@@ -4021,6 +4092,7 @@ class FiretitanServiceClient(ServiceClient):
             base_model=base_model,
             retry_config=retry_config,
             deployment_sampler=deployment_sampler,
+            training_client=training_client,
         )
 
     def create_deployment_sampler(
@@ -4028,6 +4100,7 @@ class FiretitanServiceClient(ServiceClient):
         model_path: str | None = None,
         *,
         tokenizer: Any | None = None,
+        training_client: FiretitanTrainingClient | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
     ) -> DeploymentSampler:
         """Return the FireTitan ``DeploymentSampler`` directly (not the Tinker wrapper).
@@ -4039,11 +4112,16 @@ class FiretitanServiceClient(ServiceClient):
         hands back the underlying ``DeploymentSampler`` so callers don't unwrap
         ``.deployment_sampler`` themselves. Same deployment + hot-load.
         """
-        return self.create_sampling_client(
+        sampler = self.create_sampling_client(
             model_path=model_path,
+            training_client=training_client,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
-        ).deployment_sampler
+        )
+        # Transfer ownership from the unused wrapper to the caller. Its
+        # destructor must not close the returned deployment sampler.
+        sampler._closed = True
+        return sampler.deployment_sampler
 
     def create_reference_client(
         self,

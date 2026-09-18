@@ -28,6 +28,12 @@ from fireworks.training.sdk.errors import (
     _attach_training_error_source,
     _serverless_gateway_source_error,
 )
+from fireworks.training.sdk.routing import (
+    R3_TTL_HEADER,
+    R3_STORE_HEADER,
+    RoutingReferences,
+    RoutingMatrixFormat,
+)
 from fireworks.training.sdk.concurrency import (
     FixedConcurrencyController,
     AdaptiveConcurrencyController,
@@ -170,7 +176,8 @@ class SampledCompletion:
     logprobs_echoed: bool = False
     """True when echo=True was used: logprob lists have P+C-1 entries
     (training-aligned).  False: completion-only."""
-    routing_matrices: List[str] | None = None
+    routing_matrices: List[str] | RoutingReferences | None = None
+    echoed_prompt_logprob_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -251,6 +258,10 @@ class DeploymentSampler(_RestClient):
         # to the structured error so a failure is attributable. A plain dict;
         # only recognized keys survive. Unset simply means no extra context.
         self._request_context = request_context
+        self.routing_matrix_format: RoutingMatrixFormat = "base64_inline"
+        self.r3_store_id: str | None = None
+        self._r3_negotiated = False
+        self._r3_probe: asyncio.Task[None] | None = None
 
         if max_concurrency is not None:
             warnings.warn(
@@ -266,6 +277,89 @@ class DeploymentSampler(_RestClient):
             concurrency_controller = AdaptiveConcurrencyController()
 
         self._concurrency_controller = concurrency_controller
+
+    def _copy_for_r3_binding(self) -> DeploymentSampler:
+        # Each binding owns its HTTP clients: closing or collecting another
+        # handle must not close this one's transports or change its protocol.
+        return DeploymentSampler(
+            inference_url=self.base_url,
+            model=self.model,
+            api_key=self.api_key,
+            tokenizer=self.tokenizer,
+            concurrency_controller=self.concurrency_controller,
+            additional_headers=self.additional_headers,
+            request_context=self._request_context,
+        )
+
+    def negotiate_routing_matrix_format(self, trainer_format: RoutingMatrixFormat, store_id: str | None) -> None:
+        """Bind trainer support; the first R3 request checks inference lazily."""
+        self.routing_matrix_format = "base64_inline"
+        self.r3_store_id = store_id if trainer_format == "parquet_v1" else None
+        self._r3_negotiated = not bool(self.r3_store_id)
+        self._r3_probe = None
+
+    @staticmethod
+    def _unsupported_routing_format(response: httpx.Response) -> bool:
+        # Old native servers reject this field before starting generation.
+        if response.status_code != 400:
+            return False
+        try:
+            body = response.json()
+        except ValueError:
+            return False
+        error = body.get("error") if isinstance(body, dict) else None
+        return (
+            isinstance(error, dict)
+            and error.get("code") in ("invalid_request_error", "INVALID_ARGUMENT")
+            and error.get("message")
+            == ("Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'")
+        )
+
+    async def _post_completion(self, payload: dict, headers: Mapping[str, str], timeout: float) -> httpx.Response:
+        # Sampling owns retries; do not multiply its budget in the transport.
+        return await async_request_with_retries(
+            self._get_async_client().post,
+            f"{self.base_url}/inference/v1/completions",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+            retry_status_codes=(),
+            retry_exceptions=(),
+        )
+
+    async def _probe_routing_matrix_format(self, headers: Mapping[str, str], timeout: float) -> None:
+        response = await self._post_completion(
+            {
+                "model": self.model,
+                "prompt": "R3 compatibility check.",
+                "max_tokens": 0,
+                "n": 1,
+                "echo": True,
+                "stream": False,
+                "logprobs": True,
+                "routing_matrix_format": "parquet_v1",
+            },
+            {**headers, REQUEST_ID_HEADER: uuid.uuid4().hex, R3_STORE_HEADER: self.r3_store_id, R3_TTL_HEADER: "60"},
+            timeout,
+        )
+        if not self._unsupported_routing_format(response):
+            response.raise_for_status()
+            choice = response.json()["choices"][0]
+            if choice.get("routing_matrix_format") != "parquet_v1" or choice.get("r3_store_id") != self.r3_store_id:
+                raise ValueError("Inference did not acknowledge Parquet R3 in the trainer's shared storage domain")
+            references = RoutingReferences.from_dict(choice["routing_references"])
+            if not references.files or any(file["store_id"] != self.r3_store_id for file in references.files):
+                raise ValueError("Inference probe did not publish Parquet R3 in the trainer's shared storage domain")
+            self.routing_matrix_format = "parquet_v1"
+        self._r3_negotiated = True
+        logger.info("Negotiated routing_matrix_format=%s for %s", self.routing_matrix_format, self.model)
+
+    async def _ensure_routing_matrix_format(self, headers: Mapping[str, str], timeout: float) -> None:
+        if self.r3_store_id and not self._r3_negotiated:
+            if self._r3_probe is None or self._r3_probe.done():
+                self._r3_probe = asyncio.create_task(self._probe_routing_matrix_format(headers, timeout))
+            # Cancellation of one caller must not cancel the shared probe.
+            await asyncio.shield(self._r3_probe)
 
     @property
     def concurrency_controller(
@@ -306,6 +400,7 @@ class DeploymentSampler(_RestClient):
         logical_request_id: str | None = None,
         prompt_cache_key: str | None = None,
         additional_headers_snapshot: Mapping[str, str] | None = None,
+        r3_ttl_seconds: int | None = None,
         **kwargs: Any,
     ) -> tuple[dict[str, Any], ServerMetrics]:
         """Streaming n=1 async completions request.
@@ -322,7 +417,14 @@ class DeploymentSampler(_RestClient):
 
         The request automatically sets ``perf_metrics_in_response=True``
         so the server includes complete metrics in the last chunk.
+
+        ``r3_ttl_seconds`` sets Parquet R3 retention from file creation;
+        omission uses six hours. JSON routing has no server-side file to expire.
         """
+        if r3_ttl_seconds is not None and (type(r3_ttl_seconds) is not int or r3_ttl_seconds <= 0):
+            raise ValueError("r3_ttl_seconds must be a positive integer")
+        if "routing_matrix_format" in kwargs:
+            raise ValueError("routing_matrix_format is selected by the trainer-bound sampler")
         http_timeout = kwargs.pop("http_timeout", 600)
         if kwargs.get("images"):
             kwargs.setdefault("return_token_ids", True)
@@ -345,32 +447,40 @@ class DeploymentSampler(_RestClient):
         # policy-gradient estimator. Explicit caller kwargs still win.
         payload.setdefault("top_p", 1.0)
         payload.setdefault("top_k", 0)
-        url = f"{self.base_url}/inference/v1/completions"
         headers = self._inference_headers(additional_headers_snapshot)
+        if payload.get("include_routing_matrix") and getattr(self, "_r3_binding_required", False):
+            raise ValueError("Bind the sampler to training_client= for R3 when the service has multiple model handles")
+        # These headers are owned by the trainer-bound negotiation, not caller overrides.
+        headers = {key: value for key, value in headers.items() if key.lower() not in (R3_STORE_HEADER, R3_TTL_HEADER)}
         if logical_request_id:
             # Send the SDK's stable correlation id; the gateway/fw-proxy echoes
             # it back on the response so a failure is searchable in server logs.
             headers = {**headers, REQUEST_ID_HEADER: logical_request_id}
-        client = self._get_async_client()
         prompt_len = len(prompt)
 
         for hotload_attempt in range(hotload_max_retries + 1):
             t0 = time.time()
-            # The sampling path owns its own retry budget in
-            # ``_do_one_completion`` (attempts, jittered backoff, Retry-After,
-            # structured events). Opt this transport-level helper out of BOTH
-            # status- and exception-based retries so a single logical sampling
-            # request is not retried by two nested loops with multiplied budgets
-            # (previously up to MAX_WAIT_TIME per attempt x _RETRY_MAX_ATTEMPTS).
-            resp = await async_request_with_retries(
-                client.post,
-                url,
-                headers=headers,
-                json=payload,
-                timeout=http_timeout,
-                retry_status_codes=(),
-                retry_exceptions=(),
-            )
+            try:
+                if kwargs.get("include_routing_matrix"):
+                    await self._ensure_routing_matrix_format(headers, http_timeout)
+                    if self.routing_matrix_format == "parquet_v1":
+                        payload.pop("include_routing_matrix", None)
+                        payload["routing_matrix_format"] = "parquet_v1"
+                        headers[R3_STORE_HEADER] = self.r3_store_id
+                        if r3_ttl_seconds is not None:
+                            headers[R3_TTL_HEADER] = str(r3_ttl_seconds)
+                resp = await self._post_completion(payload, headers, http_timeout)
+                if payload.get("routing_matrix_format") == "parquet_v1" and self._unsupported_routing_format(resp):
+                    # A different replica may still run the old image. Retry only this pre-generation rejection.
+                    self.routing_matrix_format = "base64_inline"
+                    payload.pop("routing_matrix_format")
+                    payload["include_routing_matrix"] = True
+                    headers = {
+                        key: value for key, value in headers.items() if key not in (R3_STORE_HEADER, R3_TTL_HEADER)
+                    }
+                    resp = await self._post_completion(payload, headers, http_timeout)
+            except httpx.HTTPStatusError as exc:
+                resp = exc.response
 
             if resp.status_code in (404, 425) and hotload_attempt < hotload_max_retries:
                 logger.info(
@@ -390,6 +500,7 @@ class DeploymentSampler(_RestClient):
             finish_reason = None
             usage_info = None
             raw_output = None
+            routing_metadata = {}
             perf_metrics_dict: dict[str, str] | None = None
             first_token_time: float | None = None
             upstream_response_id: str | None = None
@@ -415,6 +526,14 @@ class DeploymentSampler(_RestClient):
                     upstream_response_id = str(chunk["id"])
 
                 for choice in chunk.get("choices", []):
+                    if any(key in choice for key in ("routing_references", "routing_matrix_format", "r3_store_id")):
+                        routing_metadata.update(
+                            {
+                                key: choice[key]
+                                for key in ("routing_references", "routing_matrix_format", "r3_store_id")
+                                if key in choice
+                            }
+                        )
                     text_delta = choice.get("text", "")
                     if text_delta:
                         if first_token_time is None:
@@ -471,6 +590,7 @@ class DeploymentSampler(_RestClient):
                 "text": accumulated_text,
                 "finish_reason": finish_reason or "stop",
             }
+            assembled_choice.update(routing_metadata)
             if accumulated_logprobs:
                 assembled_choice["logprobs"] = {"content": accumulated_logprobs}
             if raw_output:
@@ -560,6 +680,7 @@ class DeploymentSampler(_RestClient):
         Each completion is an independent async streaming request.
         Server metrics from response headers are fed into the
         ``AdaptiveConcurrencyController`` (if one was provided).
+        Pass ``r3_ttl_seconds`` to set Parquet R3 retention (default: six hours).
         """
         if self.tokenizer is None:
             raise ValueError("Tokenizer is required for sample_with_tokens")
@@ -623,6 +744,7 @@ class DeploymentSampler(_RestClient):
         ``list[str]`` stops are forwarded as string stop sequences. ``list[int]``
         stops are decoded with the sampler tokenizer before forwarding because
         the completions API only accepts string stop sequences.
+        Pass ``r3_ttl_seconds`` to set Parquet R3 retention (default: six hours).
         """
         if max_seq_len is not None and len(prompt_token_ids) >= max_seq_len:
             return []
@@ -1114,6 +1236,7 @@ class DeploymentSampler(_RestClient):
                         routing_requested,
                         echo_mode,
                         raw_logprobs_match_sampling,
+                        echo_last=kwargs.get("echo_last"),
                     )
                 except Exception as e:
                     upstream_response_id = str(result["id"]) if result.get("id") else None
@@ -1252,6 +1375,7 @@ class DeploymentSampler(_RestClient):
         routing_requested: bool,
         echo_mode: bool,
         raw_logprobs_match_sampling: bool,
+        echo_last: int | None = None,
     ) -> List[SampledCompletion]:
         """Parse a completions API response into SampledCompletion objects."""
         completions: List[SampledCompletion] = []
@@ -1292,6 +1416,16 @@ class DeploymentSampler(_RestClient):
                 self._warn_missing_sampling_logprob_fallback()
                 sampling_logprobs = list(raw_logprobs)
             routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
+            if routing_requested:
+                routing_matrix_format = choice.get("routing_matrix_format", "base64_inline")
+                if routing_matrix_format == "parquet_v1":
+                    if not self.r3_store_id:
+                        raise ValueError("Deployment returned Parquet R3 without a compatible trainer binding")
+                    if choice.get("r3_store_id") != self.r3_store_id or "routing_references" not in choice:
+                        raise ValueError("Deployment did not acknowledge Parquet R3 in the trainer's shared storage domain")
+                    routing_matrices = RoutingReferences.from_dict(choice["routing_references"])
+                elif routing_matrix_format != "base64_inline" or choice.get("routing_references") is not None:
+                    raise ValueError("Deployment returned an unsupported R3 format")
 
             expanded_prompt_ids = choice.get("prompt_token_ids") or raw.get("prompt_token_ids")
             if expanded_prompt_ids is not None:
@@ -1305,30 +1439,32 @@ class DeploymentSampler(_RestClient):
             # and drop the unconditional first-token logprob to get
             # P+C-1 training-aligned entries.
             lp_is_echo = False
-            if echo_mode:
-                if (
-                    len(completion_ids) < len(prompt_for_full)
-                    or completion_ids[: len(prompt_for_full)] != prompt_for_full
-                ):
-                    raise RuntimeError(
-                        format_sdk_error(
-                            "Echo response format mismatch",
-                            "echo=True was requested but completion_token_ids do not include the prompt prefix.",
-                            "The sampler uses echo=True to align prompt and completion token logprobs. "
-                            "Use a deployment path whose raw_output token IDs include the prompt prefix when echo is enabled.",
-                            docs_url=DOCS_SDK,
-                            show_support=True,
-                        )
-                    )
-
-                completion_ids = completion_ids[len(prompt_for_full) :]
-                lp_is_echo = raw_logprobs is not None or sampling_logprobs is not None or routing_matrices is not None
+            echoed_count = 0
+            if echo_last is not None:
+                if isinstance(echo_last, bool) or not isinstance(echo_last, int) or echo_last < 0:
+                    raise ValueError("echo_last must be a nonnegative integer")
+                echo_count = min(echo_last, len(prompt_for_full))
+            else:
+                echo_count = len(prompt_for_full) if echo_mode else 0
+            if echo_count:
+                expected_prefix = prompt_for_full[-echo_count:]
+                if completion_ids[:echo_count] != expected_prefix:
+                    raise RuntimeError("Echo response format mismatch: echoed suffix differs from prompt token IDs")
+                response_count = len(completion_ids)
+                for values in (raw_logprobs, sampling_logprobs, routing_matrices):
+                    if values is not None and len(values) != response_count:
+                        raise RuntimeError("Echo response arrays do not align with returned token IDs")
+                completion_ids = completion_ids[echo_count:]
+                # Only a full echo contains the unconditional first-token row.
+                drop = int(echo_count == len(prompt_for_full))
+                echoed_count = echo_count - drop
+                lp_is_echo = True
                 if raw_logprobs is not None:
-                    raw_logprobs = raw_logprobs[1:]
+                    raw_logprobs = raw_logprobs[drop:]
                 if sampling_logprobs is not None:
-                    sampling_logprobs = sampling_logprobs[1:]
+                    sampling_logprobs = sampling_logprobs[drop:]
                 if routing_matrices is not None:
-                    routing_matrices = routing_matrices[1:]
+                    routing_matrices = routing_matrices[drop:]
 
             full_tokens = prompt_for_full + list(completion_ids)
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
@@ -1349,6 +1485,7 @@ class DeploymentSampler(_RestClient):
                     inference_logprobs=raw_logprobs,
                     sampling_logprobs=sampling_logprobs,
                     logprobs_echoed=lp_is_echo,
+                    echoed_prompt_logprob_count=echoed_count,
                     routing_matrices=routing_matrices,
                 )
             )

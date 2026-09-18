@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.14 (2026-09-18)
+
+Full Changelog: [v1.2.13...v1.2.14](https://github.com/fw-ai-external/python-sdk/compare/v1.2.13...v1.2.14)
+
+### Features
+* **training-sdk:** select Parquet R3 using a small completion request; older inference servers retain inline routing without a capability endpoint
+* **training-sdk:** allow sampling requests to set `r3_ttl_seconds` for shared Parquet routing files; the default retention is six hours
+
 ## 1.2.13 (2026-09-18)
 
 Full Changelog: [v1.2.12...v1.2.13](https://github.com/fw-ai-external/python-sdk/compare/v1.2.12...v1.2.13)

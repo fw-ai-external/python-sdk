@@ -291,6 +291,7 @@ class TestForwardBackward:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
+        datum.model_input.routing_references = None
         datum.loss_fn_inputs = {
             "weights": weights,
             "target_tokens": types.TensorData(data=[10, 11, 12, 13], dtype="int64", shape=[4]),
@@ -312,6 +313,7 @@ class TestForwardBackward:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
+        datum.model_input.routing_references = None
         datum.loss_fn_inputs = {
             "target_tokens": types.TensorData(data=[10, 11, 12], dtype="int64", shape=[3]),
         }
@@ -337,7 +339,7 @@ class TestForwardBackward:
         future = MagicMock()
         mock_forward_backward.return_value = future
 
-        result = client.forward_backward([MagicMock()], "supervised")
+        result = client.forward_backward([types.Datum(model_input=types.ModelInput.from_ints([1]), loss_fn_inputs={})], "supervised")
 
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
@@ -2214,12 +2216,12 @@ class TestFiretitanServiceClientManagedCompat:
         svc._managed_config = None
         sampler_backend = MagicMock()
         sampler_backend.hotload_saved_snapshot.return_value = True
-        sampler_backend.get_sampling_client.return_value = "sampling-client"
+        sampler_backend.get_sampling_client.return_value = SimpleNamespace(deployment_sampler=MagicMock())
         svc._sampler_backend = sampler_backend
 
         result = svc.create_sampling_client(model_path="snapshot-1")
 
-        assert result == "sampling-client"
+        assert result is sampler_backend.get_sampling_client.return_value
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("snapshot-1")
 
     def test_create_sampling_client_uses_serverless_completions_route(self):
@@ -2391,6 +2393,7 @@ class TestLazyManagedRestClient:
 def _bare_training_client():
     """A FiretitanTrainingClient with __init__ bypassed for unit testing."""
     client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.routing_matrix_format, client.r3_store_id = "base64_inline", None
     client._sampler_backend = None
     client._tokenizer_model = None
     client._lora_rank = 0
@@ -2446,6 +2449,7 @@ class TestGetTokenizer:
 class TestTrainingClientSamplingHelpers:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        client.routing_matrix_format, client.r3_store_id = "base64_inline", None
         client._sampler_backend = None
         client._lora_rank = 0
         client._sampler_checkpoint_saved = False
@@ -2565,12 +2569,12 @@ class TestTrainingClientSamplingHelpers:
         client = self._make_client()
         sampler_backend = MagicMock()
         sampler_backend.hotload_saved_snapshot.return_value = True
-        sampler_backend.get_sampling_client.return_value = "sampling-client"
+        sampler_backend.get_sampling_client.return_value = SimpleNamespace(deployment_sampler=MagicMock())
         client._attach_sampler_backend(sampler_backend)
 
         result = client.create_sampling_client("sampler-path")
 
-        assert result == "sampling-client"
+        assert result is sampler_backend.get_sampling_client.return_value
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("sampler-path")
 
     def test_tinker_sampler_backend_hotloads_snapshot_identity(self):
@@ -2748,6 +2752,7 @@ class TestTrainingClientSamplingHelpers:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
+        datum.model_input.routing_references = None
         datum.loss_fn_inputs = {}
 
         result = client.forward_backward([datum], "cross_entropy").result()
@@ -3123,13 +3128,14 @@ class TestCreateTrainingClientDuplicate:
         svc._managed_config = None
         svc._default_user_metadata = None
         svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
+        svc._training_clients = []
         svc.holder = MagicMock()
         svc.holder.get_session_id.return_value = 1
         svc.holder.get_training_client_id.return_value = 1
 
         class FakeFuture:
             def result(self):
-                return SimpleNamespace(model_id="model-id", comms="v1")
+                return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None)
 
         def run_coroutine_threadsafe(coro):
             coro.close()
