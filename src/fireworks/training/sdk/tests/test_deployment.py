@@ -293,6 +293,43 @@ class TestCreateDeployment:
         assert body["forTraining"] is False
         assert body["enableHotLoad"] is True
 
+    def test_create_sends_accept_shapeless_risk_query_param(self, mgr, deploy_config):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {
+            "name": "accounts/test-acct/deployments/dep-1",
+            "state": "CREATING",
+        }
+        mgr._post = MagicMock(return_value=resp)
+        mgr._create_deployment(
+            replace(deploy_config, accept_shapeless_risk=True)
+        )
+        path = mgr._post.call_args[0][0]
+        assert "acceptShapelessRisk=true" in path
+
+    def test_create_omits_accept_shapeless_risk_query_param_by_default(self, mgr, deploy_config):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.is_success = True
+        resp.json.return_value = {
+            "name": "accounts/test-acct/deployments/dep-1",
+            "state": "CREATING",
+        }
+        mgr._post = MagicMock(return_value=resp)
+        mgr._create_deployment(deploy_config)
+        path = mgr._post.call_args[0][0]
+        assert "acceptShapelessRisk" not in path
+
+    def test_accept_shapeless_risk_rejects_deployment_shape(self, deploy_config):
+        config = replace(
+            deploy_config,
+            deployment_shape="accounts/test/deploymentShapes/s/versions/v",
+            accept_shapeless_risk=True,
+        )
+        with pytest.raises(ValueError, match="accept_shapeless_risk"):
+            config.validate()
+
     def test_create_can_mark_deployment_as_training_owned(self, deploy_config):
         body = DeploymentManager._build_deployment_body(
             replace(deploy_config, for_training=True)

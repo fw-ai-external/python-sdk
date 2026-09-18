@@ -48,6 +48,14 @@ class DeploymentCreateParams(TypedDict, total=False):
     If true, we will not require the deployment shape to be validated.
     """
 
+    accept_shapeless_risk: Annotated[bool, PropertyInfo(alias="acceptShapelessRisk")]
+    """
+    Explicit opt-out of deployment shapes, allowing a custom config directly.
+    Mutually exclusive with setting deployment_shape. Warning: shapeless
+    deployments skip pre-validated configurations and are much more likely to
+    fail at creation. Currently accepted but not enforced.
+    """
+
     validate_only: Annotated[bool, PropertyInfo(alias="validateOnly")]
     """
     If true, this will not create the deployment, but will return the deployment
@@ -94,16 +102,21 @@ class DeploymentCreateParams(TypedDict, total=False):
     The name of the deployment shape that this deployment is using. On the server
     side, this will be replaced with the deployment shape version name.
 
+    On create, may also be `"default"`: the server picks a default validated
+    shape version for the base model.
+
     Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so the
     hardware, precision, and serving configuration are known to work together.
     Use `client.deployment_shape_versions.match_for_model(base_model)` to find
-    the shapes your account can deploy this model on, then pass one here.
+    the shapes your account can deploy this model on, then pass one here (or
+    pass `"default"` to let the server choose).
     Omitting `deployment_shape` — whether or not you set `accelerator_type`,
     `accelerator_count`, or `precision` — creates the deployment without a shape,
     which skips validation. Deployments without a shape are the most common cause
     of failed deployment creations, and the unshaped path may be deprecated in the
-    future: always pass `deployment_shape`. If no existing shape fits your
-    workload, contact us and we'll help you find or add one.
+    future: always pass `deployment_shape`. If you explicitly need to create
+    without a shape, pass `accept_shapeless_risk=True`. If no existing shape
+    fits your workload, contact us and we'll help you find or add one.
     """
 
     deployment_template: Annotated[str, PropertyInfo(alias="deploymentTemplate")]

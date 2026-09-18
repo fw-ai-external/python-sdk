@@ -2413,7 +2413,7 @@ class FiretitanTrainingClient(TrainingClient):
         active adapter into the base weights and export a full base checkpoint
         (no adapter metadata), which promotes to an ``HF_BASE_MODEL``. Load the
         adapter first via :meth:`load_adapter`; saving from a fresh LoRA session
-        would export base-identical weights.
+        fails with a user error because there is no effective adapter delta.
 
         ``export_precision`` selects the precision of the final standalone
         checkpoint and is only valid with ``checkpoint_type="merged_base"``.

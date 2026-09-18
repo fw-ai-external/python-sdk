@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.13 (2026-09-18)
+
+Full Changelog: [v1.2.12...v1.2.13](https://github.com/fw-ai-external/python-sdk/compare/v1.2.12...v1.2.13)
+
+### Features
+* **deployments:** add `accept_shapeless_risk` opt-out on `deployments.create` for intentionally creating a deployment without a pre-validated shape; document the `deployment_shape="default"` sentinel that asks the server to pick a default validated shape
+* **training-sdk:** add `accept_shapeless_risk` to `DeploymentConfig` for the manual shapeless creation path, rejected client-side when combined with `deployment_shape`
+
+### Bug Fixes
+* **training-sdk:** drop redundant TITO metric series (`turn/model_tokens`, `turn/requested_output_tokens`, `trajectory/model_tokens_processed`, `agent/wall_seconds`, and the `debug/*` artifact-write family) and remove the `observe_agent_wall` API; trajectory summaries and Harbor trial phase brackets carry the same timing information
+
 ## 1.2.12 (2026-09-15)
 
 Full Changelog: [v1.2.11...v1.2.12](https://github.com/fw-ai-external/python-sdk/compare/v1.2.11...v1.2.12)

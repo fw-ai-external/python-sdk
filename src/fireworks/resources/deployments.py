@@ -67,6 +67,7 @@ class DeploymentsResource(SyncAPIResource):
         disable_speculative_decoding: bool | Omit = omit,
         skip_image_tag_validation: bool | Omit = omit,
         skip_shape_validation: bool | Omit = omit,
+        accept_shapeless_risk: bool | Omit = omit,
         validate_only: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
         accelerator_type: Literal[
@@ -159,6 +160,11 @@ class DeploymentsResource(SyncAPIResource):
           skip_shape_validation: By default, a deployment will ensure the deployment shape provided is validated.
               If true, we will not require the deployment shape to be validated.
 
+          accept_shapeless_risk: Explicit opt-out of deployment shapes, allowing a custom config directly.
+              Mutually exclusive with setting deployment_shape. Warning: shapeless
+              deployments skip pre-validated configurations and are much more likely
+              to fail at creation. Currently accepted but not enforced.
+
           validate_only: If true, this will not create the deployment, but will return the deployment
               that would be created.
 
@@ -174,6 +180,9 @@ class DeploymentsResource(SyncAPIResource):
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
+
+              On create, may also be `"default"`: the server picks a default
+              validated shape version for the base model.
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
@@ -320,6 +329,7 @@ class DeploymentsResource(SyncAPIResource):
                         "disable_speculative_decoding": disable_speculative_decoding,
                         "skip_image_tag_validation": skip_image_tag_validation,
                         "skip_shape_validation": skip_shape_validation,
+                        "accept_shapeless_risk": accept_shapeless_risk,
                         "validate_only": validate_only,
                     },
                     deployment_create_params.DeploymentCreateParams,
@@ -890,6 +900,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
         disable_speculative_decoding: bool | Omit = omit,
         skip_image_tag_validation: bool | Omit = omit,
         skip_shape_validation: bool | Omit = omit,
+        accept_shapeless_risk: bool | Omit = omit,
         validate_only: bool | Omit = omit,
         accelerator_count: int | Omit = omit,
         accelerator_type: Literal[
@@ -982,6 +993,11 @@ class AsyncDeploymentsResource(AsyncAPIResource):
           skip_shape_validation: By default, a deployment will ensure the deployment shape provided is validated.
               If true, we will not require the deployment shape to be validated.
 
+          accept_shapeless_risk: Explicit opt-out of deployment shapes, allowing a custom config directly.
+              Mutually exclusive with setting deployment_shape. Warning: shapeless
+              deployments skip pre-validated configurations and are much more likely
+              to fail at creation. Currently accepted but not enforced.
+
           validate_only: If true, this will not create the deployment, but will return the deployment
               that would be created.
 
@@ -997,6 +1013,9 @@ class AsyncDeploymentsResource(AsyncAPIResource):
 
           deployment_shape: The name of the deployment shape that this deployment is using. On the server
               side, this will be replaced with the deployment shape version name.
+
+              On create, may also be `"default"`: the server picks a default
+              validated shape version for the base model.
 
               Always pass `deployment_shape`. Shapes are pre-validated by Fireworks, so
               the hardware, precision, and serving configuration are known to work
@@ -1143,6 +1162,7 @@ class AsyncDeploymentsResource(AsyncAPIResource):
                         "disable_speculative_decoding": disable_speculative_decoding,
                         "skip_image_tag_validation": skip_image_tag_validation,
                         "skip_shape_validation": skip_shape_validation,
+                        "accept_shapeless_risk": accept_shapeless_risk,
                         "validate_only": validate_only,
                     },
                     deployment_create_params.DeploymentCreateParams,
