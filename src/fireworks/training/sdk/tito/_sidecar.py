@@ -257,9 +257,6 @@ class TITOSidecar:
             raise AssertionError("active trajectory failure returned no artifact")
         return artifact
 
-    async def observe_agent_wall(self, trajectory_id: str, seconds: float) -> None:
-        await self._engine_for(trajectory_id).observe_agent_wall_async(seconds)
-
     async def start(self, port: int = 0) -> None:
         """Start the environment-private HTTP adapter on loopback."""
         if self._runner is not None:

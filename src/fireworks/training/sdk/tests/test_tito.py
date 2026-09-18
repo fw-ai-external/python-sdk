@@ -1783,17 +1783,14 @@ async def test_terminal_state_is_irreversible() -> None:
         engine.abandon(trajectory_id, "late cleanup")
 
 
-async def test_agent_wall_bracket_is_explicit_and_sidecar_shutdown_abandons() -> None:
+async def test_sidecar_shutdown_abandons() -> None:
     engine = _engine(FakeSampler())
     trajectory_id = engine.create_trajectory()
-    engine.observe_agent_wall(trajectory_id, 1.25)
     await engine.close()
 
     tombstone = engine._tombstone  # noqa: SLF001
     assert tombstone is not None
     assert tombstone.status == "abandoned"
-    wall = tombstone.metrics.snapshot().distributions["agent/wall_seconds"]
-    assert wall.count == 1 and wall.sum == 1.25
 
 
 async def test_sidecar_shutdown_retires_every_trajectory_after_debug_close_failures() -> None:
@@ -2784,8 +2781,6 @@ async def test_local_debug_sink_writes_searchable_events_and_exact_arrays(tmp_pa
         "commit",
         "trajectory_terminal",
     }
-    assert result.metrics.counters["debug/events_written"] >= 1
-    assert result.metrics.counters["debug/trajectories_written"] == 1
     prepare_payloads = [frame["payload"] for frame in events if frame["event"] == "prepare"]
     assert prepare_payloads[0]["disposition"] == "new_segment"
     assert prepare_payloads[1]["prompt_tokens"] > 0
