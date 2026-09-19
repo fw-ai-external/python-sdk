@@ -2785,9 +2785,9 @@ class TestForwardBackwardCustomEmbedding:
             model_input=types.ModelInput.from_ints([1, 2]),
             loss_fn_inputs={
                 "target_tokens": types.TensorData(
-                    data=[2, 3],
+                    data=[2, 3, 4, 5],
                     dtype="int64",
-                    shape=[2],
+                    shape=[2, 2],
                 )
             },
         )
@@ -2796,9 +2796,9 @@ class TestForwardBackwardCustomEmbedding:
             loss_fn_outputs=[
                 {
                     "logprobs": types.TensorData(
-                        data=[-0.2, -0.4],
+                        data=[-0.2, -0.4, -0.6, -0.8],
                         dtype="float32",
-                        shape=[2],
+                        shape=[2, 2],
                     )
                 }
             ],
@@ -2837,8 +2837,12 @@ class TestForwardBackwardCustomEmbedding:
 
         def loss_fn(data, logprobs):
             assert data == [datum]
-            assert logprobs[0].tolist() == pytest.approx([-0.2, -0.4])
-            return (logprobs[0] * torch.tensor([3.0, -1.0])).sum(), {"custom": 2.0}
+            torch.testing.assert_close(
+                logprobs[0],
+                torch.tensor([[-0.2, -0.4], [-0.6, -0.8]]),
+            )
+            coefficients = torch.tensor([[3.0, -1.0], [2.0, 4.0]])
+            return (logprobs[0] * coefficients).sum(), {"custom": 2.0}
 
         future = client.forward_backward_custom(
             [datum],
@@ -2852,7 +2856,10 @@ class TestForwardBackwardCustomEmbedding:
         assert captured["loss_fn_config"] is None
         linear_inputs = captured["data"][0].loss_fn_inputs
         assert linear_inputs["target_tokens"] == datum.loss_fn_inputs["target_tokens"]
-        assert linear_inputs["weights"].tolist() == pytest.approx([-3.0, 1.0])
+        assert linear_inputs["weights"].data == pytest.approx(
+            [-3.0, 1.0, -2.0, -4.0]
+        )
+        assert linear_inputs["weights"].shape == [2, 2]
 
     @pytest.mark.parametrize(
         ("outputs", "error"),

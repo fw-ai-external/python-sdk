@@ -90,6 +90,14 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
         "exact_completion_ids": list(value.exact_completion_ids),
         "inference_logprobs": value.inference_logprobs,
         "sampling_logprobs": value.sampling_logprobs,
+        **(
+            {
+                "inference_topk_token_ids": value.inference_topk_token_ids,
+                "inference_topk_logprobs": value.inference_topk_logprobs,
+            }
+            if value.inference_topk_token_ids is not None
+            else {}
+        ),
         "routing_matrices": routing_to_wire(value.routing_matrices),
         "prompt_routing_start": value.prompt_routing_start,
         "prompt_routing_matrices": routing_to_wire(value.prompt_routing_matrices),
@@ -264,6 +272,16 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
         exact_completion_ids=tuple(raw["exact_completion_ids"]),
         inference_logprobs=(None if raw.get("inference_logprobs") is None else tuple(raw["inference_logprobs"])),
         sampling_logprobs=(None if raw.get("sampling_logprobs") is None else tuple(raw["sampling_logprobs"])),
+        inference_topk_token_ids=(
+            None
+            if raw.get("inference_topk_token_ids") is None
+            else tuple(tuple(row) for row in raw["inference_topk_token_ids"])
+        ),
+        inference_topk_logprobs=(
+            None
+            if raw.get("inference_topk_logprobs") is None
+            else tuple(tuple(row) for row in raw["inference_topk_logprobs"])
+        ),
         routing_matrices=routing_from_wire(raw.get("routing_matrices")),
         prompt_routing_start=raw.get("prompt_routing_start"),
         prompt_routing_matrices=routing_from_wire(raw.get("prompt_routing_matrices")),

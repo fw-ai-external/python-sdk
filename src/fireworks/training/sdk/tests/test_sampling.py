@@ -83,6 +83,52 @@ def _install_stream(sampler, effects):
     return calls
 
 
+def test_completion_parser_retains_top_logprob_token_ids() -> None:
+    sampler = _make_sampler()
+    result = {
+        "choices": [
+            {
+                "text": "hi",
+                "finish_reason": "stop",
+                "raw_output": {"completion_token_ids": [40, 50]},
+                "logprobs": {
+                    "content": [
+                        {
+                            "logprob": -0.1,
+                            "sampling_logprob": -0.1,
+                            "top_logprobs": [
+                                {"token_id": 40, "logprob": -0.1},
+                                {"token_id": 41, "logprob": -1.2},
+                            ],
+                        },
+                        {
+                            "logprob": -0.2,
+                            "sampling_logprob": -0.2,
+                            "top_logprobs": [
+                                {"token_id": 50, "logprob": -0.2},
+                                {"token_id": 51, "logprob": -1.3},
+                            ],
+                        },
+                    ]
+                },
+            }
+        ]
+    }
+
+    completion = sampler._parse_completions_result(
+        result,
+        prompt_ids=[1, 2],
+        max_seq_len=None,
+        user_requested_logprobs=True,
+        routing_requested=False,
+        echo_mode=False,
+        raw_logprobs_match_sampling=True,
+    )[0]
+
+    assert completion.inference_topk_token_ids == [[40, 41], [50, 51]]
+    assert completion.inference_topk_logprobs == [[-0.1, -1.2], [-0.2, -1.3]]
+
+
 class _CountingController:
     def __init__(self) -> None:
         self.acquired = 0
