@@ -842,6 +842,47 @@ class TestPollUntilReady:
         with pytest.raises(RuntimeError, match="failed"):
             mgr._poll_until_ready("job-1", "name", timeout_s=10)
 
+    @patch.object(TrainerJobManager, "get")
+    def test_failed_attaches_lifecycle_carrier(self, mock_get, mgr):
+        # A FAILED child must raise with the structured lifecycle status carrier
+        # attached so the managed adapter preserves the reviewed status copy
+        # (e.g. trainer-provisioning-failure) instead of collapsing the plain
+        # RuntimeError into a generic "Internal error" (CM-807 / INC-917).
+        mock_get.return_value = {
+            "state": "JOB_STATE_FAILED",
+            "status": {
+                "code": "INTERNAL",
+                "message": (
+                    "Trainer provisioning failed due to a control-plane issue "
+                    "while creating the trainer. Please retry, and contact support "
+                    "if it keeps failing."
+                ),
+                "details": [],
+            },
+        }
+        with pytest.raises(RuntimeError) as exc_info:
+            mgr._poll_until_ready("job-1", "name", timeout_s=10)
+        carrier = getattr(exc_info.value, "_fireworks_training_error_status", None)
+        assert carrier is not None, "lifecycle status carrier must be attached"
+        assert carrier.status["code"] == 13  # gRPC INTERNAL as an int
+        assert "Trainer provisioning failed" in carrier.status["message"]
+
+    @patch.object(TrainerJobManager, "get")
+    def test_failed_without_valid_status_still_raises(self, mock_get, mgr):
+        # A malformed/missing status must not break the raise; the carrier is
+        # simply omitted and the adapter falls back to its own classification.
+        mock_get.return_value = {
+            "state": "JOB_STATE_FAILED",
+            "status": {"code": "NOT_A_CODE", "message": "boom"},
+        }
+        with pytest.raises(RuntimeError, match="failed"):
+            mgr._poll_until_ready("job-1", "name", timeout_s=10)
+        # The error is raised without a carrier -- verified via a fresh raise.
+        try:
+            mgr._poll_until_ready("job-1", "name", timeout_s=10)
+        except RuntimeError as e:
+            assert getattr(e, "_fireworks_training_error_status", None) is None
+
     @pytest.mark.parametrize(
         "state",
         ["JOB_STATE_DELETED", "JOB_STATE_ARCHIVED"],

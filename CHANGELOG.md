@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.15 (2026-09-19)
+## 1.2.15 (2026-09-22)
 
 Full Changelog: [v1.2.14...v1.2.15](https://github.com/fw-ai-external/python-sdk/compare/v1.2.14...v1.2.15)
 
@@ -9,6 +9,7 @@ Full Changelog: [v1.2.14...v1.2.15](https://github.com/fw-ai-external/python-sdk
 
 ### Bug Fixes
 * **training-sdk:** preserve multidimensional custom-loss gradients as shaped tensor data during backward requests
+* **training-sdk:** preserve failed trainer status when reporting provisioning errors to managed training jobs
 
 ## 1.2.14 (2026-09-18)
 

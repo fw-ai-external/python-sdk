@@ -24,6 +24,7 @@ from fireworks.training.sdk.errors import (
     CONSOLE_URL,
     HTTP_STATUS_HINTS,
     parse_api_error,
+    _LifecycleStatus,
     format_sdk_error,
     parse_training_api_error,
     _training_api_runtime_error,
@@ -160,6 +161,72 @@ def _extract_job_status_message(job: dict[str, Any]) -> str:
     if status:
         return str(status)
     return ""
+
+
+# gRPC code names as serialized by the REST gateway (protojson emits the enum
+# name), mapped to the numeric codes the lifecycle status carrier contract
+# requires. Bounded table -- the canonical set of 17 gRPC codes.
+_GRPC_CODE_NAMES = {
+    "OK": 0, "CANCELLED": 1, "UNKNOWN": 2, "INVALID_ARGUMENT": 3,
+    "DEADLINE_EXCEEDED": 4, "NOT_FOUND": 5, "ALREADY_EXISTS": 6,
+    "PERMISSION_DENIED": 7, "RESOURCE_EXHAUSTED": 8, "FAILED_PRECONDITION": 9,
+    "ABORTED": 10, "OUT_OF_RANGE": 11, "UNIMPLEMENTED": 12, "INTERNAL": 13,
+    "UNAVAILABLE": 14, "DATA_LOSS": 15, "UNAUTHENTICATED": 16,
+}
+
+
+def _child_job_lifecycle_status(job: dict[str, Any]) -> _LifecycleStatus | None:
+    """Build a lifecycle status carrier from a trainer job payload's status.
+
+    The carrier lets downstream managed adapters (FireTitan) preserve the
+    child's reviewed status code/message/details -- e.g. the registered
+    trainer-provisioning-failure copy -- instead of collapsing the plain
+    RuntimeError into a generic "Internal error" (CM-807). Returns None when
+    the payload carries no valid status mapping; never raises.
+    """
+    status = job.get("status")
+    if not isinstance(status, dict):
+        return None
+    code = status.get("code")
+    message = status.get("message")
+    if isinstance(code, str):
+        code = _GRPC_CODE_NAMES.get(code.strip().upper())
+    if not isinstance(code, int) or isinstance(code, bool) or not 0 <= code <= 16:
+        return None
+    if not isinstance(message, str) or not message:
+        return None
+    details = status.get("details", [])
+    if not isinstance(details, list):
+        details = []
+    return _LifecycleStatus(
+        status={"code": code, "message": message, "details": details}
+    )
+
+
+def _raise_child_job_failed_error(job_id: str, job: dict[str, Any]) -> None:
+    """Raise the child-trainer failure error, preserving the structured status.
+
+    The lifecycle carrier keeps the child's reviewed status message (e.g. the
+    trainer-provisioning-failure copy) intact through managed-adapter status
+    enrichment instead of letting a plain RuntimeError collapse into a generic
+    "Internal error". See CM-807.
+    """
+    msg = _extract_job_status_message(job) or "unknown"
+    err = RuntimeError(
+        format_sdk_error(
+            f"Trainer job {job_id} failed",
+            msg,
+            "The trainer status detail above is from the control plane. "
+            "Check trainer logs and events in the Fireworks console before retrying.\n"
+            f"  Console: {CONSOLE_URL}",
+            docs_url=DOCS_SDK,
+            show_support=True,
+        )
+    )
+    carrier = _child_job_lifecycle_status(job)
+    if carrier is not None:
+        err._fireworks_training_error_status = carrier  # type: ignore[attr-defined]
+    raise err
 
 
 def _log_backend_warning_status(job: dict[str, Any]) -> None:
@@ -738,18 +805,7 @@ class TrainerJobManager(FireworksClient):
                 _raise_trainer_stopped_error(job_id, state, job)
 
             if state == "JOB_STATE_FAILED":
-                msg = status_message or "unknown"
-                raise RuntimeError(
-                    format_sdk_error(
-                        f"Trainer job {job_id} failed",
-                        msg,
-                        "The trainer status detail above is from the control plane. "
-                        "Check trainer logs and events in the Fireworks console before retrying.\n"
-                        f"  Console: {CONSOLE_URL}",
-                        docs_url=DOCS_SDK,
-                        show_support=True,
-                    )
-                )
+                _raise_child_job_failed_error(job_id, job)
 
             if state == "JOB_STATE_RUNNING":
                 if self._check_healthz(gateway_base_url):
