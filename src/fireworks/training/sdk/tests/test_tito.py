@@ -234,6 +234,22 @@ class FakeSampler:
             inference_logprobs=[-0.1] * len(output),
             sampling_logprobs=[-0.2] * len(output),
             routing_matrices=list(routes) if routes is not None else None,
+            inference_topk_token_ids=(
+                [
+                    [int(token_id) + offset for offset in range(int(kwargs["top_logprobs"]))]
+                    for token_id in output
+                ]
+                if kwargs.get("top_logprobs")
+                else None
+            ),
+            inference_topk_logprobs=(
+                [
+                    [-0.1 - offset for offset in range(int(kwargs["top_logprobs"]))]
+                    for _ in output
+                ]
+                if kwargs.get("top_logprobs")
+                else None
+            ),
         )
         return SampledRequestResult(
             completions=[completion],
@@ -490,6 +506,25 @@ async def test_exact_append_preserves_sampled_checkpoint() -> None:
     assert result.calls[1].server_attempts[0].response_request_id == "request-2"
     attempt_metrics = result.segments[0].turns[1].server_attempts[0].server_metrics
     assert attempt_metrics is not None and attempt_metrics.backend_host == "pod-2"
+
+
+async def test_policy_turn_retains_sampler_topk_distribution() -> None:
+    sampler = FakeSampler(outputs=([197, 3],))
+    engine = _engine(sampler, sampling_defaults={"top_logprobs": 2})
+    trajectory_id = engine.create_trajectory()
+
+    await engine.complete(trajectory_id, _first_request())
+    artifact = engine.finish(trajectory_id)
+    turn = artifact.segments[0].turns[0]
+
+    assert sampler.calls[0]["top_logprobs"] == 2
+    assert turn.inference_topk_token_ids == ((197, 198), (3, 4))
+    assert turn.inference_topk_logprobs == ((-0.1, -1.1), (-0.1, -1.1))
+    restored = type(artifact).unpack(artifact.pack())
+    assert restored.segments[0].turns[0].inference_topk_token_ids == (
+        (197, 198),
+        (3, 4),
+    )
 
 
 async def test_default_full_history_mode_never_calls_incremental_renderer() -> None:

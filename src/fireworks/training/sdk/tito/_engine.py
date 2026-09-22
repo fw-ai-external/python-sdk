@@ -1021,6 +1021,8 @@ class _LinearTrajectoryCore:
         for name, values in (
             ("inference_logprobs", completion.inference_logprobs),
             ("sampling_logprobs", completion.sampling_logprobs),
+            ("inference_topk_token_ids", completion.inference_topk_token_ids),
+            ("inference_topk_logprobs", completion.inference_topk_logprobs),
         ):
             if values is not None and len(values) != len(output):
                 raise TITOError(
@@ -1028,6 +1030,26 @@ class _LinearTrajectoryCore:
                     502,
                     f"{name} is not aligned with completion token IDs",
                 )
+        if (completion.inference_topk_token_ids is None) != (
+            completion.inference_topk_logprobs is None
+        ):
+            raise TITOError(
+                "tito_completion_alignment_error",
+                502,
+                "top-k token ids and logprobs must be present together",
+            )
+        if completion.inference_topk_token_ids is not None:
+            for token_ids, logprobs in zip(
+                completion.inference_topk_token_ids,
+                completion.inference_topk_logprobs or (),
+                strict=True,
+            ):
+                if not token_ids or len(token_ids) != len(logprobs):
+                    raise TITOError(
+                        "tito_completion_alignment_error",
+                        502,
+                        "top-k token ids and logprobs are not aligned",
+                    )
         if include_routing_matrix and (
             completion.routing_matrices is None or len(completion.routing_matrices) != len(output)
         ):
@@ -1726,6 +1748,16 @@ class _LinearTrajectoryCore:
                     sampling_logprobs=(
                         None if original.sampling_logprobs is None else original.sampling_logprobs[count:]
                     ),
+                    inference_topk_token_ids=(
+                        None
+                        if original.inference_topk_token_ids is None
+                        else original.inference_topk_token_ids[count:]
+                    ),
+                    inference_topk_logprobs=(
+                        None
+                        if original.inference_topk_logprobs is None
+                        else original.inference_topk_logprobs[count:]
+                    ),
                     routing_matrices=original.routing_matrices[count:],
                     logprobs_echoed=False,
                     echoed_prompt_logprob_count=0,
@@ -1768,6 +1800,16 @@ class _LinearTrajectoryCore:
                 ),
                 prompt_routing_start=prompt_route_start,
                 prompt_routing_matrices=prompt_routes,
+                inference_topk_token_ids=(
+                    tuple(tuple(row) for row in completion.inference_topk_token_ids)
+                    if completion.inference_topk_token_ids is not None
+                    else None
+                ),
+                inference_topk_logprobs=(
+                    tuple(tuple(row) for row in completion.inference_topk_logprobs)
+                    if completion.inference_topk_logprobs is not None
+                    else None
+                ),
                 routing_matrices=(
                     freeze_routing(completion.routing_matrices) if completion.routing_matrices is not None else None
                 ),
@@ -1839,6 +1881,14 @@ class _LinearTrajectoryCore:
                 **(
                     {"routing_matrices": routing_to_wire(completion.routing_matrices)}
                     if completion.routing_matrices is not None
+                    else {}
+                ),
+                **(
+                    {
+                        "inference_topk_token_ids": completion.inference_topk_token_ids,
+                        "inference_topk_logprobs": completion.inference_topk_logprobs,
+                    }
+                    if completion.inference_topk_token_ids is not None
                     else {}
                 ),
             }

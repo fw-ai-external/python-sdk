@@ -2156,13 +2156,20 @@ class FiretitanTrainingClient(TrainingClient):
         for index, (datum, logprob) in enumerate(zip(data, logprobs_list, strict=True)):
             if logprob.grad is None:
                 raise ValueError(f"No gradient computed for precomputed logprob tensor {index}")
+            linear_weights = (
+                -logprob.grad.detach().to(dtype=torch.float32).reshape(-1).cpu()
+            )
             linear_loss_data.append(
                 types.Datum(
                     model_input=datum.model_input,
                     loss_fn_inputs={
                         "target_tokens": datum.loss_fn_inputs["target_tokens"],
                         # Backend CE computes -logprobs * weights.
-                        "weights": -logprob.grad,
+                        "weights": types.TensorData(
+                            data=linear_weights.tolist(),
+                            dtype="float32",
+                            shape=list(logprob.grad.shape),
+                        ),
                     },
                 )
             )

@@ -178,6 +178,10 @@ class SampledCompletion:
     (training-aligned).  False: completion-only."""
     routing_matrices: List[str] | RoutingReferences | None = None
     echoed_prompt_logprob_count: int = 0
+    inference_topk_token_ids: List[List[int]] | None = None
+    """Raw-model top-k token ids at each returned logprob position."""
+    inference_topk_logprobs: List[List[float]] | None = None
+    """Raw-model top-k logprobs aligned with ``inference_topk_token_ids``."""
 
 
 @dataclass(frozen=True)
@@ -644,6 +648,45 @@ class DeploymentSampler(_RestClient):
                     values.append(float(value))
             return values
         return None
+
+    @staticmethod
+    def _extract_top_logprobs(
+        choice: dict[str, Any],
+    ) -> tuple[List[List[int]], List[List[float]]] | None:
+        """Extract per-position top-logprob token ids and values."""
+        lp_data = choice.get("logprobs")
+        if not isinstance(lp_data, dict):
+            return None
+        content = lp_data.get("content")
+        if not isinstance(content, list) or not content:
+            return None
+
+        token_ids: List[List[int]] = []
+        logprobs: List[List[float]] = []
+        for token in content:
+            if not isinstance(token, dict):
+                return None
+            candidates = token.get("top_logprobs")
+            if not isinstance(candidates, list) or not candidates:
+                return None
+            position_ids: List[int] = []
+            position_logprobs: List[float] = []
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    return None
+                token_id = candidate.get("token_id")
+                logprob = candidate.get("logprob")
+                if (
+                    not isinstance(token_id, int)
+                    or isinstance(token_id, bool)
+                    or logprob is None
+                ):
+                    return None
+                position_ids.append(token_id)
+                position_logprobs.append(float(logprob))
+            token_ids.append(position_ids)
+            logprobs.append(position_logprobs)
+        return token_ids, logprobs
 
     @staticmethod
     def _extract_routing_matrices(choice: dict[str, Any]) -> List[str] | None:
@@ -1403,6 +1446,14 @@ class DeploymentSampler(_RestClient):
                 if user_requested_logprobs
                 else None
             )
+            top_logprobs = (
+                self._extract_top_logprobs(choice)
+                if user_requested_logprobs
+                else None
+            )
+            topk_token_ids, topk_logprobs = (
+                top_logprobs if top_logprobs is not None else (None, None)
+            )
             if (
                 sampling_logprobs is not None
                 and all(value is None for value in sampling_logprobs)
@@ -1451,7 +1502,13 @@ class DeploymentSampler(_RestClient):
                 if completion_ids[:echo_count] != expected_prefix:
                     raise RuntimeError("Echo response format mismatch: echoed suffix differs from prompt token IDs")
                 response_count = len(completion_ids)
-                for values in (raw_logprobs, sampling_logprobs, routing_matrices):
+                for values in (
+                    raw_logprobs,
+                    sampling_logprobs,
+                    routing_matrices,
+                    topk_token_ids,
+                    topk_logprobs,
+                ):
                     if values is not None and len(values) != response_count:
                         raise RuntimeError("Echo response arrays do not align with returned token IDs")
                 completion_ids = completion_ids[echo_count:]
@@ -1465,6 +1522,9 @@ class DeploymentSampler(_RestClient):
                     sampling_logprobs = sampling_logprobs[drop:]
                 if routing_matrices is not None:
                     routing_matrices = routing_matrices[drop:]
+                if topk_token_ids is not None and topk_logprobs is not None:
+                    topk_token_ids = topk_token_ids[drop:]
+                    topk_logprobs = topk_logprobs[drop:]
 
             full_tokens = prompt_for_full + list(completion_ids)
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
@@ -1487,6 +1547,8 @@ class DeploymentSampler(_RestClient):
                     logprobs_echoed=lp_is_echo,
                     echoed_prompt_logprob_count=echoed_count,
                     routing_matrices=routing_matrices,
+                    inference_topk_token_ids=topk_token_ids,
+                    inference_topk_logprobs=topk_logprobs,
                 )
             )
 
