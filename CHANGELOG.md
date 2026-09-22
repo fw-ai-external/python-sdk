@@ -10,6 +10,7 @@ Full Changelog: [v1.2.14...v1.2.15](https://github.com/fw-ai-external/python-sdk
 ### Bug Fixes
 * **training-sdk:** preserve multidimensional custom-loss gradients as shaped tensor data during backward requests
 * **training-sdk:** preserve failed trainer status when reporting provisioning errors to managed training jobs
+* **training-sdk:** upgrade pyqwest to 0.10.0 while preserving system TLS roots
 
 ## 1.2.14 (2026-09-18)
 

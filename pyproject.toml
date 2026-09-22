@@ -50,9 +50,8 @@ training-sdk = [
   # Request validation uses FailFast; keep the control-plane runtime supported.
   "pydantic>=2.9.2,<2.13",
   "orjson>=3.10.0",
-  # Tinker 0.23 constructs pyqwest.HTTPTransport() without opting into system
-  # TLS roots. pyqwest 0.7 changed that constructor default, breaking HTTPS.
-  "pyqwest==0.6.2 ; python_version >= '3.11'",
+  # The SDK patches Tinker 0.23's transport to include system TLS roots.
+  "pyqwest==0.10.0 ; python_version >= '3.11'",
   "requests",
   "urllib3>=1.26,<3",
 ]

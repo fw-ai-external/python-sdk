@@ -37,17 +37,26 @@ class _ResponseBody:
         self._chunks = chunks
         self._delay = delay
         self._stall = stall
+        self._index = 0
+        self._delay_applied = False
         self._never_finishes = asyncio.Event()
         self.started = asyncio.Event()
 
-    async def __aiter__(self) -> AsyncIterator[bytes]:
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self
+
+    async def __anext__(self) -> bytes:
         self.started.set()
-        if self._delay:
+        if self._delay and not self._delay_applied:
+            self._delay_applied = True
             await asyncio.sleep(self._delay)
-        for chunk in self._chunks:
-            yield chunk
+        if self._index < len(self._chunks):
+            chunk = self._chunks[self._index]
+            self._index += 1
+            return chunk
         if self._stall:
             await self._never_finishes.wait()
+        raise StopAsyncIteration
 
 
 class _PyqwestResponse:
