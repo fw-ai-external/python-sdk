@@ -537,6 +537,7 @@ class _TrainingKey(NamedTuple):
     train_attn: bool
     train_unembed: bool
     lora_alpha: int | None
+    projection_head_dim: int | None
 
 
 class _MappedAPIFuture(APIFuture[T]):
@@ -1887,7 +1888,7 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
-        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ):
         fwd_input = types.ForwardBackwardInput(
             data=data,
@@ -1915,7 +1916,7 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
-        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ):
         fb_input = types.ForwardBackwardInput(
             data=data,
@@ -1941,7 +1942,7 @@ class FiretitanTrainingClient(TrainingClient):
     def _build_embedding_requests(
         self,
         data: list[types.Datum],
-        output: Literal["embedding", "cos_similarity_matrix"],
+        output: Literal["embedding", "projection", "cos_similarity_matrix"],
     ) -> list[tuple[int, list[types.Datum]]]:
         # ``embedding`` is per-datum and chunk-safe — split via the inherited
         # chunked-requests helper to respect MAX_CHUNK_LEN / MAX_CHUNK_BYTES.
@@ -1960,7 +1961,7 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
-        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
         return await self._run_chunked_requests(
@@ -1978,7 +1979,7 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
-        output: Literal["embedding", "cos_similarity_matrix"] = "embedding",
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
         return await self._run_chunked_requests(
@@ -1998,7 +1999,7 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: Callable,
         *,
         loss_type_input: Literal["logprobs"] = "logprobs",
-        output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
+        output: Literal["logprobs", "embedding", "projection", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
         precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
@@ -2017,9 +2018,10 @@ class FiretitanTrainingClient(TrainingClient):
             )
         if precomputed_forward is not None:
             raise ValueError("precomputed_forward is only supported for output='logprobs'")
-        if output not in ("embedding", "cos_similarity_matrix"):
+        if output not in ("embedding", "projection", "cos_similarity_matrix"):
             raise ValueError(
-                f"Unsupported output={output!r}; expected 'logprobs', 'embedding', or 'cos_similarity_matrix'"
+                f"Unsupported output={output!r}; expected 'logprobs', 'embedding', "
+                "'projection', or 'cos_similarity_matrix'"
             )
         if loss_type_input != "logprobs":
             raise ValueError(
@@ -2045,9 +2047,10 @@ class FiretitanTrainingClient(TrainingClient):
 
         embeddings = []
         for datum, out in zip(data, forward_result.loss_fn_outputs, strict=True):
-            if "embedding" not in out:
-                raise ValueError(f"{output} response missing 'embedding' tensor")
-            embedding_data = out["embedding"]
+            output_field = "projection" if output == "projection" else "embedding"
+            if output_field not in out:
+                raise ValueError(f"{output} response missing {output_field!r} tensor")
+            embedding_data = out[output_field]
             embedding = torch.tensor(embedding_data.data, dtype=torch.float32)
             if embedding_data.shape is not None:
                 embedding = embedding.reshape(embedding_data.shape)
@@ -2065,11 +2068,12 @@ class FiretitanTrainingClient(TrainingClient):
             if embedding.grad is None:
                 raise ValueError("No gradient computed for embedding tensor")
             grad = embedding.grad.detach().to(dtype=torch.float32).reshape(-1).cpu().tolist()
+            grad_field = "projection_grads" if output == "projection" else "embedding_grads"
             backward_data.append(
                 types.Datum(
                     model_input=datum.model_input,
                     loss_fn_inputs={
-                        "embedding_grads": types.TensorData(
+                        grad_field: types.TensorData(
                             data=grad,
                             dtype="float32",
                             shape=list(embedding.grad.shape),
@@ -2194,7 +2198,7 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: Callable,
         *,
         loss_type_input: Literal["logprobs"] = "logprobs",
-        output: Literal["logprobs", "embedding", "cos_similarity_matrix"] = "logprobs",
+        output: Literal["logprobs", "embedding", "projection", "cos_similarity_matrix"] = "logprobs",
         pooling: Literal["mean", "last"] = "mean",
         precomputed_forward: types.ForwardBackwardOutput | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
@@ -3405,15 +3409,33 @@ class FiretitanServiceClient(ServiceClient):
         train_unembed: bool = True,
         lora_alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         """Create a FiretitanTrainingClient (full-param or LoRA).
 
         ``lora_alpha`` defaults to ``DEFAULT_LORA_ALPHA`` (32) and is ignored for
         full-parameter training (``lora_rank == 0``). Pass ``None`` to let the
         backend choose its own default (``2 * lora_rank``).
+        Advanced feature: ``projection_head_dim`` adds a train-only projection
+        to the dedicated trainer's language-model output contract. Its dimension
+        is fixed when the service is built and sampler export is unsupported.
         """
+        if isinstance(projection_head_dim, bool) or (
+            projection_head_dim is not None and not isinstance(projection_head_dim, int)
+        ):
+            raise ValueError("projection_head_dim must be a non-negative integer when set")
+        if projection_head_dim == 0:
+            projection_head_dim = None
+        elif projection_head_dim is not None and projection_head_dim < 0:
+            raise ValueError("projection_head_dim must be a non-negative integer when set")
         managed_config = self._managed_config
         if managed_config is not None and managed_config.max_lora_rank is not None:
+            configured_projection_head_dim = managed_config.projection_head_dim
+            if projection_head_dim is not None and projection_head_dim != configured_projection_head_dim:
+                raise ValueError(
+                    "projection_head_dim is fixed when a managed service is configured; "
+                    f"expected {configured_projection_head_dim!r}, got {projection_head_dim!r}"
+                )
             resolved_base_model = base_model or managed_config.base_model
             if resolved_base_model != managed_config.base_model:
                 raise ValueError(
@@ -3430,16 +3452,19 @@ class FiretitanServiceClient(ServiceClient):
                 managed_handle = self._ensure_managed_handle(
                     user_metadata=self._user_metadata(user_metadata),
                 )
-                training_client = managed_handle.service_client.create_training_client(
-                    base_model=managed_config.base_model,
-                    lora_rank=lora_rank,
-                    seed=seed,
-                    train_mlp=train_mlp,
-                    train_attn=train_attn,
-                    train_unembed=train_unembed,
-                    lora_alpha=lora_alpha,
-                    user_metadata=self._user_metadata(user_metadata),
-                )
+                create_model_kwargs: dict[str, Any] = {
+                    "base_model": managed_config.base_model,
+                    "lora_rank": lora_rank,
+                    "seed": seed,
+                    "train_mlp": train_mlp,
+                    "train_attn": train_attn,
+                    "train_unembed": train_unembed,
+                    "lora_alpha": lora_alpha,
+                    "user_metadata": self._user_metadata(user_metadata),
+                }
+                if configured_projection_head_dim is not None:
+                    create_model_kwargs["projection_head_dim"] = configured_projection_head_dim
+                training_client = managed_handle.service_client.create_training_client(**create_model_kwargs)
                 training_client._tokenizer_model = managed_config.tokenizer_model
                 if managed_handle.sampler_backend is not None:
                     training_client._attach_sampler_backend(managed_handle.sampler_backend)
@@ -3452,6 +3477,11 @@ class FiretitanServiceClient(ServiceClient):
                     "create_training_client", "base_model", base_model, managed_config.base_model
                 )
             _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
+            if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
+                raise ValueError(
+                    "projection_head_dim is fixed when a managed service is configured; "
+                    f"expected {managed_config.projection_head_dim!r}, got {projection_head_dim!r}"
+                )
         managed_handle = self._ensure_managed_handle(
             user_metadata=self._user_metadata(user_metadata),
         )
@@ -3462,7 +3492,16 @@ class FiretitanServiceClient(ServiceClient):
         if base_model is None:
             raise ValueError("base_model is required for a direct training client")
         effective_alpha = lora_alpha if lora_rank > 0 else None
-        config_key = _TrainingKey(base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, effective_alpha)
+        config_key = _TrainingKey(
+            base_model,
+            lora_rank,
+            seed,
+            train_mlp,
+            train_attn,
+            train_unembed,
+            effective_alpha,
+            projection_head_dim,
+        )
         if config_key in self._created_training_configs and not getattr(
             self, "_allow_duplicate_training_configs", False
         ):
@@ -3493,6 +3532,7 @@ class FiretitanServiceClient(ServiceClient):
                         model_seq_id=model_seq_id,
                         base_model=base_model,
                         lora_config=lora_config,
+                        projection_head_dim=projection_head_dim,
                         user_metadata=self._user_metadata(user_metadata),
                     ),
                 )
@@ -3533,6 +3573,7 @@ class FiretitanServiceClient(ServiceClient):
         train_unembed: bool = True,
         alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         """Tinker-compatible LoRA factory name.
 
@@ -3548,6 +3589,7 @@ class FiretitanServiceClient(ServiceClient):
             train_unembed=train_unembed,
             lora_alpha=alpha,
             user_metadata=user_metadata,
+            projection_head_dim=projection_head_dim,
         )
 
     async def create_lora_training_client_async(
@@ -3560,6 +3602,7 @@ class FiretitanServiceClient(ServiceClient):
         train_unembed: bool = True,
         alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         return await asyncio.to_thread(
             self.create_lora_training_client,
@@ -3571,6 +3614,7 @@ class FiretitanServiceClient(ServiceClient):
             train_unembed=train_unembed,
             alpha=alpha,
             user_metadata=user_metadata,
+            projection_head_dim=projection_head_dim,
         )
 
     def _managed_config_for_resume(self) -> Any | None:
@@ -3613,13 +3657,15 @@ class FiretitanServiceClient(ServiceClient):
         path: str,
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         """Resume from a DCP checkpoint path returned by ``save_state``.
 
         Sampler/HF snapshot identities returned by
         ``save_weights_for_sampler`` are not trainer-state checkpoints. Import
         a PEFT adapter through ``load_adapter`` when a weights-only warm start
-        with a fresh optimizer is intended.
+        with a fresh optimizer is intended. Projection-bearing checkpoints
+        must be recreated with the same ``projection_head_dim``.
         """
         self._reject_weights_access_token("create_training_client_from_state", weights_access_token)
         managed_config = self._managed_config_for_resume()
@@ -3628,6 +3674,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client = self._create_training_client_from_weights_info(
                 weights_info,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
             training_client.load_state(path).result()
             return training_client
@@ -3640,6 +3687,11 @@ class FiretitanServiceClient(ServiceClient):
             train_mlp=managed_config.train_mlp,
             train_attn=managed_config.train_attn,
             user_metadata=user_metadata,
+            projection_head_dim=(
+                projection_head_dim
+                if projection_head_dim is not None
+                else getattr(managed_config, "projection_head_dim", None)
+            ),
         )
         training_client.load_state(path).result()
         return training_client
@@ -3649,6 +3701,7 @@ class FiretitanServiceClient(ServiceClient):
         path: str,
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         self._reject_weights_access_token("create_training_client_from_state_async", weights_access_token)
         managed_config = self._managed_config_for_resume()
@@ -3658,6 +3711,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client = await self._create_training_client_from_weights_info_async(
                 weights_info,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
         else:
             training_client = await self.create_lora_training_client_async(
@@ -3668,6 +3722,11 @@ class FiretitanServiceClient(ServiceClient):
                 train_mlp=managed_config.train_mlp,
                 train_attn=managed_config.train_attn,
                 user_metadata=user_metadata,
+                projection_head_dim=(
+                    projection_head_dim
+                    if projection_head_dim is not None
+                    else getattr(managed_config, "projection_head_dim", None)
+                ),
             )
 
         load_future = await training_client.load_state_async(path)
@@ -3679,6 +3738,7 @@ class FiretitanServiceClient(ServiceClient):
         path: str,
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         self._reject_weights_access_token(
             "create_training_client_from_state_with_optimizer",
@@ -3690,6 +3750,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client = self._create_training_client_from_weights_info(
                 weights_info,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
             training_client.load_state_with_optimizer(path).result()
             return training_client
@@ -3702,6 +3763,11 @@ class FiretitanServiceClient(ServiceClient):
             train_mlp=managed_config.train_mlp,
             train_attn=managed_config.train_attn,
             user_metadata=user_metadata,
+            projection_head_dim=(
+                projection_head_dim
+                if projection_head_dim is not None
+                else getattr(managed_config, "projection_head_dim", None)
+            ),
         )
         training_client.load_state_with_optimizer(path).result()
         return training_client
@@ -3711,6 +3777,7 @@ class FiretitanServiceClient(ServiceClient):
         path: str,
         user_metadata: dict[str, str] | None = None,
         weights_access_token: str | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
         self._reject_weights_access_token(
             "create_training_client_from_state_with_optimizer_async",
@@ -3723,6 +3790,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client = await self._create_training_client_from_weights_info_async(
                 weights_info,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
         else:
             training_client = await self.create_lora_training_client_async(
@@ -3733,6 +3801,11 @@ class FiretitanServiceClient(ServiceClient):
                 train_mlp=managed_config.train_mlp,
                 train_attn=managed_config.train_attn,
                 user_metadata=user_metadata,
+                projection_head_dim=(
+                    projection_head_dim
+                    if projection_head_dim is not None
+                    else getattr(managed_config, "projection_head_dim", None)
+                ),
             )
 
         load_future = await training_client.load_state_with_optimizer_async(path)
@@ -3744,7 +3817,10 @@ class FiretitanServiceClient(ServiceClient):
         weights_info: Any,
         *,
         user_metadata: dict[str, str] | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
+        if projection_head_dim is None:
+            projection_head_dim = getattr(weights_info, "projection_head_dim", None)
         if weights_info.is_lora:
             assert weights_info.lora_rank is not None
             return self.create_lora_training_client(
@@ -3754,11 +3830,13 @@ class FiretitanServiceClient(ServiceClient):
                 train_mlp=weights_info.train_mlp if weights_info.train_mlp is not None else True,
                 train_attn=weights_info.train_attn if weights_info.train_attn is not None else True,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
         return self.create_training_client(
             base_model=weights_info.base_model,
             lora_rank=0,
             user_metadata=user_metadata,
+            projection_head_dim=projection_head_dim,
         )
 
     async def _create_training_client_from_weights_info_async(
@@ -3766,7 +3844,10 @@ class FiretitanServiceClient(ServiceClient):
         weights_info: Any,
         *,
         user_metadata: dict[str, str] | None = None,
+        projection_head_dim: int | None = None,
     ) -> FiretitanTrainingClient:
+        if projection_head_dim is None:
+            projection_head_dim = getattr(weights_info, "projection_head_dim", None)
         if weights_info.is_lora:
             assert weights_info.lora_rank is not None
             return await self.create_lora_training_client_async(
@@ -3776,11 +3857,13 @@ class FiretitanServiceClient(ServiceClient):
                 train_mlp=weights_info.train_mlp if weights_info.train_mlp is not None else True,
                 train_attn=weights_info.train_attn if weights_info.train_attn is not None else True,
                 user_metadata=user_metadata,
+                projection_head_dim=projection_head_dim,
             )
         return self.create_training_client(
             base_model=weights_info.base_model,
             lora_rank=0,
             user_metadata=user_metadata,
+            projection_head_dim=projection_head_dim,
         )
 
     def create_base_training_client(

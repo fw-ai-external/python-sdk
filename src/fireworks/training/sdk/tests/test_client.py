@@ -42,6 +42,7 @@ from fireworks.training.sdk.client import (
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
     _TinkerSamplerBackend,
+    _build_trainer_job_config,
     _create_or_reattach_deployment,
     _create_or_reattach_deployment_result,
 )
@@ -1364,6 +1365,7 @@ class TestFiretitanServiceClientManagedCompat:
             train_unembed=True,
             train_mlp=True,
             train_attn=True,
+            projection_head_dim=2,
         )
         training_client = MagicMock()
         training_client.load_state_with_optimizer.return_value.result.return_value = None
@@ -1383,6 +1385,7 @@ class TestFiretitanServiceClientManagedCompat:
             train_mlp=True,
             train_attn=True,
             user_metadata={"owner": "test"},
+            projection_head_dim=2,
         )
         training_client.load_state_with_optimizer.assert_called_once_with("step-1")
 
@@ -1415,7 +1418,11 @@ class TestFiretitanServiceClientManagedCompat:
         svc.create_lora_training_client = MagicMock(return_value=training_client)
 
         path = "acct/run-0123456789abcdef0123456789abcdef/step-5"
-        result = svc.create_training_client_from_state(path, user_metadata={"owner": "t"})
+        result = svc.create_training_client_from_state(
+            path,
+            user_metadata={"owner": "t"},
+            projection_head_dim=3,
+        )
 
         assert result is training_client
         rest.get_weights_info_by_tinker_path.assert_called_once_with(path)
@@ -1426,6 +1433,7 @@ class TestFiretitanServiceClientManagedCompat:
             train_mlp=True,
             train_attn=True,
             user_metadata={"owner": "t"},
+            projection_head_dim=3,
         )
         training_client.load_state.assert_called_once_with(path)
 
@@ -1535,6 +1543,80 @@ class TestFiretitanServiceClientManagedCompat:
         assert create.call_args.kwargs["user_metadata"] == {"recipe": "sdft"}
         assert svc._sampler_backend is handle.sampler_backend
 
+    @pytest.mark.parametrize(("projection_head_dim", "expected"), [(2, 2), (0, None), (None, None)])
+    def test_managed_config_normalizes_projection_head_dim(self, projection_head_dim, expected):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            lora_rank=4,
+            projection_head_dim=projection_head_dim,
+        )
+
+        assert svc._managed_config.projection_head_dim == expected
+
+    def test_managed_config_rejects_negative_projection_head_dim(self):
+        with pytest.raises(ValueError, match="projection_head_dim must be a non-negative integer"):
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-key",
+                base_model="accounts/acct/models/base",
+                lora_rank=4,
+                projection_head_dim=-1,
+            )
+
+    @pytest.mark.parametrize(
+        ("projection_head_dim", "expected_projection_arg"),
+        [(None, None), (0, None), (3, "--projection-head-dim=3")],
+    )
+    def test_managed_projection_head_is_applied_to_trainer_cli(
+        self,
+        projection_head_dim,
+        expected_projection_arg,
+    ):
+        config = _ManagedTinkerConfig(
+            base_model="accounts/acct/models/base",
+            projection_head_dim=projection_head_dim,
+            extra_args=['--model-args={"fused_rmsnorm_tail":true}', "--foo"],
+        )
+
+        trainer_config = _build_trainer_job_config(
+            config,
+            max_context_length=4096,
+            profile_training_shape="accounts/acct/trainingShapes/shape",
+        )
+
+        expected_extra_args = [
+            '--model-args={"fused_rmsnorm_tail":true}',
+            "--foo",
+        ]
+        if expected_projection_arg is not None:
+            expected_extra_args.append(expected_projection_arg)
+        assert trainer_config.extra_args == expected_extra_args
+
+    def test_managed_actor_does_not_add_trainer_extra_args(self):
+        config = _ManagedTinkerConfig(
+            base_model="accounts/acct/models/base",
+            projection_head_dim=None,
+            extra_args=None,
+        )
+
+        trainer_config = _build_trainer_job_config(
+            config,
+            max_context_length=4096,
+            profile_training_shape="accounts/acct/trainingShapes/shape",
+        )
+
+        assert trainer_config.extra_args is None
+
+    def test_managed_service_rejects_late_projection_head_override(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            lora_rank=4,
+        )
+
+        with pytest.raises(ValueError, match="fixed when a managed service is configured"):
+            svc.create_training_client(lora_rank=4, projection_head_dim=1)
+
     def test_managed_multi_model_creates_distinct_clients_on_one_handle(self):
         client_a = MagicMock()
         client_b = MagicMock()
@@ -1552,6 +1634,7 @@ class TestFiretitanServiceClientManagedCompat:
             base_model="accounts/acct/models/base",
             max_lora_rank=256,
             tokenizer_model="Qwen/Qwen3-8B",
+            projection_head_dim=1,
         )
         svc._ensure_managed_handle = MagicMock(return_value=handle)
 
@@ -1573,11 +1656,20 @@ class TestFiretitanServiceClientManagedCompat:
         assert actual_b is client_b
         assert actual_c is client_c
         assert handle.training_clients == [client_a, client_b, client_c]
-        assert [call.kwargs["lora_rank"] for call in inner_service.create_training_client.call_args_list] == [64, 256, 64]
+        assert [call.kwargs["lora_rank"] for call in inner_service.create_training_client.call_args_list] == [
+            64,
+            256,
+            64,
+        ]
         assert [call.kwargs["lora_alpha"] for call in inner_service.create_training_client.call_args_list] == [
             128,
             32,
             128,
+        ]
+        assert [call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list] == [
+            1,
+            1,
+            1,
         ]
         assert client_a._tokenizer_model == "Qwen/Qwen3-8B"
         client_a._attach_sampler_backend.assert_called_once_with(sampler_backend)
@@ -1601,13 +1693,7 @@ class TestFiretitanServiceClientManagedCompat:
 
         svc._ensure_managed_handle.assert_not_called()
 
-    @pytest.mark.parametrize(
-        "legacy_kwargs",
-        [
-            {"lora_rank": 64},
-            {"lora_alpha": 128},
-        ],
-    )
+    @pytest.mark.parametrize("legacy_kwargs", [{"lora_rank": 64}, {"lora_alpha": 128}])
     def test_managed_multi_model_rejects_service_level_model_config(self, legacy_kwargs):
         with pytest.raises(ValueError, match="cannot be combined"):
             FiretitanServiceClient.from_firetitan_config(
@@ -1616,6 +1702,51 @@ class TestFiretitanServiceClientManagedCompat:
                 max_lora_rank=256,
                 **legacy_kwargs,
             )
+
+    def test_managed_multi_model_projection_head_is_fixed_by_service(self):
+        inner_service = MagicMock()
+        handle = SimpleNamespace(
+            service_client=inner_service,
+            training_clients=[],
+            sampler_backend=None,
+        )
+        critic_service = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+            projection_head_dim=3,
+        )
+        critic_service._ensure_managed_handle = MagicMock(return_value=handle)
+
+        critic_service.create_training_client(lora_rank=64)
+
+        assert inner_service.create_training_client.call_args.kwargs["projection_head_dim"] == 3
+        with pytest.raises(ValueError, match="expected 3, got 2"):
+            critic_service.create_training_client(lora_rank=64, projection_head_dim=2)
+
+    def test_managed_multi_model_actor_service_rejects_projection_head(self):
+        inner_service = MagicMock()
+        handle = SimpleNamespace(
+            service_client=inner_service,
+            training_clients=[],
+            sampler_backend=None,
+        )
+        actor_service = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+            projection_head_dim=None,
+        )
+        actor_service._ensure_managed_handle = MagicMock(return_value=handle)
+
+        actor_service.create_training_client(lora_rank=64)
+
+        assert "projection_head_dim" not in inner_service.create_training_client.call_args.kwargs
+
+        with pytest.raises(ValueError, match="expected None, got 1"):
+            actor_service.create_training_client(lora_rank=64, projection_head_dim=1)
+
+        actor_service._ensure_managed_handle.assert_called_once()
 
     def test_managed_multi_model_rejects_different_base_model(self):
         svc = FiretitanServiceClient.from_firetitan_config(
@@ -2977,6 +3108,63 @@ class TestForwardBackwardCustomEmbedding:
         assert grad_data.data == [3.0, -1.0]
         assert grad_data.shape == [2]
 
+    def test_projection_output_preserves_token_rows_and_sends_projection_grads(self, monkeypatch):
+        client = self._make_client()
+        datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
+        forward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="forward",
+            loss_fn_outputs=[
+                {
+                    "projection": types.TensorData(
+                        data=[1.0, 2.0, 3.0, 4.0],
+                        dtype="float32",
+                        shape=[2, 2],
+                    )
+                }
+            ],
+            metrics={},
+        )
+        backward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy",
+            loss_fn_outputs=[],
+            metrics={"loss:sum": 0.0},
+        )
+        captured = {}
+
+        class _ImmediateFuture:
+            def __init__(self, value):
+                self._value = value
+
+            async def result_async(self, timeout=None):
+                return self._value
+
+            def result(self, timeout=None):
+                return self._value
+
+        async def fake_forward(data, pooling, output="embedding"):
+            assert output == "projection"
+            return _ImmediateFuture(forward_output)
+
+        async def fake_backward(data, pooling, output="embedding"):
+            assert output == "projection"
+            captured["backward_data"] = data
+            return _ImmediateFuture(backward_output)
+
+        monkeypatch.setattr(client, "_forward_embedding_async", fake_forward)
+        monkeypatch.setattr(client, "_forward_backward_embedding_async", fake_backward)
+
+        def loss_fn(_data, projections):
+            assert projections[0].shape == (2, 2)
+            weights = torch.tensor([[1.0, -1.0], [2.0, -2.0]])
+            return (projections[0] * weights).sum(), {}
+
+        future = asyncio.run(client.forward_backward_custom_async([datum], loss_fn, output="projection"))
+        future.result()
+
+        grad_data = captured["backward_data"][0].loss_fn_inputs["projection_grads"]
+        assert grad_data.data == [1.0, -1.0, 2.0, -2.0]
+        assert grad_data.shape == [2, 2]
+
     def test_embedding_output_pools_sequence_hidden_states(self, monkeypatch):
         client = self._make_client()
         datum = types.Datum(
@@ -3119,9 +3307,10 @@ class TestCreateTrainingClientDuplicate:
         svc._managed_config = None
         svc._default_user_metadata = None
         # _created_training_configs is keyed by _TrainingKey
-        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed, lora_alpha);
+        # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed,
+        # lora_alpha, projection_head_dim);
         # a namedtuple compares equal to the plain tuple with the same fields.
-        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None)}
 
         with pytest.raises(ValueError, match="already exists"):
             svc.create_training_client("model-a", lora_rank=0)
@@ -3134,7 +3323,7 @@ class TestCreateTrainingClientDuplicate:
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
         svc._default_user_metadata = None
-        svc._created_training_configs = {("model-a", 0, None, True, True, True, None)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None)}
         svc._training_clients = []
         svc.holder = MagicMock()
         svc.holder.get_session_id.return_value = 1

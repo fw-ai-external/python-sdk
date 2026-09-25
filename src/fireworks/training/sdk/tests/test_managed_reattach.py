@@ -13,15 +13,40 @@ import pytest
 
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
+    _attach_managed_deployment,
     _deployment_shape_conflict,
     _create_or_reattach_deployment,
     _create_or_reattach_deployment_result,
 )
-from fireworks.training.sdk.deployment import DeploymentInfo
+from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 
 SHAPE = "accounts/acct/deploymentShapes/rft-x"
 SHAPE_V1 = f"{SHAPE}/versions/1"
 SHAPE_V2 = f"{SHAPE}/versions/2"
+
+
+@pytest.mark.parametrize("deployment_model", ["accounts/acct/models/base-fp8", "accounts/acct/models/base-nvfp4"])
+def test_hotload_routes_to_deployment_model(deployment_model: str) -> None:
+    trainer_model = "accounts/acct/models/base-fp8"
+    trainer_job = "accounts/acct/rlorTrainerJobs/job-1"
+    deploy_mgr = MagicMock(spec=DeploymentManager)
+    deploy_mgr.account_id = "acct"
+    deployment = DeploymentManager._parse_deployment_info(
+        deploy_mgr,
+        "dep-1",
+        {"state": "READY", "baseModel": deployment_model, "hotLoadTrainerJob": trainer_job},
+    )
+    deploy_mgr.get.return_value = deployment
+    deploy_mgr.reattach_trainer.return_value = deployment
+    config = _ManagedTinkerConfig(base_model=trainer_model, deployment_id="dep-1")
+
+    _, backend, _, _ = _attach_managed_deployment(
+        deploy_mgr, config, trainer_job_name=trainer_job, deployment_shape=None
+    )
+    backend.hotload_saved_snapshot("step-0")
+
+    assert deploy_mgr.hotload_and_wait.call_args.kwargs["base_model"] == deployment_model
+    assert config.base_model == trainer_model
 
 
 class TestDeploymentShapeConflict:

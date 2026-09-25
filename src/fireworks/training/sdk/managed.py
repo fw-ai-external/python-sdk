@@ -130,6 +130,14 @@ class FiretitanProvisioningConfig:
     tokenizer_model: str | None = None
     lora_rank: int = 0
     lora_alpha: int | None = None
+    projection_head_dim: int | None = None
+    """Dimension of the model's independent trainable projection head.
+
+    The dimension is fixed for the lifetime of the managed service and is
+    applied before the trainer constructs and shards the model. ``None`` and
+    ``0`` both disable the module; a positive value creates exactly that many
+    output rows. Every trainable model handle inherits this configuration.
+    """
     max_lora_rank: int | None = None
     """Trainer LoRA capacity for managed multi-model services.
 
@@ -227,10 +235,18 @@ class FiretitanProvisioningConfig:
             object.__setattr__(self, "hotload_timeout_s", HOTLOAD_TIMEOUT_S)
         if self.max_lora_rank is not None and self.max_lora_rank <= 0:
             raise ValueError("max_lora_rank must be positive when set")
+        if isinstance(self.projection_head_dim, bool) or (
+            self.projection_head_dim is not None and not isinstance(self.projection_head_dim, int)
+        ):
+            raise ValueError("projection_head_dim must be a non-negative integer when set")
+        if self.projection_head_dim == 0:
+            object.__setattr__(self, "projection_head_dim", None)
+        elif self.projection_head_dim is not None and self.projection_head_dim < 0:
+            raise ValueError("projection_head_dim must be a non-negative integer when set")
         if self.max_lora_rank is not None and (self.lora_rank != 0 or self.lora_alpha is not None):
             raise ValueError(
                 "max_lora_rank cannot be combined with service-level lora_rank or lora_alpha; "
-                "pass model rank/alpha to create_training_client"
+                "pass LoRA configuration to create_training_client"
             )
 
         lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
@@ -260,6 +276,24 @@ _ManagedTinkerConfig = FiretitanProvisioningConfig
 
 def _trainer_lora_capacity(config: FiretitanProvisioningConfig) -> int:
     return config.max_lora_rank if config.max_lora_rank is not None else config.lora_rank
+
+
+def _trainer_extra_args(config: FiretitanProvisioningConfig) -> list[str] | None:
+    """Apply the service projection topology before trainer model construction.
+
+    Keep this as a dedicated scalar flag instead of synthesizing a second
+    ``--model-args`` object. FireTitan folds the scalar into the resolved model
+    overrides after parsing, so training-shape model settings are preserved.
+    ``None`` means the caller did not request a projection head, so actor
+    services leave both job and training-shape arguments untouched.
+    """
+
+    if config.projection_head_dim is None:
+        return config.extra_args
+
+    extra_args = list(config.extra_args or [])
+    extra_args.append(f"--projection-head-dim={config.projection_head_dim}")
+    return extra_args
 
 
 @dataclass
@@ -498,7 +532,8 @@ def _attach_managed_deployment(
     sampler_backend = _TinkerSamplerBackend(
         deploy_mgr=deploy_mgr,
         deployment_id=deployment.deployment_id,
-        base_model=config.base_model,
+        # A rollout may serve a different quantization of the trainer's model.
+        base_model=deployment.base_model or config.base_model,
         hot_load_bucket_url=deployment.hot_load_bucket_url,
         cmek_resource=cmek_resource,
         hotload_timeout_s=config.hotload_timeout_s,
@@ -620,6 +655,8 @@ def _create_managed_tinker_client(
             "lora_rank": config.lora_rank,
             "user_metadata": user_metadata,
         }
+        if config.projection_head_dim is not None:
+            create_model_kwargs["projection_head_dim"] = config.projection_head_dim
         if config.lora_rank > 0:
             create_model_kwargs["lora_alpha"] = (
                 config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
@@ -738,6 +775,7 @@ def _reference_managed_config(
         training_shape_id=reference_shape,
         lora_rank=reference_lora_rank,
         max_lora_rank=None,
+        projection_head_dim=None,
         trainer_job_id=config.reference_trainer_job_id,
         deployment_id=None,
         create_deployment=False,
@@ -843,7 +881,7 @@ def _build_trainer_job_config(
         display_name=config.display_name,
         region=config.region,
         custom_image_tag=config.custom_image_tag,
-        extra_args=config.extra_args,
+        extra_args=_trainer_extra_args(config),
         accelerator_type=None if auto_select_training_shape else config.accelerator_type,
         accelerator_count=None if auto_select_training_shape else config.accelerator_count,
         training_shape_ref=profile_training_shape,
