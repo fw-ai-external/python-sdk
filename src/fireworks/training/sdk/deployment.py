@@ -108,6 +108,8 @@ class DeploymentInfo:
     deployment_shape_version: str | None = None
     inference_model: str | None = None
     """Model string for completions API (``accounts/{account}/deployments/{id}``)."""
+    base_model: str | None = None
+    """Deployed model resource used to route hotload requests."""
 
 
 def _deployment_hot_load_trainer_job(deployment: DeploymentInfo) -> str | None:
@@ -474,6 +476,7 @@ class DeploymentManager(_RestClient):
             ),
             deployment_shape_version=data.get("deploymentShape") or data.get("deployment_shape"),
             inference_model=f"accounts/{self.account_id}/deployments/{deployment_id}",
+            base_model=data.get("baseModel") or data.get("base_model"),
         )
 
     def _wait_for_deletion(

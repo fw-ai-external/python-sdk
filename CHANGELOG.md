@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.16 (2026-09-25)
+
+Full Changelog: [v1.2.15...v1.2.16](https://github.com/fw-ai-external/python-sdk/compare/v1.2.15...v1.2.16)
+
+### Features
+* **training-sdk:** add `projection_head_dim` to managed service and training-client creation for train-only projection heads, and `output="projection"` for `forward_backward_custom` gradients with respect to projection outputs
+
 ## 1.2.15 (2026-09-22)
 
 Full Changelog: [v1.2.14...v1.2.15](https://github.com/fw-ai-external/python-sdk/compare/v1.2.14...v1.2.15)
