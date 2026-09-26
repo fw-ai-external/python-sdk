@@ -129,6 +129,14 @@ class _CreateModelResponse(types.CreateModelResponse):
         return "parquet_v1" if value == "parquet_v1" else "base64_inline"
 
 
+class WeightSyncResponse(BaseModel):
+    """A completed weight publication and its timing metrics."""
+
+    version: str
+    optimizer_version: int
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+
 class FiretitanSamplingParams(types.SamplingParams):
     """Tinker sampling parameters with optional FireTitan response fields."""
 
@@ -155,6 +163,9 @@ class FiretitanSampleResponse(types.SampleResponse):
 # FireTitan backend would otherwise default to 2 * rank, so we send it
 # explicitly to keep the alpha/rank scale consistent across stacks.
 DEFAULT_LORA_ALPHA = 32
+
+# Backend LoRA init method when ``lora_init_method`` is omitted.
+DEFAULT_LORA_INIT_METHOD = "kaiming"
 
 
 class FiretitanSamplingClient(SamplingClient):
@@ -538,6 +549,7 @@ class _TrainingKey(NamedTuple):
     train_unembed: bool
     lora_alpha: int | None
     projection_head_dim: int | None
+    lora_init_method: str | None
 
 
 class _MappedAPIFuture(APIFuture[T]):
@@ -1382,8 +1394,7 @@ class SaveSamplerResult:
     Attributes:
         path: The public sampler identity returned by the trainer.  This is the
             value to pass to ``create_sampling_client(model_path=...)``.
-        snapshot_name: The actual snapshot name used (with session_id suffix).
-            This is kept for local bookkeeping and SDK-managed hotload metadata.
+        snapshot_name: The actual file snapshot name (with session_id suffix).
     """
 
     path: str
@@ -2441,6 +2452,51 @@ class FiretitanTrainingClient(TrainingClient):
 
         return _validate_checkpoint_ref(checkpoint_name)
 
+    def weight_sync(self) -> APIFuture[WeightSyncResponse]:
+        """Sync current weights to the attached RDMA rollout deployment.
+
+        Ordered with forward/backward and optimizer operations. The future
+        completes after all eligible replicas install this version and temporary
+        RDMA buffers are safely released. Failed replicas recover through the
+        existing deployment lifecycle; if all fail, the operation waits for a
+        replacement while preserving trainer and optimizer state.
+
+        Save resumable checkpoints separately with ``save_state()``.
+        """
+        from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+
+        backend = getattr(self, "_sampler_backend", None)
+        if not isinstance(backend, _RdmaSamplerBackend) or self._lora_rank != 0 or self.run_name is not None:
+            raise ValueError("weight_sync requires a dedicated full-parameter trainer with RDMA selected at setup")
+        body = backend.publication_request()
+        body["model_id"] = self._guaranteed_model_id()
+        request_id = self._get_request_id()
+        body["seq_id"] = request_id + 1
+
+        async def _submit():
+            start = time.time()
+
+            async def _send():
+                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                    return await client.post("/api/v1/weight_sync", body=body, cast_to=types.UntypedAPIFuture)
+
+            async with self._take_turn(request_id):
+                future = await self.holder.execute_with_retries(_send)
+            return await _APIFuture(
+                WeightSyncResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="WeightSync",
+                queue_state_observer=self._queue_state_logger,
+            )
+
+        return self.holder.run_coroutine_threadsafe(_submit())
+
+    async def weight_sync_async(self) -> APIFuture[WeightSyncResponse]:
+        """Async submission with the same native future semantics as optim_step_async."""
+        return self.weight_sync()
+
     def save_weights_for_sampler_ext(
         self,
         name: str,
@@ -3410,12 +3466,17 @@ class FiretitanServiceClient(ServiceClient):
         lora_alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
         projection_head_dim: int | None = None,
+        lora_init_method: str | None = None,
     ) -> FiretitanTrainingClient:
         """Create a FiretitanTrainingClient (full-param or LoRA).
 
         ``lora_alpha`` defaults to ``DEFAULT_LORA_ALPHA`` (32) and is ignored for
         full-parameter training (``lora_rank == 0``). Pass ``None`` to let the
         backend choose its own default (``2 * lora_rank``).
+        ``lora_init_method`` selects the adapter initialization for this model:
+        ``"kaiming"`` (standard LoRA) or ``"nora"`` (NoRA-init: Kaiming A with
+        each input column L2-normalized over the rank). ``None`` keeps the
+        backend default (``"kaiming"``). Ignored for full-parameter training.
         Advanced feature: ``projection_head_dim`` adds a train-only projection
         to the dedicated trainer's language-model output contract. Its dimension
         is fixed when the service is built and sampler export is unsupported.
@@ -3460,6 +3521,7 @@ class FiretitanServiceClient(ServiceClient):
                     "train_attn": train_attn,
                     "train_unembed": train_unembed,
                     "lora_alpha": lora_alpha,
+                    "lora_init_method": lora_init_method,
                     "user_metadata": self._user_metadata(user_metadata),
                 }
                 if configured_projection_head_dim is not None:
@@ -3482,6 +3544,12 @@ class FiretitanServiceClient(ServiceClient):
                     "projection_head_dim is fixed when a managed service is configured; "
                     f"expected {managed_config.projection_head_dim!r}, got {projection_head_dim!r}"
                 )
+            if lora_init_method is not None:
+                raise ValueError(
+                    "lora_init_method is not supported on a managed service configured with lora_rank, "
+                    "which creates its training client when provisioned; configure the service with "
+                    "max_lora_rank so each create_training_client call creates its own model"
+                )
         managed_handle = self._ensure_managed_handle(
             user_metadata=self._user_metadata(user_metadata),
         )
@@ -3492,6 +3560,7 @@ class FiretitanServiceClient(ServiceClient):
         if base_model is None:
             raise ValueError("base_model is required for a direct training client")
         effective_alpha = lora_alpha if lora_rank > 0 else None
+        effective_init_method = lora_init_method if lora_rank > 0 else None
         config_key = _TrainingKey(
             base_model,
             lora_rank,
@@ -3501,6 +3570,7 @@ class FiretitanServiceClient(ServiceClient):
             train_unembed,
             effective_alpha,
             projection_head_dim,
+            (effective_init_method or DEFAULT_LORA_INIT_METHOD) if lora_rank > 0 else None,
         )
         if config_key in self._created_training_configs and not getattr(
             self, "_allow_duplicate_training_configs", False
@@ -3521,6 +3591,7 @@ class FiretitanServiceClient(ServiceClient):
             train_mlp=train_mlp,
             train_attn=train_attn,
             train_unembed=train_unembed,
+            init_method=effective_init_method,
         )
 
         async def _create():
@@ -3574,11 +3645,14 @@ class FiretitanServiceClient(ServiceClient):
         alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
         projection_head_dim: int | None = None,
+        init_method: str | None = None,
     ) -> FiretitanTrainingClient:
         """Tinker-compatible LoRA factory name.
 
         ``alpha`` defaults to ``DEFAULT_LORA_ALPHA`` (32); pass ``None`` to let
-        the backend pick its own default (``2 * rank``).
+        the backend pick its own default (``2 * rank``). ``init_method`` is the
+        adapter initialization (``"kaiming"`` or ``"nora"``); see
+        ``create_training_client``'s ``lora_init_method``.
         """
         return self.create_training_client(
             base_model=base_model,
@@ -3590,6 +3664,7 @@ class FiretitanServiceClient(ServiceClient):
             lora_alpha=alpha,
             user_metadata=user_metadata,
             projection_head_dim=projection_head_dim,
+            lora_init_method=init_method,
         )
 
     async def create_lora_training_client_async(
@@ -3603,6 +3678,7 @@ class FiretitanServiceClient(ServiceClient):
         alpha: int | None = DEFAULT_LORA_ALPHA,
         user_metadata: dict[str, str] | None = None,
         projection_head_dim: int | None = None,
+        init_method: str | None = None,
     ) -> FiretitanTrainingClient:
         return await asyncio.to_thread(
             self.create_lora_training_client,
@@ -3615,6 +3691,7 @@ class FiretitanServiceClient(ServiceClient):
             alpha=alpha,
             user_metadata=user_metadata,
             projection_head_dim=projection_head_dim,
+            init_method=init_method,
         )
 
     def _managed_config_for_resume(self) -> Any | None:
