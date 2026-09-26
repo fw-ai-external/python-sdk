@@ -1617,6 +1617,36 @@ class TestFiretitanServiceClientManagedCompat:
         with pytest.raises(ValueError, match="fixed when a managed service is configured"):
             svc.create_training_client(lora_rank=4, projection_head_dim=1)
 
+    def test_managed_single_model_rejects_lora_init_method(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            lora_rank=4,
+        )
+        svc._ensure_managed_handle = MagicMock()
+
+        with pytest.raises(ValueError, match="lora_init_method is not supported"):
+            svc.create_training_client(lora_rank=4, lora_init_method="nora")
+        svc._ensure_managed_handle.assert_not_called()
+
+    def test_managed_multi_model_forwards_lora_init_method(self):
+        inner_service = MagicMock()
+        handle = SimpleNamespace(service_client=inner_service, training_clients=[], sampler_backend=None)
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_model="accounts/acct/models/base",
+            max_lora_rank=256,
+        )
+        svc._ensure_managed_handle = MagicMock(return_value=handle)
+
+        svc.create_lora_training_client("accounts/acct/models/base", rank=64, init_method="nora")
+        svc.create_training_client(lora_rank=64)
+
+        assert [call.kwargs["lora_init_method"] for call in inner_service.create_training_client.call_args_list] == [
+            "nora",
+            None,
+        ]
+
     def test_managed_multi_model_creates_distinct_clients_on_one_handle(self):
         client_a = MagicMock()
         client_b = MagicMock()
@@ -3308,9 +3338,9 @@ class TestCreateTrainingClientDuplicate:
         svc._default_user_metadata = None
         # _created_training_configs is keyed by _TrainingKey
         # (base_model, lora_rank, seed, train_mlp, train_attn, train_unembed,
-        # lora_alpha, projection_head_dim);
+        # lora_alpha, projection_head_dim, lora_init_method);
         # a namedtuple compares equal to the plain tuple with the same fields.
-        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None, None)}
 
         with pytest.raises(ValueError, match="already exists"):
             svc.create_training_client("model-a", lora_rank=0)
@@ -3323,7 +3353,7 @@ class TestCreateTrainingClientDuplicate:
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._managed_config = None
         svc._default_user_metadata = None
-        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None)}
+        svc._created_training_configs = {("model-a", 0, None, True, True, True, None, None, None)}
         svc._training_clients = []
         svc.holder = MagicMock()
         svc.holder.get_session_id.return_value = 1
@@ -3344,6 +3374,76 @@ class TestCreateTrainingClientDuplicate:
             svc.create_training_client("model-a", lora_rank=32)
         except ValueError:
             pytest.fail("Should not raise for different lora_rank")
+
+
+class _ImmediateCreateModelFuture:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def result_async(self):
+        return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None)
+
+
+@patch("fireworks.training.sdk.client._APIFuture", _ImmediateCreateModelFuture)
+class TestCreateTrainingClientInitMethod:
+    @staticmethod
+    def _direct_service() -> tuple[FiretitanServiceClient, list[types.CreateModelRequest]]:
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._managed_config = None
+        svc._default_user_metadata = None
+        svc._created_training_configs = set()
+        svc._training_clients = []
+        svc.holder = MagicMock()
+        svc.holder.get_session_id.return_value = "session-1"
+        svc.holder.get_training_client_id.return_value = 1
+        requests: list[types.CreateModelRequest] = []
+
+        class _Models:
+            async def create(self, *, request):
+                requests.append(request)
+                return "future"
+
+        class _ClientContext:
+            def __enter__(self):
+                return SimpleNamespace(models=_Models())
+
+            def __exit__(self, *exc):
+                return False
+
+        svc.holder.aclient.return_value = _ClientContext()
+        svc.holder.run_coroutine_threadsafe.side_effect = lambda coro: SimpleNamespace(
+            result=lambda: asyncio.run(coro)
+        )
+        return svc, requests
+
+    @classmethod
+    def _create_and_capture_request(cls, **kwargs) -> types.CreateModelRequest:
+        svc, requests = cls._direct_service()
+        svc.create_lora_training_client("model-a", **kwargs)
+        return requests[-1]
+
+    def test_lora_init_method_is_sent_on_create_model(self):
+        request = self._create_and_capture_request(rank=16, init_method="nora")
+
+        assert request.lora_config.init_method == "nora"
+        assert request.model_dump(exclude_unset=True)["lora_config"]["init_method"] == "nora"
+
+    def test_lora_init_method_defaults_to_backend_choice(self):
+        request = self._create_and_capture_request(rank=16)
+
+        assert request.lora_config.init_method is None
+
+    def test_lora_init_method_ignored_for_full_param(self):
+        request = self._create_and_capture_request(rank=0, init_method="nora")
+
+        assert request.lora_config.init_method is None
+
+    def test_default_and_explicit_kaiming_are_the_same_config(self):
+        svc, _requests = self._direct_service()
+        svc.create_lora_training_client("model-a", rank=16)
+        with pytest.raises(ValueError, match="already exists"):
+            svc.create_lora_training_client("model-a", rank=16, init_method="kaiming")
+        svc.create_lora_training_client("model-a", rank=16, init_method="nora")
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.17 (2026-09-26)
+
+Full Changelog: [v1.2.16...v1.2.17](https://github.com/fw-ai-external/python-sdk/compare/v1.2.16...v1.2.17)
+
+### Features
+* **training-sdk:** add `lora_init_method` to `create_training_client` (`init_method` on `create_lora_training_client`) to pick each model's LoRA initialization at create time: `"kaiming"` (default) or `"nora"` (NoRA-init)
+
 ## 1.2.16 (2026-09-25)
 
 Full Changelog: [v1.2.15...v1.2.16](https://github.com/fw-ai-external/python-sdk/compare/v1.2.15...v1.2.16)
