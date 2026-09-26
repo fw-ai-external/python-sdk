@@ -129,6 +129,14 @@ class _CreateModelResponse(types.CreateModelResponse):
         return "parquet_v1" if value == "parquet_v1" else "base64_inline"
 
 
+class WeightSyncResponse(BaseModel):
+    """A completed weight publication and its timing metrics."""
+
+    version: str
+    optimizer_version: int
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+
 class FiretitanSamplingParams(types.SamplingParams):
     """Tinker sampling parameters with optional FireTitan response fields."""
 
@@ -1386,8 +1394,7 @@ class SaveSamplerResult:
     Attributes:
         path: The public sampler identity returned by the trainer.  This is the
             value to pass to ``create_sampling_client(model_path=...)``.
-        snapshot_name: The actual snapshot name used (with session_id suffix).
-            This is kept for local bookkeeping and SDK-managed hotload metadata.
+        snapshot_name: The actual file snapshot name (with session_id suffix).
     """
 
     path: str
@@ -2444,6 +2451,51 @@ class FiretitanTrainingClient(TrainingClient):
             return checkpoint_ref
 
         return _validate_checkpoint_ref(checkpoint_name)
+
+    def weight_sync(self) -> APIFuture[WeightSyncResponse]:
+        """Sync current weights to the attached RDMA rollout deployment.
+
+        Ordered with forward/backward and optimizer operations. The future
+        completes after all eligible replicas install this version and temporary
+        RDMA buffers are safely released. Failed replicas recover through the
+        existing deployment lifecycle; if all fail, the operation waits for a
+        replacement while preserving trainer and optimizer state.
+
+        Save resumable checkpoints separately with ``save_state()``.
+        """
+        from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+
+        backend = getattr(self, "_sampler_backend", None)
+        if not isinstance(backend, _RdmaSamplerBackend) or self._lora_rank != 0 or self.run_name is not None:
+            raise ValueError("weight_sync requires a dedicated full-parameter trainer with RDMA selected at setup")
+        body = backend.publication_request()
+        body["model_id"] = self._guaranteed_model_id()
+        request_id = self._get_request_id()
+        body["seq_id"] = request_id + 1
+
+        async def _submit():
+            start = time.time()
+
+            async def _send():
+                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                    return await client.post("/api/v1/weight_sync", body=body, cast_to=types.UntypedAPIFuture)
+
+            async with self._take_turn(request_id):
+                future = await self.holder.execute_with_retries(_send)
+            return await _APIFuture(
+                WeightSyncResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="WeightSync",
+                queue_state_observer=self._queue_state_logger,
+            )
+
+        return self.holder.run_coroutine_threadsafe(_submit())
+
+    async def weight_sync_async(self) -> APIFuture[WeightSyncResponse]:
+        """Async submission with the same native future semantics as optim_step_async."""
+        return self.weight_sync()
 
     def save_weights_for_sampler_ext(
         self,

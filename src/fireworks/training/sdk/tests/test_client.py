@@ -8,7 +8,7 @@ import logging
 import warnings
 from types import SimpleNamespace
 from threading import Event, RLock
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -1031,6 +1031,35 @@ class TestOptimStep:
             client.optim_step(types.AdamParams(), emit_grad_norm_metrics="global")
 
         client.holder.run_coroutine_threadsafe.assert_not_called()
+
+
+@pytest.mark.parametrize("method", ["weight_sync", "weight_sync_async"])
+def test_weight_sync_publishes_without_checkpoint_options(method):
+    from contextlib import nullcontext
+
+    from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+
+    client = TestOptimStep()._make_client({})
+    client._lora_rank = 0
+    client.run_name = None
+    client._sampler_backend = _RdmaSamplerBackend(sampler=None)
+    client._sampler_backend.publication_request = MagicMock(return_value={"transport": "RDMA"})
+    post = AsyncMock(return_value="raw-future")
+    client.holder.aclient.return_value = nullcontext(SimpleNamespace(post=post))
+
+    with patch("fireworks.training.sdk.client._APIFuture", TestOptimStep._FakeAPIFuture):
+        future = getattr(client, method)()
+        if method.endswith("_async"):
+            future = asyncio.run(future)
+        assert future.result() == "api-future"
+
+    post.assert_awaited_once_with(
+        "/api/v1/weight_sync",
+        body={"transport": "RDMA", "model_id": "model", "seq_id": 42},
+        cast_to=types.UntypedAPIFuture,
+    )
+    with pytest.raises(TypeError, match="dcp_checkpoint_save"):
+        getattr(client, method)(dcp_checkpoint_save=True)
 
 
 class _FakeInferenceDeploymentManager:
