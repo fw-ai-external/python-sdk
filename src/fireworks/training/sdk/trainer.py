@@ -342,6 +342,8 @@ class TrainerJobConfig:
     """
     extra_args: list[str] | None = None
     """Additional trainer arguments passed through to the backend."""
+    extra_values: dict[str, str] | None = None
+    """Advanced trainer chart overrides, subject to backend access checks."""
     accelerator_type: str | None = None
     """Accelerator type.  Shape-owned on the shape path."""
     accelerator_count: int | None = None
@@ -647,6 +649,8 @@ class TrainerJobManager(FireworksClient):
                 else:
                     flat.append(arg)
             training_config["extraArgs"] = flat
+        if config.extra_values:
+            payload["extraValues"] = dict(config.extra_values)
         if config.forward_only:
             payload["forwardOnly"] = True
         if config.purpose:

@@ -21,6 +21,7 @@ from importlib import import_module
 # allowlist whenever a sidecar-visible export gains a new runtime dependency.
 _EXPORTS = {
     # Tinker-compatible training client.
+    "WeightSyncResponse": ("fireworks.training.sdk.client", "WeightSyncResponse"),
     "SaveSamplerResult": ("fireworks.training.sdk.client", "SaveSamplerResult"),
     "GradNormMetricsMode": ("fireworks.training.sdk.client", "GradNormMetricsMode"),
     "GradAccNormalization": ("fireworks.training.sdk.client", "GradAccNormalization"),

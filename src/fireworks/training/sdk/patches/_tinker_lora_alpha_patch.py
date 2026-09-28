@@ -6,6 +6,9 @@ to its own default of ``2 * rank``. The FireTitan server schema does accept an
 optional ``alpha``, so we add the field here and rebuild the request models
 that embed ``LoraConfig`` so the value is serialized onto the wire.
 
+``init_method`` selects the adapter initialization for the created model
+(``"kaiming"`` or ``"nora"``); ``None`` keeps the backend default (kaiming).
+
 This also adds ``projection_head_dim`` until the upstream Tinker request type
 exposes the field. Safe to import multiple times; patches are idempotent.
 """
@@ -25,11 +28,13 @@ def _apply_lora_alpha_patch() -> None:
     from tinker.types.create_model_request import CreateModelRequest
 
     changed = False
-    if "alpha" not in LoraConfig.model_fields:
-        LoraConfig.model_fields["alpha"] = FieldInfo(default=None, annotation=Optional[int])
-        LoraConfig.__annotations__["alpha"] = Optional[int]
+    for name, annotation in (("alpha", Optional[int]), ("init_method", Optional[str])):
+        if name not in LoraConfig.model_fields:
+            LoraConfig.model_fields[name] = FieldInfo(default=None, annotation=annotation)
+            LoraConfig.__annotations__[name] = annotation
+            changed = True
+    if changed:
         rebuild_model(LoraConfig)
-        changed = True
     if "projection_head_dim" not in CreateModelRequest.model_fields:
         CreateModelRequest.model_fields["projection_head_dim"] = FieldInfo(default=None, annotation=Optional[int])
         CreateModelRequest.__annotations__["projection_head_dim"] = Optional[int]

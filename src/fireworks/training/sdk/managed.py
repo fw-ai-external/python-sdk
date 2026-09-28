@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import logging
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 from datetime import timedelta
 from dataclasses import field, replace, dataclass
 from concurrent.futures import ThreadPoolExecutor
@@ -47,6 +47,9 @@ from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
 )
+
+if TYPE_CHECKING:
+    from fireworks.training.sdk._rdma import _RdmaSamplerBackend
 
 logger = logging.getLogger(__name__)
 
@@ -177,10 +180,11 @@ class FiretitanProvisioningConfig:
     accelerator_count: int | None = None
     custom_image_tag: str | None = None
     extra_args: list[str] | None = None
+    extra_values: dict[str, str] | None = None
     deployment_extra_args: list[str] | None = None
     deployment_extra_values: dict[str, str] | None = None
     trainer_replica_count: int | None = None  # data-parallel HSDP replicas for the trainer
-    replica_count: int = 1  # inference deployment min/max replicas
+    replica_count: int = 1  # ordinary deployment min/max replicas for either transport
     trainer_timeout_s: float = DEFAULT_TRAINER_TIMEOUT_S
     trainer_pending_timeout_s: float = DEFAULT_TRAINER_PENDING_TIMEOUT_S
     inactivity_timeout: timedelta | str | None = None
@@ -220,7 +224,22 @@ class FiretitanProvisioningConfig:
     queued trainer does not hold serving replicas idle.
     """
 
+    weight_sync_transport: Literal["RDMA"] | None = None
+    """Opt in to ephemeral GPU weight publication; unset preserves file hotload."""
+
     def __post_init__(self) -> None:
+        if self.weight_sync_transport not in (None, "RDMA"):
+            raise ValueError("weight_sync_transport must be 'RDMA' or None")
+        if self.weight_sync_transport == "RDMA":
+            for field_name in ("extra_values", "deployment_extra_values"):
+                if (getattr(self, field_name) or {}).get("rdmaWeightSyncEnabled", "true") != "true":
+                    raise ValueError(f"RDMA weight sync conflicts with {field_name}.rdmaWeightSyncEnabled; use 'true'")
+            if self.lora_rank != 0 or self.max_lora_rank is not None or self.forward_only:
+                raise ValueError("RDMA weight sync requires a dedicated full-parameter policy trainer")
+            if not self.create_deployment:
+                raise ValueError("RDMA weight sync requires create_deployment=True")
+            if self.replica_count is not None and (type(self.replica_count) is not int or self.replica_count < 1):
+                raise ValueError("RDMA weight sync requires a positive replica_count at startup")
         object.__setattr__(
             self,
             "hot_load_transition_type",
@@ -309,7 +328,7 @@ class _ManagedTinkerHandle:
     deployment_shape: str | None = None
     deployment: DeploymentInfo | None = None
     requires_initial_sampler_sync: bool = False
-    sampler_backend: "_TinkerSamplerBackend | None" = None
+    sampler_backend: "_TinkerSamplerBackend | _RdmaSamplerBackend | None" = None
     trainer_manager: TrainerJobManager | None = None
     deployment_manager: DeploymentManager | None = None
     reference_handle: "_ManagedTinkerHandle | None" = None
@@ -520,7 +539,7 @@ def _attach_managed_deployment(
     trainer_job_name: str,
     deployment_shape: str | None,
     cmek_resource: str | None = None,
-) -> tuple[DeploymentInfo, "_TinkerSamplerBackend", bool, bool]:
+) -> tuple[DeploymentInfo, "_TinkerSamplerBackend | _RdmaSamplerBackend", bool, bool]:
     """Create/reattach the managed deployment and build its sampler backend."""
     attach_result = _create_or_reattach_deployment_result(
         deploy_mgr,
@@ -529,7 +548,7 @@ def _attach_managed_deployment(
         deployment_shape=deployment_shape,
     )
     deployment = attach_result.deployment
-    sampler_backend = _TinkerSamplerBackend(
+    sampler_backend: _TinkerSamplerBackend | _RdmaSamplerBackend = _TinkerSamplerBackend(
         deploy_mgr=deploy_mgr,
         deployment_id=deployment.deployment_id,
         # A rollout may serve a different quantization of the trainer's model.
@@ -539,7 +558,11 @@ def _attach_managed_deployment(
         hotload_timeout_s=config.hotload_timeout_s,
         lora_rank=_trainer_lora_capacity(config),
     )
-    if attach_result.reattached:
+    if config.weight_sync_transport == "RDMA":
+        from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+
+        sampler_backend = _RdmaSamplerBackend(sampler_backend)
+    elif attach_result.reattached:
         sampler_backend.reset_snapshot_chain()
     return deployment, sampler_backend, attach_result.reattached, attach_result.created
 
@@ -564,6 +587,8 @@ def _create_managed_tinker_client(
     it is never folded back into ``config``.
     """
     cmek_resource = _policy_output_cmek_resource(config.extra_args)
+    if config.weight_sync_transport == "RDMA" and cmek_resource:
+        raise ValueError("RDMA weight sync does not support CMEK output artifacts")
 
     trainer_mgr, deploy_mgr = _build_resource_managers(
         api_key=api_key,
@@ -779,6 +804,7 @@ def _reference_managed_config(
         trainer_job_id=config.reference_trainer_job_id,
         deployment_id=None,
         create_deployment=False,
+        weight_sync_transport=None,
         forward_only=True,
         reference_required=False,
         trainer_replica_count=None,
@@ -870,6 +896,9 @@ def _build_trainer_job_config(
     requested_job_id: str | None = None,
 ) -> TrainerJobConfig:
     auto_select_training_shape = profile_training_shape is None and not _uses_manual_training_infra(config)
+    extra_values = config.extra_values
+    if config.weight_sync_transport == "RDMA":
+        extra_values = {**(extra_values or {}), "rdmaWeightSyncEnabled": "true"}
     return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=_trainer_lora_capacity(config),
@@ -882,6 +911,7 @@ def _build_trainer_job_config(
         region=config.region,
         custom_image_tag=config.custom_image_tag,
         extra_args=_trainer_extra_args(config),
+        extra_values=extra_values,
         accelerator_type=None if auto_select_training_shape else config.accelerator_type,
         accelerator_count=None if auto_select_training_shape else config.accelerator_count,
         training_shape_ref=profile_training_shape,
@@ -1047,6 +1077,9 @@ def _create_or_reattach_deployment_result(
             "deployment accelerator is owned by the deployment shape. Provide a "
             "deployment_shape (or a training_shape_id whose shape references one)."
         )
+    extra_values = config.deployment_extra_values
+    if config.weight_sync_transport == "RDMA":
+        extra_values = {**(extra_values or {}), "rdmaWeightSyncEnabled": "true"}
     deployment_config = DeploymentConfig(
         deployment_id=deployment_id,
         base_model=config.base_model,
@@ -1064,7 +1097,7 @@ def _create_or_reattach_deployment_result(
         skip_shape_validation=False,
         disable_speculative_decoding=config.disable_speculative_decoding,
         extra_args=config.deployment_extra_args,
-        extra_values=config.deployment_extra_values,
+        extra_values=extra_values,
         preemptible=config.preemptible,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)
