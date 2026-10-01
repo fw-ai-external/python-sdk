@@ -31,7 +31,7 @@ from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
 from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import Sequence, AsyncGenerator
-from concurrent.futures import Future as ConcurrentFuture
+from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
 import httpx
 import numpy as np
@@ -93,6 +93,8 @@ T = TypeVar("T")
 DEFAULT_FIREWORKS_API_URL = "https://api.fireworks.ai"
 _INFERENCE_DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
+# Agentic turns have been observed generating for ~50 minutes before completing.
+SAMPLER_DRAIN_TIMEOUT_S: float = 3600.0
 DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY: int = 128
 PARALLEL_CHUNK_SEND_CONCURRENCY_ENV = "FIREWORKS_TRAINING_PARALLEL_CHUNK_SEND_CONCURRENCY"
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
@@ -115,6 +117,11 @@ class _CreateModelResponse(types.CreateModelResponse):
     comms: Comms = "v1"
     routing_matrix_format: RoutingMatrixFormat = "base64_inline"
     r3_store_id: str | None = None
+    # Trainer-authoritative Router Replay capability for the loaded base model.
+    # None when the trainer predates the field (or its topology is unknown);
+    # callers then fall back to probing the model. See supports_router_replay
+    # on FiretitanTrainingClient.
+    supports_router_replay: bool | None = None
     model_config = {"protected_namespaces": ()}
 
     @field_validator("comms", mode="before")
@@ -127,6 +134,13 @@ class _CreateModelResponse(types.CreateModelResponse):
     @classmethod
     def _known_routing_matrix_format(cls, value):
         return "parquet_v1" if value == "parquet_v1" else "base64_inline"
+
+    @field_validator("supports_router_replay", mode="before")
+    @classmethod
+    def _known_router_replay_capability(cls, value: Any) -> bool | None:
+        # Only a real bool is a decision; anything else is "unknown" so the
+        # caller falls back instead of mis-reading a malformed value.
+        return value if isinstance(value, bool) else None
 
 
 class WeightSyncResponse(BaseModel):
@@ -168,6 +182,15 @@ DEFAULT_LORA_ALPHA = 32
 DEFAULT_LORA_INIT_METHOD = "kaiming"
 
 
+class SamplingClientClosedError(RuntimeError):
+    """A sampling request was cancelled because its ``FiretitanSamplingClient`` closed.
+
+    The request did not complete and no longer holds a concurrency slot, so it is
+    safe to resubmit on a live sampling client (for example, the one bound to the
+    newest snapshot after a weight sync).
+    """
+
+
 class FiretitanSamplingClient(SamplingClient):
     """Tinker-compatible sampling wrapper backed by a ``DeploymentSampler``.
 
@@ -186,6 +209,9 @@ class FiretitanSamplingClient(SamplingClient):
         self._loop_thread: threading.Thread | None = None
         self._loop_lock = threading.Lock()
         self._closed = False
+        self._pending: set[ConcurrentFuture[Any]] = set()
+        self._pending_lock = threading.Lock()
+        self._drain_thread: threading.Thread | None = None
 
     @classmethod
     def create(
@@ -243,8 +269,31 @@ class FiretitanSamplingClient(SamplingClient):
             return loop
 
     def _submit(self, coro) -> ConcurrentFuture[Any]:
-        loop = self._ensure_loop()
-        return asyncio.run_coroutine_threadsafe(coro, loop)
+        try:
+            loop = self._ensure_loop()
+        except RuntimeError:
+            coro.close()
+            raise
+        future = asyncio.run_coroutine_threadsafe(self._run_until_closed(coro), loop)
+        with self._pending_lock:
+            self._pending.add(future)
+        future.add_done_callback(self._discard_pending)
+        return future
+
+    def _discard_pending(self, future: ConcurrentFuture[Any]) -> None:
+        with self._pending_lock:
+            self._pending.discard(future)
+
+    async def _run_until_closed(self, coro) -> Any:
+        try:
+            return await coro
+        except asyncio.CancelledError:
+            if self._closed:
+                raise SamplingClientClosedError(
+                    "FiretitanSamplingClient was closed while this request was in flight; "
+                    "resubmit it on a live sampling client."
+                ) from None
+            raise
 
     @staticmethod
     async def _await_concurrent_future(future: ConcurrentFuture[Any]) -> Any:
@@ -497,30 +546,73 @@ class FiretitanSamplingClient(SamplingClient):
             await async_client.aclose()
         self.deployment_sampler._sync_client.close()
 
-    def close(self) -> None:
-        """Close the wrapper loop and the underlying sampler clients."""
+    async def _shutdown(self) -> None:
+        # Cancel before closing transports: a request killed by aclose() instead
+        # surfaces as a transport error, which the concurrency controller reads as
+        # congestion, and its retry is stranded on a loop that is about to stop,
+        # so its caller never resolves.
+        current = asyncio.current_task()
+        tasks = [task for task in asyncio.all_tasks() if task is not current]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await self._aclose_sampler()
+
+    def close(self, drain_timeout_s: float = SAMPLER_DRAIN_TIMEOUT_S) -> None:
+        """Stop accepting requests, then shut down once in-flight requests finish.
+
+        A weight sync closes the previous snapshot's client while its turns are
+        still generating. Those keep streaming on the previous snapshot so their
+        trajectories continue; with requests in flight the drain runs in the
+        background and this returns immediately. Requests still running after
+        ``drain_timeout_s`` are cancelled while the loop still runs, so each
+        releases its concurrency slot, and their futures fail with
+        :class:`SamplingClientClosedError`.
+        """
         if self._closed:
             return
         self._closed = True
 
+        with self._pending_lock:
+            pending = list(self._pending)
+        if pending and drain_timeout_s > 0 and self._loop_thread is not threading.current_thread():
+            self._drain_thread = threading.Thread(
+                target=self._drain_and_shutdown,
+                args=(pending, drain_timeout_s),
+                name="fireworks-sampling-client-drain",
+                daemon=True,
+            )
+            self._drain_thread.start()
+            return
+        self._shutdown_loop()
+
+    def _drain_and_shutdown(self, pending: list[ConcurrentFuture[Any]], drain_timeout_s: float) -> None:
+        wait_concurrent_futures(pending, timeout=drain_timeout_s)
+        self._shutdown_loop()
+
+    def _shutdown_loop(self) -> None:
         loop = self._loop
         thread = self._loop_thread
         if loop is not None and loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(self._aclose_sampler(), loop)
-            try:
-                future.result(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
-            except Exception:
-                logger.debug("Failed to close FiretitanSamplingClient cleanly", exc_info=True)
-            loop.call_soon_threadsafe(loop.stop)
-            if thread is not None and thread is not threading.current_thread():
-                thread.join(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
-            if thread is None or not thread.is_alive():
-                loop.close()
+            if thread is threading.current_thread():
+                shutdown = loop.create_task(self._shutdown())
+                shutdown.add_done_callback(lambda _: loop.stop())
             else:
-                logger.debug(
-                    "Skipped closing FiretitanSamplingClient loop because the loop thread "
-                    "did not stop before the close timeout"
-                )
+                future = asyncio.run_coroutine_threadsafe(self._shutdown(), loop)
+                try:
+                    future.result(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+                except Exception:
+                    logger.debug("Failed to close FiretitanSamplingClient cleanly", exc_info=True)
+                loop.call_soon_threadsafe(loop.stop)
+                if thread is not None:
+                    thread.join(timeout=SAMPLER_SHUTDOWN_TIMEOUT_S)
+                if thread is None or not thread.is_alive():
+                    loop.close()
+                else:
+                    logger.debug(
+                        "Skipped closing FiretitanSamplingClient loop because the loop thread "
+                        "did not stop before the close timeout"
+                    )
         else:
             self.deployment_sampler.close()
 
@@ -1054,6 +1146,7 @@ def _create_base_only_training_client(
         comms=response.comms,
         r3_store_id=response.r3_store_id,
         routing_matrix_format=response.routing_matrix_format,
+        supports_router_replay=getattr(response, "supports_router_replay", None),
     )
 
 
@@ -1497,12 +1590,20 @@ class FiretitanTrainingClient(TrainingClient):
         comms: Comms = "v1",
         r3_store_id: str | None = None,
         routing_matrix_format: RoutingMatrixFormat = "base64_inline",
+        supports_router_replay: bool | None = None,
     ):
         if comms not in ("v1", "v2"):
             raise ValueError("comms must be 'v1' or 'v2'")
         self._comms = comms
         self.routing_matrix_format = "parquet_v1" if routing_matrix_format == "parquet_v1" else "base64_inline"
         self.r3_store_id = r3_store_id if self.routing_matrix_format == "parquet_v1" else None
+        # Trainer-authoritative: True/False when the trainer advertised whether
+        # its loaded base model has MoE layers Router Replay can replay; None
+        # when the trainer predates the field. Unlike routing_matrix_format
+        # (the R3 wire format, advertised for dense models too), this is the
+        # on/off signal. Lets callers decide R3 without GET-ing the base model,
+        # which a private early-access model rejects with 403.
+        self.supports_router_replay = supports_router_replay if isinstance(supports_router_replay, bool) else None
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
@@ -1968,23 +2069,59 @@ class FiretitanTrainingClient(TrainingClient):
         _check_cos_similarity_matrix_single_chunk(natural_chunks, output=output)
         return [(self._get_request_id(), data)]
 
-    async def _forward_embedding_async(
+    def _forward_embedding(
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
         output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
-        return await self._run_chunked_requests(
-            requests,
-            lambda request_id, chunk: self._send_single_forward_embedding_request(
-                request_id,
-                chunk,
-                pooling,
-                output,
-            ),
-            request_type="Forward",
-        )
+
+        async def _forward_embedding_async():
+            combined_future = await self._run_chunked_requests(
+                requests,
+                lambda request_id, chunk: self._send_single_forward_embedding_request(
+                    request_id,
+                    chunk,
+                    pooling,
+                    output,
+                ),
+                request_type="Forward",
+            )
+            return await combined_future
+
+        return self.holder.run_coroutine_threadsafe(_forward_embedding_async())
+
+    async def _forward_embedding_async(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        return self._forward_embedding(data, pooling, output=output)
+
+    def _forward_backward_embedding(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        requests = self._build_embedding_requests(data, output)
+
+        async def _forward_backward_embedding_async():
+            combined_future = await self._run_chunked_requests(
+                requests,
+                lambda request_id, chunk: self._send_single_forward_backward_embedding_request(
+                    request_id,
+                    chunk,
+                    pooling,
+                    output,
+                ),
+                request_type="ForwardBackward",
+            )
+            return await combined_future
+
+        return self.holder.run_coroutine_threadsafe(_forward_backward_embedding_async())
 
     async def _forward_backward_embedding_async(
         self,
@@ -1992,17 +2129,20 @@ class FiretitanTrainingClient(TrainingClient):
         pooling: Literal["mean", "last"],
         output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        requests = self._build_embedding_requests(data, output)
-        return await self._run_chunked_requests(
-            requests,
-            lambda request_id, chunk: self._send_single_forward_backward_embedding_request(
-                request_id,
-                chunk,
-                pooling,
-                output,
-            ),
-            request_type="ForwardBackward",
-        )
+        # Return the scheduled API future without awaiting trainer completion.
+        # Callers can submit follow-up work and choose their own result timeout.
+        return self._forward_backward_embedding(data, pooling, output=output)
+
+    def forward_projection(
+        self,
+        data: list[types.Datum],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Forward-only raw projection-head outputs, without accumulating gradients.
+
+        ``loss_fn_outputs[i]["projection"]`` holds one ``[tokens, projection_head_dim]``
+        tensor for ``data[i]``. Use it to read values from a critic between updates.
+        """
+        return self._forward_embedding(data, "mean", output="projection")
 
     async def forward_backward_custom_async(
         self,
@@ -3630,6 +3770,7 @@ class FiretitanServiceClient(ServiceClient):
             comms=response.comms,
             r3_store_id=response.r3_store_id,
             routing_matrix_format=response.routing_matrix_format,
+            supports_router_replay=getattr(response, "supports_router_replay", None),
         )
         self._training_clients.append(training_client)
         return training_client

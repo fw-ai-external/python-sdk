@@ -37,6 +37,20 @@ logger = logging.getLogger(__name__)
 _POLL_TRANSIENT_MAX_BACKOFF_S = 60.0
 
 
+class ModelDetailsUnavailableError(RuntimeError):
+    """``model_is_moe`` could not read the model record.
+
+    Subclasses ``RuntimeError`` so existing callers that catch ``RuntimeError``
+    are unaffected. ``status_code`` lets callers tell "not visible to this
+    caller" (403/404 -- e.g. a private early-access base model) from a real
+    control-plane failure without parsing the message.
+    """
+
+    def __init__(self, message: str, *, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class _TransientOperationPollError(Exception):
     """Retryable failure while polling a long-running operation."""
 
@@ -209,9 +223,10 @@ class FireworksClient(_RestClient):
         """
         resp = self._get(f"/v1/{model.lstrip('/')}", timeout=30)
         if not resp.is_success:
-            raise RuntimeError(
+            raise ModelDetailsUnavailableError(
                 f"Failed to fetch model details for {model!r} "
-                f"(HTTP {resp.status_code}): {parse_api_error(resp)}"
+                f"(HTTP {resp.status_code}): {parse_api_error(resp)}",
+                status_code=resp.status_code,
             )
         data = resp.json() or {}
         details = data.get("baseModelDetails") or data.get("base_model_details") or {}

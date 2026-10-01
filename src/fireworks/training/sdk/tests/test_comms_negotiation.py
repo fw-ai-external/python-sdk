@@ -405,3 +405,39 @@ def test_sampler_binding_is_independent_for_reused_deployment(
     asyncio.run(first.deployment_sampler.async_completions_stream([1, 2], include_routing_matrix=True))
     assert first.deployment_sampler.routing_matrix_format == ("parquet_v1" if enabled else "base64_inline")
     first.close()
+
+
+@pytest.mark.parametrize("route", ["dedicated", "serverless"])
+@pytest.mark.parametrize(
+    "capability,expected",
+    [
+        ({"supports_router_replay": True}, True),
+        ({"supports_router_replay": False}, False),
+        ({}, None),  # older trainer: field absent -> unknown
+        ({"supports_router_replay": None}, None),
+        ({"supports_router_replay": "yes"}, None),  # malformed -> unknown, not truthy
+        ({"supports_router_replay": 1}, None),
+    ],
+)
+def test_router_replay_capability_reaches_training_client(connect, route, capability, expected):
+    # The trainer-authoritative R3 on/off signal flows from the create_model
+    # response to the training client so callers never need GET model.
+    service, _ = connect(route, [capability])
+    client = service.create_training_client("test/model", lora_rank=8 if route == "serverless" else 0)
+    assert client.supports_router_replay is expected
+
+
+def test_router_replay_capability_is_independent_of_routing_matrix_format(connect):
+    # parquet_v1 is the R3 wire format and is advertised for dense models too;
+    # it must never be read as "this model supports Router Replay".
+    service, _ = connect(
+        "serverless", [{"routing_matrix_format": "parquet_v1", "r3_store_id": "nfs-test", "supports_router_replay": False}]
+    )
+    client = service.create_training_client("test/model", lora_rank=8)
+    assert client.routing_matrix_format == "parquet_v1"
+    assert client.supports_router_replay is False
+
+
+def test_old_response_model_accepts_router_replay_capability():
+    response = types.CreateModelResponse.model_validate({"model_id": "test", "supports_router_replay": True})
+    assert response.model_id == "test"

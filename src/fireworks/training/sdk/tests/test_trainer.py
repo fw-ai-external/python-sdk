@@ -19,7 +19,11 @@ from fireworks.training.sdk.trainer import (
     TrainerServiceEndpoint,
 )
 from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
-from fireworks.training.sdk.fireworks_client import FireworksClient, TrainingShapeProfile
+from fireworks.training.sdk.fireworks_client import (
+    FireworksClient,
+    TrainingShapeProfile,
+    ModelDetailsUnavailableError,
+)
 
 
 def _query_params(path: str) -> dict[str, list[str]]:
@@ -1199,8 +1203,12 @@ class TestModelIsMoe:
             )
         )
 
-        with pytest.raises(RuntimeError, match="HTTP 403"):
+        with pytest.raises(RuntimeError, match="HTTP 403") as exc_info:
             client.model_is_moe("accounts/a/models/m")
+        # Typed so callers can tell "not visible to this caller" apart from a
+        # real failure; still a RuntimeError for existing catch sites.
+        assert isinstance(exc_info.value, ModelDetailsUnavailableError)
+        assert exc_info.value.status_code == 403
         client.close()
 
 
