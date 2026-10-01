@@ -28,6 +28,7 @@ _EXPORTS = {
     "FiretitanServiceClient": ("fireworks.training.sdk.client", "FiretitanServiceClient"),
     "FiretitanSampleResponse": ("fireworks.training.sdk.client", "FiretitanSampleResponse"),
     "FiretitanSamplingClient": ("fireworks.training.sdk.client", "FiretitanSamplingClient"),
+    "SamplingClientClosedError": ("fireworks.training.sdk.client", "SamplingClientClosedError"),
     "FiretitanSamplingParams": ("fireworks.training.sdk.client", "FiretitanSamplingParams"),
     "FiretitanTrainingClient": ("fireworks.training.sdk.client", "FiretitanTrainingClient"),
     "FiretitanSampledSequence": ("fireworks.training.sdk.client", "FiretitanSampledSequence"),
@@ -143,6 +144,10 @@ _EXPORTS = {
     ),
     "ExportPrecision": ("fireworks.training.sdk._snapshot_chain", "ExportPrecision"),
     "FireworksClient": ("fireworks.training.sdk.fireworks_client", "FireworksClient"),
+    "ModelDetailsUnavailableError": (
+        "fireworks.training.sdk.fireworks_client",
+        "ModelDetailsUnavailableError",
+    ),
     "TrainingShapeProfile": (
         "fireworks.training.sdk.fireworks_client",
         "TrainingShapeProfile",
