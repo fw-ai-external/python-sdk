@@ -7,7 +7,7 @@ import asyncio
 import logging
 import warnings
 from types import SimpleNamespace
-from threading import Event, RLock
+from threading import Event, RLock, Thread
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +15,7 @@ import httpx
 import torch
 import pytest
 from tinker import types
+from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
 
 from fireworks.training.sdk.client import (
     FIRETITAN_TINKER_CLIENT_CONFIG,
@@ -887,14 +888,11 @@ class TestParallelChunkSubmission:
             patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
             patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
         ):
-            future = asyncio.run(
-                client._forward_embedding_async(
-                    [self._datum()],
-                    "last",
-                    output="embedding",
-                )
-            )
-            result = asyncio.run(future.result_async())
+            result = client._forward_embedding(
+                [self._datum()],
+                "last",
+                output="embedding",
+            ).result()
 
         assert send_order == [1, 2, 3]
         assert result == [1, 2, 3]
@@ -923,14 +921,11 @@ class TestParallelChunkSubmission:
             patch("fireworks.training.sdk.client._APIFuture", self._FakeAPIFuture),
             patch("fireworks.training.sdk.client._CombinedAPIFuture", self._FakeCombinedAPIFuture),
         ):
-            future = asyncio.run(
-                client._forward_backward_embedding_async(
-                    [self._datum()],
-                    "mean",
-                    output="embedding",
-                )
-            )
-            result = asyncio.run(future.result_async())
+            result = client._forward_backward_embedding(
+                [self._datum()],
+                "mean",
+                output="embedding",
+            ).result()
 
         assert send_order == [1, 2, 3]
         assert result == [1, 2, 3]
@@ -3223,6 +3218,204 @@ class TestForwardBackwardCustomEmbedding:
         grad_data = captured["backward_data"][0].loss_fn_inputs["projection_grads"]
         assert grad_data.data == [1.0, -1.0, 2.0, -2.0]
         assert grad_data.shape == [2, 2]
+
+    @staticmethod
+    def _holder_loop_client(client):
+        holder_loop = asyncio.new_event_loop()
+        holder_thread = Thread(target=holder_loop.run_forever, daemon=True)
+        holder_thread.start()
+
+        class Holder:
+            def run_coroutine_threadsafe(self, coro):
+                return AwaitableConcurrentFuture(
+                    asyncio.run_coroutine_threadsafe(coro, holder_loop)
+                )
+
+        def stop():
+            holder_loop.call_soon_threadsafe(holder_loop.stop)
+            holder_thread.join(timeout=5)
+            holder_loop.close()
+
+        client.holder = Holder()
+        client._build_embedding_requests = lambda data, _output: [(1, data)]
+        return holder_loop, stop
+
+    def test_forward_projection_is_forward_only_on_holder_loop(self, monkeypatch):
+        client = self._make_client()
+        holder_loop, stop = self._holder_loop_client(client)
+        datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
+        forward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="forward",
+            loss_fn_outputs=[
+                {
+                    "projection": types.TensorData(
+                        data=[1.0, 2.0, 3.0, 4.0],
+                        dtype="float32",
+                        shape=[2, 2],
+                    )
+                }
+            ],
+            metrics={},
+        )
+        captured = {}
+
+        class Training:
+            async def forward(self, *, request, extra_body):
+                captured["request"] = request
+                captured["extra_body"] = extra_body
+                return forward_output
+
+        class ClientContext:
+            def __enter__(self):
+                return SimpleNamespace(training=Training())
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        client.holder.aclient = lambda _pool_type: ClientContext()
+        client._guaranteed_model_id = lambda: "model"
+
+        async def fake_run_chunked_requests(requests, send_chunk, *, request_type):
+            assert asyncio.get_running_loop() is holder_loop
+            assert requests == [(1, [datum])]
+            assert request_type == "Forward"
+            result = await send_chunk(*requests[0])
+
+            async def done():
+                return result
+
+            return done()
+
+        monkeypatch.setattr(client, "_run_chunked_requests", fake_run_chunked_requests)
+
+        try:
+            result = client.forward_projection([datum]).result(timeout=5)
+        finally:
+            stop()
+
+        assert result.loss_fn_outputs[0]["projection"].data == [1.0, 2.0, 3.0, 4.0]
+        assert result.loss_fn_outputs[0]["projection"].shape == [2, 2]
+        assert captured["request"].forward_input.data == [datum]
+        assert captured["extra_body"]["forward_input"]["loss_fn_config"] == {
+            "output": "projection",
+            "pooling": "mean",
+        }
+
+    @pytest.mark.parametrize("async_caller", [False, True])
+    def test_projection_custom_loss_returns_pending_backward_future(
+        self,
+        monkeypatch,
+        async_caller,
+    ):
+        client = self._make_client()
+        _holder_loop, stop = self._holder_loop_client(client)
+        datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
+        forward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="forward",
+            loss_fn_outputs=[
+                {"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}
+            ],
+            metrics={},
+        )
+        backward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy", loss_fn_outputs=[], metrics={}
+        )
+        backward_waiting = Event()
+        release_backward = Event()
+
+        class PendingBackwardFuture:
+            async def result_async(self, timeout=None):
+                backward_waiting.set()
+                while not release_backward.is_set():
+                    await asyncio.sleep(0.01)
+                return backward_output
+
+            def __await__(self):
+                return self.result_async().__await__()
+
+        async def fake_run_chunked_requests(_requests, _send_chunk, *, request_type):
+            if request_type == "ForwardBackward":
+                return PendingBackwardFuture()
+
+            async def forward_done():
+                return forward_output
+
+            return forward_done()
+
+        monkeypatch.setattr(client, "_run_chunked_requests", fake_run_chunked_requests)
+
+        def invoke():
+            if async_caller:
+                return asyncio.run(
+                    client.forward_backward_custom_async(
+                        [datum],
+                        lambda _data, values: (values[0].sum(), {}),
+                        output="projection",
+                    )
+                )
+            return client.forward_backward_custom(
+                [datum],
+                lambda _data, values: (values[0].sum(), {}),
+                output="projection",
+            )
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                call = executor.submit(invoke)
+                assert backward_waiting.wait(timeout=5)
+                try:
+                    result_future = call.result(timeout=1)
+                except BaseException:
+                    release_backward.set()
+                    raise
+                assert not release_backward.is_set()
+                release_backward.set()
+                assert result_future.result(timeout=5) is backward_output
+        finally:
+            release_backward.set()
+            stop()
+
+    def test_projection_custom_loss_sends_requests_on_holder_loop(self, monkeypatch):
+        client = self._make_client()
+        holder_loop, stop = self._holder_loop_client(client)
+        datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
+        forward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="forward",
+            loss_fn_outputs=[
+                {"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}
+            ],
+            metrics={},
+        )
+        backward_output = types.ForwardBackwardOutput(
+            loss_fn_output_type="cross_entropy", loss_fn_outputs=[], metrics={}
+        )
+        request_types = []
+
+        async def fake_run_chunked_requests(requests, send_chunk, *, request_type):
+            assert asyncio.get_running_loop() is holder_loop
+            request_types.append(request_type)
+            if request_type == "ForwardBackward":
+                assert requests[0][1][0].loss_fn_inputs["projection_grads"].shape == [2, 1]
+            value = forward_output if request_type == "Forward" else backward_output
+
+            async def done():
+                return value
+
+            return done()
+
+        monkeypatch.setattr(client, "_run_chunked_requests", fake_run_chunked_requests)
+
+        async def run_on_caller_loop():
+            future = await client.forward_backward_custom_async(
+                [datum], lambda _data, values: (values[0].sum(), {}), output="projection"
+            )
+            return await future.result_async(timeout=5)
+
+        try:
+            assert asyncio.run(run_on_caller_loop()) is backward_output
+        finally:
+            stop()
+        assert request_types == ["Forward", "ForwardBackward"]
 
     def test_embedding_output_pools_sequence_hidden_states(self, monkeypatch):
         client = self._make_client()

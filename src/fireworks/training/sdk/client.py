@@ -2069,23 +2069,59 @@ class FiretitanTrainingClient(TrainingClient):
         _check_cos_similarity_matrix_single_chunk(natural_chunks, output=output)
         return [(self._get_request_id(), data)]
 
-    async def _forward_embedding_async(
+    def _forward_embedding(
         self,
         data: list[types.Datum],
         pooling: Literal["mean", "last"],
         output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
         requests = self._build_embedding_requests(data, output)
-        return await self._run_chunked_requests(
-            requests,
-            lambda request_id, chunk: self._send_single_forward_embedding_request(
-                request_id,
-                chunk,
-                pooling,
-                output,
-            ),
-            request_type="Forward",
-        )
+
+        async def _forward_embedding_async():
+            combined_future = await self._run_chunked_requests(
+                requests,
+                lambda request_id, chunk: self._send_single_forward_embedding_request(
+                    request_id,
+                    chunk,
+                    pooling,
+                    output,
+                ),
+                request_type="Forward",
+            )
+            return await combined_future
+
+        return self.holder.run_coroutine_threadsafe(_forward_embedding_async())
+
+    async def _forward_embedding_async(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        return self._forward_embedding(data, pooling, output=output)
+
+    def _forward_backward_embedding(
+        self,
+        data: list[types.Datum],
+        pooling: Literal["mean", "last"],
+        output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        requests = self._build_embedding_requests(data, output)
+
+        async def _forward_backward_embedding_async():
+            combined_future = await self._run_chunked_requests(
+                requests,
+                lambda request_id, chunk: self._send_single_forward_backward_embedding_request(
+                    request_id,
+                    chunk,
+                    pooling,
+                    output,
+                ),
+                request_type="ForwardBackward",
+            )
+            return await combined_future
+
+        return self.holder.run_coroutine_threadsafe(_forward_backward_embedding_async())
 
     async def _forward_backward_embedding_async(
         self,
@@ -2093,17 +2129,20 @@ class FiretitanTrainingClient(TrainingClient):
         pooling: Literal["mean", "last"],
         output: Literal["embedding", "projection", "cos_similarity_matrix"] = "embedding",
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        requests = self._build_embedding_requests(data, output)
-        return await self._run_chunked_requests(
-            requests,
-            lambda request_id, chunk: self._send_single_forward_backward_embedding_request(
-                request_id,
-                chunk,
-                pooling,
-                output,
-            ),
-            request_type="ForwardBackward",
-        )
+        # Return the scheduled API future without awaiting trainer completion.
+        # Callers can submit follow-up work and choose their own result timeout.
+        return self._forward_backward_embedding(data, pooling, output=output)
+
+    def forward_projection(
+        self,
+        data: list[types.Datum],
+    ) -> APIFuture[types.ForwardBackwardOutput]:
+        """Forward-only raw projection-head outputs, without accumulating gradients.
+
+        ``loss_fn_outputs[i]["projection"]`` holds one ``[tokens, projection_head_dim]``
+        tensor for ``data[i]``. Use it to read values from a critic between updates.
+        """
+        return self._forward_embedding(data, "mean", output="projection")
 
     async def forward_backward_custom_async(
         self,

@@ -5,8 +5,12 @@
 Full Changelog: [v1.2.17...v1.2.18](https://github.com/fw-ai-external/python-sdk/compare/v1.2.17...v1.2.18)
 
 ### Features
+* **training-sdk:** add forward-only reads for per-token projection outputs
 * **training-sdk:** expose `supports_router_replay` on training clients, reported by the trainer at `create_model`, so callers can decide Router Replay without fetching the base model (`None` when the trainer does not report it)
 * **training-sdk:** raise `ModelDetailsUnavailableError` (a `RuntimeError` subclass carrying `status_code`) from `FireworksClient.model_is_moe` when the model record cannot be read, so callers can tell an inaccessible model (403/404) from a control-plane failure
+
+### Bug Fixes
+* **training-sdk:** make projection custom-loss helpers safe to call from synchronous and asynchronous code
 
 ## 1.2.17 (2026-09-26)
 
