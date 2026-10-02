@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.19 (2026-10-02)
+
+Full Changelog: [v1.2.18...v1.2.19](https://github.com/fw-ai-external/python-sdk/compare/v1.2.18...v1.2.19)
+
+### Features
+* **training-sdk:** automatically select RDMA weight sync only for dedicated full-parameter trainers and inference replicas that all advertise support; older images, LoRA, and deployments using gateway shard fan-out retain save-weights followed by file hotload
+* **datasets:** add `fireworks.lib.dataset_upload.upload_dataset_shards` to upload a `.jsonl` file or a directory of top-level `.jsonl` shards as one dataset (single upload-endpoint registration, credential-free signed-URL PUTs, then `validate_upload`), plus `collect_dataset_shards` and `count_dataset_examples` helpers; fails closed for CMEK datasets
+
 ## 1.2.18 (2026-10-01)
 
 Full Changelog: [v1.2.17...v1.2.18](https://github.com/fw-ai-external/python-sdk/compare/v1.2.17...v1.2.18)

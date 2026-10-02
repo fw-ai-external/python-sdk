@@ -3,6 +3,7 @@
 import json
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -24,12 +25,8 @@ def connect(monkeypatch):
     monkeypatch.setattr(FiretitanServiceClient, "_resolved_account_id", lambda _: "test")
     resources = []
 
-    def create(route, capabilities):
-        prefix = (
-            "/training/v1/serverless"
-            if route == "serverless"
-            else "/training/v1/rlorTrainerJobs/test/trainer"
-        )
+    def create(route, capabilities, *, weight_sync_status=200):
+        prefix = "/training/v1/serverless" if route == "serverless" else "/training/v1/rlorTrainerJobs/test/trainer"
         calls = []
         pending = {}
         models = iter(capabilities)
@@ -45,7 +42,13 @@ def connect(monkeypatch):
             if operation == "create_model":
                 index = len(pending)
                 request_id = f"run-{index}:fut:create"
-                model_id = f"base-{index}" if body.get("base_only") else f"run-{index}:train:0"
+                model_id = (
+                    f"base-{index}"
+                    if body.get("base_only")
+                    else f"run-{index}:train:0"
+                    if route == "serverless"
+                    else f"model-{index}"
+                )
                 pending[request_id] = {"type": "create_model", "model_id": model_id, **next(models)}
                 return httpx.Response(200, json={"request_id": request_id})
             if operation == "forward_backward":
@@ -58,6 +61,20 @@ def connect(monkeypatch):
                 return httpx.Response(200, json={"request_id": request_id})
             if operation == "retrieve_future":
                 return httpx.Response(200, json=pending[body["request_id"]])
+            if operation in ("weight_sync", "save_weights_for_sampler"):
+                if operation == "weight_sync" and weight_sync_status != 200:
+                    return httpx.Response(weight_sync_status, json={"detail": "weight_sync unavailable"})
+                request_id = f"sync-{len(pending)}"
+                pending[request_id] = (
+                    {"version": "rdma-version", "optimizer_version": 1, "metrics": {}}
+                    if operation == "weight_sync"
+                    else {"path": body["path"]}
+                )
+                return httpx.Response(200, json={"request_id": request_id})
+            if operation == "optim_step":
+                request_id = f"optim-{len(pending)}"
+                pending[request_id] = {"metrics": {}}
+                return httpx.Response(200, json={"request_id": request_id})
             if operation == "weights_info":
                 return httpx.Response(200, json={"base_model": "test/model", "is_lora": True, "lora_rank": 8})
             if operation == "load_weights":
@@ -147,7 +164,11 @@ def test_capability_is_not_shared_between_services(connect):
 
 
 @pytest.mark.parametrize("capability,enabled", [({"comms": "v2"}, True), ({}, False)])
-def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch, capability, enabled):
+@pytest.mark.parametrize(
+    "setup_kwargs",
+    [{}, {"extra_args": ["--cmek-output-model-resource=models/output"], "weight_sync_transport": "RDMA"}],
+)
+def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch, capability, enabled, setup_kwargs):
     from fireworks.training.sdk import managed
 
     monkeypatch.setattr(managed, "_build_resource_managers", lambda **_: (object(), object()))
@@ -156,7 +177,9 @@ def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch
         job_id="trainer",
         base_url="https://training.invalid/training/v1/rlorTrainerJobs/test/trainer",
     )
-    monkeypatch.setattr(managed, "_start_or_reuse_trainer", lambda *_, **__: SimpleNamespace(created=False, job=endpoint))
+    monkeypatch.setattr(
+        managed, "_start_or_reuse_trainer", lambda *_, **__: SimpleNamespace(created=False, job=endpoint)
+    )
     monkeypatch.setattr(managed, "_wait_for_started_trainer", lambda *_, **__: endpoint)
     monkeypatch.setattr(managed, "_attach_managed_deployment", lambda *_, **__: (None, None, False, False))
     connections = []
@@ -168,10 +191,11 @@ def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch
         return service
 
     monkeypatch.setattr(managed, "FiretitanServiceClient", connect_ready_trainer)
-    service = FiretitanServiceClient.from_firetitan_config(api_key="fw-test", base_model="test/model")
+    service = FiretitanServiceClient.from_firetitan_config(api_key="fw-test", base_model="test/model", **setup_kwargs)
     assert connections == []
     client = service.create_training_client()
     assert client.comms == ("v2" if enabled else "v1")
+    assert not client.supports_rdma_weight_sync
     assert len(connections) == 1
 
 
@@ -200,9 +224,12 @@ def test_resume_negotiates_with_new_trainer(connect, route, with_optimizer, use_
 
 
 def test_old_response_model_accepts_new_capability():
-    response = types.CreateModelResponse.model_validate({"model_id": "test", "comms": "v2"})
+    response = types.CreateModelResponse.model_validate(
+        {"model_id": "test", "comms": "v2", "supports_rdma_weight_sync": True}
+    )
     assert response.model_id == "test"
     assert not hasattr(response, "comms")
+    assert not hasattr(response, "supports_rdma_weight_sync")
 
 
 def test_capability_does_not_weaken_model_validation(connect):
@@ -361,6 +388,7 @@ def test_sampler_binding_is_independent_for_reused_deployment(
 
     service, _ = connect(route, [{"comms": comms, "routing_matrix_format": "parquet_v1", "r3_store_id": "nfs-test"}])
     training = service.create_training_client("test/model", lora_rank=8 if route == "serverless" else 0)
+
     async def receive(request):
         assert request.url.path.endswith("/inference/v1/completions")
         if json.loads(request.content).get("stream") is False:
@@ -431,7 +459,8 @@ def test_router_replay_capability_is_independent_of_routing_matrix_format(connec
     # parquet_v1 is the R3 wire format and is advertised for dense models too;
     # it must never be read as "this model supports Router Replay".
     service, _ = connect(
-        "serverless", [{"routing_matrix_format": "parquet_v1", "r3_store_id": "nfs-test", "supports_router_replay": False}]
+        "serverless",
+        [{"routing_matrix_format": "parquet_v1", "r3_store_id": "nfs-test", "supports_router_replay": False}],
     )
     client = service.create_training_client("test/model", lora_rank=8)
     assert client.routing_matrix_format == "parquet_v1"
@@ -441,3 +470,252 @@ def test_router_replay_capability_is_independent_of_routing_matrix_format(connec
 def test_old_response_model_accepts_router_replay_capability():
     response = types.CreateModelResponse.model_validate({"model_id": "test", "supports_router_replay": True})
     assert response.model_id == "test"
+
+
+@pytest.mark.parametrize("lora_rank", [0, 8], ids=["full", "lora"])
+@pytest.mark.parametrize("trainer_support", [False, True], ids=["old-trainer", "new-trainer"])
+@pytest.mark.parametrize("inference_support", [False, True], ids=["old-inference", "new-inference"])
+def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, inference_support):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    # Missing fields reproduce the response of old images, rather than requiring
+    # those images to learn how to advertise a negative capability.
+    capability = {"supports_rdma_weight_sync": True} if trainer_support else {}
+    service, calls = connect("dedicated", [capability])
+    client = service.create_training_client("test/model", lora_rank=lora_rank)
+    manager = Mock(
+        account_id="test",
+        api_key="fw-test",
+        inference_url="https://inference.invalid",
+        hotload_api_url="https://inference.invalid",
+    )
+    manager._hotload_headers.return_value = {}
+    replica = {"supports_rdma_weight_sync": True} if inference_support else {}
+    manager.hotload_check_status.return_value = {"replicas": [replica]}
+    manager.hotload_and_wait.return_value = True
+    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
+
+    expected_rdma = lora_rank == 0 and trainer_support and inference_support
+    assert client.supports_rdma_weight_sync is expected_rdma
+    result = client.weight_sync().result(timeout=5)
+    submitted = [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")]
+    assert submitted == (["weight_sync"] if expected_rdma else ["save_weights_for_sampler"])
+    assert manager.hotload_and_wait.call_count == (0 if expected_rdma else 1)
+    assert (result.optimizer_version is not None) is expected_rdma
+    assert manager.hotload_check_status.call_count == (2 if lora_rank == 0 and trainer_support else 0)
+
+
+def _weight_sync_client(connect, *, weight_sync_status=200):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}], weight_sync_status=weight_sync_status)
+    client = service.create_training_client("test/model")
+    manager = Mock(account_id="test", hotload_api_url="https://inference.invalid")
+    manager._hotload_headers.return_value = {}
+    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": True}]}
+    manager.hotload_and_wait.return_value = True
+    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    return client, manager, calls
+
+
+@pytest.mark.parametrize("initial_support", [False, True])
+def test_weight_sync_renegotiates_without_reconnecting(connect, initial_support):
+    client, manager, calls = _weight_sync_client(connect)
+    supports = [initial_support, not initial_support, False, True]
+    for supported in supports:
+        replicas = [{"supports_rdma_weight_sync": True}]
+        if not supported:
+            replicas.append({})
+        manager.hotload_check_status.return_value = {"replicas": replicas}
+        client.weight_sync().result(timeout=5)
+        assert client.supports_rdma_weight_sync is supported
+    operations = [(op, body) for op, body in calls if op in ("weight_sync", "save_weights_for_sampler")]
+    assert [op for op, _ in operations] == [
+        "weight_sync" if value else "save_weights_for_sampler" for value in supports
+    ]
+    rdma = [body for op, body in operations if op == "weight_sync"]
+    assert len({(body["session_id"], body["source_epoch"]) for body in rdma}) == 1
+    saves = [body for op, body in operations if op == "save_weights_for_sampler"]
+    assert [body["checkpoint_type"] for body in saves] == ["base", "delta"]
+    incremental = manager.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"]
+    assert incremental["previous_snapshot_identity"] == saves[0]["path"]
+
+
+@pytest.mark.parametrize("blocked_stage", ["status", "hotload"])
+@pytest.mark.parametrize("use_async", [False, True])
+def test_file_fallback_future_covers_probe_hotload_and_preserves_training_order(connect, blocked_stage, use_async):
+    from threading import Event
+
+    client, manager, calls = _weight_sync_client(connect)
+    entered, release = Event(), Event()
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=5)
+        return {"replicas": [{}]} if blocked_stage == "status" else True
+
+    manager.hotload_check_status.return_value = {"replicas": [{}]}
+    getattr(manager, "hotload_check_status" if blocked_stage == "status" else "hotload_and_wait").side_effect = blocked
+    future = asyncio.run(client.weight_sync_async()) if use_async else client.weight_sync()
+    try:
+        assert entered.wait(timeout=3)
+        with pytest.raises(TimeoutError):
+            future.result(timeout=0.01)
+        optimizer = client.optim_step(types.AdamParams())
+        assert not any(op == "optim_step" for op, _ in calls)
+    finally:
+        release.set()
+    assert future.result(timeout=5).optimizer_version is None
+    optimizer.result(timeout=5)
+    operations = [(op, body) for op, body in calls if op in ("save_weights_for_sampler", "optim_step")]
+    assert [op for op, _ in operations] == ["save_weights_for_sampler", "optim_step"]
+    assert operations[1][1]["seq_id"] == operations[0][1]["seq_id"] + 1
+
+
+@pytest.mark.parametrize("status", [404, 405])
+def test_missing_trainer_weight_sync_route_falls_back_without_reconnecting(connect, status):
+    client, manager, calls = _weight_sync_client(connect, weight_sync_status=status)
+    assert client.weight_sync().result(timeout=5).optimizer_version is None
+    assert client.weight_sync().result(timeout=5).optimizer_version is None
+    operations = [(op, body) for op, body in calls if op in ("weight_sync", "save_weights_for_sampler")]
+    assert [op for op, _ in operations] == ["weight_sync", "save_weights_for_sampler", "save_weights_for_sampler"]
+    assert operations[0][1]["seq_id"] == operations[1][1]["seq_id"]
+    assert not client.supports_rdma_weight_sync
+    assert manager.hotload_and_wait.call_count == 2
+
+
+@pytest.mark.parametrize("use_async", [False, True])
+def test_rdma_allows_later_training_submission_before_publication_completes(connect, monkeypatch, use_async):
+    from threading import Event
+
+    from fireworks.training.sdk import client as client_module
+
+    client, manager, calls = _weight_sync_client(connect)
+    entered, release = Event(), Event()
+    api_future = client_module._APIFuture
+
+    async def pending_publication(*args, **kwargs):
+        if kwargs["request_type"] == "WeightSync":
+            entered.set()
+            assert await asyncio.to_thread(release.wait, 5)
+        return await api_future(*args, **kwargs)
+
+    monkeypatch.setattr(client_module, "_APIFuture", pending_publication)
+    publication = asyncio.run(client.weight_sync_async()) if use_async else client.weight_sync()
+    try:
+        assert entered.wait(timeout=3)
+        client.optim_step(types.AdamParams()).result(timeout=3)
+        with pytest.raises(TimeoutError):
+            publication.result(timeout=0.01)
+        operations = [(op, body) for op, body in calls if op in ("weight_sync", "optim_step")]
+        assert [op for op, _ in operations] == ["weight_sync", "optim_step"]
+        assert operations[1][1]["seq_id"] == operations[0][1]["seq_id"] + 1
+    finally:
+        release.set()
+    assert publication.result(timeout=5).optimizer_version == 1
+    manager.hotload_and_wait.assert_not_called()
+
+
+def test_accepted_rdma_failure_does_not_trigger_file_retry(connect, monkeypatch):
+    client, manager, calls = _weight_sync_client(connect)
+
+    async def failed_future(*args, **kwargs):
+        raise ValueError("accepted publication failed")
+
+    monkeypatch.setattr("fireworks.training.sdk.client._APIFuture", failed_future)
+    with pytest.raises(ValueError, match="accepted publication failed"):
+        client.weight_sync().result(timeout=5)
+    assert [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")] == ["weight_sync"]
+    manager.hotload_and_wait.assert_not_called()
+
+
+def test_failed_capability_refresh_does_not_block_later_operations(connect):
+    client, manager, calls = _weight_sync_client(connect)
+    manager.hotload_check_status.side_effect = httpx.ConnectError("status unavailable")
+    sync = client.weight_sync()
+    optimizer = client.optim_step(types.AdamParams())
+    with pytest.raises(httpx.ConnectError, match="status unavailable"):
+        sync.result(timeout=5)
+    optimizer.result(timeout=5)
+    assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+    manager.hotload_and_wait.assert_not_called()
+
+
+def test_automatic_rdma_keeps_existing_file_save_hotload_flow(connect):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}])
+    client = service.create_training_client("test/model")
+    manager = Mock(
+        account_id="test",
+        api_key="fw-test",
+        inference_url="https://inference.invalid",
+        hotload_api_url="https://inference.invalid",
+    )
+    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": True}]}
+    backend = _TinkerSamplerBackend(manager, "rollout", "test/model")
+    client._attach_sampler_backend(backend)
+    assert client.supports_rdma_weight_sync
+
+    for name, checkpoint_type in (("base", "base"), ("delta", "delta")):
+        saved = client.save_weights_for_sampler(name, checkpoint_type=checkpoint_type).result(timeout=5)
+        sampler = client.create_sampling_client(saved.path)
+        sampler.close()
+    incremental = manager.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"]
+    first_identity = manager.hotload_and_wait.call_args_list[0].kwargs["snapshot_identity"]
+    assert incremental["previous_snapshot_identity"] == first_identity
+    assert [op for op, _ in calls if op == "weight_sync"] == []
+
+
+@pytest.mark.parametrize("value", [None, False, "true", 1, "rdma_v2", {}, []])
+def test_unknown_rdma_advertisements_keep_file_transport(connect, value):
+    service, _ = connect("dedicated", [{"supports_rdma_weight_sync": value}])
+    client = service.create_training_client("test/model")
+    assert client._trainer_supports_rdma_weight_sync is False
+
+
+@pytest.mark.parametrize(
+    "replicas",
+    [[], [{}], [{"supports_rdma_weight_sync": "true"}], [{"supports_rdma_weight_sync": True}, {}]],
+)
+def test_every_inference_replica_must_advertise_rdma(connect, replicas):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, _ = connect("dedicated", [{"supports_rdma_weight_sync": True}])
+    client = service.create_training_client("test/model")
+    manager = Mock()
+    manager.hotload_check_status.return_value = {"replicas": replicas}
+    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    assert client.supports_rdma_weight_sync is False
+
+
+@pytest.mark.parametrize("regions", [["US_MINNESOTA_1"], ["US_MINNESOTA_1", "US_OHIO_1"]])
+def test_shard_fanout_keeps_file_even_when_returned_replicas_support_rdma(connect, regions):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}])
+    client = service.create_training_client("test/model")
+    manager = Mock()
+    manager.hotload_and_wait.return_value = True
+    # Shape of aggregateHotLoadStatus's real gateway response. A single
+    # responding shard also needs FILE; other shard responses may be missing.
+    manager.hotload_check_status.return_value = {
+        "replicas": [{"region": region, "supports_rdma_weight_sync": True} for region in regions],
+        "replica_distribution": {region: 1 for region in regions},
+    }
+    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    assert client.supports_rdma_weight_sync is False
+    client.weight_sync().result()
+    assert [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")] == ["save_weights_for_sampler"]
+    manager.hotload_and_wait.assert_called_once()
+
+
+def test_rdma_negotiation_does_not_hide_status_failures(connect):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, _ = connect("dedicated", [{"supports_rdma_weight_sync": True}])
+    client = service.create_training_client("test/model")
+    manager = Mock()
+    manager.hotload_check_status.side_effect = httpx.ConnectError("unavailable")
+    with pytest.raises(httpx.ConnectError):
+        client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))

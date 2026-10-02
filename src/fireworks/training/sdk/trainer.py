@@ -341,9 +341,9 @@ class TrainerJobConfig:
     infra override.
     """
     extra_args: list[str] | None = None
-    """Additional trainer arguments passed through to the backend."""
+    """Explicit trainer arguments. Requires a superuser API key."""
     extra_values: dict[str, str] | None = None
-    """Advanced trainer chart overrides, subject to backend access checks."""
+    """Explicit trainer chart overrides. Requires a superuser API key."""
     accelerator_type: str | None = None
     """Accelerator type.  Shape-owned on the shape path."""
     accelerator_count: int | None = None

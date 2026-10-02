@@ -93,6 +93,57 @@ def test_managed_config_defaults_use_reservation_true_and_accepts_opt_out():
     assert disabled.use_reservation is False
 
 
+@pytest.mark.parametrize(
+    "overrides,enabled",
+    [
+        ({}, True),
+        ({"lora_rank": 8}, False),
+        ({"max_lora_rank": 8}, False),
+        ({"forward_only": True}, False),
+        ({"create_deployment": False}, False),
+        ({"extra_args": ["--cmek-output-model-resource=models/output"]}, False),
+        ({"extra_values": {"rdmaWeightSyncEnabled": "false"}}, False),
+        ({"deployment_extra_values": {"rdmaWeightSyncEnabled": "false"}}, False),
+    ],
+)
+@pytest.mark.parametrize("compatibility_hint", [None, "RDMA"])
+def test_rdma_negotiation_preserves_explicit_overrides(overrides, enabled, compatibility_hint):
+    config = _policy_config(**overrides, weight_sync_transport=compatibility_hint)
+    trainer = managed_module._build_trainer_job_config(
+        config, requested_job_id="test", max_context_length=None, profile_training_shape=None
+    )
+    assert trainer.extra_values == config.extra_values
+    assert managed_module._rdma_candidate(config) is enabled
+
+
+@pytest.mark.parametrize("lora_config", [{"lora_rank": 0}, {"lora_rank": 8}, {"max_lora_rank": 8}])
+@pytest.mark.parametrize("compatibility_hint", [None, "RDMA"])
+def test_managed_weight_sync_create_requests_omit_privileged_fields(lora_config, compatibility_hint):
+    from fireworks.training.sdk.trainer import TrainerJobManager
+    from fireworks.training.sdk.deployment import DeploymentManager
+
+    config = _policy_config(**lora_config, weight_sync_transport=compatibility_hint)
+    trainer = managed_module._build_trainer_job_config(
+        config, requested_job_id="test", max_context_length=None, profile_training_shape="ts-policy"
+    )
+    trainer_payload = TrainerJobManager._build_trainer_create_payload(trainer)
+    deployment_payloads = []
+
+    def create_deployment(deployment_config):
+        deployment_payloads.append(DeploymentManager._build_deployment_body(deployment_config))
+        return SimpleNamespace(state="READY")
+
+    manager = SimpleNamespace(get=lambda _id: None, create_or_get=create_deployment)
+    managed_module._create_or_reattach_deployment_result(
+        manager, config, trainer_job_name="accounts/acct/rlorTrainerJobs/test", deployment_shape="ds-policy"
+    )
+    assert len(deployment_payloads) == 1
+    for payload in (trainer_payload, trainer_payload["trainingConfig"], deployment_payloads[0]):
+        assert "extraArgs" not in payload
+        assert "extraValues" not in payload
+    assert deployment_payloads[0]["hotLoadTrainerJob"] == "accounts/acct/rlorTrainerJobs/test"
+
+
 def _policy_config(**overrides) -> _ManagedTinkerConfig:
     # _ManagedTinkerConfig is frozen, so build with overrides rather than setattr.
     fields = dict(
