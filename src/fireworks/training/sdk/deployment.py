@@ -185,7 +185,9 @@ class DeploymentConfig:
     """
     disable_speculative_decoding: bool = False
     extra_args: list[str] | None = None
+    """Explicit serving arguments. Requires a superuser API key."""
     extra_values: dict[str, str] | None = None
+    """Explicit deployment chart overrides. Requires a superuser API key."""
     annotations: dict[str, str] | None = None
     for_training: bool = False
     """Whether this deployment is SDK-managed training infrastructure.

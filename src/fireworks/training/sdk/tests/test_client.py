@@ -1038,6 +1038,7 @@ def test_weight_sync_publishes_without_checkpoint_options(method):
     client._lora_rank = 0
     client.run_name = None
     client._sampler_backend = _RdmaSamplerBackend(sampler=None)
+    client._refresh_weight_sync_backend = MagicMock(return_value=client._sampler_backend)
     client._sampler_backend.publication_request = MagicMock(return_value={"transport": "RDMA"})
     post = AsyncMock(return_value="raw-future")
     client.holder.aclient.return_value = nullcontext(SimpleNamespace(post=post))
@@ -2716,8 +2717,11 @@ class TestTrainingClientSamplingHelpers:
             )
 
     def test_save_weights_for_sampler_records_public_path_and_snapshot_alias(self):
+        from contextlib import nullcontext
+
         client = self._make_client()
         client.session_id = "test1234"
+        client.model_id = "model"
         client._saved_sampler_names = set()
         sampler_backend = MagicMock()
         client._attach_sampler_backend(sampler_backend)
@@ -2726,14 +2730,19 @@ class TestTrainingClientSamplingHelpers:
         public_path = "run-abc:train:0/step-1-test1234"
 
         def run_coroutine_threadsafe(coro):
-            coro.close()
             future = MagicMock()
-            future.result.return_value = public_path
+            future.result.return_value = asyncio.run(coro)
             return future
 
-        client.holder = SimpleNamespace(run_coroutine_threadsafe=MagicMock(side_effect=run_coroutine_threadsafe))
+        client._take_turn = MagicMock(return_value=nullcontext())
+        client._queue_state_logger = None
+        client.holder = SimpleNamespace(
+            run_coroutine_threadsafe=MagicMock(side_effect=run_coroutine_threadsafe),
+            execute_with_retries=AsyncMock(return_value="save-future"),
+        )
 
-        result = client.save_weights_for_sampler_ext("step-1", checkpoint_type="delta")
+        with patch("fireworks.training.sdk.client._APIFuture", AsyncMock(return_value=SimpleNamespace(path=public_path))):
+            result = client.save_weights_for_sampler_ext("step-1", checkpoint_type="delta")
 
         assert result == SaveSamplerResult(path=public_path, snapshot_name="step-1-test1234")
         calls = sampler_backend.remember_saved_snapshot.call_args_list
@@ -3583,7 +3592,7 @@ class TestCreateTrainingClientDuplicate:
 
         class FakeFuture:
             def result(self):
-                return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None)
+                return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None, supports_rdma_weight_sync=False)
 
         def run_coroutine_threadsafe(coro):
             coro.close()
@@ -3603,7 +3612,7 @@ class _ImmediateCreateModelFuture:
         pass
 
     async def result_async(self):
-        return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None)
+        return SimpleNamespace(model_id="model-id", comms="v1", routing_matrix_format="base64_inline", r3_store_id=None, supports_rdma_weight_sync=False)
 
 
 @patch("fireworks.training.sdk.client._APIFuture", _ImmediateCreateModelFuture)

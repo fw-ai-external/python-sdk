@@ -27,7 +27,10 @@ class _RdmaSamplerBackend:
         }
 
     def hotload_saved_snapshot(self, model_path: str) -> bool:
-        raise ValueError("Use training_client.weight_sync() for RDMA; it includes rollout activation")
+        return self.sampler.hotload_saved_snapshot(model_path)
+
+    def remember_saved_snapshot(self, model_path: str, **kwargs) -> None:
+        self.sampler.remember_saved_snapshot(model_path, **kwargs)
 
     def get_sampling_client(self, tokenizer=None, concurrency_controller=None):
         return self.sampler.get_sampling_client(tokenizer, concurrency_controller)

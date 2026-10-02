@@ -127,6 +127,9 @@ class FiretitanProvisioningConfig:
     Immutable: normalized once at the SDK boundary and never mutated by
     cookbook recipes. This is the single source of truth for SDK-managed
     trainer/deployment provisioning.
+
+    ``extra_args``, ``extra_values`` and their deployment counterparts are
+    explicit superuser-only overrides. Transport negotiation never adds them.
     """
 
     base_model: str
@@ -140,6 +143,8 @@ class FiretitanProvisioningConfig:
     applied before the trainer constructs and shards the model. ``None`` and
     ``0`` both disable the module; a positive value creates exactly that many
     output rows. Every trainable model handle inherits this configuration.
+    Provisioning this option uses the trainer's superuser-only ``extraArgs``
+    field and requires an admin API key.
     """
     max_lora_rank: int | None = None
     """Trainer LoRA capacity for managed multi-model services.
@@ -225,21 +230,11 @@ class FiretitanProvisioningConfig:
     """
 
     weight_sync_transport: Literal["RDMA"] | None = None
-    """Opt in to ephemeral GPU weight publication; unset preserves file hotload."""
+    """Compatibility option; eligible runtimes negotiate RDMA automatically."""
 
     def __post_init__(self) -> None:
         if self.weight_sync_transport not in (None, "RDMA"):
             raise ValueError("weight_sync_transport must be 'RDMA' or None")
-        if self.weight_sync_transport == "RDMA":
-            for field_name in ("extra_values", "deployment_extra_values"):
-                if (getattr(self, field_name) or {}).get("rdmaWeightSyncEnabled", "true") != "true":
-                    raise ValueError(f"RDMA weight sync conflicts with {field_name}.rdmaWeightSyncEnabled; use 'true'")
-            if self.lora_rank != 0 or self.max_lora_rank is not None or self.forward_only:
-                raise ValueError("RDMA weight sync requires a dedicated full-parameter policy trainer")
-            if not self.create_deployment:
-                raise ValueError("RDMA weight sync requires create_deployment=True")
-            if self.replica_count is not None and (type(self.replica_count) is not int or self.replica_count < 1):
-                raise ValueError("RDMA weight sync requires a positive replica_count at startup")
         object.__setattr__(
             self,
             "hot_load_transition_type",
@@ -425,6 +420,7 @@ class _TinkerSamplerBackend:
     reset_prompt_cache: bool = True
     lora_rank: int = 0
     compression_format: str = DEFAULT_DELTA_COMPRESSION
+    allow_rdma: bool = True
     _snapshot_types: dict[str, str] = field(default_factory=dict)
     _snapshot_lora_ranks: dict[str, int] = field(default_factory=dict)
     _base_identity: str | None = None
@@ -557,12 +553,9 @@ def _attach_managed_deployment(
         cmek_resource=cmek_resource,
         hotload_timeout_s=config.hotload_timeout_s,
         lora_rank=_trainer_lora_capacity(config),
+        allow_rdma=_rdma_candidate(config),
     )
-    if config.weight_sync_transport == "RDMA":
-        from fireworks.training.sdk._rdma import _RdmaSamplerBackend
-
-        sampler_backend = _RdmaSamplerBackend(sampler_backend)
-    elif attach_result.reattached:
+    if attach_result.reattached:
         sampler_backend.reset_snapshot_chain()
     return deployment, sampler_backend, attach_result.reattached, attach_result.created
 
@@ -587,8 +580,6 @@ def _create_managed_tinker_client(
     it is never folded back into ``config``.
     """
     cmek_resource = _policy_output_cmek_resource(config.extra_args)
-    if config.weight_sync_transport == "RDMA" and cmek_resource:
-        raise ValueError("RDMA weight sync does not support CMEK output artifacts")
 
     trainer_mgr, deploy_mgr = _build_resource_managers(
         api_key=api_key,
@@ -888,6 +879,21 @@ def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
     )
 
 
+def _rdma_candidate(config: _ManagedTinkerConfig) -> bool:
+    """Allow capability negotiation without changing platform-owned resources."""
+    return (
+        config.create_deployment
+        and config.lora_rank == 0
+        and config.max_lora_rank is None
+        and not config.forward_only
+        and not _policy_output_cmek_resource(config.extra_args)
+        and all(
+            (getattr(config, field_name) or {}).get("rdmaWeightSyncEnabled", "true") == "true"
+            for field_name in ("extra_values", "deployment_extra_values")
+        )
+    )
+
+
 def _build_trainer_job_config(
     config: _ManagedTinkerConfig,
     *,
@@ -896,9 +902,6 @@ def _build_trainer_job_config(
     requested_job_id: str | None = None,
 ) -> TrainerJobConfig:
     auto_select_training_shape = profile_training_shape is None and not _uses_manual_training_infra(config)
-    extra_values = config.extra_values
-    if config.weight_sync_transport == "RDMA":
-        extra_values = {**(extra_values or {}), "rdmaWeightSyncEnabled": "true"}
     return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=_trainer_lora_capacity(config),
@@ -911,7 +914,7 @@ def _build_trainer_job_config(
         region=config.region,
         custom_image_tag=config.custom_image_tag,
         extra_args=_trainer_extra_args(config),
-        extra_values=extra_values,
+        extra_values=config.extra_values,
         accelerator_type=None if auto_select_training_shape else config.accelerator_type,
         accelerator_count=None if auto_select_training_shape else config.accelerator_count,
         training_shape_ref=profile_training_shape,
@@ -1077,9 +1080,6 @@ def _create_or_reattach_deployment_result(
             "deployment accelerator is owned by the deployment shape. Provide a "
             "deployment_shape (or a training_shape_id whose shape references one)."
         )
-    extra_values = config.deployment_extra_values
-    if config.weight_sync_transport == "RDMA":
-        extra_values = {**(extra_values or {}), "rdmaWeightSyncEnabled": "true"}
     deployment_config = DeploymentConfig(
         deployment_id=deployment_id,
         base_model=config.base_model,
@@ -1097,7 +1097,7 @@ def _create_or_reattach_deployment_result(
         skip_shape_validation=False,
         disable_speculative_decoding=config.disable_speculative_decoding,
         extra_args=config.deployment_extra_args,
-        extra_values=extra_values,
+        extra_values=config.deployment_extra_values,
         preemptible=config.preemptible,
     )
     deployment = deploy_mgr.create_or_get(deployment_config)

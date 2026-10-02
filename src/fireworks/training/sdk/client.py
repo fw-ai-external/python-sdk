@@ -29,13 +29,14 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
+from contextlib import nullcontext
 from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
 import httpx
 import numpy as np
-from tinker import SamplingClient, types
+from tinker import APIStatusError, SamplingClient, types
 from pydantic import Field, BaseModel, field_validator
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from tinker.lib.telemetry import Telemetry
@@ -122,6 +123,7 @@ class _CreateModelResponse(types.CreateModelResponse):
     # callers then fall back to probing the model. See supports_router_replay
     # on FiretitanTrainingClient.
     supports_router_replay: bool | None = None
+    supports_rdma_weight_sync: bool = False
     model_config = {"protected_namespaces": ()}
 
     @field_validator("comms", mode="before")
@@ -142,12 +144,17 @@ class _CreateModelResponse(types.CreateModelResponse):
         # caller falls back instead of mis-reading a malformed value.
         return value if isinstance(value, bool) else None
 
+    @field_validator("supports_rdma_weight_sync", mode="before")
+    @classmethod
+    def _known_rdma_support(cls, value):
+        return value is True
+
 
 class WeightSyncResponse(BaseModel):
     """A completed weight publication and its timing metrics."""
 
     version: str
-    optimizer_version: int
+    optimizer_version: int | None = None
     metrics: dict[str, float] = Field(default_factory=dict)
 
 
@@ -1591,6 +1598,7 @@ class FiretitanTrainingClient(TrainingClient):
         r3_store_id: str | None = None,
         routing_matrix_format: RoutingMatrixFormat = "base64_inline",
         supports_router_replay: bool | None = None,
+        supports_rdma_weight_sync: bool = False,
     ):
         if comms not in ("v1", "v2"):
             raise ValueError("comms must be 'v1' or 'v2'")
@@ -1604,6 +1612,7 @@ class FiretitanTrainingClient(TrainingClient):
         # on/off signal. Lets callers decide R3 without GET-ing the base model,
         # which a private early-access model rejects with 403.
         self.supports_router_replay = supports_router_replay if isinstance(supports_router_replay, bool) else None
+        self._trainer_supports_rdma_weight_sync = supports_rdma_weight_sync is True
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
@@ -1640,7 +1649,44 @@ class FiretitanTrainingClient(TrainingClient):
     def _attach_sampler_backend(self, backend: Any) -> "FiretitanTrainingClient":
         """Attach SDK-owned sampler backend state to this training client."""
         self._sampler_backend = backend
+        self._refresh_weight_sync_backend()
         return self
+
+    def _refresh_weight_sync_backend(self) -> Any:
+        """Recheck the existing status response, retaining the RDMA session binding."""
+        from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+        from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+        backend = self._require_sampler_backend()
+        sampler = backend.sampler if isinstance(backend, _RdmaSamplerBackend) else backend
+        self._rdma_weight_sync_available = False
+        if (
+            isinstance(sampler, _TinkerSamplerBackend)
+            and sampler.allow_rdma
+            and getattr(self, "_trainer_supports_rdma_weight_sync", False) is True
+            and self._lora_rank == 0
+            and self.run_name is None
+            and not sampler.cmek_resource
+        ):
+            state = sampler.deploy_mgr.hotload_check_status(sampler.deployment_id, sampler.base_model)
+            replicas = state.get("replicas", [])
+            # The existing shard fan-out merges ledgers without a shared tip
+            # and drops RDMA publication/completion bodies. Its status response
+            # identifies that path even when only one shard answered. Keep it
+            # on the supported FILE protocol without changing the gateway.
+            if "replica_distribution" in state:
+                return sampler
+            if replicas and all(replica.get("supports_rdma_weight_sync") is True for replica in replicas):
+                if not isinstance(backend, _RdmaSamplerBackend):
+                    backend = self._sampler_backend = _RdmaSamplerBackend(sampler)
+                self._rdma_weight_sync_available = True
+                return backend
+        return sampler
+
+    @property
+    def supports_rdma_weight_sync(self) -> bool:
+        """Last negotiated result; weight_sync refreshes support before each publication."""
+        return getattr(self, "_rdma_weight_sync_available", False)
 
     def _require_sampler_backend(self) -> Any:
         if self._sampler_backend is None:
@@ -2311,9 +2357,7 @@ class FiretitanTrainingClient(TrainingClient):
         for index, (datum, logprob) in enumerate(zip(data, logprobs_list, strict=True)):
             if logprob.grad is None:
                 raise ValueError(f"No gradient computed for precomputed logprob tensor {index}")
-            linear_weights = (
-                -logprob.grad.detach().to(dtype=torch.float32).reshape(-1).cpu()
-            )
+            linear_weights = -logprob.grad.detach().to(dtype=torch.float32).reshape(-1).cpu()
             linear_loss_data.append(
                 types.Datum(
                     model_input=datum.model_input,
@@ -2593,35 +2637,59 @@ class FiretitanTrainingClient(TrainingClient):
         return _validate_checkpoint_ref(checkpoint_name)
 
     def weight_sync(self) -> APIFuture[WeightSyncResponse]:
-        """Sync current weights to the attached RDMA rollout deployment.
+        """Sync weights using RDMA when both runtimes support it, otherwise save/hotload.
 
-        Ordered with forward/backward and optimizer operations. The future
-        completes after all eligible replicas install this version and temporary
-        RDMA buffers are safely released. Failed replicas recover through the
-        existing deployment lifecycle; if all fail, the operation waits for a
-        replacement while preserving trainer and optimizer state.
+        Rechecks inference support before each publication without reconnecting.
+        The pending future includes negotiation, publication and rollout activation,
+        ordered with training operations. FILE results have optimizer_version=None
+        because legacy sampler saves do not report it. Errors after an RDMA
+        publication is accepted are surfaced without an unsafe FILE retry.
 
         Save resumable checkpoints separately with ``save_state()``.
         """
         from fireworks.training.sdk._rdma import _RdmaSamplerBackend
 
-        backend = getattr(self, "_sampler_backend", None)
-        if not isinstance(backend, _RdmaSamplerBackend) or self._lora_rank != 0 or self.run_name is not None:
-            raise ValueError("weight_sync requires a dedicated full-parameter trainer with RDMA selected at setup")
-        body = backend.publication_request()
-        body["model_id"] = self._guaranteed_model_id()
+        self._require_sampler_backend()
+        model_id = self._guaranteed_model_id()
         request_id = self._get_request_id()
-        body["seq_id"] = request_id + 1
 
         async def _submit():
-            start = time.time()
-
-            async def _send():
-                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-                    return await client.post("/api/v1/weight_sync", body=body, cast_to=types.UntypedAPIFuture)
-
+            # Reserve the turn before probing so later optimizer/save operations
+            # cannot overtake fallback, including its checkpoint-chain updates.
             async with self._take_turn(request_id):
-                future = await self.holder.execute_with_retries(_send)
+                backend = await asyncio.to_thread(self._refresh_weight_sync_backend)
+                if isinstance(backend, _RdmaSamplerBackend):
+                    body = {**backend.publication_request(), "model_id": model_id, "seq_id": request_id + 1}
+                    start = time.time()
+
+                    async def _send():
+                        with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                            return await client.post("/api/v1/weight_sync", body=body, cast_to=types.UntypedAPIFuture)
+
+                    try:
+                        future = await self.holder.execute_with_retries(_send)
+                    except APIStatusError as exc:
+                        if exc.status_code not in (404, 405):
+                            raise
+                        # An older trainer has no operation at this route: no
+                        # publication was accepted and the same seq_id is safe.
+                        self._trainer_supports_rdma_weight_sync = False
+                        self._rdma_weight_sync_available = False
+                        backend = backend.sampler
+
+                if not isinstance(backend, _RdmaSamplerBackend):
+                    saved = await self._save_sampler_snapshot(
+                        qualify_snapshot_name(self.session_id, f"weight-sync-{uuid.uuid4().hex}"),
+                        resolved_checkpoint_type=self._next_sampler_checkpoint_type(),
+                        request_id=request_id,
+                        take_turn=False,
+                    )
+                    if not await asyncio.to_thread(backend.hotload_saved_snapshot, saved.path):
+                        raise RuntimeError(f"Hotload failed for sampler snapshot {saved.path!r}")
+                    return WeightSyncResponse(version=saved.path)
+
+            # Preserve RDMA's existing submission ordering: later operations may
+            # queue while the trainer's publication lease protects live weights.
             return await _APIFuture(
                 WeightSyncResponse,
                 self.holder,
@@ -2686,41 +2754,56 @@ class FiretitanTrainingClient(TrainingClient):
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
+        request_id = self._get_request_id()
+        return self.holder.run_coroutine_threadsafe(
+            self._save_sampler_snapshot(
+                actual_name,
+                resolved_checkpoint_type=resolved_checkpoint_type,
+                resolved_export_precision=resolved_export_precision,
+                ttl_seconds=ttl_seconds,
+                request_id=request_id,
+            )
+        ).result()
+
+    async def _save_sampler_snapshot(
+        self,
+        actual_name: str,
+        *,
+        resolved_checkpoint_type: SamplerCheckpointType,
+        resolved_export_precision: ExportPrecision | None = None,
+        ttl_seconds: int | None = None,
+        request_id: int,
+        take_turn: bool = True,
+    ) -> SaveSamplerResult:
+        """Shared sampler save and bookkeeping for explicit saves and weight_sync."""
         extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
         if resolved_export_precision is not None:
             extra_body["export_precision"] = resolved_export_precision
-        request_id = self._get_request_id()
+        request = types.SaveWeightsForSamplerRequest(
+            model_id=self._guaranteed_model_id(),
+            path=actual_name,
+            seq_id=request_id + 1,
+            ttl_seconds=ttl_seconds,
+        )
+        start = time.time()
 
-        async def _save():
-            request = types.SaveWeightsForSamplerRequest(
-                model_id=self._guaranteed_model_id(),
-                path=actual_name,
-                seq_id=request_id + 1,
-                ttl_seconds=ttl_seconds,
-            )
-            start = time.time()
+        async def _send():
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                return await client.weights.save_for_sampler(request=request, extra_body=extra_body)
 
-            async def _send():
-                with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
-                    return await client.weights.save_for_sampler(
-                        request=request,
-                        extra_body=extra_body,
-                    )
+        async with self._take_turn(request_id) if take_turn else nullcontext():
+            future = await self.holder.execute_with_retries(_send)
+        resp = await _APIFuture(
+            types.SaveWeightsForSamplerResponseInternal,
+            self.holder,
+            future,
+            request_start_time=start,
+            request_type="SaveWeightsForSampler",
+            queue_state_observer=self._queue_state_logger,
+        )
+        assert resp.path is not None
+        public_path = resp.path
 
-            async with self._take_turn(request_id):
-                future = await self.holder.execute_with_retries(_send)
-            resp = await _APIFuture(
-                types.SaveWeightsForSamplerResponseInternal,
-                self.holder,
-                future,
-                request_start_time=start,
-                request_type="SaveWeightsForSampler",
-                queue_state_observer=self._queue_state_logger,
-            )
-            assert resp.path is not None
-            return resp.path
-
-        public_path = self.holder.run_coroutine_threadsafe(_save()).result()
         self._saved_sampler_names.add(actual_name)
         self._sampler_checkpoint_saved = True
         # The trainer may return a run/session-qualified public identity while
@@ -3675,9 +3758,7 @@ class FiretitanServiceClient(ServiceClient):
 
         if managed_config is not None:
             if base_model is not None:
-                _warn_deprecated_override(
-                    "create_training_client", "base_model", base_model, managed_config.base_model
-                )
+                _warn_deprecated_override("create_training_client", "base_model", base_model, managed_config.base_model)
             _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
             if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
                 raise ValueError(
@@ -3771,6 +3852,7 @@ class FiretitanServiceClient(ServiceClient):
             r3_store_id=response.r3_store_id,
             routing_matrix_format=response.routing_matrix_format,
             supports_router_replay=getattr(response, "supports_router_replay", None),
+            supports_rdma_weight_sync=response.supports_rdma_weight_sync,
         )
         self._training_clients.append(training_client)
         return training_client
@@ -4375,9 +4457,7 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = (
-            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
-        )
+        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,
