@@ -9,6 +9,7 @@ Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk
 
 ### Bug Fixes
 * **training-sdk:** include tool-call indices in TITO SSE deltas and preserve parser-produced argument strings separately from canonical lineage messages in responses and trajectory artifacts
+* **training-sdk:** retry serverless trainer capacity conflicts while preserving fail-fast behavior for terminal and unrecognized HTTP 409 errors
 
 ### Refactors
 * **training-sdk:** keep generic trainer/deployment overrides as opaque, opt-in testing interfaces; managed projection-head topology must be configured by the training shape rather than implicit launch overrides
