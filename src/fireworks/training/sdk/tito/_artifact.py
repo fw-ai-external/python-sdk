@@ -83,6 +83,11 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
         "request": _request_value(value.request),
         "assistant": {
             "message": dict(value.assistant.message),
+            **(
+                {"response_message": dict(value.assistant.response_message)}
+                if value.assistant.response_message != value.assistant.message
+                else {}
+            ),
             "output_kind": value.assistant.output_kind,
             "parser_fallback": value.assistant.parser_fallback,
         },
@@ -260,14 +265,24 @@ def _request(raw: Mapping[str, Any]) -> TITOChatRequest:
 
 def _turn(raw: Mapping[str, Any]) -> TITOTurn:
     assistant = raw["assistant"]
+    parsed = TITOParsedAssistant(
+        message=assistant["message"],
+        output_kind=str(assistant["output_kind"]),
+        parser_fallback=bool(assistant["parser_fallback"]),
+    )
+    if "response_message" in assistant:
+        response = TITOParsedAssistant(
+            message=assistant["response_message"],
+            output_kind=parsed.output_kind,
+            parser_fallback=parsed.parser_fallback,
+        )
+        if response.message != parsed.message:
+            raise ValueError("assistant response_message differs from canonical message")
+        parsed = response
     return TITOTurn(
         turn_id=str(raw["turn_id"]),
         request=_request(raw["request"]),
-        assistant=TITOParsedAssistant(
-            message=assistant["message"],
-            output_kind=str(assistant["output_kind"]),
-            parser_fallback=bool(assistant["parser_fallback"]),
-        ),
+        assistant=parsed,
         exact_prompt_ids=tuple(raw["exact_prompt_ids"]),
         exact_completion_ids=tuple(raw["exact_completion_ids"]),
         inference_logprobs=(None if raw.get("inference_logprobs") is None else tuple(raw["inference_logprobs"])),

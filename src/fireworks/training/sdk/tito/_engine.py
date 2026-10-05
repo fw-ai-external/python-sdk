@@ -1103,7 +1103,7 @@ class _LinearTrajectoryCore:
             "choices": [
                 {
                     "index": 0,
-                    "message": dict(parsed.message),
+                    "message": dict(parsed.response_message),
                     "finish_reason": finish_reason,
                 }
             ],

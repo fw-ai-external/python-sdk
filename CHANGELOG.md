@@ -4,6 +4,12 @@
 
 Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk/compare/v1.2.19...v1.2.20)
 
+### Features
+* **training-sdk:** allow `TITOSidecar(bind_address=...)` to listen on a specific host interface, including Docker bridge gateways; loopback remains the default
+
+### Bug Fixes
+* **training-sdk:** include tool-call indices in TITO SSE deltas and preserve parser-produced argument strings separately from canonical lineage messages in responses and trajectory artifacts
+
 ### Refactors
 * **training-sdk:** keep generic trainer/deployment overrides as opaque, opt-in testing interfaces; managed projection-head topology must be configured by the training shape rather than implicit launch overrides
 

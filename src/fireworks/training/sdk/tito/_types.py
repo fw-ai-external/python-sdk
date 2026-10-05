@@ -144,6 +144,8 @@ def _chat_normalization_steps(
             elif isinstance(wire_content, str) and wire_content and not wire_content.strip():
                 steps.append(f"messages[{message_index}].content:whitespace_to_empty")
         for call_index, (wire_call, canonical_call) in enumerate(zip(wire_calls, canonical_calls)):
+            if "index" in wire_call and "index" not in canonical_call:
+                steps.append(f"messages[{message_index}].tool_calls[{call_index}].index:stream_index_removed")
             wire_function = wire_call.get("function") or {}
             canonical_function = canonical_call.get("function") or {}
             if wire_function.get("arguments", "") != canonical_function.get("arguments", ""):
@@ -182,11 +184,25 @@ def _server_attempt_value(attempt: SampledServerAttempt) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class TITOParsedAssistant:
+    """Canonical lineage message plus the order-preserving client response.
+
+    ``response_message`` preserves parser-produced argument strings, including
+    their whitespace and key order. ``message`` retains protocol canonicalization
+    for semantic history comparisons, never as a substitute for token alignment.
+    """
+
     message: Mapping[str, Any]
     output_kind: str = "text"
     parser_fallback: bool = False
+    response_message: Mapping[str, Any] = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
+        response = _copy_json_in_order(self.message)
+        for call in response.get("tool_calls") or ():
+            function = call.get("function") or {}
+            if "arguments" in function and not isinstance(function["arguments"], str):
+                function["arguments"] = json.dumps(function["arguments"], separators=(",", ":"), ensure_ascii=False)
+        object.__setattr__(self, "response_message", MappingProxyType(response))
         object.__setattr__(
             self,
             "message",
@@ -296,6 +312,12 @@ class TITOChatRequest:
             # their already canonical messages and request fingerprints.
             if message.get("role") == "assistant" and message.get("provider_specific_fields") == {"refusal": None}:
                 del message["provider_specific_fields"]
+            if message.get("role") == "assistant" and message.get("tool_calls"):
+                # SSE indices identify chunks, not calls in a replayed message.
+                # Keep the original wire value and legacy artifact identities.
+                message["tool_calls"] = [
+                    {key: value for key, value in call.items() if key != "index"} for call in message["tool_calls"]
+                ]
         normalized = cls(
             messages=tuple(messages),
             tools=tuple(payload.get("tools") or ()),
@@ -566,7 +588,7 @@ class TITOSegmentResult:
 
 @dataclass(frozen=True)
 class TITOTrajectoryEndpoint:
-    """Loopback endpoint and credential for one independent trajectory."""
+    """Sidecar endpoint and credential for one independent trajectory."""
 
     trajectory_id: str
     openai_base_url: str
