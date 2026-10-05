@@ -53,63 +53,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CMEK_OUTPUT_MODEL_RESOURCE_FLAG = "--cmek-output-model-resource"
-_POLICY_OUTPUT_EXTRA_ARGS = frozenset(
-    {
-        "--fireworks-gateway-target",
-        _CMEK_OUTPUT_MODEL_RESOURCE_FLAG,
-        "--require-cmek-output-encryption",
-    }
-)
-
-
-def _policy_output_cmek_resource(extra_args: list[str] | None) -> str | None:
-    """Recover the policy output CMEK resource from the trainer flags.
-
-    A separate reference has this flag stripped by ``_reference_extra_args``,
-    so it resolves to ``None`` there.
-    """
-    if not extra_args:
-        return None
-    take_next = False
-    for arg in extra_args:
-        stripped = str(arg).strip()
-        if take_next:
-            return stripped or None
-        if not stripped.startswith(_CMEK_OUTPUT_MODEL_RESOURCE_FLAG):
-            continue
-        remainder = stripped[len(_CMEK_OUTPUT_MODEL_RESOURCE_FLAG) :]
-        if not remainder:
-            take_next = True
-        elif remainder[0] in "= ":
-            return remainder[1:].strip() or None
-    return None
-
-
-def _reference_extra_args(extra_args: list[str] | None) -> list[str] | None:
-    """Remove policy-output-only runtime flags from a separate reference."""
-    if extra_args is None:
-        return None
-
-    filtered: list[str] = []
-    skip_next_value = False
-    for arg in extra_args:
-        if skip_next_value:
-            skip_next_value = False
-            continue
-        stripped = arg.strip()
-        if not stripped:
-            filtered.append(arg)
-            continue
-        option = stripped.split("=", 1)[0].split(maxsplit=1)[0]
-        if option not in _POLICY_OUTPUT_EXTRA_ARGS:
-            filtered.append(arg)
-            continue
-        if stripped == option and option != "--require-cmek-output-encryption":
-            skip_next_value = True
-    return filtered
-
-
 DEPLOYMENT_TERMINAL_STATES = frozenset({"FAILED", "DELETED", "DELETING"})
 DEPLOYMENT_SERVING_STATES = frozenset({"READY", "UPDATING"})
 _POLICY_TRAINER_MODE = "POLICY_TRAINER"
@@ -139,12 +82,11 @@ class FiretitanProvisioningConfig:
     projection_head_dim: int | None = None
     """Dimension of the model's independent trainable projection head.
 
-    The dimension is fixed for the lifetime of the managed service and is
-    applied before the trainer constructs and shards the model. ``None`` and
+    The dimension is fixed for the lifetime of the managed service. ``None`` and
     ``0`` both disable the module; a positive value creates exactly that many
     output rows. Every trainable model handle inherits this configuration.
-    Provisioning this option uses the trainer's superuser-only ``extraArgs``
-    field and requires an admin API key.
+    The training shape must already configure this topology. This field selects
+    the model-handle dimension; it does not add trainer launch overrides.
     """
     max_lora_rank: int | None = None
     """Trainer LoRA capacity for managed multi-model services.
@@ -290,24 +232,6 @@ _ManagedTinkerConfig = FiretitanProvisioningConfig
 
 def _trainer_lora_capacity(config: FiretitanProvisioningConfig) -> int:
     return config.max_lora_rank if config.max_lora_rank is not None else config.lora_rank
-
-
-def _trainer_extra_args(config: FiretitanProvisioningConfig) -> list[str] | None:
-    """Apply the service projection topology before trainer model construction.
-
-    Keep this as a dedicated scalar flag instead of synthesizing a second
-    ``--model-args`` object. FireTitan folds the scalar into the resolved model
-    overrides after parsing, so training-shape model settings are preserved.
-    ``None`` means the caller did not request a projection head, so actor
-    services leave both job and training-shape arguments untouched.
-    """
-
-    if config.projection_head_dim is None:
-        return config.extra_args
-
-    extra_args = list(config.extra_args or [])
-    extra_args.append(f"--projection-head-dim={config.projection_head_dim}")
-    return extra_args
 
 
 @dataclass
@@ -579,8 +503,6 @@ def _create_managed_tinker_client(
     ``max_context_length`` is resolved here from the shape and flows as a local;
     it is never folded back into ``config``.
     """
-    cmek_resource = _policy_output_cmek_resource(config.extra_args)
-
     trainer_mgr, deploy_mgr = _build_resource_managers(
         api_key=api_key,
         base_url=base_url,
@@ -638,7 +560,6 @@ def _create_managed_tinker_client(
                 config,
                 trainer_job_name=started_trainer.job.job_name,
                 deployment_shape=deployment_shape,
-                cmek_resource=cmek_resource,
             )
 
         endpoint = trainer_future.result()
@@ -799,7 +720,6 @@ def _reference_managed_config(
         forward_only=True,
         reference_required=False,
         trainer_replica_count=None,
-        extra_args=_reference_extra_args(config.extra_args),
         cleanup_trainer_on_close=config.cleanup_reference_trainer_on_close,
     )
 
@@ -886,11 +806,6 @@ def _rdma_candidate(config: _ManagedTinkerConfig) -> bool:
         and config.lora_rank == 0
         and config.max_lora_rank is None
         and not config.forward_only
-        and not _policy_output_cmek_resource(config.extra_args)
-        and all(
-            (getattr(config, field_name) or {}).get("rdmaWeightSyncEnabled", "true") == "true"
-            for field_name in ("extra_values", "deployment_extra_values")
-        )
     )
 
 
@@ -913,7 +828,7 @@ def _build_trainer_job_config(
         display_name=config.display_name,
         region=config.region,
         custom_image_tag=config.custom_image_tag,
-        extra_args=_trainer_extra_args(config),
+        extra_args=config.extra_args,
         extra_values=config.extra_values,
         accelerator_type=None if auto_select_training_shape else config.accelerator_type,
         accelerator_count=None if auto_select_training_shape else config.accelerator_count,

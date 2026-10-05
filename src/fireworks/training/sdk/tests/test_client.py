@@ -1588,34 +1588,17 @@ class TestFiretitanServiceClientManagedCompat:
                 projection_head_dim=-1,
             )
 
-    @pytest.mark.parametrize(
-        ("projection_head_dim", "expected_projection_arg"),
-        [(None, None), (0, None), (3, "--projection-head-dim=3")],
-    )
-    def test_managed_projection_head_is_applied_to_trainer_cli(
-        self,
-        projection_head_dim,
-        expected_projection_arg,
-    ):
+    @pytest.mark.parametrize("projection_head_dim", [None, 0, 3])
+    def test_managed_projection_head_preserves_opaque_trainer_args(self, projection_head_dim):
         config = _ManagedTinkerConfig(
             base_model="accounts/acct/models/base",
             projection_head_dim=projection_head_dim,
-            extra_args=['--model-args={"fused_rmsnorm_tail":true}', "--foo"],
+            extra_args=["--test-flag"],
         )
-
         trainer_config = _build_trainer_job_config(
-            config,
-            max_context_length=4096,
-            profile_training_shape="accounts/acct/trainingShapes/shape",
+            config, max_context_length=4096, profile_training_shape="accounts/acct/trainingShapes/shape"
         )
-
-        expected_extra_args = [
-            '--model-args={"fused_rmsnorm_tail":true}',
-            "--foo",
-        ]
-        if expected_projection_arg is not None:
-            expected_extra_args.append(expected_projection_arg)
-        assert trainer_config.extra_args == expected_extra_args
+        assert trainer_config.extra_args == ["--test-flag"]
 
     def test_managed_actor_does_not_add_trainer_extra_args(self):
         config = _ManagedTinkerConfig(

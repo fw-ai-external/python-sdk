@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.20 (2026-10-05)
+
+Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk/compare/v1.2.19...v1.2.20)
+
+### Refactors
+* **training-sdk:** keep generic trainer/deployment overrides as opaque, opt-in testing interfaces; managed projection-head topology must be configured by the training shape rather than implicit launch overrides
+
 ## 1.2.19 (2026-10-02)
 
 Full Changelog: [v1.2.18...v1.2.19](https://github.com/fw-ai-external/python-sdk/compare/v1.2.18...v1.2.19)

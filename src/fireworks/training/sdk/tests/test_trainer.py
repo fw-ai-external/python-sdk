@@ -318,7 +318,7 @@ class TestCreate:
             training_shape_ref="accounts/test-account/trainingShapes/ts-test/versions/shape-v1",
             region="US_OHIO_1",
             custom_image_tag="0.33.0",
-            extra_args=["--flag"],
+            extra_args=["--test-flag"],
         )
         resp = MagicMock()
         resp.is_success = True
@@ -339,7 +339,7 @@ class TestCreate:
         assert "maxContextLength" not in tc
         assert "nodeCount" not in payload
         assert tc["region"] == "US_OHIO_1"
-        assert tc["extraArgs"] == ["--flag"]
+        assert tc["extraArgs"] == ["--test-flag"]
 
     def test_auto_shape_path_omits_manual_infra_but_sends_selector_inputs(self, mgr):
         config = TrainerJobConfig(
@@ -373,7 +373,7 @@ class TestCreate:
 
     def test_auto_shape_path_with_extra_args_omits_skip_validations(self, mgr):
         # Regression: managed jobs whose extra_args were populated by the
-        # control plane (e.g. the warm-start --lora-target-modules shim) must
+        # caller must
         # stay on the auto-shape path and not send skipValidations=true, which
         # the server rejects with 400 for non-superuser (customer) keys.
         config = TrainerJobConfig(
@@ -381,7 +381,7 @@ class TestCreate:
             auto_select_training_shape=True,
             max_context_length=8192,
             region="US_OHIO_1",
-            extra_args=["--lora-target-modules", "q_proj,k_proj"],
+            extra_args=["--test-option", "test-value"],
         )
         resp = MagicMock()
         resp.is_success = True
@@ -396,8 +396,8 @@ class TestCreate:
         assert "skipValidations" not in path
         assert "trainingShape" not in path
         assert payload["trainingConfig"]["extraArgs"] == [
-            "--lora-target-modules",
-            "q_proj,k_proj",
+            "--test-option",
+            "test-value",
         ]
 
     def test_manual_path_sends_all_fields(self, mgr):
@@ -552,7 +552,7 @@ class TestCreate:
     def test_extra_args_flattened(self, mgr):
         config = TrainerJobConfig(
             base_model="accounts/test/models/m",
-            extra_args=["--pp 8", "--ep=4", "--flag"],
+            extra_args=["--test-option value", "--test-flag=value", "--test-flag"],
         )
         resp = MagicMock()
         resp.is_success = True
@@ -563,10 +563,10 @@ class TestCreate:
         mgr._create(config)
         payload = mgr._post.call_args[1]["json"]
         assert payload["trainingConfig"]["extraArgs"] == [
-            "--pp",
-            "8",
-            "--ep=4",
-            "--flag",
+            "--test-option",
+            "value",
+            "--test-flag=value",
+            "--test-flag",
         ]
 
     def test_display_name_too_long_rejected_locally(self, mgr):
