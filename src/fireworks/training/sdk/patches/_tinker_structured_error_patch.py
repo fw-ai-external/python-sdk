@@ -79,10 +79,14 @@ def _make_fetch_via_rest_with_source_capture(current: Any) -> Any:
             _CAPTURED_FUTURE_SOURCE.reset(source_token)
             _CAPTURE_FUTURE_SOURCE.reset(capture_token)
 
-    # Preserve the timeout marker when wrapping the current compatibility
-    # implementation so its own idempotence check remains valid.
-    if getattr(current, "_fireworks_body_timeout_patch", False):
-        _fetch_via_rest._fireworks_body_timeout_patch = True
+    # Preserve known compatibility markers when wrapping the current
+    # implementation so each patch's idempotence check remains valid.
+    for marker in (
+        "_fireworks_body_timeout_patch",
+        "_fireworks_capacity_409_retry_fetch_patch",
+    ):
+        if getattr(current, marker, False):
+            setattr(_fetch_via_rest, marker, True)
     setattr(_fetch_via_rest, _PATCH_SENTINEL, True)
     return _fetch_via_rest
 

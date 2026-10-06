@@ -77,6 +77,9 @@ from fireworks.training.sdk._snapshot_chain import (
     resolve_next_checkpoint_type,
 )
 from fireworks.training.sdk.patches._tinker_result_validation_patch import CommsV2APIFuture
+from fireworks.training.sdk.patches._tinker_capacity_409_retry_patch import (
+    _mark_serverless_supervised_409_retry,
+)
 
 
 class LoadAdapterResponse(BaseModel):
@@ -3221,6 +3224,19 @@ class FiretitanServiceClient(ServiceClient):
         session this service owns, for CP ops (GetTrainingSession, checkpoint
         list/promote, DeleteTrainingSession). None for non-serverless services."""
         return self._serverless_training_session_name(self._current_session_id())
+
+    def _enable_serverless_supervised_409_retry(self) -> None:
+        """Private SFT/DPO serverless opt-in for capacity-409 retrieve retries.
+
+        The transport layer has no intrinsic job-type fact. The cookbook's
+        SFT/DPO serverless setup and standalone examples call this named seam
+        before creating or resuming a training client; every future on this
+        holder is then eligible.
+        Other serverless workloads remain fatal on retrieve-path 409.
+        """
+        if not hasattr(self, "holder"):
+            raise RuntimeError("Cannot enable supervised 409 retry before the service holder exists")
+        _mark_serverless_supervised_409_retry(self.holder)
 
     def _resolved_account_id(self) -> str | None:
         """The Fireworks account id, resolved once and cached, or ``None`` if it

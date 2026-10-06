@@ -1,7 +1,9 @@
 """Retry capacity/recovery HTTP 409s on serverless trainer future retrieve.
 
-Scope: only requests whose URL is under ``/training/v1/serverless`` (managed /
-recipe SFT & DPO on serverless trainers). Dedicated trainer URLs are unchanged.
+Scope: only serverless SFT/DPO recipe setup and standalone examples opt in.
+Within that opt-in, requests under ``/training/v1/serverless`` may retry
+capacity or recovery 409s. Dedicated trainer URLs and unmarked serverless
+clients are unchanged.
 
 Tinker retries 409 on submit but marks retrieve-path 409 as FATAL; this
 reclassifies serverless capacity/lifecycle conflicts as ``RETRY_WITH_BACKOFF``.
@@ -11,12 +13,21 @@ Identity and other explicit, unrecognized conflicts stay FATAL.
 from __future__ import annotations
 
 from typing import Any
+from contextlib import contextmanager
+from contextvars import ContextVar
 from urllib.parse import urlparse
+from collections.abc import Iterator
 
 import tinker.lib.api_future_impl as api_future_impl
 
 _PATCH_SENTINEL = "_fireworks_capacity_409_retry_patch"
+_FETCH_PATCH_SENTINEL = "_fireworks_capacity_409_retry_fetch_patch"
 _SERVERLESS_ROUTE = "/training/v1/serverless"
+_HOLDER_ATTR = "_fireworks_serverless_supervised_409_retry"
+_SUPERVISED_409_RETRY: ContextVar[bool] = ContextVar(
+    "_fireworks_serverless_supervised_409_retry",
+    default=False,
+)
 
 _RETRYABLE_MARKERS = (
     "capacity_exhausted",
@@ -39,6 +50,47 @@ _TERMINAL_MARKERS = (
     "conflicts with durable model state",
     "model lifecycle conflicts with durable state",
 )
+
+
+def _mark_serverless_supervised_409_retry(holder: Any) -> None:
+    """Mark one Tinker holder as an opted-in supervised serverless run."""
+    setattr(holder, _HOLDER_ATTR, True)
+
+
+@contextmanager
+def _serverless_supervised_409_retry() -> Iterator[None]:
+    """Expose the private holder opt-in to future-retrieve classification."""
+    token = _SUPERVISED_409_RETRY.set(True)
+    try:
+        yield
+    finally:
+        _SUPERVISED_409_RETRY.reset(token)
+
+
+def _make_fetch_via_rest_with_supervised_gate(current: Any) -> Any:
+    async def _fetch_via_rest(self: Any, state: Any, iteration: int) -> Any:
+        holder = getattr(self, "holder", None)
+        if getattr(holder, _HOLDER_ATTR, False) is not True:
+            return await current(self, state, iteration)
+        token = _SUPERVISED_409_RETRY.set(True)
+        try:
+            return await current(self, state, iteration)
+        finally:
+            _SUPERVISED_409_RETRY.reset(token)
+
+    setattr(_fetch_via_rest, _FETCH_PATCH_SENTINEL, True)
+    for marker in ("_fireworks_body_timeout_patch", "_fireworks_structured_error_patch"):
+        if getattr(current, marker, False):
+            setattr(_fetch_via_rest, marker, True)
+    return _fetch_via_rest
+
+
+def _patch_fetch_via_rest() -> bool:
+    current = api_future_impl._APIFuture._fetch_via_rest
+    if getattr(current, _FETCH_PATCH_SENTINEL, False):
+        return False
+    api_future_impl._APIFuture._fetch_via_rest = _make_fetch_via_rest_with_supervised_gate(current)
+    return True
 
 
 def _is_serverless_trainer_request(exc: Any) -> bool:
@@ -118,6 +170,8 @@ def _patch_rest_status_error_to_transport_error() -> bool:
             return transport
         if not _is_serverless_trainer_request(exc):
             return transport
+        if not _SUPERVISED_409_RETRY.get():
+            return transport
         detail = getattr(transport, "detail", None)
         if not _is_retryable_capacity_409(exc, detail if isinstance(detail, str) else None):
             return transport
@@ -138,4 +192,5 @@ def _patch_rest_status_error_to_transport_error() -> bool:
     return True
 
 
+_patch_fetch_via_rest()
 _patch_rest_status_error_to_transport_error()

@@ -12,6 +12,7 @@ Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk
 * **dependencies:** update runtime and development locks to AnyIO 4.14.2 on Python 3.10+. Python 3.9 retains AnyIO 4.12.1 for compatibility because newer AnyIO releases require Python 3.10+.
 * **training-sdk:** include tool-call indices in TITO SSE deltas and preserve parser-produced argument strings separately from canonical lineage messages in responses and trajectory artifacts
 * **training-sdk:** retry serverless trainer capacity conflicts while preserving fail-fast behavior for terminal and unrecognized HTTP 409 errors
+* **training-sdk:** limit serverless capacity-409 retrieve retries to the SFT/DPO serverless setup; other serverless workloads retain fail-fast behavior
 
 ### Refactors
 * **training-sdk:** keep generic trainer/deployment overrides as opaque, opt-in testing interfaces; managed projection-head topology must be configured by the training shape rather than implicit launch overrides

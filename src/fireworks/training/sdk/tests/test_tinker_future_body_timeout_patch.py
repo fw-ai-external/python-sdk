@@ -505,6 +505,20 @@ def test_retrieve_future_copies_final_serverless_http_context() -> None:
     assert exc.__cause__._fireworks_training_error_source == source
 
 
+def test_retrieve_future_unmarked_serverless_capacity_409_fails_without_retry() -> None:
+    exc = asyncio.run(
+        _future_exception(
+            {"detail": "model lifecycle is closing"},
+            status=409,
+            base_url="https://api.example.com/training/v1/serverless",
+        )
+    )
+
+    assert isinstance(exc, ValueError)
+    assert type(exc.__cause__) is tinker.ConflictError
+    assert "model lifecycle is closing" in str(exc)
+
+
 @pytest.mark.parametrize("state", ["FAILED", "EXPIRED"])
 def test_retrieve_future_terminal_run_state_409_fails_without_retry(state: str) -> None:
     async def run() -> Exception:
