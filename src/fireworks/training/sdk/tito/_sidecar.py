@@ -7,6 +7,7 @@ import time
 import uuid
 import asyncio
 import secrets
+import ipaddress
 from typing import Any, Mapping, Callable
 from collections import OrderedDict
 
@@ -36,7 +37,13 @@ _TERMINAL_ENGINE_LIMIT = 4096
 
 
 class TITOSidecar:
-    """Loopback runtime scoped to one Docker or remote-sandbox environment."""
+    """Environment-scoped runtime, bound to loopback unless explicitly configured.
+
+    ``bind_address`` must be a specific IPv4 or IPv6 address on this host.
+    A Docker bridge gateway permits isolated containers to reach a host-side
+    runtime without host networking. Network isolation/firewall rules remain
+    the caller's responsibility; trajectory credentials are still required.
+    """
 
     _MAX_HTTP_REQUEST_BYTES = 64 * 1024 * 1024
 
@@ -54,7 +61,15 @@ class TITOSidecar:
         default_drift_policy: TrajectoryDriftPolicy | None = None,
         prompt_mode: TITOPromptMode = "full_history",
         keepalive_seconds: float = 5.0,
+        bind_address: str = "127.0.0.1",
     ) -> None:
+        try:
+            address = ipaddress.ip_address(bind_address)
+        except ValueError as exc:
+            raise ValueError("bind_address must be a specific IPv4 or IPv6 address") from exc
+        if address.is_unspecified or address.is_multicast:
+            raise ValueError("bind_address must be a specific unicast IP address, not a wildcard or multicast address")
+        self._bind_address = str(address)
         self._sampler = sampler
         self._renderer = renderer
         self._max_context_tokens = max_context_tokens
@@ -93,6 +108,7 @@ class TITOSidecar:
         keepalive_seconds: float = 5.0,
         default_drift_policy: TrajectoryDriftPolicy | None = None,
         prompt_mode: TITOPromptMode = "full_history",
+        bind_address: str = "127.0.0.1",
     ) -> "TITOSidecar":
         source = dict(sampler.additional_headers or {})
         normalized = {name.lower(): value for name, value in source.items()}
@@ -116,6 +132,7 @@ class TITOSidecar:
             keepalive_seconds=keepalive_seconds,
             default_drift_policy=default_drift_policy,
             prompt_mode=prompt_mode,
+            bind_address=bind_address,
         )
 
     def create_trajectory(
@@ -258,7 +275,7 @@ class TITOSidecar:
         return artifact
 
     async def start(self, port: int = 0) -> None:
-        """Start the environment-private HTTP adapter on loopback."""
+        """Start the HTTP adapter on the configured interface (default loopback)."""
         if self._runner is not None:
             return
         from aiohttp import web
@@ -273,14 +290,19 @@ class TITOSidecar:
         application.router.add_get("/trajectories/{trajectory_id}/v1/models", self._handle_openai_models)
         runner = web.AppRunner(application)
         await runner.setup()
-        site = web.TCPSite(runner, "127.0.0.1", port)
-        await site.start()
+        site = web.TCPSite(runner, self._bind_address, port)
+        try:
+            await site.start()
+        except BaseException:
+            await runner.cleanup()
+            raise
         sockets = site._server.sockets  # noqa: SLF001 - aiohttp exposes no bound-port API
         bound_port = sockets[0].getsockname()[1]
         self._runner = runner
         self._site = site
         self._port = int(bound_port)
-        self._base_url = f"http://127.0.0.1:{bound_port}"
+        host = f"[{self._bind_address}]" if ":" in self._bind_address else self._bind_address
+        self._base_url = f"http://{host}:{bound_port}"
 
     async def _write_error(self, request: Any, error: TITOError) -> Any:
         from aiohttp import web
@@ -405,7 +427,7 @@ class TITOSidecar:
                 return await self._write_error(request, exc)
             except Exception:
                 return await self._write_error(request, self._upstream_error())
-            body = _canonical_bytes(dict(result.response))
+            body = json.dumps(dict(result.response), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             response = web.StreamResponse(
                 status=200,
                 headers={"content-type": "application/json"},
@@ -535,7 +557,11 @@ class TITOSidecar:
             result = await task
             committed = result.turn_id
             choice = dict(result.response)["choices"][0]
-            message = choice["message"]
+            message = dict(choice["message"])
+            if message.get("tool_calls"):
+                # Stream-only indices must not mutate the cached response or
+                # canonical assistant history used for replay/lineage checks.
+                message["tool_calls"] = [{**call, "index": index} for index, call in enumerate(message["tool_calls"])]
             delta = {
                 "id": dict(result.response)["id"],
                 "object": "chat.completion.chunk",
@@ -556,7 +582,8 @@ class TITOSidecar:
                     }
                 ],
             }
-            await _write_sse(b"data: " + _canonical_bytes(delta) + b"\n\n", "assistant")
+            encoded_delta = json.dumps(delta, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            await _write_sse(b"data: " + encoded_delta + b"\n\n", "assistant")
             await _write_sse(b"data: " + _canonical_bytes(terminal) + b"\n\n", "terminal")
             await _write_sse(b"data: [DONE]\n\n", "done")
             await response.write_eof()

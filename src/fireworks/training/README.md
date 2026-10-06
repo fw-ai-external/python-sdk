@@ -150,3 +150,9 @@ print(profile.supports_lora)  # bool
 ```bash
 pytest src/fireworks/training/sdk/tests
 ```
+
+Generic trainer/deployment argument and value overrides are opt-in testing
+interfaces. They forward opaque caller-provided data, require authorized
+credentials, and are left unset by normal managed flows. Prefer typed options
+and validated shapes in recipes. A projection-head model handle requires a
+training shape that already configures the requested topology.

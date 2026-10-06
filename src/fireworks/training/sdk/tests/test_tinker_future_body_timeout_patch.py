@@ -503,3 +503,40 @@ def test_retrieve_future_copies_final_serverless_http_context() -> None:
     assert (source.code, source.type) == ("NOT_FOUND", "error")
     assert type(exc.__cause__) is tinker.NotFoundError
     assert exc.__cause__._fireworks_training_error_source == source
+
+
+def test_retrieve_future_unmarked_serverless_capacity_409_fails_without_retry() -> None:
+    exc = asyncio.run(
+        _future_exception(
+            {"detail": "model lifecycle is closing"},
+            status=409,
+            base_url="https://api.example.com/training/v1/serverless",
+        )
+    )
+
+    assert isinstance(exc, ValueError)
+    assert type(exc.__cause__) is tinker.ConflictError
+    assert "model lifecycle is closing" in str(exc)
+
+
+@pytest.mark.parametrize("state", ["FAILED", "EXPIRED"])
+def test_retrieve_future_terminal_run_state_409_fails_without_retry(state: str) -> None:
+    async def run() -> Exception:
+        return await asyncio.wait_for(
+            _future_exception(
+                {
+                    "detail": (
+                        f"cannot resume training run run-example: run state is {state}, not READY or legacy UNSPECIFIED"
+                    )
+                },
+                status=409,
+                base_url="https://api.example.com/training/v1/serverless",
+            ),
+            timeout=1.0,
+        )
+
+    exc = asyncio.run(run())
+
+    assert isinstance(exc, ValueError)
+    assert type(exc.__cause__) is tinker.ConflictError
+    assert f"run state is {state}" in str(exc)

@@ -30,54 +30,12 @@ from fireworks.training.sdk.managed import (
     _ManagedTinkerHandle,
     _reference_managed_config,
     _use_shared_base_reference,
-    _policy_output_cmek_resource,
     _validate_reference_training_shape,
 )
 from fireworks.training.sdk.trainer import CreatedTrainerJob, TrainerServiceEndpoint
 from fireworks.training.sdk._constants import DEFAULT_TRAINER_PENDING_TIMEOUT_S
 
 BASE_MODEL = "accounts/acct/models/base"
-
-
-@pytest.mark.parametrize(
-    "extra_args",
-    [
-        ["--tp=2", "--cmek-output-model-resource=models/output-model"],
-        ["--cmek-output-model-resource", "models/output-model"],
-        ["--cmek-output-model-resource models/output-model"],
-    ],
-)
-def test_policy_output_cmek_resource_reads_every_flag_form(extra_args):
-    assert _policy_output_cmek_resource(extra_args) == "models/output-model"
-
-
-@pytest.mark.parametrize(
-    "extra_args",
-    [
-        None,
-        [],
-        ["--tp=2"],
-        # A longer flag that merely shares the prefix must not match.
-        ["--cmek-output-model-resource-extra=models/output-model"],
-    ],
-)
-def test_policy_output_cmek_resource_absent(extra_args):
-    assert _policy_output_cmek_resource(extra_args) is None
-
-
-def test_reference_config_derives_no_policy_cmek_resource():
-    """The reference strips the flag, so it can never own the output model key."""
-    policy = _policy_config(
-        extra_args=[
-            "--fireworks-gateway-target=gateway.internal:443",
-            "--cmek-output-model-resource=models/output-model",
-            "--require-cmek-output-encryption",
-        ]
-    )
-    assert _policy_output_cmek_resource(policy.extra_args) == "models/output-model"
-
-    reference = _reference_managed_config(policy, policy_lora_rank=policy.lora_rank)
-    assert _policy_output_cmek_resource(reference.extra_args) is None
 
 
 def test_managed_config_defaults_use_reservation_true_and_accepts_opt_out():
@@ -101,9 +59,8 @@ def test_managed_config_defaults_use_reservation_true_and_accepts_opt_out():
         ({"max_lora_rank": 8}, False),
         ({"forward_only": True}, False),
         ({"create_deployment": False}, False),
-        ({"extra_args": ["--cmek-output-model-resource=models/output"]}, False),
-        ({"extra_values": {"rdmaWeightSyncEnabled": "false"}}, False),
-        ({"deployment_extra_values": {"rdmaWeightSyncEnabled": "false"}}, False),
+        ({"extra_values": {"testValue": "test-value"}}, True),
+        ({"deployment_extra_values": {"testValue": "test-value"}}, True),
     ],
 )
 @pytest.mark.parametrize("compatibility_hint", [None, "RDMA"])
@@ -269,46 +226,11 @@ class TestReferenceManagedConfig:
         reference = _reference_managed_config(config, policy_lora_rank=0)
         assert reference.trainer_replica_count is None
 
-    def test_reference_drops_policy_output_encryption_args(self):
-        config = _policy_config(
-            reference_training_shape_id="ts-ref",
-            extra_args=[
-                "--pp=2",
-                "--fireworks-gateway-target=gateway:443",
-                "--cmek-output-model-resource=models/output",
-                "--require-cmek-output-encryption",
-            ],
-        )
-
+    def test_reference_preserves_opaque_trainer_args(self):
+        config = _policy_config(reference_training_shape_id="ts-ref", extra_args=["--test-flag"])
         reference = _reference_managed_config(config, policy_lora_rank=0)
+        assert reference.extra_args == ["--test-flag"]
 
-        assert reference.extra_args == ["--pp=2"]
-
-    def test_reference_drops_split_policy_output_args(self):
-        config = _policy_config(
-            reference_training_shape_id="ts-ref",
-            extra_args=[
-                "--fireworks-gateway-target",
-                "gateway:443",
-                "--cmek-output-model-resource",
-                "models/output",
-                "--activation-checkpoint",
-            ],
-        )
-
-        reference = _reference_managed_config(config, policy_lora_rank=0)
-
-        assert reference.extra_args == ["--activation-checkpoint"]
-
-    def test_reference_tolerates_blank_extra_args(self):
-        config = _policy_config(
-            reference_training_shape_id="ts-ref",
-            extra_args=["--pp=2", "", "--require-cmek-output-encryption"],
-        )
-
-        reference = _reference_managed_config(config, policy_lora_rank=0)
-
-        assert reference.extra_args == ["--pp=2", ""]
 
 
 class TestTrainerCreateShapeRef:
@@ -418,7 +340,7 @@ class TestManagedProvisioning:
         trainer_config = managed_module._build_trainer_job_config(
             _policy_config(
                 training_shape_id=None,
-                extra_args=["--pp", "2"],
+                extra_args=["--test-option", "value"],
             ),
             max_context_length=32768,
             profile_training_shape=None,
@@ -426,7 +348,7 @@ class TestManagedProvisioning:
 
         assert trainer_config.training_shape_ref is None
         assert trainer_config.auto_select_training_shape is True
-        assert trainer_config.extra_args == ["--pp", "2"]
+        assert trainer_config.extra_args == ["--test-option", "value"]
 
     def test_use_reservation_flows_to_trainer_config(self):
         trainer_config = managed_module._build_trainer_job_config(

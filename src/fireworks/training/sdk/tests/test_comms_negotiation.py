@@ -166,7 +166,7 @@ def test_capability_is_not_shared_between_services(connect):
 @pytest.mark.parametrize("capability,enabled", [({"comms": "v2"}, True), ({}, False)])
 @pytest.mark.parametrize(
     "setup_kwargs",
-    [{}, {"extra_args": ["--cmek-output-model-resource=models/output"], "weight_sync_transport": "RDMA"}],
+    [{}, {"extra_args": ["--test-flag"], "weight_sync_transport": "RDMA"}],
 )
 def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch, capability, enabled, setup_kwargs):
     from fireworks.training.sdk import managed
