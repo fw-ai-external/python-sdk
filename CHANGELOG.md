@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.20 (2026-10-05)
+## 1.2.20 (2026-10-06)
 
 Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk/compare/v1.2.19...v1.2.20)
 
@@ -8,6 +8,8 @@ Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk
 * **training-sdk:** allow `TITOSidecar(bind_address=...)` to listen on a specific host interface, including Docker bridge gateways; loopback remains the default
 
 ### Bug Fixes
+* **dependencies:** allow base SDK installs with Pydantic 2.13 while retaining the Pydantic <3 upper bound. Training extras retain their existing Pydantic <2.13 constraint.
+* **dependencies:** update runtime and development locks to AnyIO 4.14.2 on Python 3.10+. Python 3.9 retains AnyIO 4.12.1 for compatibility because newer AnyIO releases require Python 3.10+.
 * **training-sdk:** include tool-call indices in TITO SSE deltas and preserve parser-produced argument strings separately from canonical lineage messages in responses and trajectory artifacts
 * **training-sdk:** retry serverless trainer capacity conflicts while preserving fail-fast behavior for terminal and unrecognized HTTP 409 errors
 
