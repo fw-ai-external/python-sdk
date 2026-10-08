@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.21 (2026-10-08)
+
+Full Changelog: [v1.2.20...v1.2.21](https://github.com/fw-ai-external/python-sdk/compare/v1.2.20...v1.2.21)
+
+### Features
+* **training-sdk:** send `projection_head_dim` as first-class trainer configuration so any compatible validated training shape can create the requested head, while preserving legacy `extra_args`
+
 ## 1.2.20 (2026-10-06)
 
 Full Changelog: [v1.2.19...v1.2.20](https://github.com/fw-ai-external/python-sdk/compare/v1.2.19...v1.2.20)
