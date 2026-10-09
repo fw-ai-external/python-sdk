@@ -131,6 +131,17 @@ class TestCreate:
         assert mgr._build_trainer_create_payload(default)["useReservation"] is True
         assert mgr._build_trainer_create_payload(disabled)["useReservation"] is False
 
+    @pytest.mark.parametrize(("projection_head_dim", "expected"), [(None, None), (0, None), (3, 3)])
+    def test_projection_head_dim_payload(self, mgr, projection_head_dim, expected):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/qwen3-1p7b",
+            projection_head_dim=projection_head_dim,
+        )
+
+        training_config = mgr._build_trainer_create_payload(config)["trainingConfig"]
+
+        assert training_config.get("projectionHeadDim") == expected
+
     def test_reservation_target_overrides_default_use_reservation(self, mgr):
         target = "accounts/test/reservations/team-training"
         config = TrainerJobConfig(
@@ -1496,6 +1507,15 @@ class TestValidate:
     def test_rejects_empty_base_model(self):
         config = TrainerJobConfig(base_model="")
         with pytest.raises(ValueError, match="base_model"):
+            config.validate()
+
+    @pytest.mark.parametrize("projection_head_dim", [-1, True, 1.5])
+    def test_rejects_invalid_projection_head_dim(self, projection_head_dim):
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/m",
+            projection_head_dim=projection_head_dim,
+        )
+        with pytest.raises(ValueError, match="projection_head_dim"):
             config.validate()
 
     def test_unset_gradient_accumulation_steps_is_silent(self, caplog):

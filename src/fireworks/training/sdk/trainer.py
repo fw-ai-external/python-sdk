@@ -290,6 +290,12 @@ class TrainerJobConfig:
 
     base_model: str
     lora_rank: int = 0
+    projection_head_dim: int | None = None
+    """Dimension of the independent trainable projection head.
+
+    ``None`` and ``0`` disable the head. A positive value is sent as a
+    first-class trainer field and may be used with shape selection.
+    """
     max_context_length: int | None = None
     """Max context length for the trainer.
 
@@ -427,6 +433,12 @@ class TrainerJobConfig:
         errors: list[str] = []
         if not self.base_model:
             errors.append("base_model is required")
+        if isinstance(self.projection_head_dim, bool) or (
+            self.projection_head_dim is not None and not isinstance(self.projection_head_dim, int)
+        ):
+            errors.append("projection_head_dim must be a non-negative integer when set")
+        elif self.projection_head_dim is not None and self.projection_head_dim < 0:
+            errors.append("projection_head_dim must be a non-negative integer when set")
         if self.gradient_accumulation_steps is not None and self.gradient_accumulation_steps != 1:
             errors.append(
                 "gradient_accumulation_steps must be 1. Server-side gradient "
@@ -611,6 +623,8 @@ class TrainerJobManager(FireworksClient):
             "loraRank": config.lora_rank,
             "learningRate": config.learning_rate,
         }
+        if config.projection_head_dim:
+            training_config["projectionHeadDim"] = config.projection_head_dim
         payload: dict[str, Any] = {
             "serviceMode": True,
             "keepAlive": False,

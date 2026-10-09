@@ -84,9 +84,8 @@ class FiretitanProvisioningConfig:
 
     The dimension is fixed for the lifetime of the managed service. ``None`` and
     ``0`` both disable the module; a positive value creates exactly that many
-    output rows. Every trainable model handle inherits this configuration.
-    The training shape must already configure this topology. This field selects
-    the model-handle dimension; it does not add trainer launch overrides.
+    output rows. The SDK sends it as first-class trainer configuration, and
+    every trainable model handle inherits the same dimension.
     """
     max_lora_rank: int | None = None
     """Trainer LoRA capacity for managed multi-model services.
@@ -820,6 +819,7 @@ def _build_trainer_job_config(
     return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=_trainer_lora_capacity(config),
+        projection_head_dim=config.projection_head_dim,
         max_context_length=max_context_length,
         learning_rate=config.learning_rate,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
