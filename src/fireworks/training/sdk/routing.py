@@ -144,6 +144,16 @@ def routing_model_input_kwargs(value) -> dict:
     return {"routing_matrix_format": None, "routing_matrices": value, "routing_references": None}
 
 
+def top_sampling_model_input_kwargs(value, length: int) -> dict:
+    """ModelInput fields for Parquet top-K references over ``length`` input positions."""
+    if value is None:
+        return {"top_sampling_references": None}
+    references = value if isinstance(value, RoutingReferences) else RoutingReferences.from_dict(value)
+    if len(references) != length:
+        raise ValueError("Top-K sampling references must cover every model input position")
+    return {"top_sampling_references": references.to_dict()}
+
+
 def routing_has_gaps(value):
     return (
         any(s.get("file_index") is None for s in value.spans)

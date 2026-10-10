@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.22 (2026-10-10)
+
+Full Changelog: [v1.2.21...v1.2.22](https://github.com/fw-ai-external/python-sdk/compare/v1.2.21...v1.2.22)
+
+### Features
+* **training-sdk:** preserve optional Parquet sampling-support references through deployment sampling, Tinker-style sampled sequences, model inputs, and TITO; target-policy support selection remains off by default
+* **training-sdk:** accept the trainer's built-in DPPO loss name
+
+### Bug Fixes
+* **training-sdk:** retain HTTP request/response diagnostics when an older serving image rejects sampling-support capture
+
 ## 1.2.21 (2026-10-08)
 
 Full Changelog: [v1.2.20...v1.2.21](https://github.com/fw-ai-external/python-sdk/compare/v1.2.20...v1.2.21)
