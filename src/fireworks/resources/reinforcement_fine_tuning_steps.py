@@ -7,6 +7,7 @@ import httpx
 from ..types import (
     reinforcement_fine_tuning_step_get_params,
     reinforcement_fine_tuning_step_list_params,
+    reinforcement_fine_tuning_step_cancel_params,
     reinforcement_fine_tuning_step_create_params,
     reinforcement_fine_tuning_step_resume_params,
     reinforcement_fine_tuning_step_execute_params,
@@ -285,6 +286,55 @@ class ReinforcementFineTuningStepsResource(SyncAPIResource):
                 "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}",
                 account_id=account_id,
                 rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
+    def cancel(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Reinforcement Fine-tuning Step
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:cancel",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
+            body=maybe_transform(
+                body, reinforcement_fine_tuning_step_cancel_params.ReinforcementFineTuningStepCancelParams
             ),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
@@ -719,6 +769,55 @@ class AsyncReinforcementFineTuningStepsResource(AsyncAPIResource):
             cast_to=object,
         )
 
+    async def cancel(
+        self,
+        rlor_trainer_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Reinforcement Fine-tuning Step
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not rlor_trainer_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `rlor_trainer_job_id` but received {rlor_trainer_job_id!r}"
+            )
+        return await self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/rlorTrainerJobs/{rlor_trainer_job_id}:cancel",
+                account_id=account_id,
+                rlor_trainer_job_id=rlor_trainer_job_id,
+            ),
+            body=await async_maybe_transform(
+                body, reinforcement_fine_tuning_step_cancel_params.ReinforcementFineTuningStepCancelParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def execute(
         self,
         rlor_trainer_job_id: str,
@@ -896,6 +995,9 @@ class ReinforcementFineTuningStepsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
+        self.cancel = to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.cancel,
+        )
         self.execute = to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.execute,
         )
@@ -919,6 +1021,9 @@ class AsyncReinforcementFineTuningStepsResourceWithRawResponse:
         )
         self.delete = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
+        )
+        self.cancel = async_to_raw_response_wrapper(
+            reinforcement_fine_tuning_steps.cancel,
         )
         self.execute = async_to_raw_response_wrapper(
             reinforcement_fine_tuning_steps.execute,
@@ -944,6 +1049,9 @@ class ReinforcementFineTuningStepsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
         )
+        self.cancel = to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.cancel,
+        )
         self.execute = to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.execute,
         )
@@ -967,6 +1075,9 @@ class AsyncReinforcementFineTuningStepsResourceWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.delete,
+        )
+        self.cancel = async_to_streamed_response_wrapper(
+            reinforcement_fine_tuning_steps.cancel,
         )
         self.execute = async_to_streamed_response_wrapper(
             reinforcement_fine_tuning_steps.execute,

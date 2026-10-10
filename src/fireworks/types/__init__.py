@@ -87,6 +87,7 @@ from .dataset_create_params import DatasetCreateParams as DatasetCreateParams
 from .dataset_update_params import DatasetUpdateParams as DatasetUpdateParams
 from .dataset_upload_params import DatasetUploadParams as DatasetUploadParams
 from .deployment_get_params import DeploymentGetParams as DeploymentGetParams
+from .dpo_job_cancel_params import DpoJobCancelParams as DpoJobCancelParams
 from .dpo_job_create_params import DpoJobCreateParams as DpoJobCreateParams
 from .dpo_job_resume_params import DpoJobResumeParams as DpoJobResumeParams
 from .evaluator_list_params import EvaluatorListParams as EvaluatorListParams
@@ -184,6 +185,9 @@ from .response_content_block_location_citation import (
 from .response_search_result_location_citation import (
     ResponseSearchResultLocationCitation as ResponseSearchResultLocationCitation,
 )
+from .supervised_fine_tuning_job_cancel_params import (
+    SupervisedFineTuningJobCancelParams as SupervisedFineTuningJobCancelParams,
+)
 from .supervised_fine_tuning_job_create_params import (
     SupervisedFineTuningJobCreateParams as SupervisedFineTuningJobCreateParams,
 )
@@ -219,6 +223,9 @@ from .reinforcement_fine_tuning_job_create_params import (
 )
 from .reinforcement_fine_tuning_job_resume_params import (
     ReinforcementFineTuningJobResumeParams as ReinforcementFineTuningJobResumeParams,
+)
+from .reinforcement_fine_tuning_step_cancel_params import (
+    ReinforcementFineTuningStepCancelParams as ReinforcementFineTuningStepCancelParams,
 )
 from .reinforcement_fine_tuning_step_create_params import (
     ReinforcementFineTuningStepCreateParams as ReinforcementFineTuningStepCreateParams,

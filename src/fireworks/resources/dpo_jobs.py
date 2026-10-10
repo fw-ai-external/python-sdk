@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import httpx
 
-from ..types import dpo_job_get_params, dpo_job_list_params, dpo_job_create_params, dpo_job_resume_params
+from ..types import (
+    dpo_job_get_params,
+    dpo_job_list_params,
+    dpo_job_cancel_params,
+    dpo_job_create_params,
+    dpo_job_resume_params,
+)
 from .._types import Body, Omit, Query, Headers, NotGiven, omit, not_given
 from .._utils import path_template, maybe_transform, async_maybe_transform
 from .._compat import cached_property
@@ -237,6 +243,51 @@ class DpoJobsResource(SyncAPIResource):
             + path_template(
                 "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}", account_id=account_id, dpo_job_id=dpo_job_id
             ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
+    def cancel(
+        self,
+        dpo_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Dpo Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dpo_job_id:
+            raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
+        return self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:cancel",
+                account_id=account_id,
+                dpo_job_id=dpo_job_id,
+            ),
+            body=maybe_transform(body, dpo_job_cancel_params.DpoJobCancelParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -593,6 +644,51 @@ class AsyncDpoJobsResource(AsyncAPIResource):
             cast_to=object,
         )
 
+    async def cancel(
+        self,
+        dpo_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Dpo Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not dpo_job_id:
+            raise ValueError(f"Expected a non-empty value for `dpo_job_id` but received {dpo_job_id!r}")
+        return await self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/dpoJobs/{dpo_job_id}:cancel",
+                account_id=account_id,
+                dpo_job_id=dpo_job_id,
+            ),
+            body=await async_maybe_transform(body, dpo_job_cancel_params.DpoJobCancelParams),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def get(
         self,
         dpo_job_id: str,
@@ -739,6 +835,9 @@ class DpoJobsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             dpo_jobs.delete,
         )
+        self.cancel = to_raw_response_wrapper(
+            dpo_jobs.cancel,
+        )
         self.get = to_raw_response_wrapper(
             dpo_jobs.get,
         )
@@ -762,6 +861,9 @@ class AsyncDpoJobsResourceWithRawResponse:
         )
         self.delete = async_to_raw_response_wrapper(
             dpo_jobs.delete,
+        )
+        self.cancel = async_to_raw_response_wrapper(
+            dpo_jobs.cancel,
         )
         self.get = async_to_raw_response_wrapper(
             dpo_jobs.get,
@@ -787,6 +889,9 @@ class DpoJobsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             dpo_jobs.delete,
         )
+        self.cancel = to_streamed_response_wrapper(
+            dpo_jobs.cancel,
+        )
         self.get = to_streamed_response_wrapper(
             dpo_jobs.get,
         )
@@ -810,6 +915,9 @@ class AsyncDpoJobsResourceWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             dpo_jobs.delete,
+        )
+        self.cancel = async_to_streamed_response_wrapper(
+            dpo_jobs.cancel,
         )
         self.get = async_to_streamed_response_wrapper(
             dpo_jobs.get,
