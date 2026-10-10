@@ -333,6 +333,74 @@ def _r3_probe_result():
     }
 
 
+@pytest.mark.parametrize(
+    "status,message,replay,expects_guidance",
+    [
+        (400, "Extra inputs are not permitted, field: 'top_sampling_format', value: 'parquet_v1'", True, True),
+        (
+            400,
+            "2 request validation errors: Extra inputs are not permitted, field: 'top_sampling_logprobs', "
+            "value: 20000; Extra inputs are not permitted, field: 'top_sampling_format', value: 'parquet_v1'",
+            True,
+            True,
+        ),
+        (400, "R3 shared storage domain mismatch", True, False),
+        (400, "Extra inputs are not permitted, field: 'other_option', value: 1", True, False),
+        (
+            429,
+            "Extra inputs are not permitted, field: 'top_sampling_format', value: 'parquet_v1'",
+            True,
+            False,
+        ),
+        (
+            400,
+            "Extra inputs are not permitted, field: 'top_sampling_format', value: 'parquet_v1'",
+            False,
+            False,
+        ),
+    ],
+)
+def test_old_serving_sampling_support_error_is_actionable_without_fallback(status, message, replay, expects_guidance):
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    calls = []
+
+    async def receive(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            status,
+            json={"error": {"code": "invalid_request_error", "message": message}},
+            headers={"x-request-id": "unsupported-serving-probe"},
+        )
+
+    sampler = DeploymentSampler("https://inference.invalid", "test/model", "fw-test")
+    sampler.r3_store_id = "nfs-test"
+    sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(receive))
+    kwargs = {"top_sampling_logprobs": 20000, "top_sampling_format": "parquet_v1"} if replay else {}
+
+    async def run():
+        with pytest.raises(httpx.HTTPStatusError) as caught:
+            if status == 400:
+                await sampler.sample_with_prompt_tokens_result([1, 2], logprobs=True, **kwargs)
+            else:
+                await sampler.async_completions_stream([1, 2], logprobs=True, **kwargs)
+        assert ("use a serving image" in str(caught.value)) == expects_guidance
+        assert caught.value.response.status_code == status
+        assert caught.value.response.json()["error"]["message"] == message
+        if status == 400:
+            assert caught.value.attempts == 1
+            assert caught.value.server_attempts[0].status_code == 400
+            assert caught.value.server_attempts[0].response_request_id == "unsupported-serving-probe"
+        assert len(calls) == 1
+        assert (calls[0].get("top_sampling_format") == "parquet_v1") == replay
+        await sampler._async_client.aclose()
+
+    try:
+        asyncio.run(run())
+    finally:
+        sampler.close()
+
+
 def test_old_replica_after_successful_probe_retries_inline_once():
     from fireworks.training.sdk.sampling import DeploymentSampler
 

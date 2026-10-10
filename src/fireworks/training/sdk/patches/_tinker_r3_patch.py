@@ -1,10 +1,10 @@
-"""Patch tinker's ModelInput for R3 routing_matrices support.
+"""Patch tinker's ModelInput for R3 routing and top-K sampling references.
 
-Adds an optional routing_matrices field to ModelInput and rebuilds
-the Pydantic model chain so serialization includes it.
+Adds optional routing (R3) and top-K sampling reference fields to ModelInput
+and rebuilds the Pydantic model chain so serialization includes them.
 
 Safe to import multiple times -- patches are applied only once.
-Remove this file when tinker adds native routing_matrices support.
+Remove this file when tinker supports these fields natively.
 """
 
 from __future__ import annotations
@@ -14,7 +14,12 @@ from typing import List, Optional
 
 from pydantic.fields import FieldInfo
 
-from fireworks.training.sdk.routing import RoutingReferences, RoutingMatrixFormat, routing_model_input_kwargs
+from fireworks.training.sdk.routing import (
+    RoutingReferences,
+    RoutingMatrixFormat,
+    routing_model_input_kwargs,
+    top_sampling_model_input_kwargs,
+)
 from fireworks.training.sdk.patches._model_utils import rebuild_model
 
 logger = logging.getLogger(__name__)
@@ -58,18 +63,21 @@ def _rebuild_wire_models() -> None:
 def _apply_r3_patch() -> None:
     from tinker.types.model_input import ModelInput
 
-    if "routing_matrix_format" in ModelInput.model_fields:
+    if "top_sampling_references" in ModelInput.model_fields:
         _rebuild_wire_models()
         return
 
-    ModelInput.model_fields["routing_matrices"] = FieldInfo(
-        default=None, annotation=Optional[List[str]]
-    )
-    ModelInput.__annotations__["routing_matrices"] = Optional[List[str]]
-    ModelInput.model_fields["routing_references"] = FieldInfo(default=None, annotation=Optional[dict])
-    ModelInput.__annotations__["routing_references"] = Optional[dict]
-    ModelInput.model_fields["routing_matrix_format"] = FieldInfo(default=None, annotation=Optional[RoutingMatrixFormat])
-    ModelInput.__annotations__["routing_matrix_format"] = Optional[RoutingMatrixFormat]
+    fields = {
+        "routing_matrices": Optional[List[str]],
+        "routing_references": Optional[dict],
+        "routing_matrix_format": Optional[RoutingMatrixFormat],
+        # Parquet references to the sampler's top-K distribution; row t produced target t.
+        "top_sampling_references": Optional[dict],
+    }
+    for name, annotation in fields.items():
+        if name not in ModelInput.model_fields:
+            ModelInput.model_fields[name] = FieldInfo(default=None, annotation=annotation)
+            ModelInput.__annotations__[name] = annotation
     rebuild_model(ModelInput)
 
     from tinker.types.datum import Datum
@@ -86,13 +94,20 @@ def _apply_r3_patch() -> None:
     from tinker.types.encoded_text_chunk import EncodedTextChunk
 
     @classmethod  # type: ignore[misc]
-    def from_ints(cls, tokens: List[int], routing_matrices: List[str] | RoutingReferences | None = None) -> ModelInput:
+    def from_ints(
+        cls,
+        tokens: List[int],
+        routing_matrices: List[str] | RoutingReferences | None = None,
+        top_sampling_references: RoutingReferences | dict | None = None,
+    ) -> ModelInput:
         kwargs: dict = {"chunks": [EncodedTextChunk(tokens=tokens)]}
         kwargs.update(routing_model_input_kwargs(routing_matrices))
+        if top_sampling_references is not None:
+            kwargs.update(top_sampling_model_input_kwargs(top_sampling_references, len(tokens)))
         return cls(**kwargs)
 
     ModelInput.from_ints = from_ints  # type: ignore[assignment]
-    logger.info("R3 patch applied: routing_matrices added to ModelInput")
+    logger.info("R3 patch applied: routing and top-K sampling reference fields added to ModelInput")
 
 
 _apply_r3_patch()

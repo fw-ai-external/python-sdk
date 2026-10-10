@@ -19,7 +19,7 @@ from fireworks.training.sdk.patches._model_utils import rebuild_model
 logger = logging.getLogger(__name__)
 
 _SENTINEL = "_builtin_loss_fn_patch_applied"
-_FIREWORKS_BUILTIN_LOSS_FNS = ("dapo", "gspo")
+_FIREWORKS_BUILTIN_LOSS_FNS = ("dapo", "gspo", "dppo")
 
 
 def _apply_builtin_loss_fn_patch() -> None:

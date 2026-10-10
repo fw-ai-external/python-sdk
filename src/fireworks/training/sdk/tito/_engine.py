@@ -978,6 +978,7 @@ class _LinearTrajectoryCore:
         plan: _TurnPlan,
         result: SampledRequestResult,
         include_routing_matrix: bool,
+        include_top_sampling: bool,
     ) -> SampledCompletion:
         if len(result.completions) != 1:
             raise TITOError(
@@ -1057,6 +1058,14 @@ class _LinearTrajectoryCore:
                 "tito_completion_alignment_error",
                 502,
                 "completion-only routing matrices are not aligned with completion IDs",
+            )
+        if include_top_sampling and (
+            completion.top_sampling_references is None or len(completion.top_sampling_references) != len(output)
+        ):
+            raise TITOError(
+                "tito_completion_alignment_error",
+                502,
+                "top-K sampling references are not aligned with completion IDs",
             )
         return completion
 
@@ -1221,6 +1230,10 @@ class _LinearTrajectoryCore:
                         json.dumps(routing_to_wire(completion.routing_matrices))
                         if isinstance(completion.routing_matrices, RoutingReferences)
                         else completion.routing_matrices
+                    )
+                if completion.top_sampling_references is not None:
+                    sampled_arrays[f"{prefix}_top_sampling_references"] = json.dumps(
+                        routing_to_wire(completion.top_sampling_references)
                     )
         try:
             await self._record_async(
@@ -1674,6 +1687,7 @@ class _LinearTrajectoryCore:
             phase = "sampling_admission"
             sampling_kwargs = self._sampling_kwargs(state, request)
             include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
+            include_top_sampling = sampling_kwargs.get("top_sampling_format") == "parquet_v1"
             if include_routing and self.incremental_prompt_routing:
                 retained = 0
                 if plan.segment is not None:
@@ -1763,7 +1777,7 @@ class _LinearTrajectoryCore:
                     echoed_prompt_logprob_count=0,
                 )
                 sampled = replace(sampled, completions=[normalized])
-            completion = self._validate_completion(plan, sampled, include_routing)
+            completion = self._validate_completion(plan, sampled, include_routing, include_top_sampling)
             phase = "parser"
             parsed = self._parse(request, completion)
             if parsed.parser_fallback:
@@ -1813,6 +1827,7 @@ class _LinearTrajectoryCore:
                 routing_matrices=(
                     freeze_routing(completion.routing_matrices) if completion.routing_matrices is not None else None
                 ),
+                top_sampling_references=completion.top_sampling_references,
                 response_id=str(response["id"]),
                 finish_reason=completion.finish_reason,
                 prompt_disposition=plan.prompt_disposition,
@@ -1881,6 +1896,11 @@ class _LinearTrajectoryCore:
                 **(
                     {"routing_matrices": routing_to_wire(completion.routing_matrices)}
                     if completion.routing_matrices is not None
+                    else {}
+                ),
+                **(
+                    {"top_sampling_references": routing_to_wire(completion.top_sampling_references)}
+                    if completion.top_sampling_references is not None
                     else {}
                 ),
                 **(
@@ -2129,7 +2149,12 @@ class _LinearTrajectoryCore:
                 {"prepared_prompt_ids": prompt},
             )
             phase = "sampling_admission"
-            sampling_kwargs = self._sampling_kwargs(state, request)
+            # Auxiliary outputs are never trained, so they skip Parquet top-K publication.
+            sampling_kwargs = {
+                key: value
+                for key, value in self._sampling_kwargs(state, request).items()
+                if key not in ("top_sampling_logprobs", "top_sampling_format")
+            }
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")
             state.sampler_calls += 1
@@ -2191,6 +2216,7 @@ class _LinearTrajectoryCore:
                 ),
                 sampled,
                 bool(sampling_kwargs.get("include_routing_matrix", False)),
+                include_top_sampling=False,
             )
             phase = "parser"
             parsed = self._parse(request, completion)

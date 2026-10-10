@@ -126,6 +126,7 @@ class _CreateModelResponse(types.CreateModelResponse):
     # callers then fall back to probing the model. See supports_router_replay
     # on FiretitanTrainingClient.
     supports_router_replay: bool | None = None
+    supports_target_logprob_support: bool | None = None
     supports_rdma_weight_sync: bool = False
     model_config = {"protected_namespaces": ()}
 
@@ -140,7 +141,7 @@ class _CreateModelResponse(types.CreateModelResponse):
     def _known_routing_matrix_format(cls, value):
         return "parquet_v1" if value == "parquet_v1" else "base64_inline"
 
-    @field_validator("supports_router_replay", mode="before")
+    @field_validator("supports_router_replay", "supports_target_logprob_support", mode="before")
     @classmethod
     def _known_router_replay_capability(cls, value: Any) -> bool | None:
         # Only a real bool is a decision; anything else is "unknown" so the
@@ -165,6 +166,8 @@ class FiretitanSamplingParams(types.SamplingParams):
     """Tinker sampling parameters with optional FireTitan response fields."""
 
     include_routing_matrix: bool = False
+    top_sampling_logprobs: int | None = Field(default=None, gt=0, strict=True)
+    """When set, capture sampling support as completion-aligned Parquet references."""
     # Parquet R3 retention from file creation. None uses the serving default (6h).
     r3_ttl_seconds: int | None = Field(default=None, gt=0, strict=True)
 
@@ -174,6 +177,8 @@ class FiretitanSampledSequence(types.SampledSequence):
     """A Tinker sampled sequence with FireTitan-specific token metadata."""
 
     routing_matrices: list[str] | RoutingReferences | None = None
+    top_sampling_references: RoutingReferences | None = None
+    """Sampling-support rows for generated tokens only, independent of prompt echo."""
 
 
 @dataclass(frozen=True)
@@ -330,9 +335,16 @@ class FiretitanSamplingClient(SamplingClient):
         if seed is not None:
             kwargs["seed"] = seed
 
-        if isinstance(sampling_params, FiretitanSamplingParams) and sampling_params.include_routing_matrix:
-            kwargs["include_routing_matrix"] = True
-            if sampling_params.r3_ttl_seconds is not None:
+        if isinstance(sampling_params, FiretitanSamplingParams):
+            if sampling_params.include_routing_matrix:
+                kwargs["include_routing_matrix"] = True
+            if sampling_params.top_sampling_logprobs is not None:
+                kwargs["top_sampling_logprobs"] = sampling_params.top_sampling_logprobs
+                kwargs["top_sampling_format"] = "parquet_v1"
+            if (
+                sampling_params.include_routing_matrix
+                or sampling_params.top_sampling_logprobs is not None
+            ) and sampling_params.r3_ttl_seconds is not None:
                 kwargs["r3_ttl_seconds"] = sampling_params.r3_ttl_seconds
 
         return kwargs
@@ -438,6 +450,7 @@ class FiretitanSamplingClient(SamplingClient):
                         _tokens_list=completion_tokens,
                         _logprobs_list=sampled_logprobs,
                         routing_matrices=routing_matrices,
+                        top_sampling_references=completion.top_sampling_references,
                     )
                 )
             else:
@@ -1157,6 +1170,7 @@ def _create_base_only_training_client(
         r3_store_id=response.r3_store_id,
         routing_matrix_format=response.routing_matrix_format,
         supports_router_replay=getattr(response, "supports_router_replay", None),
+        supports_target_logprob_support=getattr(response, "supports_target_logprob_support", None),
     )
 
 
@@ -1554,6 +1568,27 @@ def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
     return byte_count
 
 
+def _top_sampling_references_wire_bytes(model_input: types.ModelInput) -> int:
+    references = getattr(model_input, "top_sampling_references", None)
+    if not isinstance(references, dict):
+        return 0
+    return len(json.dumps({"top_sampling_references": references}, separators=(",", ":")).encode())
+
+
+def _target_logprob_support(loss_fn_config: dict[str, float | str | bool] | None) -> str:
+    config = loss_fn_config or {}
+    for old_key in ("replay", "logprob_normalization", "importance_sampling"):
+        if old_key in config:
+            raise ValueError(
+                f"loss_fn_config.{old_key} is unsupported; use loss_fn_config.target_logprob_support "
+                "with 'full_vocabulary' or 'sampling_support'"
+            )
+    support = config.get("target_logprob_support", "full_vocabulary")
+    if not isinstance(support, str) or support not in ("full_vocabulary", "sampling_support"):
+        raise ValueError("loss_fn_config.target_logprob_support must be 'full_vocabulary' or 'sampling_support'")
+    return support
+
+
 class FiretitanTrainingClient(TrainingClient):
     """TrainingClient with firetitan-specific extensions.
 
@@ -1601,6 +1636,7 @@ class FiretitanTrainingClient(TrainingClient):
         r3_store_id: str | None = None,
         routing_matrix_format: RoutingMatrixFormat = "base64_inline",
         supports_router_replay: bool | None = None,
+        supports_target_logprob_support: bool | None = None,
         supports_rdma_weight_sync: bool = False,
     ):
         if comms not in ("v1", "v2"):
@@ -1615,6 +1651,7 @@ class FiretitanTrainingClient(TrainingClient):
         # on/off signal. Lets callers decide R3 without GET-ing the base model,
         # which a private early-access model rejects with 403.
         self.supports_router_replay = supports_router_replay if isinstance(supports_router_replay, bool) else None
+        self.supports_target_logprob_support = supports_target_logprob_support is True
         self._trainer_supports_rdma_weight_sync = supports_rdma_weight_sync is True
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         # Full CP resource name of the serverless training run this model is, i.e.
@@ -1745,6 +1782,7 @@ class FiretitanTrainingClient(TrainingClient):
             self.holder.estimate_bytes_count_in_model_input(datum.model_input)
             + sum(_tensor_value_count(value) * 10 for value in datum.loss_fn_inputs.values())
             + _routing_matrices_wire_bytes(datum.model_input)
+            + _top_sampling_references_wire_bytes(datum.model_input)
         )
 
     async def _run_chunked_requests(
@@ -1845,7 +1883,7 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         loss_fn: types.LossFnType,
-        loss_fn_config: dict[str, float] | None,
+        loss_fn_config: dict[str, float | str | bool] | None,
     ):
         request = types.ForwardRequest(
             forward_input=types.ForwardBackwardInput(
@@ -1864,9 +1902,11 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         data: list[types.Datum],
         loss_fn: types.LossFnType,
-        loss_fn_config: dict[str, float] | None = None,
+        loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         """Compute a forward pass, using Fireworks' JSON path with parallel chunks."""
+        if _target_logprob_support(loss_fn_config) == "sampling_support":
+            raise ValueError("target_logprob_support='sampling_support' requires forward_backward, not forward")
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         if getattr(client_config, "fwd_via_fwdbwd", False) and getattr(
@@ -1902,7 +1942,7 @@ class FiretitanTrainingClient(TrainingClient):
         request_id: int,
         data: list[types.Datum],
         loss_fn: types.LossFnType,
-        loss_fn_config: dict[str, float] | None,
+        loss_fn_config: dict[str, float | str | bool] | None,
     ) -> Any:
         request = types.ForwardBackwardRequest(
             forward_backward_input=types.ForwardBackwardInput(
@@ -2005,8 +2045,14 @@ class FiretitanTrainingClient(TrainingClient):
         self,
         data: list[types.Datum],
         loss_fn: types.LossFnType,
-        loss_fn_config: dict[str, float] | None = None,
+        loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
+        support = _target_logprob_support(loss_fn_config)
+        if support == "sampling_support" and not getattr(self, "supports_target_logprob_support", False):
+            raise ValueError(
+                "Trainer does not advertise target_logprob_support='sampling_support'; "
+                "upgrade the trainer or select target_logprob_support='full_vocabulary'"
+            )
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         proto_write = getattr(client_config, "proto_write_fwdbwd", False)
@@ -2423,9 +2469,18 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         operation: str,
     ) -> None:
-        """Log one client-side error when an R3 trainer request is invalid."""
+        """Reject invalid shared-storage references; log one client-side error for other R3 issues."""
         for datum in data:
             model_input = datum.model_input
+            top_sampling = getattr(model_input, "top_sampling_references", None)
+            if isinstance(top_sampling, dict):
+                if not self.r3_store_id:
+                    raise ValueError("Parquet top-K sampling references require trainer shared storage")
+                references = RoutingReferences.from_dict(top_sampling)
+                if references.length != model_input.length:
+                    raise ValueError("Top-K sampling references must match the model input token length")
+                if any(file["store_id"] != self.r3_store_id for file in references.files):
+                    raise ValueError("Top-K sampling reference belongs to a different shared storage domain")
             raw = getattr(model_input, "routing_references", None)
             if raw is None:
                 continue
@@ -3868,6 +3923,7 @@ class FiretitanServiceClient(ServiceClient):
             r3_store_id=response.r3_store_id,
             routing_matrix_format=response.routing_matrix_format,
             supports_router_replay=getattr(response, "supports_router_replay", None),
+            supports_target_logprob_support=getattr(response, "supports_target_logprob_support", None),
             supports_rdma_weight_sync=response.supports_rdma_weight_sync,
         )
         self._training_clients.append(training_client)

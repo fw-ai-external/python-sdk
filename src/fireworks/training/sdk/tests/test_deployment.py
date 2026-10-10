@@ -1912,6 +1912,9 @@ class TestFiretitanSamplingClient:
         assert isinstance(response.sequences[0], FiretitanSampledSequence)
         assert isinstance(response.sequences[0], tinker_types.SampledSequence)
         assert response.sequences[0].routing_matrices == ["matrix-1", "matrix-2"]
+        assert response.sequences[0].top_sampling_references is None
+        assert "top_sampling_logprobs" not in captured
+        assert "top_sampling_format" not in captured
 
     def test_sample_splits_echo_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]
@@ -1957,6 +1960,88 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].logprobs == [-0.33, -0.44]
         assert response.sequences[0].stop_reason == "length"
         assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
+
+    @pytest.mark.parametrize(
+        "echo,echoed_reference_rows", [(False, False), (True, False), (True, True)]
+    )
+    def test_sample_preserves_completion_sampling_support(
+        self, fake_tinker, echo, echoed_reference_rows
+    ):
+        sampler = _make_sampler(tokenizer=None)
+        sampler.r3_store_id = "test"
+        prompt_ids, completion_ids = [10, 20, 30], [40, 50]
+        captured = {}
+        row_count = 5 if echoed_reference_rows else 2
+
+        async def fake_stream(*_args, **kwargs):
+            captured.update(kwargs)
+            content = [
+                {"logprob": -0.3, "sampling_logprob": -0.33},
+                {"logprob": -0.4, "sampling_logprob": -0.44},
+            ]
+            if echo:
+                content = [
+                    {"logprob": lp, "sampling_logprob": None}
+                    for lp in [0.0, -0.1, -0.2]
+                ] + content
+            return {"choices": [{
+                "text": "out",
+                "finish_reason": "length",
+                "raw_output": {
+                    "completion_token_ids": (prompt_ids if echo else []) + completion_ids,
+                },
+                "logprobs": {"content": content},
+                "top_sampling_format": "parquet_v1",
+                "r3_store_id": "test",
+                "top_sampling_references": {
+                    "length": row_count,
+                    "files": [{
+                        "store_id": "test",
+                        "file_id": "00000000-0000-0000-0000-000000000001",
+                        "format": "parquet_v1",
+                        "row_count": row_count,
+                        "expires_at": 9999999999,
+                    }],
+                    "spans": [{
+                        "input_token_start": 0,
+                        "file_index": 0,
+                        "file_row_start": 0,
+                        "count": row_count,
+                    }],
+                },
+            }]}, ServerMetrics()
+
+        sampler.async_completions_stream = fake_stream
+        client = FiretitanSamplingClient(sampler)
+        try:
+            response = client.sample(
+                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                num_samples=1,
+                sampling_params=FiretitanSamplingParams(
+                    max_tokens=2, top_sampling_logprobs=256, r3_ttl_seconds=120,
+                ),
+                include_prompt_logprobs=echo,
+            ).result(timeout=5)
+        finally:
+            client.close()
+
+        sequence = response.sequences[0]
+        assert captured["top_sampling_logprobs"] == 256
+        assert captured["top_sampling_format"] == "parquet_v1"
+        assert captured["r3_ttl_seconds"] == 120
+        assert "include_routing_matrix" not in captured
+        assert sequence.tokens == completion_ids
+        assert sequence.logprobs == [-0.33, -0.44]
+        assert len(sequence.top_sampling_references) == len(completion_ids)
+        assert sequence.top_sampling_references.spans[0]["file_row_start"] == (
+            len(prompt_ids) if echoed_reference_rows else 0
+        )
+        assert response.prompt_logprobs == ([None, -0.1, -0.2] if echo else None)
+
+    @pytest.mark.parametrize("width", [0, -1, True, "256", 1.5])
+    def test_sampling_support_width_must_be_a_positive_integer(self, width):
+        with pytest.raises(ValueError):
+            FiretitanSamplingParams(top_sampling_logprobs=width)
 
     def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
         prompt_ids = [10, 20, 30]

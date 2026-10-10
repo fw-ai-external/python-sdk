@@ -25,6 +25,7 @@ from fireworks.training.sdk.tito import (
     TITOIncrementalPrompt,
     TrajectoryDriftPolicy,
 )
+from fireworks.training.sdk.routing import RoutingReferences
 from fireworks.training.sdk.sampling import (
     ServerMetrics,
     DeploymentSampler,
@@ -197,6 +198,23 @@ class FakeIncrementalRenderer(FakeRenderer):
         )
 
 
+def _top_sampling_refs(length: int, *, row_start: int = 0) -> RoutingReferences:
+    return RoutingReferences.from_dict(
+        {
+            "length": length,
+            "files": [
+                {
+                    "store_id": "store",
+                    "file_id": f"file-{row_start}",
+                    "format": "parquet_v1",
+                    "row_count": row_start + length,
+                }
+            ],
+            "spans": [{"input_token_start": 0, "count": length, "file_index": 0, "file_row_start": row_start}],
+        }
+    )
+
+
 class FakeSampler:
     def __init__(
         self,
@@ -212,6 +230,7 @@ class FakeSampler:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
         self.block = False
+        self.top_sampling_rows_delta = 0
 
     async def sample_with_prompt_tokens_result(
         self, prompt_token_ids: list[int], **kwargs: Any
@@ -248,6 +267,11 @@ class FakeSampler:
                     for _ in output
                 ]
                 if kwargs.get("top_logprobs")
+                else None
+            ),
+            top_sampling_references=(
+                _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
+                if kwargs.get("top_sampling_format") == "parquet_v1"
                 else None
             ),
         )
@@ -525,6 +549,47 @@ async def test_policy_turn_retains_sampler_topk_distribution() -> None:
         (197, 198),
         (3, 4),
     )
+
+
+async def test_policy_turns_record_completion_only_top_sampling_references() -> None:
+    sampler = FakeSampler(outputs=([197, 3], [198, 199, 3]))
+    engine = _engine(
+        sampler,
+        sampling_defaults={"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+    )
+    trajectory_id = engine.create_trajectory()
+
+    await engine.complete(trajectory_id, _first_request())
+    await engine.complete(trajectory_id, _second_request())
+    artifact = engine.finish(trajectory_id)
+
+    assert all(call["top_sampling_logprobs"] == 128 for call in sampler.calls)
+    assert all(call["top_sampling_format"] == "parquet_v1" for call in sampler.calls)
+    turns = [turn for segment in artifact.segments for turn in segment.turns]
+    assert [turn.top_sampling_references for turn in turns] == [
+        _top_sampling_refs(2, row_start=10),
+        _top_sampling_refs(3, row_start=20),
+    ]
+    restored = type(artifact).unpack(artifact.pack())
+    assert [turn.top_sampling_references for segment in restored.segments for turn in segment.turns] == [
+        turn.top_sampling_references for turn in turns
+    ]
+
+    auxiliary_sampler = FakeSampler(outputs=([197, 3],))
+    auxiliary = _engine(
+        auxiliary_sampler,
+        sampling_defaults={"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+        call_classifier=lambda _request: ("auxiliary", "test_auxiliary"),
+    )
+    await auxiliary.complete(auxiliary.create_trajectory(), _first_request())
+    assert not {"top_sampling_format", "top_sampling_logprobs"} & auxiliary_sampler.calls[0].keys()
+
+    misaligned = FakeSampler(outputs=([197, 3],))
+    misaligned.top_sampling_rows_delta = -1
+    engine = _engine(misaligned, sampling_defaults={"top_sampling_logprobs": 8, "top_sampling_format": "parquet_v1"})
+    trajectory_id = engine.create_trajectory()
+    with pytest.raises(TITOError, match="top-K sampling references"):
+        await engine.complete(trajectory_id, _first_request())
 
 
 async def test_default_full_history_mode_never_calls_incremental_renderer() -> None:

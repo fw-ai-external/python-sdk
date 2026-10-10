@@ -15,6 +15,7 @@ import fireworks.training.sdk.patches._tinker_tensor_validation_patch  # noqa: F
 import fireworks.training.sdk.patches._tinker_json_encoding_patch  # noqa: F401
 import fireworks.training.sdk.patches._discriminator_patch  # noqa: F401
 import fireworks.training.sdk.patches._builtin_loss_fn_patch  # noqa: F401
+import fireworks.training.sdk.patches._loss_fn_config_patch  # noqa: F401
 import fireworks.training.sdk.patches._tinker_lora_alpha_patch  # noqa: F401
 import fireworks.training.sdk.patches._tinker_grad_norm_metrics_patch  # noqa: F401
 import fireworks.training.sdk.patches._tinker_pyqwest_transport_patch  # noqa: F401

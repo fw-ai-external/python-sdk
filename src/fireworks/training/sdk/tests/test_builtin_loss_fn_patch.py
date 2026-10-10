@@ -22,10 +22,15 @@ class TestBuiltinLossFnPatch:
         loss_fns = _loss_fn_args()
         assert "dapo" in loss_fns
         assert "gspo" in loss_fns
+        assert "dppo" in loss_fns
 
     def test_gspo_validates(self):
         request = PydanticForwardBackwardInput(data=[], loss_fn="gspo")
         assert request.loss_fn == "gspo"
+
+    def test_dppo_validates(self):
+        request = PydanticForwardBackwardInput(data=[], loss_fn="dppo")
+        assert request.loss_fn == "dppo"
 
     def test_dapo_validates(self):
         request = PydanticForwardBackwardInput(data=[], loss_fn="dapo")
