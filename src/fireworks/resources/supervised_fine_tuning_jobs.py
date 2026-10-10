@@ -9,6 +9,7 @@ import httpx
 from ..types import (
     supervised_fine_tuning_job_get_params,
     supervised_fine_tuning_job_list_params,
+    supervised_fine_tuning_job_cancel_params,
     supervised_fine_tuning_job_create_params,
     supervised_fine_tuning_job_resume_params,
 )
@@ -377,6 +378,53 @@ class SupervisedFineTuningJobsResource(SyncAPIResource):
                 account_id=account_id,
                 supervised_fine_tuning_job_id=supervised_fine_tuning_job_id,
             ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
+    def cancel(
+        self,
+        supervised_fine_tuning_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Supervised Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not supervised_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
+            )
+        return self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:cancel",
+                account_id=account_id,
+                supervised_fine_tuning_job_id=supervised_fine_tuning_job_id,
+            ),
+            body=maybe_transform(body, supervised_fine_tuning_job_cancel_params.SupervisedFineTuningJobCancelParams),
             options=make_request_options(
                 extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
             ),
@@ -839,6 +887,55 @@ class AsyncSupervisedFineTuningJobsResource(AsyncAPIResource):
             cast_to=object,
         )
 
+    async def cancel(
+        self,
+        supervised_fine_tuning_job_id: str,
+        *,
+        account_id: str | None = None,
+        body: object,
+        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        # The extra values given here take precedence over values defined on the client or passed to this method.
+        extra_headers: Headers | None = None,
+        extra_query: Query | None = None,
+        extra_body: Body | None = None,
+        timeout: float | httpx.Timeout | None | NotGiven = not_given,
+    ) -> object:
+        """
+        Cancel Supervised Fine-tuning Job
+
+        Args:
+          extra_headers: Send extra headers
+
+          extra_query: Add additional query parameters to the request
+
+          extra_body: Add additional JSON properties to the request
+
+          timeout: Override the client-level default timeout for this request, in seconds
+        """
+        if account_id is None:
+            account_id = self._client._get_account_id_path_param()
+        if not account_id:
+            raise ValueError(f"Expected a non-empty value for `account_id` but received {account_id!r}")
+        if not supervised_fine_tuning_job_id:
+            raise ValueError(
+                f"Expected a non-empty value for `supervised_fine_tuning_job_id` but received {supervised_fine_tuning_job_id!r}"
+            )
+        return await self._post(
+            ("https://api.fireworks.ai" if not self._client._base_url_overridden else "")
+            + path_template(
+                "/v1/accounts/{account_id}/supervisedFineTuningJobs/{supervised_fine_tuning_job_id}:cancel",
+                account_id=account_id,
+                supervised_fine_tuning_job_id=supervised_fine_tuning_job_id,
+            ),
+            body=await async_maybe_transform(
+                body, supervised_fine_tuning_job_cancel_params.SupervisedFineTuningJobCancelParams
+            ),
+            options=make_request_options(
+                extra_headers=extra_headers, extra_query=extra_query, extra_body=extra_body, timeout=timeout
+            ),
+            cast_to=object,
+        )
+
     async def get(
         self,
         supervised_fine_tuning_job_id: str,
@@ -957,6 +1054,9 @@ class SupervisedFineTuningJobsResourceWithRawResponse:
         self.delete = to_raw_response_wrapper(
             supervised_fine_tuning_jobs.delete,
         )
+        self.cancel = to_raw_response_wrapper(
+            supervised_fine_tuning_jobs.cancel,
+        )
         self.get = to_raw_response_wrapper(
             supervised_fine_tuning_jobs.get,
         )
@@ -977,6 +1077,9 @@ class AsyncSupervisedFineTuningJobsResourceWithRawResponse:
         )
         self.delete = async_to_raw_response_wrapper(
             supervised_fine_tuning_jobs.delete,
+        )
+        self.cancel = async_to_raw_response_wrapper(
+            supervised_fine_tuning_jobs.cancel,
         )
         self.get = async_to_raw_response_wrapper(
             supervised_fine_tuning_jobs.get,
@@ -999,6 +1102,9 @@ class SupervisedFineTuningJobsResourceWithStreamingResponse:
         self.delete = to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.delete,
         )
+        self.cancel = to_streamed_response_wrapper(
+            supervised_fine_tuning_jobs.cancel,
+        )
         self.get = to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.get,
         )
@@ -1019,6 +1125,9 @@ class AsyncSupervisedFineTuningJobsResourceWithStreamingResponse:
         )
         self.delete = async_to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.delete,
+        )
+        self.cancel = async_to_streamed_response_wrapper(
+            supervised_fine_tuning_jobs.cancel,
         )
         self.get = async_to_streamed_response_wrapper(
             supervised_fine_tuning_jobs.get,

@@ -31,18 +31,27 @@ def test_dpo_use_reservation_uses_rest_alias() -> None:
 def test_training_reservation_target_uses_rest_alias() -> None:
     target = "accounts/test/reservations/team-training"
 
-    assert transform(
-        {"dataset": "dataset", "reservation_target": target},
-        expected_type=SupervisedFineTuningJobCreateParams,
-    )["reservationTarget"] == target
-    assert transform(
-        {"dataset": "dataset", "reservation_target": target},
-        expected_type=DpoJobCreateParams,
-    )["reservationTarget"] == target
-    assert transform(
-        {"dataset": "dataset", "evaluator": "evaluators/test", "reservation_target": target},
-        expected_type=ReinforcementFineTuningJobCreateParams,
-    )["reservationTarget"] == target
+    assert (
+        transform(
+            {"dataset": "dataset", "reservation_target": target},
+            expected_type=SupervisedFineTuningJobCreateParams,
+        )["reservationTarget"]
+        == target
+    )
+    assert (
+        transform(
+            {"dataset": "dataset", "reservation_target": target},
+            expected_type=DpoJobCreateParams,
+        )["reservationTarget"]
+        == target
+    )
+    assert (
+        transform(
+            {"dataset": "dataset", "evaluator": "evaluators/test", "reservation_target": target},
+            expected_type=ReinforcementFineTuningJobCreateParams,
+        )["reservationTarget"]
+        == target
+    )
 
 
 def test_job_response_models_expose_use_reservation() -> None:
@@ -119,3 +128,40 @@ def test_managed_job_create_payload_sends_reservation_target() -> None:
     )
 
     assert [payload["reservationTarget"] for payload in payloads] == [target, target, target]
+
+
+def test_managed_training_cancel_uses_cancel_endpoint() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    client = Fireworks(
+        api_key="test-key",
+        base_url="http://test.local",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    client.supervised_fine_tuning_jobs.cancel(
+        account_id="test",
+        supervised_fine_tuning_job_id="sft-job",
+        body={},
+    )
+    client.dpo_jobs.cancel(
+        account_id="test",
+        dpo_job_id="dpo-job",
+        body={},
+    )
+    client.reinforcement_fine_tuning_steps.cancel(
+        account_id="test",
+        rlor_trainer_job_id="rlor-job",
+        body={},
+    )
+
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("POST", "/v1/accounts/test/supervisedFineTuningJobs/sft-job:cancel"),
+        ("POST", "/v1/accounts/test/dpoJobs/dpo-job:cancel"),
+        ("POST", "/v1/accounts/test/rlorTrainerJobs/rlor-job:cancel"),
+    ]
+    assert [json.loads(request.content) for request in requests] == [{}, {}, {}]
