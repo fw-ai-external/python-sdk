@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.23 (2026-10-10)
+
+Full Changelog: [v1.2.22...v1.2.23](https://github.com/fw-ai-external/python-sdk/compare/v1.2.22...v1.2.23)
+
+### Bug Fixes
+* **dependencies:** update runtime and development locks to multidict 6.9.1 to fix a native reference leak
+
 ## 1.2.22 (2026-10-10)
 
 Full Changelog: [v1.2.21...v1.2.22](https://github.com/fw-ai-external/python-sdk/compare/v1.2.21...v1.2.22)
