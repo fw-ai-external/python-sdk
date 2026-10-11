@@ -1363,6 +1363,8 @@ class TestSampleWithTokens:
         assert c.full_tokens == prompt_ids + [400, 500]
         assert c.completion_len == 2
         assert c.logprobs_echoed is False
+        assert c.inference_logprobs is None
+        assert c.sampling_logprobs is None
         sampler.close()
 
     def test_echo_logprobs_aligned(self):

@@ -1583,7 +1583,7 @@ class DeploymentSampler(_RestClient):
                 # Only a full echo contains the unconditional first-token row.
                 drop = int(echo_count == len(prompt_for_full))
                 echoed_count = echo_count - drop
-                lp_is_echo = True
+                lp_is_echo = raw_logprobs is not None or sampling_logprobs is not None
                 if raw_logprobs is not None:
                     raw_logprobs = raw_logprobs[drop:]
                 if sampling_logprobs is not None:
