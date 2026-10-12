@@ -921,18 +921,16 @@ class TestPollUntilReady:
             "JOB_STATE_DELETING",
         ],
     )
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "get")
     def test_stopped_state_fails_fast_instead_of_waiting_for_readiness_timeout(
         self,
         mock_get,
-        mock_time,
-        mock_sleep,
+        mock_clock,
         mgr,
         state,
     ):
-        mock_time.side_effect = [0.0, 60.0]
+        mock_clock.time.side_effect = [0.0, 60.0]
         mock_get.return_value = {"state": state, "status": {"message": "Service cancelled"}}
 
         with pytest.raises(RuntimeError, match=f"stopped in {state} before it became ready") as exc_info:
@@ -942,16 +940,14 @@ class TestPollUntilReady:
         assert "Service cancelled" in str(exc_info.value)
         assert mock_get.call_count == 1
 
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
     @patch.object(TrainerJobManager, "get")
     def test_stopped_state_tolerated_while_a_resume_settles(
         self,
         mock_get,
         mock_healthz,
-        mock_time,
-        mock_sleep,
+        mock_clock,
         mgr,
     ):
         mock_get.side_effect = [
@@ -959,26 +955,24 @@ class TestPollUntilReady:
             {"state": "JOB_STATE_PENDING"},
             {"state": "JOB_STATE_RUNNING"},
         ]
-        mock_time.side_effect = [0.0, 1.0, 2.0, 3.0]
+        mock_clock.time.side_effect = [0.0, 1.0, 2.0, 3.0]
 
         result = mgr._poll_until_ready("job-1", "name", timeout_s=3600, pending_timeout_s=600)
 
         assert result.job_id == "job-1"
 
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "get")
-    def test_timeout_raises(self, mock_get, mock_time, mock_sleep, mgr):
-        mock_time.side_effect = [0.0, 0.0, 6.0]
+    def test_timeout_raises(self, mock_get, mock_clock, mgr):
+        mock_clock.time.side_effect = [0.0, 0.0, 6.0]
         mock_get.return_value = {"state": "JOB_STATE_CREATING"}
         with pytest.raises(TimeoutError, match="not become ready"):
             mgr._poll_until_ready("job-1", "name", timeout_s=5)
 
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "get")
-    def test_pending_uses_separate_capacity_timeout(self, mock_get, mock_time, mock_sleep, mgr):
-        mock_time.side_effect = [0.0, 0.0, 6.0]
+    def test_pending_uses_separate_capacity_timeout(self, mock_get, mock_clock, mgr):
+        mock_clock.time.side_effect = [0.0, 0.0, 6.0]
         mock_get.return_value = {"state": "JOB_STATE_PENDING"}
 
         with pytest.raises(TimeoutError, match="pending for capacity"):
@@ -989,16 +983,14 @@ class TestPollUntilReady:
                 pending_timeout_s=5,
             )
 
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "_check_healthz", return_value=True)
     @patch.object(TrainerJobManager, "get")
     def test_readiness_clock_starts_after_pending(
         self,
         mock_get,
         mock_healthz,
-        mock_time,
-        mock_sleep,
+        mock_clock,
         mgr,
     ):
         mock_get.side_effect = [
@@ -1006,7 +998,7 @@ class TestPollUntilReady:
             {"state": "JOB_STATE_CREATING"},
             {"state": "JOB_STATE_RUNNING"},
         ]
-        mock_time.side_effect = [0.0, 9.0, 9.0, 13.0]
+        mock_clock.time.side_effect = [0.0, 9.0, 9.0, 13.0]
 
         result = mgr._poll_until_ready(
             "job-1",
@@ -1071,10 +1063,9 @@ class TestReconnectAndWait:
         result = mgr.reconnect_and_wait("j")
         assert result is ep
 
-    @patch("fireworks.training.sdk.trainer.time.sleep")
-    @patch("fireworks.training.sdk.trainer.time.time")
+    @patch("fireworks.training.sdk.trainer.time", spec=["time", "sleep"])
     @patch.object(TrainerJobManager, "get")
-    def test_stuck_state_raises(self, mock_get, mock_time, mock_sleep, mgr):
+    def test_stuck_state_raises(self, mock_get, mock_clock, mgr):
         call_count = 0
 
         def fake_time():
@@ -1082,7 +1073,7 @@ class TestReconnectAndWait:
             call_count += 1
             return 0.0 if call_count <= 4 else 200.0
 
-        mock_time.side_effect = fake_time
+        mock_clock.time.side_effect = fake_time
         mock_get.return_value = {"state": "JOB_STATE_CREATING"}
         with pytest.raises(RuntimeError, match="stuck"):
             mgr.reconnect_and_wait("j", max_wait_for_resumable_s=5)

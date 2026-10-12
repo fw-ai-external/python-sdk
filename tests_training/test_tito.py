@@ -57,7 +57,7 @@ def test_public_sidecar_import_does_not_load_torch_or_trainer_stack() -> None:
             **os.environ,
             "PYTHONPATH": os.pathsep.join(
                 (
-                    str(Path(__file__).resolve().parents[4]),
+                    str(Path(__file__).resolve().parents[1] / "src"),
                     os.environ.get("PYTHONPATH", ""),
                 )
             ),

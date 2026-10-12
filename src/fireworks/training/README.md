@@ -147,8 +147,13 @@ print(profile.supports_lora)  # bool
 
 ## Tests
 
+Run the optional training suite from the repository root on Python 3.11+.
+It is separate from the base SDK's `tests/` suite, which supports Python 3.9
+and Pydantic v1.
+
 ```bash
-pytest src/fireworks/training/sdk/tests
+pip install -e '.[training-sdk]' torch numpy openai transformers pytest pytest-asyncio pytest-timeout
+pytest tests_training
 ```
 
 Generic trainer/deployment argument and value overrides are opt-in testing

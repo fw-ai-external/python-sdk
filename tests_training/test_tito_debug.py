@@ -106,7 +106,7 @@ def test_quota_failure_does_not_advance_event_sequence(tmp_path) -> None:
 async def test_engine_fails_loudly_when_enabled_debug_storage_is_full(
     tmp_path,
 ) -> None:
-    from fireworks.training.sdk.tests.test_tito import FakeSampler, FakeRenderer
+    from tests_training.test_tito import FakeSampler, FakeRenderer
 
     sink = TITOLocalDebugSink(_config(tmp_path, max_local_bytes=300))
     engine = _LinearTrajectoryCore(

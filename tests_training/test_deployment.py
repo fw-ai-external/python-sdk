@@ -717,10 +717,12 @@ class TestReattachTrainer:
         ready_new = replace(updating_new, state="READY")
         mgr.get = MagicMock(side_effect=[existing, ready_old, updating_new, ready_new])
         mgr.update = MagicMock(return_value=updating_new)
-        monkeypatch.setattr("fireworks.training.sdk.deployment.time.sleep", lambda _seconds: None)
         monkeypatch.setattr(
-            "fireworks.training.sdk.deployment.time.time",
-            MagicMock(side_effect=[0, 0.75, 0.9, 1.5, 1.75]),
+            "fireworks.training.sdk.deployment.time",
+            pytypes.SimpleNamespace(
+                time=MagicMock(side_effect=[0, 0.75, 0.9, 1.5, 1.75]),
+                sleep=lambda _seconds: None,
+            ),
         )
 
         result = mgr.reattach_trainer(

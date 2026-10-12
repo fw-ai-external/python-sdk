@@ -14,9 +14,9 @@ import httpx
 import pytest
 from openai import AsyncOpenAI
 
+from tests_training.test_tito import FakeSampler, FakeRenderer
 from fireworks.training.sdk.tito import TITOSidecar, TITOChatRequest, TITOParsedAssistant, TrajectoryDriftPolicy
 from fireworks.training.sdk.tito._artifact import _turn, _request, _turn_value, _request_value
-from fireworks.training.sdk.tests.test_tito import FakeSampler, FakeRenderer
 
 _ARGUMENTS = ('{ "z": 1, "a": {"y": 2, "b": 3} }', '{"path":"x","command":"ls"}')
 _CALLS = [
@@ -172,14 +172,13 @@ def test_stream_indices_normalize_only_at_request_admission() -> None:
 
 @pytest.mark.parametrize("address", ["127.0.0.2", "::1"])
 async def test_sidecar_binds_and_advertises_specific_address(address: str) -> None:
-    if address == "::1":
-        probe = socket.socket(socket.AF_INET6)
-        try:
-            probe.bind((address, 0))
-        except OSError:
-            pytest.skip("IPv6 loopback is unavailable")
-        finally:
-            probe.close()
+    probe = socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET)
+    try:
+        probe.bind((address, 0))
+    except OSError:
+        pytest.skip(f"Loopback address {address} is unavailable")
+    finally:
+        probe.close()
     sidecar = _sidecar(bind_address=address)
     await sidecar.start()
     try:

@@ -23,7 +23,7 @@ The reusable comparison logic lives in :class:`SamplingFormatComparator`, which
 is import-safe to reuse from notebooks/scripts.
 
 Run just this file:
-    pytest src/fireworks/training/sdk/tests/test_firetitan_tinker_compat.py -v
+    pytest tests_training/test_firetitan_tinker_compat.py -v
 Run the live layer too:
     FIRETITAN_LIVE=1 pytest -k LiveFormatCompat -v
 """
