@@ -11,6 +11,7 @@ import logging
 import warnings
 from math import ceil
 from typing import TYPE_CHECKING, Any, List, Literal, Mapping
+from collections import deque
 from dataclasses import dataclass
 
 import httpx
@@ -63,6 +64,14 @@ _STORAGE_REFERENCE_FIELDS = (
     "top_sampling_format",
 )
 
+# Per-attempt ServerMetrics retained between drains. A training step drains
+# far fewer; the cap only bounds memory for callers that never drain.
+_RECENT_METRICS_MAX = 65_536
+# Most recent attempts kept for timeout diagnostics, independent of drains,
+# and how long one stays "recent".
+_DIAGNOSTIC_METRICS_MAX = 32
+_DIAGNOSTIC_MAX_AGE_S = 600.0
+
 # =============================================================================
 # DeploymentSampler — completions API with client-side tokenization
 # =============================================================================
@@ -89,11 +98,20 @@ class ServerMetrics:
     generation_duration: float | None = None
     client_ttft: float | None = None
     """Client-measured time-to-first-token (seconds).  Only set for streaming."""
+    client_latency: float | None = None
+    """Client-measured seconds from sending this attempt to its final stream
+    chunk. Compare with ``server_processing_time`` to separate serving time
+    from transport and gateway overhead.  Only set for completed streams."""
+    completion_tokens: int | None = None
+    """Generated tokens reported by the response ``usage`` block."""
     http_status_code: int | None = None
     transport_error: bool = False
     """True when the attempt failed below HTTP (connect/read/write error)."""
     retry_attempt: int | None = None
     """1-based attempt index that produced this observation."""
+    error: str | None = None
+    """Why this attempt failed (for example ``"HTTP 503"`` or ``"SSE truncation"``);
+    ``None`` when it completed."""
     response_request_id: str | None = None
     """Request ID returned by the inference gateway for log correlation."""
     backend_host: str | None = None
@@ -109,6 +127,8 @@ class ServerMetrics:
         client_ttft: float | None = None,
         http_status_code: int | None = None,
         retry_attempt: int | None = None,
+        client_latency: float | None = None,
+        completion_tokens: int | None = None,
     ) -> "ServerMetrics":
         """Parse server metrics from HTTP response headers."""
 
@@ -155,6 +175,8 @@ class ServerMetrics:
             prefill_duration=_float("prefill-duration"),
             generation_duration=_float("generation-duration"),
             client_ttft=client_ttft,
+            client_latency=client_latency,
+            completion_tokens=completion_tokens,
             http_status_code=http_status_code,
             retry_attempt=retry_attempt,
             response_request_id=_string("x-request-id"),
@@ -271,7 +293,10 @@ class DeploymentSampler(_RestClient):
         super().__init__(api_key=api_key, base_url=inference_url, additional_headers=additional_headers)
         self.model = model
         self.tokenizer = tokenizer
-        self._recent_metrics: list[ServerMetrics] = []
+        # Bounded so a caller that never drains cannot grow memory without
+        # limit; drain once per training step to observe every request.
+        self._recent_metrics: deque[ServerMetrics] = deque(maxlen=_RECENT_METRICS_MAX)
+        self._diagnostic_metrics: deque[tuple[float, ServerMetrics]] = deque(maxlen=_DIAGNOSTIC_METRICS_MAX)
         self._warned_missing_sampling_logprob_fallback = False
         # Optional non-sensitive identity (session/run/checkpoint/step) attached
         # to the structured error so a failure is attributable. A plain dict;
@@ -524,7 +549,9 @@ class DeploymentSampler(_RestClient):
         prompt_len = len(prompt)
 
         for hotload_attempt in range(hotload_max_retries + 1):
-            t0 = time.time()
+            # Timed from the completion request itself; the shared R3 format
+            # probe and a pre-generation fallback are not part of it.
+            t0 = time.monotonic()
             try:
                 if kwargs.get("include_routing_matrix"):
                     await self._ensure_routing_matrix_format(headers, http_timeout)
@@ -532,6 +559,7 @@ class DeploymentSampler(_RestClient):
                         payload.pop("include_routing_matrix", None)
                         payload["routing_matrix_format"] = "parquet_v1"
                         self._set_shared_storage_headers(headers, r3_ttl_seconds)
+                t0 = time.monotonic()
                 resp = await self._post_completion(payload, headers, http_timeout)
                 if (
                     payload.get("routing_matrix_format") == "parquet_v1"
@@ -545,6 +573,7 @@ class DeploymentSampler(_RestClient):
                     headers = {
                         key: value for key, value in headers.items() if key not in (R3_STORE_HEADER, R3_TTL_HEADER)
                     }
+                    t0 = time.monotonic()
                     resp = await self._post_completion(payload, headers, http_timeout)
             except httpx.HTTPStatusError as exc:
                 resp = exc.response
@@ -604,7 +633,7 @@ class DeploymentSampler(_RestClient):
                     text_delta = choice.get("text", "")
                     if text_delta:
                         if first_token_time is None:
-                            first_token_time = time.time()
+                            first_token_time = time.monotonic()
                         accumulated_text += text_delta
 
                     lp = choice.get("logprobs")
@@ -640,6 +669,8 @@ class DeploymentSampler(_RestClient):
                 )
 
             client_ttft = (first_token_time - t0) if first_token_time else None
+            elapsed = time.monotonic() - t0
+            completion_tokens = usage_info.get("completion_tokens") if usage_info else None
 
             # Build ServerMetrics: prefer perf_metrics from final chunk
             # (has complete timing), fall back to HTTP headers (partial).
@@ -651,6 +682,12 @@ class DeploymentSampler(_RestClient):
                 metrics_source,
                 client_ttft=client_ttft,
                 http_status_code=resp.status_code,
+                client_latency=elapsed,
+                completion_tokens=(
+                    completion_tokens
+                    if isinstance(completion_tokens, int) and not isinstance(completion_tokens, bool)
+                    else None
+                ),
             )
 
             assembled_choice: dict[str, Any] = {
@@ -668,7 +705,6 @@ class DeploymentSampler(_RestClient):
             if usage_info:
                 result["usage"] = usage_info
 
-            elapsed = time.time() - t0
             logger.debug(
                 "Stream completions: prompt=%d, text_len=%d, %.1fs",
                 prompt_len,
@@ -944,15 +980,44 @@ class DeploymentSampler(_RestClient):
         if self._concurrency_controller is not None:
             await self._concurrency_controller.acquire()
 
-    def _release_concurrency(self, server_metrics: ServerMetrics | None = None) -> None:
-        """Release a concurrency slot, feeding metrics to the controller."""
-        if server_metrics is not None:
-            self._recent_metrics.append(server_metrics)
+    def _release_concurrency(
+        self,
+        server_metrics: ServerMetrics | None = None,
+        attempt_record: ServerMetrics | None = None,
+    ) -> None:
+        """Release a concurrency slot, feeding ``server_metrics`` to the controller.
+
+        ``attempt_record`` (defaulting to ``server_metrics``) is the telemetry
+        record of this attempt; it never reaches the controller, so failures the
+        controller does not treat as congestion signals stay invisible to it.
+        """
+        record = attempt_record if attempt_record is not None else server_metrics
+        if record is not None:
+            self._recent_metrics.append(record)
+            # Only observations timeout diagnostics can use, so a burst of
+            # metricless failures cannot evict the last serving-pressure evidence.
+            if any(
+                value is not None
+                for value in (
+                    record.prefill_queue_duration,
+                    record.generation_queue_duration,
+                    record.client_ttft,
+                    record.num_concurrent_requests,
+                )
+            ):
+                self._diagnostic_metrics.append((time.monotonic(), record))
         if self._concurrency_controller is not None:
             self._concurrency_controller.release(server_metrics)
 
     def drain_metrics(self) -> list[ServerMetrics]:
-        """Return and clear all collected ServerMetrics since last drain."""
+        """Return and clear the ServerMetrics collected since the last drain.
+
+        One record is kept per completed or failed attempt, up to the most
+        recent ``_RECENT_METRICS_MAX``; older records are discarded first.
+        Every record carries its 1-based ``retry_attempt``; failed attempts set
+        ``error``. Cancelled attempts are not recorded. Draining does not
+        affect the recent history that timeout diagnostics read.
+        """
         out = list(self._recent_metrics)
         self._recent_metrics.clear()
         return out
@@ -1041,7 +1106,8 @@ class DeploymentSampler(_RestClient):
         return f"{value:.1f}s"
 
     def _recent_metrics_diagnostic(self) -> list[str]:
-        recent = self._recent_metrics[-32:]
+        oldest = time.monotonic() - _DIAGNOSTIC_MAX_AGE_S
+        recent = [record for observed, record in self._diagnostic_metrics if observed >= oldest]
         if not recent:
             return []
 
@@ -1268,6 +1334,8 @@ class DeploymentSampler(_RestClient):
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             await self._acquire_concurrency()
             server_metrics: ServerMetrics | None = None
+            # Telemetry-only record for failures the controller never observes.
+            attempt_record: ServerMetrics | None = None
             transient: BaseException | None = None
             label = ""
             try:
@@ -1279,13 +1347,22 @@ class DeploymentSampler(_RestClient):
                     logical_request_id=logical_request_id,
                     **kwargs,
                 )
+                server_metrics.retry_attempt = attempt
             except _SSETruncationError as e:
+                # HTTP 200 whose stream closed before completing.
+                attempt_record = ServerMetrics(http_status_code=200, retry_attempt=attempt, error="SSE truncation")
                 transient, label = e, "SSE truncation"
             except httpx.HTTPStatusError as e:
                 if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
                     # Non-retryable (e.g. 400/401/403/404/409/422): fail fast
                     # with the same raw HTTP error and additive private context.
                     self._attach_serverless_gateway_source(e, e)
+                    attempt_record = ServerMetrics.from_headers(
+                        dict(e.response.headers),
+                        http_status_code=e.response.status_code,
+                        retry_attempt=attempt,
+                    )
+                    attempt_record.error = f"HTTP {e.response.status_code}"
                     server_attempts.append(
                         SampledServerAttempt(
                             index=attempt,
@@ -1293,7 +1370,7 @@ class DeploymentSampler(_RestClient):
                             status_code=e.response.status_code,
                             error_kind=self._classify_transient(e),
                             response_request_id=extract_request_id(e.response.headers),
-                            server_metrics=ServerMetrics.from_headers(dict(e.response.headers)),
+                            server_metrics=attempt_record,
                         )
                     )
                     self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
@@ -1303,15 +1380,19 @@ class DeploymentSampler(_RestClient):
                     http_status_code=e.response.status_code,
                     retry_attempt=attempt,
                 )
+                server_metrics.error = f"HTTP {e.response.status_code}"
                 transient, label = e, f"HTTP {e.response.status_code}"
             except self._RETRY_HTTPX_CONNECTION_EXC as e:
-                server_metrics = ServerMetrics(transport_error=True, retry_attempt=attempt)
+                server_metrics = ServerMetrics(
+                    transport_error=True, retry_attempt=attempt, error=type(e).__name__
+                )
                 transient, label = e, type(e).__name__
             except asyncio.CancelledError as e:
                 server_attempts.append(SampledServerAttempt(index=attempt, outcome="cancelled"))
                 self._attach_attempt_context(e, logical_request_id, attempt, server_attempts)
                 raise
             except Exception as e:
+                attempt_record = ServerMetrics(retry_attempt=attempt, error=type(e).__name__)
                 server_attempts.append(
                     SampledServerAttempt(
                         index=attempt,
@@ -1326,7 +1407,7 @@ class DeploymentSampler(_RestClient):
                 # rollout timeout or scheduler shutdown), and contract/parser
                 # failures may bypass the retryable exception branches above.
                 # Every successful acquire must release exactly once.
-                self._release_concurrency(server_metrics)
+                self._release_concurrency(server_metrics, attempt_record)
 
             if transient is None:
                 try:
@@ -1342,6 +1423,10 @@ class DeploymentSampler(_RestClient):
                         top_sampling_requested=self._top_sampling_parquet_requested(kwargs),
                     )
                 except Exception as e:
+                    # The attempt's record is already drained-visible; mark that same
+                    # record failed (the controller already consumed it unchanged).
+                    if server_metrics is not None:
+                        server_metrics.error = type(e).__name__
                     upstream_response_id = str(result["id"]) if result.get("id") else None
                     server_attempts.append(
                         SampledServerAttempt(

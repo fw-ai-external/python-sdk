@@ -2679,6 +2679,272 @@ class TestStreamingCompletions:
         assert summary["avg_pq"] == pytest.approx(0.1)
         sampler.close()
 
+    def test_drained_metrics_include_client_latency_and_usage(self):
+        import json as _json
+
+        prompt_ids = [1, 2, 3]
+        sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
+        chunk_data = {
+            "choices": [{
+                "text": "hello",
+                "raw_output": {"completion_token_ids": [400, 500]},
+                "finish_reason": "stop",
+            }],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+            "perf_metrics": {"server-processing-time": "0.25"},
+        }
+        raw_bytes = f"data: {_json.dumps(chunk_data)}\n\ndata: [DONE]\n\n".encode()
+
+        async def mock_post(*args, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            resp.headers = {"x-request-id": "req-1"}
+
+            async def aiter_bytes():
+                yield raw_bytes
+
+            resp.aiter_bytes = aiter_bytes
+            return resp
+
+        sampler._get_async_client = MagicMock()
+        sampler._get_async_client.return_value.post = mock_post
+
+        asyncio.run(sampler.sample_with_tokens(messages=[{"role": "user", "content": "hi"}]))
+
+        [metrics] = sampler.drain_metrics()
+        assert metrics.completion_tokens == 2
+        assert metrics.server_processing_time == pytest.approx(0.25)
+        assert metrics.client_latency is not None and metrics.client_latency >= 0
+        assert metrics.response_request_id == "req-1"
+        assert sampler.drain_metrics() == []
+        sampler.close()
+
+    def test_undrained_metrics_are_bounded(self, monkeypatch):
+        from fireworks.training.sdk import sampling as sampling_module
+
+        monkeypatch.setattr(sampling_module, "_RECENT_METRICS_MAX", 4)
+        sampler = _make_sampler()
+        for index in range(6):
+            sampler._release_concurrency(ServerMetrics(prompt_tokens=index))
+
+        assert [m.prompt_tokens for m in sampler.drain_metrics()] == [2, 3, 4, 5]
+        sampler.close()
+
+
+class TestAttemptRecords:
+    """Contract: ``drain_metrics`` holds one record per completed or failed attempt,
+    each with its 1-based ``retry_attempt``; failures set ``error``. The
+    concurrency controller still sees only its congestion inputs, and draining
+    does not erase the history timeout diagnostics read."""
+
+    @staticmethod
+    def _no_backoff(monkeypatch):
+        import random as _random
+
+        monkeypatch.setattr(_random, "random", lambda: 0.0)
+
+        async def _no_sleep(_s):
+            return None
+
+        monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+    @staticmethod
+    def _http_error(status: int) -> httpx.HTTPStatusError:
+        request = httpx.Request("POST", "https://example.invalid/v1/completions")
+        response = httpx.Response(status, request=request, headers={"x-request-id": f"req-{status}"})
+        return httpx.HTTPStatusError(f"HTTP {status}", request=request, response=response)
+
+    @staticmethod
+    def _success():
+        return {
+            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {"completion_token_ids": [7]}}]
+        }, ServerMetrics(server_processing_time=0.1)
+
+    def _run(self, monkeypatch, failures, *, controller=None):
+        self._no_backoff(monkeypatch)
+        sampler = _make_sampler(tokenizer=None)
+        if controller is not None:
+            sampler._concurrency_controller = controller
+        attempts = {"n": 0}
+
+        async def _fake(*args, **kwargs):
+            attempts["n"] += 1
+            if attempts["n"] <= len(failures):
+                raise failures[attempts["n"] - 1]
+            return self._success()
+
+        sampler.async_completions_stream = _fake
+        error = None
+        try:
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+        except Exception as exc:  # noqa: BLE001 -- the terminal case is asserted by the caller
+            error = exc
+        records = sampler.drain_metrics()
+        sampler.close()
+        return records, error
+
+    @staticmethod
+    def _summary(records):
+        return [(r.retry_attempt, r.http_status_code, r.error) for r in records]
+
+    def test_retryable_http_failure_then_success(self, monkeypatch):
+        records, error = self._run(monkeypatch, [self._http_error(503)])
+        assert error is None
+        assert self._summary(records) == [(1, 503, "HTTP 503"), (2, None, None)]
+
+    def test_sse_truncation_then_success(self, monkeypatch):
+        records, error = self._run(monkeypatch, [_SSETruncationError("truncated")])
+        assert error is None
+        assert self._summary(records) == [(1, 200, "SSE truncation"), (2, None, None)]
+
+    def test_terminal_client_error_is_recorded(self, monkeypatch):
+        records, error = self._run(monkeypatch, [self._http_error(400)])
+        assert isinstance(error, httpx.HTTPStatusError)
+        assert self._summary(records) == [(1, 400, "HTTP 400")]
+        assert records[0].response_request_id == "req-400"
+
+    def test_controller_sees_only_its_congestion_inputs(self, monkeypatch):
+        released = []
+        controller = MagicMock()
+
+        async def _acquire():
+            return None
+
+        controller.acquire = _acquire
+        controller.release = lambda metrics=None: released.append(metrics)
+        failures = [_SSETruncationError("truncated"), self._http_error(503)]
+        records, error = self._run(monkeypatch, failures, controller=controller)
+        assert error is None
+        # Truncation stays invisible to the controller; 503 and success reach it.
+        assert released[0] is None
+        assert released[1].http_status_code == 503
+        assert released[2] is records[2]
+
+    def test_draining_keeps_timeout_diagnostic_history(self):
+        sampler = _make_sampler(tokenizer=None)
+        sampler._release_concurrency(ServerMetrics(prefill_queue_duration=2.0, num_concurrent_requests=5))
+        assert len(sampler.drain_metrics()) == 1
+        assert sampler.drain_metrics() == []
+        diagnostic = sampler._recent_metrics_diagnostic()
+        assert "recent_prefill_queue_p95=2.0s" in diagnostic
+        assert "recent_concurrent_requests_max=5" in diagnostic
+        sampler.close()
+
+    def test_metricless_failures_do_not_evict_timeout_evidence(self):
+        sampler = _make_sampler(tokenizer=None)
+        sampler._release_concurrency(ServerMetrics(prefill_queue_duration=5.0))
+        for attempt in range(1, 41):
+            sampler._release_concurrency(ServerMetrics(transport_error=True, retry_attempt=attempt, error="ReadTimeout"))
+        assert len(sampler.drain_metrics()) == 41
+        assert "recent_prefill_queue_p95=5.0s" in sampler._recent_metrics_diagnostic()
+        sampler.close()
+
+    def test_timeout_evidence_expires(self, monkeypatch):
+        from fireworks.training.sdk import sampling as sampling_module
+
+        clock = {"now": 1000.0}
+        monkeypatch.setattr(sampling_module.time, "monotonic", lambda: clock["now"])
+        sampler = _make_sampler(tokenizer=None)
+        sampler._release_concurrency(ServerMetrics(prefill_queue_duration=5.0))
+        assert "recent_prefill_queue_p95=5.0s" in sampler._recent_metrics_diagnostic()
+        clock["now"] += sampling_module._DIAGNOSTIC_MAX_AGE_S + 1
+        assert sampler._recent_metrics_diagnostic() == []
+        sampler.close()
+
+    def test_parser_rejection_marks_the_same_attempt_failed(self, monkeypatch):
+        import json as _json
+
+        self._no_backoff(monkeypatch)
+        released = []
+        controller = MagicMock()
+
+        async def _acquire():
+            return None
+
+        controller.acquire = _acquire
+        controller.release = lambda metrics=None: released.append(metrics)
+        sampler = _make_sampler(tokenizer=None)
+        sampler._concurrency_controller = controller
+        # HTTP 200 whose choice lacks raw_output.completion_token_ids: the real
+        # stream succeeds and the real parser rejects it.
+        chunk = {"choices": [{"text": "ok", "finish_reason": "stop"}]}
+        raw = f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+
+        async def _post(payload, headers, timeout):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            resp.headers = {"x-request-id": "req-parse"}
+
+            async def aiter_bytes():
+                yield raw
+
+            resp.aiter_bytes = aiter_bytes
+            return resp
+
+        sampler._post_completion = _post
+        with pytest.raises(RuntimeError):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+        records = sampler.drain_metrics()
+        sampler.close()
+        assert len(records) == 1
+        assert (records[0].retry_attempt, records[0].http_status_code, records[0].response_request_id) == (
+            1,
+            200,
+            "req-parse",
+        )
+        assert records[0].error is not None
+        # One release, carrying the same record; no extra controller input.
+        assert len(released) == 1 and released[0] is records[0]
+
+    def test_client_latency_excludes_the_r3_format_probe(self, monkeypatch):
+        import json as _json
+        import time as _time
+
+        from fireworks.training.sdk import sampling as sampling_module
+
+        clock = {"now": 100.0}
+        fake_time = pytypes.SimpleNamespace(
+            **{name: getattr(_time, name) for name in dir(_time) if not name.startswith("_")}
+        )
+        fake_time.monotonic = lambda: clock["now"]
+        monkeypatch.setattr(sampling_module, "time", fake_time)
+
+        sampler = _make_sampler(tokenizer=None)
+
+        async def _probe(headers, timeout):
+            clock["now"] += 3.0  # shared R3 format negotiation
+            sampler.routing_matrix_format = "base64_inline"
+
+        chunk = {
+            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {"completion_token_ids": [7]}}],
+            "usage": {"completion_tokens": 1},
+        }
+        raw = f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+
+        async def _post(payload, headers, timeout):
+            clock["now"] += 0.5  # the completion itself
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            resp.headers = {}
+
+            async def aiter_bytes():
+                yield raw
+
+            resp.aiter_bytes = aiter_bytes
+            return resp
+
+        sampler._ensure_routing_matrix_format = _probe
+        sampler._post_completion = _post
+        _result, metrics = asyncio.run(
+            sampler.async_completions_stream([1, 2, 3], max_tokens=4, include_routing_matrix=True)
+        )
+        assert metrics.client_latency == pytest.approx(0.5)
+        assert metrics.client_ttft == pytest.approx(0.5)
+        sampler.close()
+
 
 class TestSseTruncationRetry:
     """Contract: only :class:`_SSETruncationError` triggers retry; other
@@ -2810,14 +3076,16 @@ class TestSamplerTimeoutDiagnostics:
             model="accounts/test-account/deployments/test-deployment",
             concurrency_controller=FixedConcurrencyController(16),
         )
-        sampler._recent_metrics = [
+        # Seed the bounded history that timeout diagnostics read.
+        sampler._release_concurrency(
             ServerMetrics(
                 prefill_queue_duration=590.0,
                 generation_queue_duration=591.0,
                 client_ttft=599.0,
                 num_concurrent_requests=16,
             )
-        ]
+        )
+        sampler.drain_metrics()  # a per-step drain must not erase it
         attempts = {"n": 0}
 
         async def _fake(*args, **kwargs):

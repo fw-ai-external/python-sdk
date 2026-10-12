@@ -1,11 +1,18 @@
 # Changelog
 
-## 1.2.23 (2026-10-11)
+## 1.2.23 (2026-10-12)
 
 Full Changelog: [v1.2.22...v1.2.23](https://github.com/fw-ai-external/python-sdk/compare/v1.2.22...v1.2.23)
 
+### Features
+* **training-sdk:** record each completed sampling attempt's client-measured latency and generated-token count in `ServerMetrics`, so callers can compare client and serving time from `DeploymentSampler.drain_metrics()`
+* **training-sdk:** `DeploymentSampler.drain_metrics()` now returns one record per completed or failed attempt: every record carries its 1-based `retry_attempt`, and failed attempts (including non-retryable HTTP errors, truncated streams and responses the parser rejects) set the new `ServerMetrics.error`
+
 ### Bug Fixes
 * **dependencies:** update runtime and development locks to multidict 6.9.1 to fix a native reference leak
+* **training-sdk:** bound the per-attempt `ServerMetrics` buffer kept for `drain_metrics()`; samplers that are never drained no longer grow memory for the life of the run
+* **training-sdk:** measure `client_latency` and `client_ttft` from the completion request itself with a monotonic clock, excluding the shared R3 format probe and a pre-generation fallback
+* **training-sdk:** draining metrics no longer clears the recent history that sampler timeout diagnostics report; that history keeps only attempts with timings, for at most ten minutes
 
 ## 1.2.22 (2026-10-10)
 
