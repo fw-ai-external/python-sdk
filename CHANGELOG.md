@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.24 (2026-10-12)
+
+Full Changelog: [v1.2.23...v1.2.24](https://github.com/fw-ai-external/python-sdk/compare/v1.2.23...v1.2.24)
+
+### Bug Fixes
+* **training-sdk:** preserve configured routing headers when resolving the account for sampling
+
 ## 1.2.23 (2026-10-12)
 
 Full Changelog: [v1.2.22...v1.2.23](https://github.com/fw-ai-external/python-sdk/compare/v1.2.22...v1.2.23)

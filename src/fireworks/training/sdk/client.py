@@ -58,6 +58,7 @@ from tinker.lib.public_interfaces.training_client import (
 import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
 from fireworks.training.sdk._comms import Comms, comms_context
 from fireworks.training.sdk.routing import RoutingReferences, RoutingMatrixFormat
+from fireworks.training.sdk.decision import SamplerCheckpointMetadata
 from fireworks.training.sdk._constants import (
     CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
     CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
@@ -2769,6 +2770,7 @@ class FiretitanTrainingClient(TrainingClient):
         checkpoint_type: str | None = None,
         ttl_seconds: int | None = None,
         export_precision: ExportPrecision | None = None,
+        metadata: SamplerCheckpointMetadata | None = None,
     ) -> SaveSamplerResult:
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
@@ -2799,6 +2801,9 @@ class FiretitanTrainingClient(TrainingClient):
         match the model architecture or downstream serving precision; validate
         serving load and inference before promotion.
 
+        ``metadata.decision_calibration`` carries held-out decision temperatures into the
+        checkpoint's ``decision.json``.
+
         Returns:
             :class:`SaveSamplerResult` with the trainer-returned public sampler
             identity in ``path`` and the requested snapshot name in
@@ -2820,6 +2825,7 @@ class FiretitanTrainingClient(TrainingClient):
                 resolved_export_precision=resolved_export_precision,
                 ttl_seconds=ttl_seconds,
                 request_id=request_id,
+                metadata=metadata,
             )
         ).result()
 
@@ -2832,11 +2838,14 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         request_id: int,
         take_turn: bool = True,
+        metadata: SamplerCheckpointMetadata | None = None,
     ) -> SaveSamplerResult:
         """Shared sampler save and bookkeeping for explicit saves and weight_sync."""
         extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
         if resolved_export_precision is not None:
             extra_body["export_precision"] = resolved_export_precision
+        if metadata is not None:
+            extra_body["metadata"] = metadata.model_dump(mode="json")
         request = types.SaveWeightsForSamplerRequest(
             model_id=self._guaranteed_model_id(),
             path=actual_name,
@@ -2905,6 +2914,7 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
+        metadata: SamplerCheckpointMetadata | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         """Save sampler weights and return a FireTitan snapshot identity.
 
@@ -2927,6 +2937,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if metadata is not None:
+            save_kwargs["metadata"] = metadata
         result = self.save_weights_for_sampler_ext(name, **save_kwargs)
         return _ImmediateAPIFuture(types.SaveWeightsForSamplerResponse(path=result.path))
 
@@ -2937,6 +2949,7 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
+        metadata: SamplerCheckpointMetadata | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         save_kwargs: dict[str, Any] = {
             "ttl_seconds": ttl_seconds,
@@ -2944,6 +2957,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if metadata is not None:
+            save_kwargs["metadata"] = metadata
         return await asyncio.to_thread(self.save_weights_for_sampler, name, **save_kwargs)
 
     def create_sampling_client(
@@ -3318,7 +3333,11 @@ class FiretitanServiceClient(ServiceClient):
                 from fireworks.training.sdk.fireworks_client import FireworksClient
 
                 base_url = _fireworks_api_root_url(getattr(self, "_managed_base_url", None))
-                account = FireworksClient(api_key=api_key, base_url=base_url).account_id
+                account = FireworksClient(
+                    api_key=api_key,
+                    base_url=base_url,
+                    additional_headers=getattr(self, "_managed_additional_headers", None),
+                ).account_id
             except Exception:
                 account = None
         self._cp_account_id = account

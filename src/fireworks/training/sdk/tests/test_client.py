@@ -3907,6 +3907,22 @@ class TestAccountResolutionBestEffort:
         assert svc._resolved_account_id() == "test-account"
         assert svc._resolved_account_id() == "test-account"
 
+    def test_base_sampling_resolves_account_with_routing_headers(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._fireworks_api_key = "fw_x"
+        svc._managed_additional_headers = {"X-Fireworks-Dev-Environment": "dev-test"}
+
+        class RoutedFireworksClient:
+            def __init__(self, **kwargs):
+                if kwargs.get("additional_headers") != svc._managed_additional_headers:
+                    raise PermissionError("Account lookup reached the wrong environment")
+
+            account_id = "test-account"
+
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", RoutedFireworksClient):
+            assert svc._serverless_base_sampling_model_name() == "accounts/test-account/trainingSessions/ts-abc123"
+
     def test_no_in_progress_none_published(self):
         # Regression: the cache must never hold a transient None *during*
         # resolution. A concurrent reader must see "unset" (and resolve too) or

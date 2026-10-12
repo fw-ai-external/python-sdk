@@ -12,6 +12,7 @@ from tinker._base_client import AsyncHttpxClientWrapper
 
 from fireworks.training.sdk.client import FiretitanServiceClient
 from fireworks.training.sdk.trainer import TrainerServiceEndpoint
+from fireworks.training.sdk.decision import DecisionCalibration, SamplerCheckpointMetadata
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:The .*construct.* method is deprecated:pydantic.warnings.PydanticDeprecatedSince20"
@@ -787,3 +788,15 @@ def test_rdma_negotiation_does_not_hide_status_failures(connect):
     manager.hotload_check_status.side_effect = httpx.ConnectError("unavailable")
     with pytest.raises(httpx.ConnectError):
         client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+
+
+def test_decision_calibration_rides_on_sampler_save_only(connect):
+    calibration = DecisionCalibration(temperature={"choice": 1.3, "noul": 1.1}, fit_rows={"choice": 400})
+    service, calls = connect("serverless", [{}])
+    client = service.create_lora_training_client("test/model", rank=8)
+    client.save_weights_for_sampler_ext("final", metadata=SamplerCheckpointMetadata(decision_calibration=calibration))
+    bodies = dict(calls)
+    assert "decision" not in bodies["create_model"]
+    assert bodies["save_weights_for_sampler"]["metadata"] == {
+        "decision_calibration": calibration.model_dump(mode="json")
+    }
