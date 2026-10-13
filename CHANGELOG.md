@@ -5,6 +5,7 @@
 Full Changelog: [v1.2.23...v1.2.24](https://github.com/fw-ai-external/python-sdk/compare/v1.2.23...v1.2.24)
 
 ### Bug Fixes
+* **training-sdk:** preserve Router Replay fallback when validation errors omit rejected input values
 * **training-sdk:** preserve configured routing headers when resolving the account for sampling
 
 ### Refactors

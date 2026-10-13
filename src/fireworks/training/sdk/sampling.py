@@ -360,7 +360,8 @@ class DeploymentSampler(_RestClient):
 
     @staticmethod
     def _unsupported_routing_format(response: httpx.Response) -> bool:
-        # Old native servers reject this field before starting generation.
+        # Native servers reject this field before starting generation; older
+        # validation messages also include the rejected value.
         if response.status_code != 400:
             return False
         try:
@@ -372,7 +373,10 @@ class DeploymentSampler(_RestClient):
             isinstance(error, dict)
             and error.get("code") in ("invalid_request_error", "INVALID_ARGUMENT")
             and error.get("message")
-            == ("Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'")
+            in (
+                "Extra inputs are not permitted, field: 'routing_matrix_format'",
+                "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'",
+            )
         )
 
     @staticmethod

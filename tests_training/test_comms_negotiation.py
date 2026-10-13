@@ -244,12 +244,14 @@ def test_capability_does_not_weaken_model_validation(connect):
     [
         (200, "", False),
         (400, "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'", False),
+        (400, "Extra inputs are not permitted, field: 'routing_matrix_format'", False),
         (400, "temperature must be between 0 and 2", False),
         (400, "R3 shared storage domain mismatch", False),
         (429, "rate limit", False),
         (500, "internal error", False),
         (200, "", True),
         (400, "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'", True),
+        (400, "Extra inputs are not permitted, field: 'routing_matrix_format'", True),
     ],
 )
 def test_r3_probe_is_lazy_shared_and_only_unknown_format_falls_back(
