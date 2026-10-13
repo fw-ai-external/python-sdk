@@ -1,8 +1,8 @@
 """Decision checkpoint calibration.
 
 ``SamplerCheckpointMetadata`` rides on ``save_weights_for_sampler`` and carries the held-out
-temperatures the trainer writes into the checkpoint's ``decision.json``. These mirror
-``firetitan/train/rlor/decision_artifact.py``, whose schema is authoritative.
+temperatures the trainer writes into the checkpoint's ``decision.json``. The models
+below validate the calibration metadata supplied with a sampler checkpoint.
 """
 
 from __future__ import annotations

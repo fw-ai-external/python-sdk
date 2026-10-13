@@ -189,16 +189,18 @@ jobs:
             --remove-label "autorelease: pending" \
             --add-label "autorelease: tagged"
 
-      - name: Request private staging metadata sync
+      - name: Request release metadata sync
         env:
           GH_TOKEN: ${{ secrets.FW_AI_BOT_TOKEN }}
+          RELEASE_SYNC_REPOSITORY: ${{ secrets.RELEASE_SYNC_REPOSITORY }}
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          : "${RELEASE_SYNC_REPOSITORY:?Configure RELEASE_SYNC_REPOSITORY for release metadata synchronization}"
           gh api \
             --method POST \
-            "repos/fw-ai/fireworks/dispatches" \
+            "repos/${RELEASE_SYNC_REPOSITORY}/dispatches" \
             -f event_type="sdk_release_published" \
             -F "client_payload[version]=${VERSION}" \
             -F "client_payload[tag]=${TAG}" \

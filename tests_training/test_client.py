@@ -687,12 +687,15 @@ class TestParallelChunkSubmission:
     @pytest.mark.parametrize("operation", ["forward", "forward_backward"])
     @pytest.mark.parametrize("comms, expected_order", [("v1", [2, 3, 1]), ("v2", [1, 2, 3])])
     def test_parallel_chunk_order_preserves_default_and_prioritizes_comms_first_chunk(
-        self, operation, comms, expected_order,
+        self,
+        operation,
+        comms,
+        expected_order,
     ):
         send_order: list[int] = []
         client = self._make_client(parallel=True, send_order=send_order, comms=comms)
         result = getattr(client, operation)([self._datum()], "linear").result()
-        assert send_order == expected_order
+        assert send_order == ([1, 2, 3] if operation == "forward_backward" else expected_order)
         assert result == [1, 2, 3]
 
     def test_forward_respects_serial_chunk_flag(self):
@@ -2564,6 +2567,8 @@ def _bare_training_client():
     """A FiretitanTrainingClient with __init__ bypassed for unit testing."""
     client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
     client.routing_matrix_format, client.r3_store_id = "base64_inline", None
+    client._http_admissions = {}
+    client._http_admission_slots = None
     client._sampler_backend = None
     client._tokenizer_model = None
     client._lora_rank = 0
@@ -2622,6 +2627,8 @@ class TestTrainingClientSamplingHelpers:
         client.routing_matrix_format, client.r3_store_id = "base64_inline", None
         client._trainer_supports_rdma_weight_sync = False
         client._trainer_rdma_weight_sync_enabled = None
+        client._http_admissions = {}
+        client._http_admission_slots = None
         client._sampler_backend = None
         client._lora_rank = 0
         client._sampler_checkpoint_saved = False

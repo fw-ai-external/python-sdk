@@ -29,7 +29,7 @@ import threading
 from enum import Enum
 from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from datetime import datetime, timezone
-from contextlib import nullcontext
+from contextlib import nullcontext, asynccontextmanager
 from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
@@ -1660,6 +1660,8 @@ class FiretitanTrainingClient(TrainingClient):
         self._trainer_supports_rdma_weight_sync = supports_rdma_weight_sync is True
         self._trainer_rdma_weight_sync_enabled = rdma_weight_sync_enabled
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
+        self._http_admissions: dict[int, asyncio.Task[Any]] = {}
+        self._http_admission_slots: asyncio.Semaphore | None = None
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
         # derived from ``model_id`` ("{run_id}:train:{seq}"). Both are None for
@@ -1788,6 +1790,53 @@ class FiretitanTrainingClient(TrainingClient):
     def _comms_request_body(self) -> dict[str, str]:
         return {"comms": "v2"} if self.comms == "v2" else {}
 
+    def _chunked_requests(self, data: list[types.Datum]) -> list[tuple[int, list[types.Datum]]]:
+        # Reserve one contiguous range even when callers prepare groups on different threads.
+        chunks = list(self._chunked_requests_generator(data))
+        with self._request_id_lock:
+            first = self._request_id_counter
+            self._request_id_counter += len(chunks)
+        return list(zip(range(first, first + len(chunks)), chunks))
+
+    @asynccontextmanager
+    async def _take_turn(self, min_turn: int, max_turn: int | None = None) -> AsyncGenerator[None, None]:
+        """Other operations retain their ordered boundary after parallel F/B uploads."""
+        async with super()._take_turn(min_turn, max_turn):
+            pending = {rid: task for rid, task in self._http_admissions.items() if rid < min_turn}
+            if pending:
+                joined = asyncio.gather(*pending.values(), return_exceptions=True)
+                try:
+                    results = await asyncio.shield(joined)
+                except asyncio.CancelledError:
+                    await asyncio.shield(joined)
+                    raise
+                for result in results:
+                    if isinstance(result, BaseException):
+                        # Keep failed admissions: no later mutation may skip a failed sequence.
+                        raise result
+                for rid in pending:
+                    self._http_admissions.pop(rid, None)
+            yield
+
+    async def _submit_parallel_backward(
+        self, request_id: int, turn_min: int, turn_max: int | None, send: Callable[..., Any], chunk: list[types.Datum]
+    ) -> Any:
+        """Retire admission order before ACK, with a client-wide upload limit."""
+        if self._http_admission_slots is None:
+            self._http_admission_slots = asyncio.Semaphore(_parallel_chunk_send_concurrency())
+        slots = self._http_admission_slots
+        async with super()._take_turn(turn_min, turn_max):
+            await slots.acquire()
+            task = asyncio.create_task(self.holder.execute_with_retries(send, request_id, chunk))
+            self._http_admissions[request_id] = task
+            task.add_done_callback(lambda _task: slots.release())
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # An in-flight HTTP request can already own remote work. Join its ACK before unwinding.
+            await asyncio.shield(task)
+            raise
+
     def _parallel_chunks_enabled(self) -> bool:
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
@@ -1829,21 +1878,22 @@ class FiretitanTrainingClient(TrainingClient):
         ) -> APIFuture[types.ForwardBackwardOutput]:
             turn_min = min_rid if parallel else request_id
             turn_max = max_rid if parallel else None
-            async with self._take_turn(turn_min, turn_max):
-                untyped_future = await self.holder.execute_with_retries(
-                    send_chunk,
-                    request_id,
-                    chunk,
+            if parallel and request_type == "ForwardBackward":
+                untyped_future = await self._submit_parallel_backward(
+                    request_id, turn_min, turn_max, send_chunk, chunk
                 )
-                future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
-                return future_type(
-                    types.ForwardBackwardOutput,
-                    self.holder,
-                    untyped_future,
-                    request_start_time=start_time,
-                    request_type=request_type,
-                    queue_state_observer=self._queue_state_logger,
-                )
+            else:
+                async with self._take_turn(turn_min, turn_max):
+                    untyped_future = await self.holder.execute_with_retries(send_chunk, request_id, chunk)
+            future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
+            return future_type(
+                types.ForwardBackwardOutput,
+                self.holder,
+                untyped_future,
+                request_start_time=start_time,
+                request_type=request_type,
+                queue_state_observer=self._queue_state_logger,
+            )
 
         async def _submit_limited(
             semaphore: asyncio.Semaphore,
@@ -1853,7 +1903,21 @@ class FiretitanTrainingClient(TrainingClient):
             async with semaphore:
                 return await _submit_chunk(request_id, chunk)
 
-        if parallel and len(requests) > 1:
+        if parallel and request_type == "ForwardBackward":
+            # Start the leading sequence first on both wire versions. Shared slots
+            # bound uploads across logical calls; a slow ACK does not hold the next turn.
+            tasks = [asyncio.create_task(_submit_chunk(request_id, chunk)) for request_id, chunk in requests]
+            joined = asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                results = await asyncio.shield(joined)
+            except asyncio.CancelledError:
+                await asyncio.shield(joined)
+                raise
+            for result in results:
+                if isinstance(result, BaseException):
+                    raise result
+            futures = list(results)
+        elif parallel and len(requests) > 1:
             concurrency = _parallel_chunk_send_concurrency()
             if concurrency == 1:
                 futures = []

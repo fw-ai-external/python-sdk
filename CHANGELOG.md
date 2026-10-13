@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.25 (2026-10-13)
+
+Full Changelog: [v1.2.24...v1.2.25](https://github.com/fw-ai-external/python-sdk/compare/v1.2.24...v1.2.25)
+
+### Bug Fixes
+* **training-sdk:** overlap forward/backward request uploads across calls while retaining upload limits, retry ordering, and optimizer admission barriers; safely retire shared admission fences before multi-chunk forward calls
+
 ## 1.2.24 (2026-10-13)
 
 Full Changelog: [v1.2.23...v1.2.24](https://github.com/fw-ai-external/python-sdk/compare/v1.2.23...v1.2.24)
