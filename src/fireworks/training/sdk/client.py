@@ -1583,11 +1583,13 @@ def _target_logprob_support(loss_fn_config: dict[str, float | str | bool] | None
         if old_key in config:
             raise ValueError(
                 f"loss_fn_config.{old_key} is unsupported; use loss_fn_config.target_logprob_support "
-                "with 'full_vocabulary' or 'sampling_support'"
+                "with 'full_vocabulary', 'sampling_support' or 'candidates'"
             )
     support = config.get("target_logprob_support", "full_vocabulary")
-    if not isinstance(support, str) or support not in ("full_vocabulary", "sampling_support"):
-        raise ValueError("loss_fn_config.target_logprob_support must be 'full_vocabulary' or 'sampling_support'")
+    if not isinstance(support, str) or support not in ("full_vocabulary", "sampling_support", "candidates"):
+        raise ValueError(
+            "loss_fn_config.target_logprob_support must be 'full_vocabulary', 'sampling_support' or 'candidates'"
+        )
     return support
 
 
@@ -1926,8 +1928,9 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         """Compute a forward pass, using Fireworks' JSON path with parallel chunks."""
-        if _target_logprob_support(loss_fn_config) == "sampling_support":
-            raise ValueError("target_logprob_support='sampling_support' requires forward_backward, not forward")
+        support = _target_logprob_support(loss_fn_config)
+        if support != "full_vocabulary":
+            raise ValueError(f"target_logprob_support='{support}' requires forward_backward, not forward")
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         if getattr(client_config, "fwd_via_fwdbwd", False) and getattr(

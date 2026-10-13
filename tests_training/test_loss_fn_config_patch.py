@@ -13,7 +13,7 @@ import fireworks.training.sdk.patches  # noqa: F401
 from fireworks.training.sdk.client import FiretitanTrainingClient, _CreateModelResponse
 
 
-@pytest.mark.parametrize("support_choice", ["full_vocabulary", "sampling_support"])
+@pytest.mark.parametrize("support_choice", ["full_vocabulary", "sampling_support", "candidates"])
 def test_support_choice_mode_survives_wire_conversion(support_choice):
     config = {"target_logprob_support": support_choice, "clip_low_threshold": 0.2}
     body = to_pydantic_input(ForwardBackwardInput(data=[], loss_fn="ppo", loss_fn_config=config)).model_dump(
@@ -52,6 +52,18 @@ def test_support_choice_selection_reaches_submission_unchanged(config):
         submit.assert_called_once_with([], "ppo", config)
 
 
+def test_candidates_support_reaches_submission_unchanged():
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    config = {"target_logprob_support": "candidates"}
+    with (
+        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
+        patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
+    ):
+        client.forward_backward([], "cross_entropy", config)
+        submit.assert_called_once_with([], "cross_entropy", config)
+
+
 @pytest.mark.parametrize("value", [True, None, "top_tokens"])
 @pytest.mark.parametrize("operation", ["forward", "forward_backward"])
 def test_invalid_support_choice_is_rejected_before_submission(value, operation):
@@ -77,11 +89,12 @@ def test_old_support_keys_are_rejected_with_migration_hint(key, value, operation
 
 
 @pytest.mark.parametrize("capability", [False, True])
-def test_sampling_support_forward_fails_before_submission(capability):
+@pytest.mark.parametrize("support", ["sampling_support", "candidates"])
+def test_non_vocabulary_support_forward_fails_before_submission(capability, support):
     client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
     client.supports_target_logprob_support = capability
-    with pytest.raises(ValueError, match="requires forward_backward, not forward"):
-        client.forward([], "ppo", {"target_logprob_support": "sampling_support"})
+    with pytest.raises(ValueError, match=f"'{support}' requires forward_backward, not forward"):
+        client.forward([], "cross_entropy", {"target_logprob_support": support})
 
 
 @pytest.mark.parametrize("config", [None, {"target_logprob_support": "full_vocabulary"}])
