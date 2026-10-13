@@ -58,38 +58,46 @@ The managed SDK and cookbook select RDMA automatically only
 for dedicated full-parameter training when the trainer and every inference
 replica advertise `supports_rdma_weight_sync=true`. It reads the existing
 create-model response and hotload status response; no capability endpoint or
-image-tag comparison is needed. Missing or unknown fields mean unsupported.
+image-tag comparison is needed. Missing or unknown support fields mean unsupported; an enabled flag still requires RDMA.
 
 RDMA readiness comes from platform-managed runtime/shape configuration. The
 SDK does not add superuser-only `extraArgs` or `extraValues` to enable RDMA.
-Runtimes without RDMA configured use FILE, including with the compatibility
-option below. Explicit admin overrides remain available for superuser callers.
+Runtimes without RDMA configured use FILE. Explicit admin overrides remain available for superuser callers.
 
 | Training mode | Trainer supports RDMA | Inference supports RDMA | Selected path |
 | --- | --- | --- | --- |
 | Full parameter | No | No | Save → file hotload |
-| Full parameter | No | Yes | Save → file hotload |
-| Full parameter | Yes | No | Save → file hotload |
+| Full parameter | No | Yes | Capability mismatch error |
+| Full parameter | Yes | No | Capability mismatch error |
 | Full parameter | Yes | Yes | RDMA |
 | LoRA | No | No | Save → file hotload |
-| LoRA | No | Yes | Save → file hotload |
-| LoRA | Yes | No | Save → file hotload |
-| LoRA | Yes | Yes | Save → file hotload |
+| LoRA | No | Yes | Rollout rejects FILE publication when RDMA is enabled |
+| LoRA | Yes | No | Configuration error |
+| LoRA | Yes | Yes | Configuration error |
 
 `training_client.supports_rdma_weight_sync` reports the negotiated result.
-The older `weight_sync_transport="RDMA"` setup option remains accepted but
-does not bypass capability checks. `weight_sync()` rechecks inference support
-before each publication and uses the existing sampler-save/hotload operations
-when support disappears. Callers do not need to branch or reconnect. Its future
-covers negotiation through rollout activation; FILE results have
-`optimizer_version=None` because legacy saves do not report an optimizer version.
-Explicit `save_weights_for_sampler()` / `create_sampling_client()` calls remain
-available.
+Enabling the trainer or rollout RDMA flag makes RDMA mandatory. Both runtimes
+fail startup if their enabled RDMA checks fail. Their existing runtime responses
+also expose `rdma_weight_sync_enabled`, separately from `supports_rdma_weight_sync`.
+The SDK checks both fields before every publication: both enabled and supported
+uses RDMA; both disabled uses FILE; mismatches or enabled-but-unavailable RDMA raise.
+A trainer requiring RDMA cannot use unsupported session modes or gateway shard fan-out.
+Legacy LoRA/session clients retain their FILE flow without a base-model status probe;
+an RDMA-enabled rollout rejects that FILE publication server-side. HTTP 404/405 from the RDMA operation also raises.
 
-Reused deployments retain their runtime configuration and advertise false if
-RDMA is disabled. A trainer that no longer implements the weight-sync route
-(HTTP 404/405 before acceptance) also uses FILE. Errors after an RDMA publication
-is accepted are surfaced; they do not trigger an unsafe FILE retry.
+Legacy FILE runtimes without these fields remain supported when neither side
+advertises RDMA. Once RDMA has been selected, losing support cannot downgrade the
+session. Old runtimes cannot expose an enabled flag when their first probe fails;
+upgrade trainer and serving images as well as the SDK for the full startup contract.
+The rollout also rejects FILE weight-sync requests when its RDMA flag is on,
+including requests from older clients. Explicit checkpoint exports remain available;
+loading them as FILE weight sync requires a FILE-configured rollout. Initial model
+loading and durable checkpoint storage are separate from this transport requirement.
+
+When model creation or initial transport attachment fails after managed resources
+are ready, the SDK closes its client holder and applies the configured cleanup
+policies to resources it created, including a separate reference trainer. Reused
+resources are preserved. Cleanup errors do not replace the original setup error.
 
 ## Account resolution
 

@@ -294,22 +294,34 @@ class _ManagedTinkerHandle:
                     e,
                 )
 
-        if self.cleanup_deployment_on_close and self.deployment and self.deployment_manager:
-            if self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO:
-                self.deployment_manager.scale_to_zero(self.deployment.deployment_id)
-            elif self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE:
-                self.deployment_manager.delete(self.deployment.deployment_id)
-            else:
-                allowed = ", ".join(
-                    [
-                        CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
-                        CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
-                    ]
-                )
-                raise ValueError(f"cleanup_deployment_on_close must be None or one of: {allowed}")
+        cleanup_error: Exception | None = None
+        try:
+            if self.cleanup_deployment_on_close and self.deployment and self.deployment_manager:
+                if self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO:
+                    self.deployment_manager.scale_to_zero(self.deployment.deployment_id)
+                elif self.cleanup_deployment_on_close == CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE:
+                    self.deployment_manager.delete(self.deployment.deployment_id)
+                else:
+                    allowed = ", ".join(
+                        [
+                            CLEANUP_DEPLOYMENT_ON_CLOSE_DELETE,
+                            CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO,
+                        ]
+                    )
+                    raise ValueError(f"cleanup_deployment_on_close must be None or one of: {allowed}")
+        except Exception as exc:
+            cleanup_error = exc
 
-        if self.cleanup_trainer_on_close and self.trainer_manager:
-            self.trainer_manager.delete(self.trainer_endpoint.job_id)
+        try:
+            if self.cleanup_trainer_on_close and self.trainer_manager:
+                self.trainer_manager.delete(self.trainer_endpoint.job_id)
+        except Exception as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+            else:
+                logger.warning("Trainer cleanup also failed for %s", self.trainer_endpoint.job_id, exc_info=True)
+        if cleanup_error is not None:
+            raise cleanup_error
 
     def __enter__(self) -> "_ManagedTinkerHandle":
         return self
@@ -583,35 +595,10 @@ def _create_managed_tinker_client(
 
     service_client = FiretitanServiceClient(base_url=endpoint.base_url, api_key=api_key)
     service_client._allow_duplicate_training_configs = config.max_lora_rank is not None
-    training_client = None
-    training_clients: list[FiretitanTrainingClient] = []
-    if config.max_lora_rank is None:
-        create_model_kwargs: dict[str, Any] = {
-            "base_model": config.base_model,
-            "lora_rank": config.lora_rank,
-            "user_metadata": user_metadata,
-        }
-        if config.projection_head_dim is not None:
-            create_model_kwargs["projection_head_dim"] = config.projection_head_dim
-        if config.lora_rank > 0:
-            create_model_kwargs["lora_alpha"] = (
-                config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
-            )
-        training_client = service_client.create_training_client(**create_model_kwargs)
-        # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
-        training_client._tokenizer_model = config.tokenizer_model
-        training_clients.append(training_client)
-
-        if sampler_backend is not None:
-            training_client._attach_sampler_backend(sampler_backend)
-    if sampler_backend is not None:
-        service_client._attach_sampler_backend(sampler_backend)
-
-    return _ManagedTinkerHandle(
+    handle = _ManagedTinkerHandle(
         service_client=service_client,
-        training_client=training_client,
+        training_client=None,
         trainer_endpoint=endpoint,
-        training_clients=training_clients,
         training_profile=profile,
         max_context_length=resolved_max_context_length,
         deployment_shape=deployment_shape,
@@ -624,6 +611,40 @@ def _create_managed_tinker_client(
         cleanup_trainer_on_close=config.cleanup_trainer_on_close and started_trainer.created,
         cleanup_deployment_on_close=(config.cleanup_deployment_on_close if deployment_created else None),
     )
+    try:
+        if config.max_lora_rank is None:
+            create_model_kwargs: dict[str, Any] = {
+                "base_model": config.base_model,
+                "lora_rank": config.lora_rank,
+                "user_metadata": user_metadata,
+            }
+            if config.projection_head_dim is not None:
+                create_model_kwargs["projection_head_dim"] = config.projection_head_dim
+            if config.lora_rank > 0:
+                create_model_kwargs["lora_alpha"] = (
+                    config.lora_alpha if config.lora_alpha is not None else DEFAULT_LORA_ALPHA
+                )
+            training_client = service_client.create_training_client(**create_model_kwargs)
+            # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
+            training_client._tokenizer_model = config.tokenizer_model
+            handle.training_client = training_client
+            handle.training_clients.append(training_client)
+
+            if sampler_backend is not None:
+                training_client._attach_sampler_backend(sampler_backend)
+        if sampler_backend is not None:
+            service_client._attach_sampler_backend(sampler_backend)
+
+    except BaseException:
+        # The caller cannot own the handles until provisioning returns.
+        for owned_handle in (reference_handle, handle):
+            if owned_handle is not None:
+                try:
+                    owned_handle.close()
+                except Exception:
+                    logger.warning("Failed to clean up managed resources after initialization failure", exc_info=True)
+        raise
+    return handle
 
 
 def _should_provision_reference(config: _ManagedTinkerConfig) -> bool:
@@ -801,10 +822,7 @@ def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
 def _rdma_candidate(config: _ManagedTinkerConfig) -> bool:
     """Allow capability negotiation without changing platform-owned resources."""
     return (
-        config.create_deployment
-        and config.lora_rank == 0
-        and config.max_lora_rank is None
-        and not config.forward_only
+        config.create_deployment and config.lora_rank == 0 and config.max_lora_rank is None and not config.forward_only
     )
 
 

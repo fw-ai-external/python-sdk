@@ -562,6 +562,12 @@ def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, infer
     replica = {"supports_rdma_weight_sync": True} if inference_support else {}
     manager.hotload_check_status.return_value = {"replicas": [replica]}
     manager.hotload_and_wait.return_value = True
+    if (lora_rank == 0 and trainer_support != inference_support) or (lora_rank != 0 and trainer_support):
+        with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+            client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
+        assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+        manager.hotload_and_wait.assert_not_called()
+        return
     client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
 
     expected_rdma = lora_rank == 0 and trainer_support and inference_support
@@ -571,43 +577,49 @@ def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, infer
     assert submitted == (["weight_sync"] if expected_rdma else ["save_weights_for_sampler"])
     assert manager.hotload_and_wait.call_count == (0 if expected_rdma else 1)
     assert (result.optimizer_version is not None) is expected_rdma
-    assert manager.hotload_check_status.call_count == (2 if lora_rank == 0 and trainer_support else 0)
+    assert manager.hotload_check_status.call_count == (2 if lora_rank == 0 else 0)
 
 
-def _weight_sync_client(connect, *, weight_sync_status=200):
+def _weight_sync_client(connect, *, weight_sync_status=200, rdma=True):
     from fireworks.training.sdk.managed import _TinkerSamplerBackend
 
-    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}], weight_sync_status=weight_sync_status)
+    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": rdma}], weight_sync_status=weight_sync_status)
     client = service.create_training_client("test/model")
     manager = Mock(account_id="test", hotload_api_url="https://inference.invalid")
     manager._hotload_headers.return_value = {}
-    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": True}]}
+    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": rdma}]}
     manager.hotload_and_wait.return_value = True
     client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
     return client, manager, calls
 
 
-@pytest.mark.parametrize("initial_support", [False, True])
-def test_weight_sync_renegotiates_without_reconnecting(connect, initial_support):
+@pytest.mark.parametrize("replicas", [[], [{}], [{"supports_rdma_weight_sync": True}, {}]])
+@pytest.mark.parametrize("use_async", [False, True])
+def test_weight_sync_rejects_capability_mismatch_before_file(connect, replicas, use_async):
     client, manager, calls = _weight_sync_client(connect)
-    supports = [initial_support, not initial_support, False, True]
-    for supported in supports:
-        replicas = [{"supports_rdma_weight_sync": True}]
-        if not supported:
-            replicas.append({})
-        manager.hotload_check_status.return_value = {"replicas": replicas}
+    assert client.weight_sync().result(timeout=5).optimizer_version is not None
+    calls.clear()
+    manager.hotload_check_status.return_value = {"replicas": replicas}
+    future = asyncio.run(client.weight_sync_async()) if use_async else client.weight_sync()
+    optimizer = client.optim_step(types.AdamParams())
+    with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+        future.result(timeout=5)
+    optimizer.result(timeout=5)
+    assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+    manager.hotload_and_wait.assert_not_called()
+    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": True}]}
+    assert client.weight_sync().result(timeout=5).optimizer_version is not None
+
+
+def test_prior_rdma_selection_never_downgrades_to_file(connect):
+    client, manager, calls = _weight_sync_client(connect)
+    assert client.weight_sync().result(timeout=5).optimizer_version is not None
+    client._trainer_supports_rdma_weight_sync = False
+    manager.hotload_check_status.return_value = {"replicas": [{}]}
+    with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
         client.weight_sync().result(timeout=5)
-        assert client.supports_rdma_weight_sync is supported
-    operations = [(op, body) for op, body in calls if op in ("weight_sync", "save_weights_for_sampler")]
-    assert [op for op, _ in operations] == [
-        "weight_sync" if value else "save_weights_for_sampler" for value in supports
-    ]
-    rdma = [body for op, body in operations if op == "weight_sync"]
-    assert len({(body["session_id"], body["source_epoch"]) for body in rdma}) == 1
-    saves = [body for op, body in operations if op == "save_weights_for_sampler"]
-    assert [body["checkpoint_type"] for body in saves] == ["base", "delta"]
-    incremental = manager.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"]
-    assert incremental["previous_snapshot_identity"] == saves[0]["path"]
+    assert [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")] == ["weight_sync"]
+    manager.hotload_and_wait.assert_not_called()
 
 
 @pytest.mark.parametrize("blocked_stage", ["status", "hotload"])
@@ -615,7 +627,7 @@ def test_weight_sync_renegotiates_without_reconnecting(connect, initial_support)
 def test_file_fallback_future_covers_probe_hotload_and_preserves_training_order(connect, blocked_stage, use_async):
     from threading import Event
 
-    client, manager, calls = _weight_sync_client(connect)
+    client, manager, calls = _weight_sync_client(connect, rdma=False)
     entered, release = Event(), Event()
 
     def blocked(*args, **kwargs):
@@ -642,15 +654,16 @@ def test_file_fallback_future_covers_probe_hotload_and_preserves_training_order(
 
 
 @pytest.mark.parametrize("status", [404, 405])
-def test_missing_trainer_weight_sync_route_falls_back_without_reconnecting(connect, status):
+def test_missing_trainer_weight_sync_route_errors_without_file(connect, status):
     client, manager, calls = _weight_sync_client(connect, weight_sync_status=status)
-    assert client.weight_sync().result(timeout=5).optimizer_version is None
-    assert client.weight_sync().result(timeout=5).optimizer_version is None
-    operations = [(op, body) for op, body in calls if op in ("weight_sync", "save_weights_for_sampler")]
-    assert [op for op, _ in operations] == ["weight_sync", "save_weights_for_sampler", "save_weights_for_sampler"]
-    assert operations[0][1]["seq_id"] == operations[1][1]["seq_id"]
-    assert not client.supports_rdma_weight_sync
-    assert manager.hotload_and_wait.call_count == 2
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="trainer RDMA API is unavailable"):
+            client.weight_sync().result(timeout=5)
+    assert [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")] == [
+        "weight_sync",
+        "weight_sync",
+    ]
+    manager.hotload_and_wait.assert_not_called()
 
 
 @pytest.mark.parametrize("use_async", [False, True])
@@ -710,30 +723,12 @@ def test_failed_capability_refresh_does_not_block_later_operations(connect):
     manager.hotload_and_wait.assert_not_called()
 
 
-def test_automatic_rdma_keeps_existing_file_save_hotload_flow(connect):
-    from fireworks.training.sdk.managed import _TinkerSamplerBackend
-
-    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}])
-    client = service.create_training_client("test/model")
-    manager = Mock(
-        account_id="test",
-        api_key="fw-test",
-        inference_url="https://inference.invalid",
-        hotload_api_url="https://inference.invalid",
-    )
-    manager.hotload_check_status.return_value = {"replicas": [{"supports_rdma_weight_sync": True}]}
-    backend = _TinkerSamplerBackend(manager, "rollout", "test/model")
-    client._attach_sampler_backend(backend)
-    assert client.supports_rdma_weight_sync
-
+def test_rdma_keeps_explicit_checkpoint_exports_available(connect):
+    client, manager, calls = _weight_sync_client(connect)
     for name, checkpoint_type in (("base", "base"), ("delta", "delta")):
-        saved = client.save_weights_for_sampler(name, checkpoint_type=checkpoint_type).result(timeout=5)
-        sampler = client.create_sampling_client(saved.path)
-        sampler.close()
-    incremental = manager.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"]
-    first_identity = manager.hotload_and_wait.call_args_list[0].kwargs["snapshot_identity"]
-    assert incremental["previous_snapshot_identity"] == first_identity
+        assert client.save_weights_for_sampler(name, checkpoint_type=checkpoint_type).result(timeout=5).path
     assert [op for op, _ in calls if op == "weight_sync"] == []
+    manager.hotload_and_wait.assert_not_called()
 
 
 @pytest.mark.parametrize("value", [None, False, "true", 1, "rdma_v2", {}, []])
@@ -754,12 +749,29 @@ def test_every_inference_replica_must_advertise_rdma(connect, replicas):
     client = service.create_training_client("test/model")
     manager = Mock()
     manager.hotload_check_status.return_value = {"replicas": replicas}
-    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+        client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
     assert client.supports_rdma_weight_sync is False
 
 
+@pytest.mark.parametrize("trainer_support", [False, True])
+def test_mixed_rollout_capabilities_reject_for_either_trainer_capability(connect, trainer_support):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, calls = connect("dedicated", [{"supports_rdma_weight_sync": trainer_support}])
+    client = service.create_training_client("test/model")
+    manager = Mock()
+    manager.hotload_check_status.return_value = {
+        "replicas": [{"supports_rdma_weight_sync": True}, {"supports_rdma_weight_sync": False}]
+    }
+    with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+        client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+    manager.hotload_and_wait.assert_not_called()
+
+
 @pytest.mark.parametrize("regions", [["US_MINNESOTA_1"], ["US_MINNESOTA_1", "US_OHIO_1"]])
-def test_shard_fanout_keeps_file_even_when_returned_replicas_support_rdma(connect, regions):
+def test_shard_fanout_rejects_enabled_rdma(connect, regions):
     from fireworks.training.sdk.managed import _TinkerSamplerBackend
 
     service, calls = connect("dedicated", [{"supports_rdma_weight_sync": True}])
@@ -772,11 +784,10 @@ def test_shard_fanout_keeps_file_even_when_returned_replicas_support_rdma(connec
         "replicas": [{"region": region, "supports_rdma_weight_sync": True} for region in regions],
         "replica_distribution": {region: 1 for region in regions},
     }
-    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
-    assert client.supports_rdma_weight_sync is False
-    client.weight_sync().result()
-    assert [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")] == ["save_weights_for_sampler"]
-    manager.hotload_and_wait.assert_called_once()
+    with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+        client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+    assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+    manager.hotload_and_wait.assert_not_called()
 
 
 def test_rdma_negotiation_does_not_hide_status_failures(connect):
@@ -788,6 +799,53 @@ def test_rdma_negotiation_does_not_hide_status_failures(connect):
     manager.hotload_check_status.side_effect = httpx.ConnectError("unavailable")
     with pytest.raises(httpx.ConnectError):
         client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model"))
+
+
+@pytest.mark.parametrize(
+    "trainer_enabled,rollout_enabled", [(True, True), (True, False), (False, True), (False, False)]
+)
+@pytest.mark.parametrize("supported", [False, True])
+def test_configured_rdma_flags_are_enforced_even_before_first_sync(
+    connect, trainer_enabled, rollout_enabled, supported
+):
+    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+
+    service, calls = connect(
+        "dedicated",
+        [
+            {
+                "rdma_weight_sync_enabled": trainer_enabled,
+                "supports_rdma_weight_sync": supported,
+            }
+        ],
+    )
+    client = service.create_training_client("test/model")
+    assert client._trainer_rdma_weight_sync_enabled is trainer_enabled
+    manager = Mock(account_id="test", hotload_api_url="https://inference.invalid")
+    manager._hotload_headers.return_value = {}
+    manager.hotload_check_status.return_value = {
+        "replicas": [
+            {
+                "rdma_weight_sync_enabled": rollout_enabled,
+                "supports_rdma_weight_sync": supported,
+            }
+        ]
+    }
+    backend = _TinkerSamplerBackend(manager, "rollout", "test/model")
+    if trainer_enabled and rollout_enabled and supported:
+        client._attach_sampler_backend(backend)
+        assert client.weight_sync().result(timeout=5).optimizer_version is not None
+    elif not trainer_enabled and not rollout_enabled and not supported:
+        manager.hotload_and_wait.return_value = True
+        client._attach_sampler_backend(backend)
+        assert client.weight_sync().result(timeout=5).optimizer_version is None
+        manager.hotload_and_wait.assert_called_once()
+        return
+    else:
+        with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
+            client._attach_sampler_backend(backend)
+        assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
+    manager.hotload_and_wait.assert_not_called()
 
 
 def test_decision_calibration_rides_on_sampler_save_only(connect):
