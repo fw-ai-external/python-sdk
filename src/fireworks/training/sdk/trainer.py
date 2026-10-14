@@ -8,6 +8,7 @@ GRPO, SFT, or any Tinker-protocol training.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 import uuid
@@ -45,6 +46,7 @@ from fireworks.training.sdk.fireworks_client import FireworksClient
 
 logger = logging.getLogger(__name__)
 
+_TRAINER_GATEWAY_URL_ENV = "FIREWORKS_TRAINER_GATEWAY_URL"
 _SHAPE_OWNED_FIELDS = ("accelerator_type", "accelerator_count", "node_count")
 _DISPLAY_NAME_LENGTH_LIMIT = 64
 _MAX_INACTIVITY_TIMEOUT_S = 3 * 60 * 60
@@ -504,6 +506,7 @@ class TrainerJobManager(FireworksClient):
         base_url: str = "https://api.fireworks.ai",
         additional_headers: dict[str, str] | None = None,
         verify_ssl: bool | None = None,
+        trainer_gateway_url: str | None = None,
         **kwargs,
     ):
         if "account_id" in kwargs:
@@ -517,6 +520,10 @@ class TrainerJobManager(FireworksClient):
             additional_headers=additional_headers,
             verify_ssl=verify_ssl,
         )
+        # Host for /training/v1 trainer-proxy calls when base_url doesn't serve them.
+        self.trainer_gateway_url = (
+            trainer_gateway_url or os.environ.get(_TRAINER_GATEWAY_URL_ENV) or self.base_url
+        ).rstrip("/")
         self.boot_time_s: float | None = None
         """Wall-clock seconds spent in the most recent ``_poll_until_ready`` call."""
 
@@ -778,7 +785,7 @@ class TrainerJobManager(FireworksClient):
         header.  The gateway strips the prefix so the trainer receives
         the original path (e.g. ``/api/v1/healthz``).
         """
-        return f"{self.base_url}/training/v1/rlorTrainerJobs/{self.account_id}/{job_id}"
+        return f"{self.trainer_gateway_url}/training/v1/rlorTrainerJobs/{self.account_id}/{job_id}"
 
     def _check_healthz(self, base_url: str, timeout: float = 5) -> bool:
         """Probe /api/v1/healthz -- returns True only on HTTP 200."""

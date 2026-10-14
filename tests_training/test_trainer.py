@@ -848,6 +848,52 @@ class TestPollUntilReady:
         assert result.base_url == "https://api.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
         assert result.max_context_length == 32768
 
+    @pytest.mark.parametrize("source", ["argument", "env"])
+    @patch.object(TrainerJobManager, "get")
+    def test_trainer_gateway_url_overrides_proxy_host(self, mock_get, source, monkeypatch):
+        mock_get.return_value = {"state": "JOB_STATE_RUNNING"}
+        kwargs = {}
+        if source == "argument":
+            kwargs["trainer_gateway_url"] = "https://gateway.example.com/"
+        else:
+            monkeypatch.setenv("FIREWORKS_TRAINER_GATEWAY_URL", "https://gateway.example.com/")
+        manager = TrainerJobManager(api_key="test-key", base_url="http://10.0.0.1:8083", **kwargs)
+        manager._account_id = "test-account"
+        probed: list[str] = []
+        manager._check_healthz = lambda url, **_: probed.append(url) or True
+        try:
+            result = manager._poll_until_ready("job-1", "accounts/test/rlorTrainerJobs/job-1", timeout_s=10)
+        finally:
+            manager.close()
+
+        proxy = "https://gateway.example.com/training/v1/rlorTrainerJobs/test-account/job-1"
+        assert probed == [proxy]
+        assert result.base_url == proxy
+        assert manager.base_url == "http://10.0.0.1:8083"
+
+    @pytest.mark.parametrize(
+        ("argument", "env", "expected"),
+        [
+            ("https://arg.example.com", "https://env.example.com", "https://arg.example.com"),
+            (None, "https://env.example.com", "https://env.example.com"),
+            (None, None, "http://10.0.0.1:8083"),
+        ],
+    )
+    def test_trainer_gateway_url_precedence(self, argument, env, expected, monkeypatch):
+        if env is None:
+            monkeypatch.delenv("FIREWORKS_TRAINER_GATEWAY_URL", raising=False)
+        else:
+            monkeypatch.setenv("FIREWORKS_TRAINER_GATEWAY_URL", env)
+        manager = TrainerJobManager(api_key="test-key", base_url="http://10.0.0.1:8083", trainer_gateway_url=argument)
+        manager._account_id = "test-account"
+        try:
+            assert manager.trainer_gateway_url == expected
+            assert manager._get_trainer_gateway_url("job-1") == (
+                f"{expected}/training/v1/rlorTrainerJobs/test-account/job-1"
+            )
+        finally:
+            manager.close()
+
     @patch.object(TrainerJobManager, "get")
     def test_failed_raises_runtime_error(self, mock_get, mgr):
         mock_get.return_value = {
