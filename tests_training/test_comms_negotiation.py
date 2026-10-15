@@ -7,12 +7,12 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
-from tinker import types
-from tinker._base_client import AsyncHttpxClientWrapper
 
+from fireworks.training.sdk import types
 from fireworks.training.sdk.client import FiretitanServiceClient
 from fireworks.training.sdk.trainer import TrainerServiceEndpoint
 from fireworks.training.sdk.decision import DecisionCalibration, SamplerCheckpointMetadata
+from fireworks.training.sdk._core._base_client import AsyncHttpxClientWrapper
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:The .*construct.* method is deprecated:pydantic.warnings.PydanticDeprecatedSince20"
@@ -22,7 +22,9 @@ pytestmark = pytest.mark.filterwarnings(
 @pytest.fixture
 def connect(monkeypatch):
     # Keep background telemetry out of the deterministic HTTP transcript.
-    monkeypatch.setattr("tinker.lib.internal_client_holder.init_telemetry", lambda *_, **__: None)
+    monkeypatch.setattr(
+        "fireworks.training.sdk._core.lib.internal_client_holder.init_telemetry", lambda *_, **__: None
+    )
     monkeypatch.setattr(FiretitanServiceClient, "_resolved_account_id", lambda _: "test")
     resources = []
 
@@ -46,9 +48,7 @@ def connect(monkeypatch):
                 model_id = (
                     f"base-{index}"
                     if body.get("base_only")
-                    else f"run-{index}:train:0"
-                    if route == "serverless"
-                    else f"model-{index}"
+                    else f"run-{index}:train:0" if route == "serverless" else f"model-{index}"
                 )
                 pending[request_id] = {"type": "create_model", "model_id": model_id, **next(models)}
                 return httpx.Response(200, json={"request_id": request_id})
@@ -72,17 +72,24 @@ def connect(monkeypatch):
                     else {"path": body["path"]}
                 )
                 return httpx.Response(200, json={"request_id": request_id})
+            if operation == "unload_model":
+                request_id = "unload-test"
+                pending[request_id] = {"model_id": body["model_id"], "type": "unload_model"}
+                return httpx.Response(200, json={"request_id": request_id})
             if operation == "optim_step":
                 request_id = f"optim-{len(pending)}"
                 pending[request_id] = {"metrics": {}}
                 return httpx.Response(200, json={"request_id": request_id})
             if operation == "weights_info":
+                assert route == "serverless", "Dedicated trainers do not serve weights_info"
                 return httpx.Response(200, json={"base_model": "test/model", "is_lora": True, "lora_rank": 8})
             if operation == "load_weights":
                 request_id = f"run-{len(pending)}:fut:load"
                 pending[request_id] = {"type": "load_weights", "path": body["path"]}
                 return httpx.Response(200, json={"request_id": request_id})
-            if operation in ("session_heartbeat", "telemetry"):
+            if operation == "telemetry":
+                return httpx.Response(200, json={"status": "accepted"})
+            if operation == "session_heartbeat":
                 return httpx.Response(200, json={})
             raise AssertionError(f"Unexpected request: {operation}")
 
@@ -200,11 +207,10 @@ def test_lazy_managed_service_negotiates_after_provisioning(connect, monkeypatch
     assert len(connections) == 1
 
 
-@pytest.mark.parametrize("route", ["dedicated", "serverless"])
 @pytest.mark.parametrize("with_optimizer", [False, True])
 @pytest.mark.parametrize("use_async", [False, True])
-def test_resume_negotiates_with_new_trainer(connect, route, with_optimizer, use_async):
-    service, calls = connect(route, [{"comms": "v2"}])
+def test_serverless_resume_negotiates_with_new_trainer(connect, with_optimizer, use_async):
+    service, calls = connect("serverless", [{"comms": "v2"}])
     method = "create_training_client_from_state"
     if with_optimizer:
         method += "_with_optimizer"
@@ -566,7 +572,9 @@ def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, infer
     manager.hotload_and_wait.return_value = True
     if (lora_rank == 0 and trainer_support != inference_support) or (lora_rank != 0 and trainer_support):
         with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
-            client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
+            client._attach_sampler_backend(
+                _TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank)
+            )
         assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
         manager.hotload_and_wait.assert_not_called()
         return
@@ -860,3 +868,124 @@ def test_decision_calibration_rides_on_sampler_save_only(connect):
     assert bodies["save_weights_for_sampler"]["metadata"] == {
         "decision_calibration": calibration.model_dump(mode="json")
     }
+
+
+def test_public_close_stops_session_heartbeat(connect):
+    service, _ = connect("dedicated", [{}])
+    holder = service.holder
+    task = holder._session_heartbeat_task
+    assert task is not None and not task.done()
+    service.close()
+    service.close()
+    holder.run_coroutine_threadsafe(asyncio.sleep(0)).result(timeout=5)
+    assert holder._closed
+    assert task.done()
+
+
+def test_public_close_flushes_queued_telemetry(connect, monkeypatch):
+    from fireworks.training.sdk._core.lib.telemetry import Telemetry
+
+    monkeypatch.setattr("fireworks.training.sdk._core.lib.telemetry.FLUSH_INTERVAL", 3600)
+    service, calls = connect("dedicated", [{}])
+    holder = service.holder
+    telemetry = holder._telemetry = Telemetry(holder, "ts-test")
+    holder.run_coroutine_threadsafe(asyncio.sleep(0)).result(timeout=5)
+    telemetry.log("queued-before-close", {"count": 1})
+    service.close()
+    events = [event for operation, body in calls if operation == "telemetry" for event in body["events"]]
+    assert any(event.get("event_name") == "queued-before-close" for event in events)
+    assert telemetry._flush_counter == telemetry._push_counter
+
+
+def test_public_close_on_holder_loop_does_not_wait_for_itself(connect):
+    from fireworks.training.sdk._core.lib.telemetry import Telemetry
+
+    service, _ = connect("dedicated", [{}])
+    holder = service.holder
+    telemetry = holder._telemetry = Telemetry(holder, "ts-test")
+    wait = Mock(wraps=telemetry._wait_until_drained_sync)
+    telemetry._wait_until_drained_sync = wait
+
+    async def close():
+        service.close()
+        assert telemetry._task is not None
+        await asyncio.wait_for(asyncio.gather(telemetry._task, return_exceptions=True), timeout=1)
+
+    holder.run_coroutine_threadsafe(close()).result(timeout=2)
+    wait.assert_not_called()
+    assert telemetry._task.done()
+
+
+def test_public_unload_model_keeps_native_request_and_future_contract(connect):
+    service, calls = connect("dedicated", [{}])
+    client = service.create_training_client("test/model", lora_rank=8)
+    response = client.unload_model().result(timeout=5)
+    assert response.model_id == client._guaranteed_model_id()
+    assert ("unload_model", {"model_id": response.model_id, "type": "unload_model"}) in calls
+
+
+@pytest.mark.parametrize("with_optimizer", [False, True])
+@pytest.mark.parametrize("use_async", [False, True])
+def test_direct_dedicated_resume_requires_explicit_configuration(connect, with_optimizer, use_async):
+    service, calls = connect("dedicated", [])
+    before = list(calls)
+    method = "create_training_client_from_state"
+    if with_optimizer:
+        method += "_with_optimizer"
+    if use_async:
+        method += "_async"
+    with pytest.raises(NotImplementedError, match="serverless"):
+        result = getattr(service, method)("test/run-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/checkpoint")
+        if use_async:
+            asyncio.run(result)
+    assert calls == before
+
+
+@pytest.mark.parametrize("route", ["dedicated", "serverless"])
+@pytest.mark.parametrize("ttl", [0, 60])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "save_state",
+        "save_state_async",
+        "save_weights_for_sampler",
+        "save_weights_for_sampler_async",
+        "save_weights_for_sampler_ext",
+    ],
+)
+def test_unsupported_checkpoint_ttl_does_not_submit_or_consume_sequence(connect, route, ttl, method):
+    service, calls = connect(route, [{}])
+    client = service.create_lora_training_client("test/model", rank=8)
+    before = list(calls)
+    with pytest.raises(NotImplementedError, match="ttl_seconds"):
+        result = getattr(client, method)("checkpoint", ttl_seconds=ttl)
+        if method.endswith("_async"):
+            asyncio.run(result)
+    assert calls == before
+    client.optim_step(types.AdamParams()).result(timeout=5)
+    body = next(body for operation, body in calls if operation == "optim_step")
+    assert body["seq_id"] == 1
+
+
+def test_tinker_project_environment_is_not_applied(connect, monkeypatch):
+    monkeypatch.setenv("TINKER_PROJECT_ID", "foreign-project")
+    _, calls = connect("serverless", [])
+    body = next(body for operation, body in calls if operation == "create_session")
+    assert body.get("project_id") is None
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_project_assignment_is_rejected_before_session_creation(monkeypatch, managed):
+    def unexpected_session(*args, **kwargs):
+        raise AssertionError("Unsupported project assignment must not create a session")
+
+    monkeypatch.setattr(
+        "fireworks.training.sdk._core.lib.public_interfaces.service_client.InternalClientHolder", unexpected_session
+    )
+    with pytest.raises(NotImplementedError, match="project assignment"):
+        if managed:
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-test", base_model="test/model", project_id="unsupported-project"
+            )
+        else:
+            FiretitanServiceClient(api_key="fw-test", project_id="unsupported-project")

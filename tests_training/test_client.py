@@ -9,18 +9,18 @@ import warnings
 from types import SimpleNamespace
 from threading import Event, RLock, Thread
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import httpx
+import numpy as np
 import torch
 import pytest
-from tinker import types
-from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
 
+from fireworks.training.sdk import types
+from fireworks.training.sdk._core import TrainingClient as CoreTrainingClient
 from fireworks.training.sdk.client import (
     FIRETITAN_TINKER_CLIENT_CONFIG,
     PARALLEL_CHUNK_SEND_CONCURRENCY_ENV,
-    SAMPLING_CLIENT_FROM_TRAINER_MESSAGE,
     DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY,
     SaveSamplerResult,
     GradNormMetricsMode,
@@ -32,11 +32,9 @@ from fireworks.training.sdk.client import (
     _run_id_from_model_id,
     qualify_snapshot_name,
     _count_response_tokens,
-    _LazyManagedRestClient,
     _is_serverless_session_id,
     _BaseOnlyCreateModelRequest,
     _model_input_position_count,
-    _FireworksApiKeyAuthProvider,
     _serialize_input_for_extra_body,
     _parallel_chunk_send_concurrency,
     _check_cos_similarity_matrix_single_chunk,
@@ -50,6 +48,8 @@ from fireworks.training.sdk.managed import (
 )
 from fireworks.training.sdk._constants import CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO
 from fireworks.training.sdk.deployment import DeploymentConfig
+from fireworks.training.sdk._core.lib._auth_token_provider import ApiKeyAuthProvider as _FireworksApiKeyAuthProvider
+from fireworks.training.sdk._core.lib.public_interfaces.api_future import AwaitableConcurrentFuture
 
 # ---------------------------------------------------------------------------
 # generate_session_id
@@ -93,6 +93,7 @@ class TestQualifySnapshotName:
 class TestWarnIfNameReused:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
@@ -120,6 +121,7 @@ class TestWarnIfNameReused:
 class TestResolveCheckpointPath:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
@@ -170,12 +172,13 @@ class TestResolveCheckpointPath:
 class TestSaveState:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
         return client
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
     def test_timeout_waits_for_future(self, mock_save_state):
         client = self._make_client()
         future = MagicMock()
@@ -187,7 +190,7 @@ class TestSaveState:
         mock_save_state.assert_called_once_with("step-1", ttl_seconds=None, overwrite=False)
         future.result.assert_called_once_with(timeout=30)
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
     def test_without_timeout_returns_future_immediately(self, mock_save_state):
         client = self._make_client()
         future = MagicMock()
@@ -199,7 +202,7 @@ class TestSaveState:
         mock_save_state.assert_called_once_with("step-1", ttl_seconds=None, overwrite=False)
         future.result.assert_not_called()
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
     def test_overwrite_true_raises_not_implemented(self, mock_save_state):
         client = self._make_client()
 
@@ -208,7 +211,7 @@ class TestSaveState:
 
         mock_save_state.assert_not_called()
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.save_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
     def test_save_state_async_rejects_overwrite_true(self, mock_save_state):
         client = self._make_client()
 
@@ -221,9 +224,10 @@ class TestSaveState:
 class TestLoadStateCompatibility:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         return client
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.load_state")
     def test_load_state_passes_through_without_access_token(self, mock_load_state):
         client = self._make_client()
         future = MagicMock()
@@ -234,7 +238,7 @@ class TestLoadStateCompatibility:
         assert result is future
         mock_load_state.assert_called_once_with("step-1", weights_access_token=None)
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.load_state")
     def test_load_state_rejects_non_schema_path(self, mock_load_state):
         client = self._make_client()
 
@@ -243,7 +247,7 @@ class TestLoadStateCompatibility:
 
         mock_load_state.assert_not_called()
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.load_state")
     def test_load_state_rejects_access_token(self, mock_load_state):
         client = self._make_client()
 
@@ -252,7 +256,9 @@ class TestLoadStateCompatibility:
 
         mock_load_state.assert_not_called()
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.load_state_with_optimizer")
+    @patch(
+        "fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.load_state_with_optimizer"
+    )
     def test_load_state_with_optimizer_rejects_access_token(self, mock_load_state):
         client = self._make_client()
 
@@ -265,6 +271,7 @@ class TestLoadStateCompatibility:
 class TestForwardBackward:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
@@ -277,13 +284,21 @@ class TestForwardBackward:
         )
         return client
 
-    @pytest.mark.parametrize("weights", [
-        types.TensorData(data=[0.0, 1.0, 1.0, 0.0], dtype="float32", shape=[4]),
-        # Stored nonzeros must count separately even when duplicate sparse columns cancel.
-        types.TensorData(data=[0.25, -0.25, 0.0], dtype="float32", shape=[1, 2],
-                         sparse_crow_indices=[0, 3], sparse_col_indices=[0, 0, 1]),
-    ])
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @pytest.mark.parametrize(
+        "weights",
+        [
+            types.TensorData(data=[0.0, 1.0, 1.0, 0.0], dtype="float32", shape=[4]),
+            # Stored nonzeros must count separately even when duplicate sparse columns cancel.
+            types.TensorData(
+                data=[0.25, -0.25, 0.0],
+                dtype="float32",
+                shape=[1, 2],
+                sparse_crow_indices=[0, 3],
+                sparse_col_indices=[0, 0, 1],
+            ),
+        ],
+    )
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_cross_entropy_adds_response_tokens_from_weights(self, mock_forward_backward, weights):
         client = self._make_client()
         future = MagicMock()
@@ -305,7 +320,7 @@ class TestForwardBackward:
         assert result.metrics["response_tokens"] == 2.0
         mock_forward_backward.assert_called_once_with([datum], "cross_entropy", None)
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_cross_entropy_falls_back_to_target_token_length(self, mock_forward_backward):
         client = self._make_client()
         future = MagicMock()
@@ -325,7 +340,7 @@ class TestForwardBackward:
 
         assert result.metrics["response_tokens"] == 3.0
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_proto_forward_backward_is_rejected(self, mock_forward_backward):
         client = self._make_client()
         client.holder._client_config.proto_write_fwdbwd = True
@@ -335,19 +350,21 @@ class TestForwardBackward:
 
         mock_forward_backward.assert_not_called()
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_parallel_forward_backward_is_preserved_for_firetitan(self, mock_forward_backward):
         client = self._make_client()
         client.holder._client_config.parallel_fwdbwd_chunks = True
         future = MagicMock()
         mock_forward_backward.return_value = future
 
-        result = client.forward_backward([types.Datum(model_input=types.ModelInput.from_ints([1]), loss_fn_inputs={})], "supervised")
+        result = client.forward_backward(
+            [types.Datum(model_input=types.ModelInput.from_ints([1]), loss_fn_inputs={})], "supervised"
+        )
 
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_r3_missing_or_misaligned_logs_one_error(self, mock_forward_backward, caplog):
         client = self._make_client()
         mock_forward_backward.return_value = MagicMock()
@@ -381,7 +398,7 @@ class TestForwardBackward:
         assert "datum[0] routing_matrices is empty; expected 3" in messages[0]
         assert "datum[1] routing_matrix_count=1; expected 3" in messages[0]
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_r3_valid_or_disabled_does_not_log_error(self, mock_forward_backward, caplog):
         client = self._make_client()
         mock_forward_backward.return_value = MagicMock()
@@ -403,7 +420,7 @@ class TestForwardBackward:
 
         assert "R3 is enabled" not in caplog.text
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_r3_multimodal_counts_image_positions(self, mock_forward_backward, caplog):
         client = self._make_client()
         mock_forward_backward.return_value = MagicMock()
@@ -427,7 +444,7 @@ class TestForwardBackward:
 
         assert "R3 is enabled" not in caplog.text
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_r3_multimodal_mismatch_uses_expanded_position_count(self, mock_forward_backward, caplog):
         client = self._make_client()
         mock_forward_backward.return_value = MagicMock()
@@ -563,7 +580,7 @@ class TestRoutingMatrixChunkSizing:
         assert client._estimate_bytes_count(datum) == 20 + expected_r3_bytes
 
     def test_routing_matrices_force_chunk_split(self, monkeypatch):
-        import tinker.lib.public_interfaces.training_client as tinker_training_client
+        import fireworks.training.sdk._core.lib.public_interfaces.training_client as tinker_training_client
 
         client = self._make_client()
         datum = self._datum(["A" * 160])
@@ -597,6 +614,11 @@ class TestParallelChunkSubmission:
     class _ImmediateThreadFuture:
         def __init__(self, coro):
             self._value = asyncio.run(coro)
+            self._future = Future()
+            self._future.set_result(self._value)
+
+        def future(self):
+            return self._future
 
         def result(self, timeout=None):
             return self._value
@@ -945,10 +967,17 @@ class TestOptimStep:
 
     class _ImmediateThreadFuture:
         def __init__(self, coro):
-            self._coro = coro
+            from fireworks.training.sdk._core.lib.internal_client_holder import (
+                _internal_client_holder_thread_singleton,
+            )
+
+            self._future = asyncio.run_coroutine_threadsafe(coro, _internal_client_holder_thread_singleton.get_loop())
+
+        def future(self):
+            return self._future
 
         def result(self):
-            return asyncio.run(self._coro)
+            return self._future.result()
 
     class _ClientContext:
         def __init__(self, training):
@@ -972,6 +1001,7 @@ class TestOptimStep:
 
     def _make_client(self, captured: dict):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._get_request_id = MagicMock(return_value=41)
         client._guaranteed_model_id = MagicMock(return_value="model")
         client._queue_state_logger = None
@@ -1340,11 +1370,11 @@ class TestFiretitanServiceClientManagedCompat:
             )
 
     def test_fireworks_key_service_client_uses_local_client_config(self):
-        from tinker.lib import internal_client_holder as holder_module
+        from fireworks.training.sdk._core.lib import internal_client_holder as holder_module
 
         original_auth_provider = getattr(holder_module, "ApiKeyAuthProvider", None)
         with patch(
-            "tinker.lib.public_interfaces.service_client.ServiceClient.__init__",
+            "fireworks.training.sdk._core.lib.public_interfaces.service_client.ServiceClient.__init__",
             return_value=None,
         ) as init:
             FiretitanServiceClient(base_url="https://trainer.test", api_key="fw-key")
@@ -1503,25 +1533,6 @@ class TestFiretitanServiceClientManagedCompat:
         assert kwargs["train_unembed"] is True
         assert kwargs["train_mlp"] is True
         assert kwargs["train_attn"] is True
-
-    def test_lazy_managed_rest_client_weights_info_ignores_path(self):
-        # Dedicated/managed path: the lazy-managed stub returns the frozen
-        # managed config regardless of the requested path (resume stays pinned
-        # to the one dedicated trainer config). This locks the non-serverless
-        # behavior that must stay unchanged.
-        managed_config = SimpleNamespace(
-            base_model="accounts/acct/models/base",
-            lora_rank=8,
-            train_unembed=True,
-            train_mlp=False,
-            train_attn=True,
-        )
-        stub = _LazyManagedRestClient(managed_config)
-        info = stub.get_weights_info_by_tinker_path("some/other/run/step-1").result()
-        assert info.base_model == "accounts/acct/models/base"
-        assert info.is_lora is True
-        assert info.lora_rank == 8
-        assert info.train_mlp is False
 
     def test_from_firetitan_config_deprecates_accelerator_fields(self):
         with pytest.warns(DeprecationWarning) as record:
@@ -1708,7 +1719,9 @@ class TestFiretitanServiceClientManagedCompat:
             32,
             128,
         ]
-        assert [call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list] == [
+        assert [
+            call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list
+        ] == [
             1,
             1,
             1,
@@ -2402,6 +2415,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
         svc._managed_additional_headers = {"X-Test-Header": "1"}
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
@@ -2421,6 +2435,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1"
+        svc._training_base_url = "https://api.example.com/training/v1"
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
@@ -2434,6 +2449,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
         svc._managed_additional_headers = {"X-Test-Header": "1"}
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
@@ -2457,6 +2473,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
         svc._managed_additional_headers = {}
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
@@ -2472,6 +2489,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1"
+        svc._training_base_url = "https://api.example.com/training/v1"
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
@@ -2485,6 +2503,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._sampler_backend = None
         svc._managed_config = None
         svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = None  # _resolved_account_id() degrades to None.
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
@@ -2526,46 +2545,10 @@ class TestFiretitanServiceClientManagedCompat:
         assert svc.requires_initial_sampler_sync() is False
 
 
-class TestLazyManagedRestClient:
-    def _make_rest_client(self):
-        managed_config = SimpleNamespace(
-            base_model="accounts/acct/models/base",
-            trainer_job_id=None,
-            lora_rank=8,
-            train_unembed=True,
-            train_mlp=True,
-            train_attn=True,
-        )
-        return _LazyManagedRestClient(managed_config)
-
-    def test_get_audit_log_raises_not_implemented(self):
-        rest_client = self._make_rest_client()
-
-        with pytest.raises(NotImplementedError, match="get_audit_log"):
-            rest_client.get_audit_log().result()
-
-    def test_assign_session_project_raises_not_implemented(self):
-        rest_client = self._make_rest_client()
-
-        with pytest.raises(NotImplementedError, match="assign_session_project"):
-            rest_client.assign_session_project("session-1", "project-1").result()
-
-    def test_get_audit_log_async_raises_not_implemented(self):
-        rest_client = self._make_rest_client()
-
-        with pytest.raises(NotImplementedError, match="get_audit_log_async"):
-            asyncio.run(rest_client.get_audit_log_async())
-
-    def test_assign_session_project_async_raises_not_implemented(self):
-        rest_client = self._make_rest_client()
-
-        with pytest.raises(NotImplementedError, match="assign_session_project_async"):
-            asyncio.run(rest_client.assign_session_project_async("session-1", "project-1"))
-
-
 def _bare_training_client():
     """A FiretitanTrainingClient with __init__ bypassed for unit testing."""
     client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
     client.routing_matrix_format, client.r3_store_id = "base64_inline", None
     client._http_admissions = {}
     client._http_admission_slots = None
@@ -2575,34 +2558,6 @@ def _bare_training_client():
     client._sampler_checkpoint_saved = False
     client._first_sampler_checkpoint_type = "base"
     return client
-
-
-class TestSaveWeightsAndGetSamplingClientUnsupported:
-    """The Tinker combined save+sample idiom has no FireTitan equivalent.
-
-    Fireworks samples from a separate hot-load deployment, so the inherited
-    tinker implementation (ephemeral in-service sampling session) cannot work.
-    All three entry points must raise NotImplementedError with the two-step
-    idiom rather than the opaque inherited AssertionError.
-    """
-
-    def test_sync_raises_with_idiom(self):
-        client = _bare_training_client()
-        with pytest.raises(NotImplementedError) as exc:
-            client.save_weights_and_get_sampling_client("step-1")
-        assert "save_weights_for_sampler" in str(exc.value)
-        assert "create_sampling_client" in str(exc.value)
-        assert str(exc.value) == SAMPLING_CLIENT_FROM_TRAINER_MESSAGE
-
-    def test_submit_raises(self):
-        client = _bare_training_client()
-        with pytest.raises(NotImplementedError):
-            client.save_weights_and_get_sampling_client_submit()
-
-    def test_async_raises(self):
-        client = _bare_training_client()
-        with pytest.raises(NotImplementedError):
-            asyncio.run(client.save_weights_and_get_sampling_client_async("step-1"))
 
 
 class TestGetTokenizer:
@@ -2624,6 +2579,7 @@ class TestGetTokenizer:
 class TestTrainingClientSamplingHelpers:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client.routing_matrix_format, client.r3_store_id = "base64_inline", None
         client._trainer_supports_rdma_weight_sync = False
         client._trainer_rdma_weight_sync_enabled = None
@@ -2668,10 +2624,10 @@ class TestTrainingClientSamplingHelpers:
             "save_weights_for_sampler_ext",
             return_value=SaveSamplerResult(path="raw/path", snapshot_name="step-1-test1234"),
         ) as save_ext:
-            future = client.save_weights_for_sampler("step-1", checkpoint_type="base", ttl_seconds=60)
+            future = client.save_weights_for_sampler("step-1", checkpoint_type="base")
 
         assert future.result().path == "raw/path"
-        save_ext.assert_called_once_with("step-1", checkpoint_type="base", ttl_seconds=60)
+        save_ext.assert_called_once_with("step-1", checkpoint_type="base", ttl_seconds=None)
 
     def test_save_weights_for_sampler_passes_export_precision(self):
         client = self._make_client()
@@ -2723,9 +2679,9 @@ class TestTrainingClientSamplingHelpers:
         public_path = "run-abc:train:0/step-1-test1234"
 
         def run_coroutine_threadsafe(coro):
-            future = MagicMock()
-            future.result.return_value = asyncio.run(coro)
-            return future
+            pending = Future()
+            pending.set_result(asyncio.run(coro))
+            return AwaitableConcurrentFuture(pending)
 
         client._take_turn = MagicMock(return_value=nullcontext())
         client._queue_state_logger = None
@@ -2734,7 +2690,9 @@ class TestTrainingClientSamplingHelpers:
             execute_with_retries=AsyncMock(return_value="save-future"),
         )
 
-        with patch("fireworks.training.sdk.client._APIFuture", AsyncMock(return_value=SimpleNamespace(path=public_path))):
+        with patch(
+            "fireworks.training.sdk.client._APIFuture", AsyncMock(return_value=SimpleNamespace(path=public_path))
+        ):
             result = client.save_weights_for_sampler_ext("step-1", checkpoint_type="delta")
 
         assert result == SaveSamplerResult(path=public_path, snapshot_name="step-1-test1234")
@@ -2928,7 +2886,7 @@ class TestTrainingClientSamplingHelpers:
 
         assert deploy_mgr.hotload_and_wait.call_args.kwargs["incremental_snapshot_metadata"] is None
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
     def test_existing_response_tokens_metric_is_preserved(self, mock_forward_backward):
         client = self._make_client()
         future = MagicMock()
@@ -2950,12 +2908,13 @@ class TestTrainingClientSamplingHelpers:
 class TestForwardBackwardCustomEmbedding:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
         return client
 
-    @patch("tinker.lib.public_interfaces.training_client.TrainingClient.forward_backward_custom")
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward_custom")
     def test_logprob_output_delegates_to_upstream_tinker(self, mock_forward_backward_custom):
         client = self._make_client()
         future = MagicMock()
@@ -2966,7 +2925,9 @@ class TestForwardBackwardCustomEmbedding:
         assert result is future
         mock_forward_backward_custom.assert_called_once()
 
-    def test_logprob_output_reuses_precomputed_forward(self, monkeypatch):
+    @pytest.mark.parametrize("default_dtype", [torch.float32, torch.float64])
+    @pytest.mark.parametrize("strided", [False, True])
+    def test_logprob_output_reuses_precomputed_forward(self, monkeypatch, default_dtype, strided):
         client = self._make_client()
         datum = types.Datum(
             model_input=types.ModelInput.from_ints([1, 2]),
@@ -2978,12 +2939,15 @@ class TestForwardBackwardCustomEmbedding:
                 )
             },
         )
+        values = np.array([-0.2, -0.4, -0.6, -0.8], dtype=np.float32)
+        if strided:
+            values = values[::-1].copy()[::-1]
         precomputed = types.ForwardBackwardOutput(
             loss_fn_output_type="cross_entropy",
             loss_fn_outputs=[
                 {
                     "logprobs": types.TensorData(
-                        data=[-0.2, -0.4, -0.6, -0.8],
+                        data=values,
                         dtype="float32",
                         shape=[2, 2],
                     )
@@ -3001,6 +2965,11 @@ class TestForwardBackwardCustomEmbedding:
         class _ImmediateFuture:
             def __init__(self, value):
                 self.value = value
+
+            def future(self):
+                pending = Future()
+                pending.set_result(self.value)
+                return pending
 
             def result(self, timeout=None):
                 return self.value
@@ -3031,21 +3000,26 @@ class TestForwardBackwardCustomEmbedding:
             coefficients = torch.tensor([[3.0, -1.0], [2.0, 4.0]])
             return (logprobs[0] * coefficients).sum(), {"custom": 2.0}
 
-        future = client.forward_backward_custom(
-            [datum],
-            loss_fn,
-            precomputed_forward=precomputed,
-        )
-        result = future.result()
+        previous_dtype = torch.get_default_dtype()
+        try:
+            torch.set_default_dtype(default_dtype)
+            with patch.object(types.TensorData, "data", new_callable=PropertyMock) as copied:
+                copied.side_effect = AssertionError("Precomputed tensors copied to Python lists")
+                future = client.forward_backward_custom(
+                    [datum],
+                    loss_fn,
+                    precomputed_forward=precomputed,
+                )
+                result = future.result()
+        finally:
+            torch.set_default_dtype(previous_dtype)
 
         assert result.metrics["custom"] == 2.0
         assert captured["loss_fn"] == "cross_entropy"
         assert captured["loss_fn_config"] is None
         linear_inputs = captured["data"][0].loss_fn_inputs
         assert linear_inputs["target_tokens"] == datum.loss_fn_inputs["target_tokens"]
-        assert linear_inputs["weights"].data == pytest.approx(
-            [-3.0, 1.0, -2.0, -4.0]
-        )
+        assert linear_inputs["weights"].data == pytest.approx([-3.0, 1.0, -2.0, -4.0])
         assert linear_inputs["weights"].shape == [2, 2]
 
     @pytest.mark.parametrize(
@@ -3229,9 +3203,7 @@ class TestForwardBackwardCustomEmbedding:
 
         class Holder:
             def run_coroutine_threadsafe(self, coro):
-                return AwaitableConcurrentFuture(
-                    asyncio.run_coroutine_threadsafe(coro, holder_loop)
-                )
+                return AwaitableConcurrentFuture(asyncio.run_coroutine_threadsafe(coro, holder_loop))
 
         def stop():
             holder_loop.call_soon_threadsafe(holder_loop.stop)
@@ -3314,9 +3286,7 @@ class TestForwardBackwardCustomEmbedding:
         datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
         forward_output = types.ForwardBackwardOutput(
             loss_fn_output_type="forward",
-            loss_fn_outputs=[
-                {"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}
-            ],
+            loss_fn_outputs=[{"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}],
             metrics={},
         )
         backward_output = types.ForwardBackwardOutput(
@@ -3383,9 +3353,7 @@ class TestForwardBackwardCustomEmbedding:
         datum = types.Datum(model_input=types.ModelInput.from_ints([1, 2]), loss_fn_inputs={})
         forward_output = types.ForwardBackwardOutput(
             loss_fn_output_type="forward",
-            loss_fn_outputs=[
-                {"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}
-            ],
+            loss_fn_outputs=[{"projection": types.TensorData(data=[0.0, 0.0], dtype="float32", shape=[2, 1])}],
             metrics={},
         )
         backward_output = types.ForwardBackwardOutput(
@@ -3678,6 +3646,7 @@ class TestCreateTrainingClientInitMethod:
 class TestLoadAdapter:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client._saved_sampler_names = set()
         client._saved_state_names = set()
         client.session_id = "test1234"
@@ -3702,11 +3671,14 @@ class TestLoadAdapter:
         we just verify the dispatch happened and the coroutine was constructed.
         """
         client = self._make_client()
-        with patch.object(client, "_get_request_id", return_value=42):
+        with (
+            patch.object(client, "_get_request_id", return_value=42),
+            patch.object(client, "_submit_operation") as submit,
+        ):
             client.load_adapter("gs://bucket/adapter-dir")
 
-        client.holder.run_coroutine_threadsafe.assert_called_once()
-        coro_arg = client.holder.run_coroutine_threadsafe.call_args.args[0]
+        submit.assert_called_once()
+        coro_arg = submit.call_args.args[0]
         assert hasattr(coro_arg, "__await__")
         coro_arg.close()
 
@@ -3781,6 +3753,7 @@ class TestBuildEmbeddingRequestsDispatch:
 
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+        CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
         client.session_id = "test1234"
         client.holder = MagicMock()
         return client

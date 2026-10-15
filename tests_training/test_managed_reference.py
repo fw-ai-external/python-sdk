@@ -232,7 +232,6 @@ class TestReferenceManagedConfig:
         assert reference.extra_args == ["--test-flag"]
 
 
-
 class TestTrainerCreateShapeRef:
     def test_strips_resolved_profile_version(self):
         profile = SimpleNamespace(
@@ -712,9 +711,7 @@ class TestManagedProvisioning:
             events.append(f"deployment_start:{trainer_job_name}")
             return SimpleNamespace(deployment_id="deployment-1"), object(), False, True
 
-        monkeypatch.setattr(
-            managed_module, "_build_resource_managers", lambda **_k: (FakeTrainerManager(), object())
-        )
+        monkeypatch.setattr(managed_module, "_build_resource_managers", lambda **_k: (FakeTrainerManager(), object()))
         monkeypatch.setattr(managed_module, "_attach_managed_deployment", fake_attach_deployment)
         monkeypatch.setattr(managed_module, "FiretitanServiceClient", FakeServiceClient)
 
@@ -958,31 +955,9 @@ class TestManagedTinkerHandleCleanup:
     def test_close_stops_tinker_holder_before_deleting_trainer(self):
         events: list[str] = []
 
-        class FakeFuture:
-            def result(self, timeout=None):
-                events.append(f"holder_cleanup_result:{timeout}")
-
-        class FakeTelemetry:
-            def _trigger_flush(self):
-                events.append("telemetry_flush")
-
-            def _wait_until_drained_sync(self):
-                events.append("telemetry_drained")
-
-            def stop(self):
-                events.append("telemetry_stop")
-
         class FakeHolder:
-            def get_telemetry(self):
-                return FakeTelemetry()
-
-            def _async_cleanup(self):
-                events.append("holder_async_cleanup")
-                return "cleanup-coro"
-
-            def run_coroutine_threadsafe(self, coro):
-                events.append(f"holder_run:{coro}")
-                return FakeFuture()
+            def close(self):
+                events.append("holder_close")
 
         class FakeTrainerManager:
             def delete(self, job_id):
@@ -999,11 +974,6 @@ class TestManagedTinkerHandleCleanup:
         handle.close()
 
         assert events == [
-            "telemetry_flush",
-            "telemetry_drained",
-            "telemetry_stop",
-            "holder_async_cleanup",
-            "holder_run:cleanup-coro",
-            "holder_cleanup_result:5.0",
+            "holder_close",
             "delete:ref-job",
         ]

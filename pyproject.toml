@@ -43,14 +43,18 @@ Homepage = "https://github.com/fw-ai-external/python-sdk"
 Repository = "https://github.com/fw-ai-external/python-sdk"
 
 [project.optional-dependencies]
-# Lightweight: only what the training SDK actually imports at runtime.
+# Python 3.11+ only: the training package checks this before runtime imports.
+# The inference SDK retains its Python 3.9+ support.
 # Use this for CI, deployment, and programmatic training job management.
 training-sdk = [
-  "tinker==0.23.0 ; python_version >= '3.11'",
+  "httpx[http2]>=0.23.0,<1",
+  "numpy>=1.24.0 ; python_version >= '3.11'",
+  "protobuf>=4.25.3,<8 ; python_version >= '3.11'",
+  "zstandard>=0.22.0 ; python_version >= '3.11'",
   # Request validation uses FailFast; keep the control-plane runtime supported.
   "pydantic>=2.9.2,<2.13",
   "orjson>=3.10.0",
-  # The SDK patches Tinker 0.23's transport to include system TLS roots.
+  # Native HTTP transport includes system TLS roots.
   "pyqwest==0.10.0 ; python_version >= '3.11'",
   "requests",
   "urllib3>=1.26,<3",
@@ -177,7 +181,6 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
   "error",
-  "ignore::urllib3.exceptions.InsecureRequestWarning",
   "ignore:Importing from 'fireworks.client':DeprecationWarning",
   "ignore:acreate\\(\\) is deprecated:DeprecationWarning",
 ]

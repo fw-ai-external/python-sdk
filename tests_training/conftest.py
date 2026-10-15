@@ -3,13 +3,10 @@
 import pytest
 
 
-def pytest_collection_modifyitems(items):
-    for item in items:
-        item.add_marker(
-            pytest.mark.filterwarnings(
-                "ignore::pytest.PytestUnraisableExceptionWarning"
-            )
-        )
+def pytest_configure(config):
+    # urllib3 belongs to the training extra; inference-only test environments
+    # must not import it while parsing the package-wide warning filters.
+    config.addinivalue_line("filterwarnings", "ignore::urllib3.exceptions.InsecureRequestWarning")
 
 
 @pytest.fixture(autouse=True)

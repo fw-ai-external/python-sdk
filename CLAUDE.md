@@ -2,6 +2,10 @@
 
 ## Tinker-style Training SDK
 
+The training SDK is Fireworks-owned and has no external Tinker dependency.
+Preserve supported client/type/future interfaces and JSON v1/v2 contracts.
+Unsupported inherited operations must fail before sending a request.
+
 When working on the tinker-style training SDK, **only look at code in `src/fireworks/training/`**. Do not reference or modify training-related code outside of this directory.
 
 This SDK repo contains auto-generated code from Stainless outside of `src/fireworks/training/`. The training SDK is developed independently and lives entirely within that directory.

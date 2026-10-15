@@ -30,7 +30,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
-logging.getLogger("tinker.lib.api_future_impl").setLevel(logging.ERROR)
+logging.getLogger("fireworks.training.sdk._core.lib.api_future_impl").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 

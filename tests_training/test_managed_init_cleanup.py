@@ -19,7 +19,6 @@ def setup_resources(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     deployment = SimpleNamespace(deployment_id="rollout")
     backend = Mock()
     service = Mock()
-    service.holder.get_telemetry.return_value = None
     training = service.create_training_client.return_value
     reference = Mock()
     attach = Mock(return_value=(deployment, backend, False, True))
@@ -68,7 +67,7 @@ def test_setup_failure_releases_owned_resources(setup_resources: SimpleNamespace
             ),
         )
     assert raised.value is error
-    r.service.holder._async_cleanup.assert_called_once()
+    r.service.holder.close.assert_called_once()
     r.trainer_mgr.delete.assert_called_once_with("trainer")
     r.deploy_mgr.delete.assert_called_once_with("rollout")
     r.reference.close.assert_called_once()
@@ -95,7 +94,7 @@ def test_setup_failure_preserves_reused_resources(
         )
     assert r.trainer_mgr.delete.call_count == int(trainer_created)
     assert r.deploy_mgr.delete.call_count == int(deployment_created)
-    r.service.holder._async_cleanup.assert_called_once()
+    r.service.holder.close.assert_called_once()
 
 
 @pytest.mark.parametrize("cleanup", [None, "scale_to_zero"])
@@ -114,7 +113,7 @@ def test_setup_failure_respects_cleanup_settings(setup_resources: SimpleNamespac
     r.trainer_mgr.delete.assert_not_called()
     r.deploy_mgr.delete.assert_not_called()
     assert r.deploy_mgr.scale_to_zero.call_count == int(cleanup == "scale_to_zero")
-    r.service.holder._async_cleanup.assert_called_once()
+    r.service.holder.close.assert_called_once()
 
 
 def test_cleanup_errors_do_not_mask_setup_failure_or_skip_other_resources(setup_resources: SimpleNamespace) -> None:
@@ -135,7 +134,7 @@ def test_cleanup_errors_do_not_mask_setup_failure_or_skip_other_resources(setup_
         )
     assert raised.value is error
     r.reference.close.assert_called_once()
-    r.service.holder._async_cleanup.assert_called_once()
+    r.service.holder.close.assert_called_once()
     r.deploy_mgr.delete.assert_called_once_with("rollout")
     r.trainer_mgr.delete.assert_called_once_with("trainer")
 
@@ -153,12 +152,12 @@ def test_success_transfers_cleanup_to_caller(setup_resources: SimpleNamespace) -
     assert handle.training_client is r.training
     assert handle.training_clients == [r.training]
     assert handle.reference_handle is r.reference
-    r.service.holder._async_cleanup.assert_not_called()
+    r.service.holder.close.assert_not_called()
     r.trainer_mgr.delete.assert_not_called()
     r.deploy_mgr.delete.assert_not_called()
     r.reference.close.assert_not_called()
     handle.close()
     handle.close()
-    r.service.holder._async_cleanup.assert_called_once()
+    r.service.holder.close.assert_called_once()
     r.trainer_mgr.delete.assert_called_once_with("trainer")
     r.deploy_mgr.delete.assert_called_once_with("rollout")

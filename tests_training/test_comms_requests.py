@@ -6,13 +6,13 @@ from contextlib import nullcontext
 
 import httpx
 import pytest
-from tinker import types
-from tinker._client import AsyncTinker
-from tinker._base_client import AsyncHttpxClientWrapper
-from tinker.types.client_config_response import ClientConfigResponse
 
+from fireworks.training.sdk import types
 from fireworks.training.sdk._comms import get_comms
 from fireworks.training.sdk.client import FiretitanServiceClient, FiretitanTrainingClient
+from fireworks.training.sdk._core._client import AsyncTrainingHTTPClient
+from fireworks.training.sdk._core._base_client import AsyncHttpxClientWrapper
+from fireworks.training.sdk.types.client_config_response import ClientConfigResponse
 
 # Tinker's response decoder still calls Pydantic's deprecated construct().
 pytestmark = pytest.mark.filterwarnings(
@@ -20,9 +20,46 @@ pytestmark = pytest.mark.filterwarnings(
 )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flag", ["proto_write_fwdbwd", "proto_compress_fwdbwd"])
+@pytest.mark.parametrize("feature", ["routing_matrices", "routing_references", "top_sampling_references"])
+async def test_resource_rejects_unimplemented_binary_requests_before_sending(flag, feature):
+    sent = []
+
+    def receive(request):
+        sent.append(request)
+        return httpx.Response(200, json={"request_id": "must-not-submit"})
+
+    model_input = types.ModelInput.from_ints([1, 2])
+    if feature == "routing_matrices":
+        model_input = model_input.model_copy(update={feature: ["", "matrix"]})
+    else:
+        # The format must be rejected before visiting even unfamiliar reference fields.
+        model_input = model_input.model_copy(update={feature: {"length": 2, "files": [], "spans": []}})
+    request = types.ForwardBackwardRequest(
+        model_id="model",
+        seq_id=1,
+        forward_backward_input=types.ForwardBackwardInput(
+            data=[types.Datum(model_input=model_input)],
+            loss_fn="ppo",
+            loss_fn_config={"clip_low_threshold": 0.2, "target_logprob_support": "sampling_support", "enabled": True},
+        ),
+    )
+    async with AsyncTrainingHTTPClient(
+        api_key="test-key",
+        base_url="https://trainer.invalid",
+        http_client=AsyncHttpxClientWrapper(transport=httpx.MockTransport(receive)),
+        _client_config=ClientConfigResponse(**{flag: True}, use_pyqwest_transport=False),
+    ) as client:
+        with pytest.raises(NotImplementedError, match="end-to-end Fireworks transport support"):
+            await client.training.forward_backward(request=request)
+    assert sent == []
+
+
 def test_managed_service_leaves_negotiation_to_each_model(monkeypatch):
     service = FiretitanServiceClient.from_firetitan_config(
-        api_key="fw-test", base_model="accounts/test/models/base",
+        api_key="fw-test",
+        base_model="accounts/test/models/base",
     )
     assert not hasattr(service, "holder")
     received = []
@@ -60,7 +97,7 @@ async def test_sdk_marks_only_comms_training_requests(operation, comms, monkeypa
     async def execute(send, *args):
         return await send(*args)
 
-    async with AsyncTinker(
+    async with AsyncTrainingHTTPClient(
         api_key="tml-test",
         base_url="https://trainer.invalid",
         max_retries=1,

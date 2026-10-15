@@ -141,13 +141,11 @@ def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_r
 
 
 def test_top_sampling_references_survive_model_input_wire_serialization():
-    import tinker
-    from tinker._compat import model_dump
-    from tinker.lib._pydantic_conv import to_pydantic_request
-    from tinker.types.forward_backward_input import ForwardBackwardInput
-    from tinker.types.forward_backward_request import ForwardBackwardRequest
-
-    import fireworks.training.sdk.patches  # noqa: F401
+    import fireworks.training.sdk._core as tinker
+    from fireworks.training.sdk._core._compat import model_dump
+    from fireworks.training.sdk._core.lib._pydantic_conv import to_pydantic_request
+    from fireworks.training.sdk.types.forward_backward_input import ForwardBackwardInput
+    from fireworks.training.sdk.types.forward_backward_request import ForwardBackwardRequest
 
     references = concat_routing([""], refs(2, 7))
     model_input = tinker.ModelInput.from_ints([1, 2, 3], routing_matrices=refs(3), top_sampling_references=references)
@@ -184,9 +182,7 @@ def test_top_sampling_references_survive_model_input_wire_serialization():
 
 def test_model_input_copy_clears_the_previous_routing_representation():
     # The training client installs these extensions; do not depend on test order.
-    from tinker import types
-
-    import fireworks.training.sdk.patches  # noqa: F401
+    from fireworks.training.sdk import types
     from fireworks.training.sdk.routing import routing_model_input_kwargs
 
     original = types.ModelInput.from_ints([1, 2], routing_matrices=["a", "b"])

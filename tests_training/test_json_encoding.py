@@ -6,11 +6,10 @@ import math
 import httpx
 import numpy as np
 import pytest
-from tinker import TensorData
-from tinker._base_client import AsyncHttpxClientWrapper
 
+from fireworks.training.sdk._core import TensorData
 from fireworks.training.sdk._comms import comms_context
-from fireworks.training.sdk.patches import _tinker_json_encoding_patch  # noqa: F401
+from fireworks.training.sdk._core._base_client import AsyncHttpxClientWrapper
 
 
 @pytest.fixture(autouse=True)
@@ -51,9 +50,19 @@ def test_numeric_json_retains_values_and_request_options(value):
 def test_default_and_unrelated_requests_keep_httpx_bytes(operation, comms):
     tensor = TensorData(data=[1e-6] * 512, dtype="float32")
     input_key = "forward_backward_input" if operation == "forward_backward" else "forward_input"
-    body = {input_key: {"data": [{"loss_fn_inputs": {
-        "weights": {"data": tensor.data, "dtype": "float32"},
-    }}]}, "model_id": "model", "seq_id": 1}
+    body = {
+        input_key: {
+            "data": [
+                {
+                    "loss_fn_inputs": {
+                        "weights": {"data": tensor.data, "dtype": "float32"},
+                    }
+                }
+            ]
+        },
+        "model_id": "model",
+        "seq_id": 1,
+    }
     url = f"https://example.com/api/v1/{operation}"
     with comms_context(comms):
         actual = AsyncHttpxClientWrapper().build_request("POST", url, json=body)

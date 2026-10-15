@@ -1,6 +1,6 @@
-"""Fireworks Tinker SDK compatibility extensions for full-param training.
+"""Fireworks training clients for full-parameter and LoRA training.
 
-This layer extends the upstream tinker client with:
+The clients support:
   1. training-client creation with lora_config=None support
   2. optimizer-step grad_accumulation_normalization and grad-norm metrics controls
   3. routing_matrices-aware JSON request sizing
@@ -12,7 +12,7 @@ This layer extends the upstream tinker client with:
   9. HF PEFT adapter warm-start loading (weights-only)
   10. custom-loss backward reuse of a compatible forward result
 
-Most other methods are inherited from tinker.
+Shared request, future and lifecycle behavior lives in the owned runtime.
 """
 
 from __future__ import annotations
@@ -27,35 +27,21 @@ import logging
 import warnings
 import threading
 from enum import Enum
-from typing import Any, Literal, TypeVar, Callable, Optional, NamedTuple
-from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from contextlib import nullcontext, asynccontextmanager
 from dataclasses import fields, replace, dataclass, is_dataclass
 from collections.abc import Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
-import httpx
 import numpy as np
-from tinker import APIStatusError, SamplingClient, types
 from pydantic import Field, BaseModel, field_validator
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
-from tinker.lib.telemetry import Telemetry
-from tinker.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
-from tinker.lib.queue_state_logger import QueueStateLogger
-from tinker.lib.client_connection_pool_type import ClientConnectionPoolType
-from tinker.lib.public_interfaces.api_future import APIFuture
-from tinker.lib.public_interfaces.service_client import ServiceClient
-from tinker.lib.public_interfaces.training_client import (
-    TrainingClient,
-    combine_fwd_bwd_output_results,
-)
 
-# Explicitly apply the tinker-type patches this module depends on, rather than
-# relying on the package ``__init__`` side effect. ``create_training_client``
-# constructs ``types.LoraConfig(alpha=...)``, and the ``alpha`` field only
-# exists after ``_tinker_lora_alpha_patch`` runs; importing it here guarantees
-# the field is present whenever this module is loaded (the patch is idempotent).
-import fireworks.training.sdk.patches  # noqa: F401  (applies LoraConfig.alpha + others)
+from fireworks.training.sdk import types
+from fireworks.training.sdk._core import APIStatusError, SamplingClient
+from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 from fireworks.training.sdk._comms import Comms, comms_context
 from fireworks.training.sdk.routing import RoutingReferences, RoutingMatrixFormat
 from fireworks.training.sdk.decision import SamplerCheckpointMetadata
@@ -70,6 +56,8 @@ from fireworks.training.sdk.deployment import (
     DeploymentSampler,
 )
 from fireworks.training.sdk.concurrency import SamplingConcurrencyController
+from fireworks.training.sdk._core._client import resolve_training_base_url
+from fireworks.training.sdk._core.lib.comms import CommsV2APIFuture
 from fireworks.training.sdk._snapshot_chain import (
     ExportPrecision,
     SamplerCheckpointType,
@@ -77,9 +65,21 @@ from fireworks.training.sdk._snapshot_chain import (
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
 )
-from fireworks.training.sdk.patches._tinker_result_validation_patch import CommsV2APIFuture
-from fireworks.training.sdk.patches._tinker_capacity_409_retry_patch import (
+from fireworks.training.sdk._core.lib.telemetry import Telemetry
+from fireworks.training.sdk._core.lib._pydantic_conv import to_pydantic_input
+from fireworks.training.sdk._core.lib.capacity_retry import (
     _mark_serverless_supervised_409_retry,
+)
+from fireworks.training.sdk._core.lib.api_future_impl import _APIFuture, _CombinedAPIFuture
+from fireworks.training.sdk._core.lib.queue_state_logger import QueueStateLogger
+from fireworks.training.sdk._core.lib.client_connection_pool_type import ClientConnectionPoolType
+from fireworks.training.sdk._core.lib.public_interfaces.api_future import APIFuture, AwaitableConcurrentFuture
+from fireworks.training.sdk._core.lib.public_interfaces.rest_client import RestClient
+from fireworks.training.sdk._core.lib.public_interfaces.service_client import ServiceClient
+from fireworks.training.sdk._core.lib.public_interfaces.training_client import (
+    TrainingClient,
+    _admit_call,
+    combine_fwd_bwd_output_results,
 )
 
 
@@ -109,7 +109,6 @@ FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "sample_no_retries": False,
     "use_pyqwest_transport": True,
 }
-_TINKER_AUTH_PROVIDER_PATCH_LOCK = threading.Lock()
 
 
 class _BaseOnlyCreateModelRequest(types.CreateModelRequest):
@@ -143,7 +142,9 @@ class _CreateModelResponse(types.CreateModelResponse):
     def _known_routing_matrix_format(cls, value):
         return "parquet_v1" if value == "parquet_v1" else "base64_inline"
 
-    @field_validator("supports_router_replay", "supports_target_logprob_support", "rdma_weight_sync_enabled", mode="before")
+    @field_validator(
+        "supports_router_replay", "supports_target_logprob_support", "rdma_weight_sync_enabled", mode="before"
+    )
     @classmethod
     def _known_router_replay_capability(cls, value: Any) -> bool | None:
         # Only a real bool is a decision; anything else is "unknown" so the
@@ -255,7 +256,7 @@ class FiretitanSamplingClient(SamplingClient):
         return cls(sampler)
 
     @staticmethod
-    def _tinker_types():
+    def _training_types():
         return types
 
     def _ensure_loop(self) -> asyncio.AbstractEventLoop:
@@ -314,11 +315,6 @@ class FiretitanSamplingClient(SamplingClient):
 
     @staticmethod
     async def _await_concurrent_future(future: ConcurrentFuture[Any]) -> Any:
-        try:
-            from tinker.lib.public_interfaces.api_future import AwaitableConcurrentFuture
-        except ImportError:
-            return await asyncio.wrap_future(future)
-
         return await AwaitableConcurrentFuture(future)
 
     @staticmethod
@@ -344,8 +340,7 @@ class FiretitanSamplingClient(SamplingClient):
                 kwargs["top_sampling_logprobs"] = sampling_params.top_sampling_logprobs
                 kwargs["top_sampling_format"] = "parquet_v1"
             if (
-                sampling_params.include_routing_matrix
-                or sampling_params.top_sampling_logprobs is not None
+                sampling_params.include_routing_matrix or sampling_params.top_sampling_logprobs is not None
             ) and sampling_params.r3_ttl_seconds is not None:
                 kwargs["r3_ttl_seconds"] = sampling_params.r3_ttl_seconds
 
@@ -370,7 +365,7 @@ class FiretitanSamplingClient(SamplingClient):
     ) -> types.SampleResponse:
         self._check_topk_prompt_logprobs_supported(topk_prompt_logprobs)
 
-        tinker_types = self._tinker_types()
+        tinker_types = self._training_types()
         use_firetitan_response = isinstance(sampling_params, FiretitanSamplingParams)
         prompt_token_ids = list(prompt.to_ints())
         max_tokens = getattr(sampling_params, "max_tokens", None)
@@ -514,7 +509,7 @@ class FiretitanSamplingClient(SamplingClient):
         )
 
     async def _compute_logprobs_async_impl(self, prompt: types.ModelInput) -> list[float | None]:
-        tinker_types = self._tinker_types()
+        tinker_types = self._training_types()
         response = await self._sample_async_impl(
             prompt,
             num_samples=1,
@@ -686,25 +681,6 @@ class _MappedAPIFuture(APIFuture[T]):
         return self.result_async().__await__()
 
 
-class _FireworksApiKeyAuthProvider(httpx.Auth):
-    """Tinker auth provider that accepts Fireworks API keys for FireTitan.
-
-    Tinker 0.22.x validates API keys before sending requests and only accepts
-    ``tml-`` keys or JWTs. FireTitan trainer endpoints are authenticated by the
-    Fireworks control plane, which expects Fireworks API keys on ``X-API-Key``.
-    """
-
-    def __init__(self, api_key: str):
-        self._api_key = api_key
-
-    async def async_auth_flow(
-        self,
-        request: httpx.Request,
-    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
-        request.headers["X-API-Key"] = self._api_key
-        yield request
-
-
 class _ImmediateAPIFuture(APIFuture[T]):
     """Already-completed API future for compatibility wrappers."""
 
@@ -721,270 +697,12 @@ class _ImmediateAPIFuture(APIFuture[T]):
         return self.result_async().__await__()
 
 
-class _FailedAPIFuture(APIFuture[T]):
-    """Future that fails with a known exception when awaited or resolved."""
-
-    def __init__(self, error: Exception):
-        self._error = error
-
-    def result(self, timeout: float | None = None) -> T:
-        raise self._error
-
-    async def result_async(self, timeout: float | None = None) -> T:
-        raise self._error
-
-    def __await__(self):
-        return self.result_async().__await__()
-
-
-class _LazyManagedRestClient:
-    """Small REST metadata shim before a managed Tinker session exists."""
-
-    def __init__(
-        self,
-        managed_config: Any,
-        user_metadata: dict[str, str] | None = None,
-    ):
-        self._managed_config = managed_config
-        self._user_metadata = dict(user_metadata or {})
-
-    def _model_owner(self) -> str:
-        parts = self._managed_config.base_model.split("/")
-        if len(parts) >= 2 and parts[0] == "accounts":
-            return parts[1]
-        return "fireworks"
-
-    def _training_run_id(self) -> str:
-        return self._managed_config.trainer_job_id or "firetitan-managed"
-
-    def _training_run(self) -> types.TrainingRun:
-        is_lora = self._managed_config.lora_rank > 0
-        return types.TrainingRun(
-            training_run_id=self._training_run_id(),
-            base_model=self._managed_config.base_model,
-            model_owner=self._model_owner(),
-            is_lora=is_lora,
-            lora_rank=self._managed_config.lora_rank if is_lora else None,
-            last_request_time=datetime.now(timezone.utc),
-            user_metadata=self._user_metadata,
+def _reject_checkpoint_ttl(ttl_seconds: int | None) -> None:
+    if ttl_seconds is not None:
+        raise NotImplementedError(
+            "Fireworks training does not support checkpoint ttl_seconds. "
+            "Checkpoint retention is managed separately from save operations."
         )
-
-    def _weights_info(self) -> types.WeightsInfoResponse:
-        is_lora = self._managed_config.lora_rank > 0
-        return types.WeightsInfoResponse(
-            base_model=self._managed_config.base_model,
-            is_lora=is_lora,
-            lora_rank=self._managed_config.lora_rank if is_lora else None,
-            train_unembed=self._managed_config.train_unembed,
-            train_mlp=self._managed_config.train_mlp,
-            train_attn=self._managed_config.train_attn,
-        )
-
-    @staticmethod
-    def _cursor(limit: int, offset: int) -> types.Cursor:
-        return types.Cursor(offset=offset, limit=limit, total_count=0)
-
-    def _unsupported(self, method: str) -> NotImplementedError:
-        return NotImplementedError(
-            f"FireTitan lazy managed REST client does not support {method}. "
-            "Create a trainer-backed service client or use Fireworks checkpoint APIs for this operation."
-        )
-
-    def _unsupported_future(self, method: str) -> _FailedAPIFuture[Any]:
-        return _FailedAPIFuture(self._unsupported(method))
-
-    def get_training_run(self, training_run_id: str, access_scope: str = "owned"):
-        return _ImmediateAPIFuture(self._training_run())
-
-    async def get_training_run_async(
-        self,
-        training_run_id: str,
-        access_scope: str = "owned",
-    ):
-        return self._training_run()
-
-    def get_training_run_by_tinker_path(
-        self,
-        path: str,
-        access_scope: str = "owned",
-    ):
-        return _ImmediateAPIFuture(self._training_run())
-
-    async def get_training_run_by_tinker_path_async(
-        self,
-        path: str,
-        access_scope: str = "owned",
-    ):
-        return self._training_run()
-
-    def get_weights_info_by_tinker_path(self, path: str):
-        return _ImmediateAPIFuture(self._weights_info())
-
-    def list_training_runs(
-        self,
-        limit: int = 20,
-        offset: int = 0,
-        access_scope: str = "owned",
-    ):
-        return _ImmediateAPIFuture(
-            types.TrainingRunsResponse(
-                training_runs=[self._training_run()],
-                cursor=self._cursor(limit, offset),
-            )
-        )
-
-    async def list_training_runs_async(
-        self,
-        limit: int = 20,
-        offset: int = 0,
-        access_scope: str = "owned",
-    ):
-        return self.list_training_runs(
-            limit=limit,
-            offset=offset,
-            access_scope=access_scope,
-        ).result()
-
-    def list_checkpoints(self, training_run_id: str):
-        return _ImmediateAPIFuture(
-            types.CheckpointsListResponse(
-                checkpoints=[],
-                cursor=self._cursor(100, 0),
-            )
-        )
-
-    async def list_checkpoints_async(self, training_run_id: str):
-        return self.list_checkpoints(training_run_id).result()
-
-    def list_user_checkpoints(self, limit: int = 100, offset: int = 0):
-        return _ImmediateAPIFuture(
-            types.CheckpointsListResponse(
-                checkpoints=[],
-                cursor=self._cursor(limit, offset),
-            )
-        )
-
-    async def list_user_checkpoints_async(self, limit: int = 100, offset: int = 0):
-        return self.list_user_checkpoints(limit=limit, offset=offset).result()
-
-    def get_session(self, session_id: str, access_scope: str = "owned"):
-        return _ImmediateAPIFuture(types.GetSessionResponse(training_run_ids=[], sampler_ids=[]))
-
-    async def get_session_async(self, session_id: str, access_scope: str = "owned"):
-        return self.get_session(session_id, access_scope=access_scope).result()
-
-    def list_sessions(
-        self,
-        limit: int = 20,
-        offset: int = 0,
-        access_scope: str = "owned",
-    ):
-        return _ImmediateAPIFuture(types.ListSessionsResponse(sessions=[]))
-
-    async def list_sessions_async(
-        self,
-        limit: int = 20,
-        offset: int = 0,
-        access_scope: str = "owned",
-    ):
-        return self.list_sessions(
-            limit=limit,
-            offset=offset,
-            access_scope=access_scope,
-        ).result()
-
-    def get_sampler(self, sampler_id: str):
-        return _ImmediateAPIFuture(
-            types.GetSamplerResponse(
-                sampler_id=sampler_id,
-                base_model=self._managed_config.base_model,
-                model_path=None,
-            )
-        )
-
-    async def get_sampler_async(self, sampler_id: str):
-        return self.get_sampler(sampler_id).result()
-
-    def get_checkpoint_archive_url(self, training_run_id: str, checkpoint_id: str):
-        return self._unsupported_future("get_checkpoint_archive_url")
-
-    async def get_checkpoint_archive_url_async(
-        self,
-        training_run_id: str,
-        checkpoint_id: str,
-    ):
-        raise self._unsupported("get_checkpoint_archive_url_async")
-
-    def get_checkpoint_archive_url_from_tinker_path(self, tinker_path: str):
-        return self._unsupported_future("get_checkpoint_archive_url_from_tinker_path")
-
-    async def get_checkpoint_archive_url_from_tinker_path_async(self, tinker_path: str):
-        raise self._unsupported("get_checkpoint_archive_url_from_tinker_path_async")
-
-    def get_audit_log(
-        self,
-        event_type: Literal["all", "checkpoints"] = "all",
-        day: Any | None = None,
-    ):
-        return self._unsupported_future("get_audit_log")
-
-    async def get_audit_log_async(
-        self,
-        event_type: Literal["all", "checkpoints"] = "all",
-        day: Any | None = None,
-    ):
-        raise self._unsupported("get_audit_log_async")
-
-    def assign_session_project(self, session_id: str, project_id: str):
-        return self._unsupported_future("assign_session_project")
-
-    async def assign_session_project_async(self, session_id: str, project_id: str) -> None:
-        raise self._unsupported("assign_session_project_async")
-
-    def delete_checkpoint_from_tinker_path(self, path: str):
-        return _ImmediateAPIFuture(None)
-
-    async def delete_checkpoint_from_tinker_path_async(self, path: str) -> None:
-        return None
-
-    def delete_checkpoint(self, training_run_id: str, checkpoint_id: str):
-        return _ImmediateAPIFuture(None)
-
-    async def delete_checkpoint_async(
-        self,
-        training_run_id: str,
-        checkpoint_id: str,
-    ) -> None:
-        return None
-
-    def publish_checkpoint_from_tinker_path(self, tinker_path: str):
-        return self._unsupported_future("publish_checkpoint_from_tinker_path")
-
-    async def publish_checkpoint_from_tinker_path_async(self, tinker_path: str):
-        raise self._unsupported("publish_checkpoint_from_tinker_path_async")
-
-    def unpublish_checkpoint_from_tinker_path(self, tinker_path: str):
-        return self._unsupported_future("unpublish_checkpoint_from_tinker_path")
-
-    async def unpublish_checkpoint_from_tinker_path_async(self, tinker_path: str):
-        raise self._unsupported("unpublish_checkpoint_from_tinker_path_async")
-
-    def set_checkpoint_ttl_from_tinker_path(
-        self,
-        tinker_path: str,
-        ttl_seconds: int | None,
-    ):
-        return self._unsupported_future("set_checkpoint_ttl_from_tinker_path")
-
-    async def set_checkpoint_ttl_from_tinker_path_async(
-        self,
-        tinker_path: str,
-        ttl_seconds: int | None,
-    ):
-        raise self._unsupported("set_checkpoint_ttl_from_tinker_path_async")
-
-    def get_telemetry(self) -> None:
-        return None
 
 
 class GradAccNormalization(str, Enum):
@@ -1256,7 +974,7 @@ def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -
 # -- Session-scoped snapshot name qualification --------------------------------
 #
 # Ensures sampler snapshot GCS paths are unique per training session,
-# preventing Alluxio cache staleness when deployment_id is reused.
+# keeping snapshot names distinct when deployment_id is reused.
 # By suffixing every sampler snapshot name with a unique session_id,
 # the GCS paths are guaranteed to be unique by construction.
 
@@ -1265,19 +983,16 @@ def generate_session_id() -> str:
     """Generate a unique 8-char hex session identifier.
 
     Called once per training session (including on resume) to produce
-    a fresh identifier that namespaces all sampler snapshot GCS paths.
+    a fresh identifier that namespaces sampler snapshot paths.
     """
     return uuid.uuid4().hex[:8]
 
 
 def qualify_snapshot_name(session_id: str, name: str) -> str:
-    """Suffix a snapshot name with *session_id* for GCS path uniqueness.
+    """Suffix a snapshot name with *session_id* for uniqueness across sessions.
 
-    Uses ``-`` as separator (not ``/``) because ``os.path.basename()``
-    is used downstream in ``xor_extensions.py`` and ``tinker_api.py``
-    to extract the snapshot name from the local directory path.  A
-    ``/`` separator would be stripped by ``basename()``, defeating the
-    purpose.
+    Uses ``-`` so the session suffix remains part of the snapshot basename
+    when paths are resolved.
 
     Args:
         session_id: Unique per-session identifier (from
@@ -1292,6 +1007,10 @@ def qualify_snapshot_name(session_id: str, name: str) -> str:
 
 
 def _tensor_value_count(tensor: types.TensorData) -> int:
+    if isinstance(tensor, types.TensorData):
+        # Count stored values, including CSR values, without exporting a list
+        # or densifying the tensor. The owned runtime controls this buffer.
+        return int(tensor._numpy.size)
     if getattr(tensor, "sparse_crow_indices", None) is not None:
         return len(tensor.data)
     return int(tensor.to_numpy().size)
@@ -1349,23 +1068,8 @@ def _dump_tinker_model(obj: Any) -> Any:
 
 
 def _serialize_input_for_extra_body(fb_input: Any) -> dict:
-    """Convert a tinker public ``ForwardBackwardInput`` (or ``ForwardInput`` —
-    same shape) to a JSON-safe dict suitable for ``extra_body`` override.
-
-    tinker 0.22+ split public types (Datum, ModelInput, ForwardBackwardInput,
-    EncodedTextChunk, ...) into plain dataclasses with internal pydantic mirrors.
-    ``dataclasses.asdict`` can't recurse through the mixed dataclass/pydantic/
-    typed-dict tree, but tinker's own ``to_pydantic_input`` does the full
-    conversion and the result is a normal pydantic BaseModel that ``model_dump``
-    knows how to JSON-encode.
-
-    Use tinker's request-level converter so embedding APIs work across the
-    public dataclass/pydantic type split in tinker 0.22+.
-    """
-    from tinker._compat import model_dump as _tinker_model_dump
-    from tinker.lib._pydantic_conv import to_pydantic_input
-
-    return _tinker_model_dump(
+    """Convert mixed dataclass/model input into the existing JSON wire shape."""
+    return _training_model_dump(
         to_pydantic_input(fb_input),
         mode="json",
         exclude_none=True,
@@ -1392,8 +1096,7 @@ def _model_input_position_count(datum: types.Datum) -> int | None:
     if isinstance(length, int) and not isinstance(length, bool):
         return length
 
-    # Keep the diagnostic compatible with older Tinker ModelInput variants
-    # that do not expose ``length``. Image chunks occupy ``expected_tokens``
+    # Serialized inputs may not expose ``length``. Image chunks occupy ``expected_tokens``
     # positions even though multimodal target_tokens intentionally omit them.
     raw_datum = _dump_tinker_model(datum)
     chunks = raw_datum.get("model_input", {}).get("chunks", [])
@@ -1523,26 +1226,13 @@ class SaveSamplerResult:
 # -- FiretitanTrainingClient ---------------------------------------------------
 
 
-SAMPLING_CLIENT_FROM_TRAINER_MESSAGE = (
-    "FiretitanTrainingClient does not support save_weights_and_get_sampling_client(). "
-    "Fireworks serves sampling from a separate hot-load inference deployment, not from "
-    "an in-service ephemeral sampling session as Tinker's managed service does. Save a "
-    "sampler snapshot and open a sampling client against the deployment instead:\n"
-    "    saved = training_client.save_weights_for_sampler(name).result()\n"
-    "    sampler = service.create_sampling_client(model_path=saved.path)\n"
-    "The SDK resolves base vs. delta hot-load automatically from the snapshot chain."
-)
-
-
 def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
     """Return the compact-JSON bytes added by ``routing_matrices``.
 
-    Tinker's base request-size estimator knows only about its native
-    ``ModelInput.chunks`` fields. Fireworks adds ``routing_matrices`` to that
-    model dynamically, so count the actual JSON field fragment here without
-    first materializing one potentially hundreds-of-megabytes JSON array.
+    Count routing fields separately from ``ModelInput.chunks`` without
+    materializing a potentially large JSON array.
 
-    ``ModelInput`` always serializes ``chunks`` before this patched field, hence
+    ``ModelInput`` serializes ``chunks`` before the routing fields, hence
     the leading comma in the wire fragment.
     """
     references = getattr(model_input, "routing_references", None)
@@ -1600,7 +1290,7 @@ class FiretitanTrainingClient(TrainingClient):
       - save_weights_for_sampler_ext(): checkpoint_type support + session_id suffixing
       - list_checkpoints(): DCP checkpoint listing from the trainer
       - Checkpoint name reuse detection (warns on duplicate names within a session)
-      - Session-scoped snapshot name qualification (prevents Alluxio cache staleness)
+      - Session-scoped snapshot names that remain distinct across clients
       - run_id / run_name: the CP serverless training run this model is
         (``run-<hex>`` / ``accounts/<a>/trainingRuns/<run_id>``), parsed from
         ``model_id``; what run-based routing and checkpoints key on. None for
@@ -1617,14 +1307,12 @@ class FiretitanTrainingClient(TrainingClient):
       - save_state(): supports blocking waits and rejects unsupported overwrite
       - load_state()/load_state_with_optimizer(): reject unsupported cross-account tokens
       - get_tokenizer(): loads from the managed tokenizer_model name, no get_info RPC
-      - save_weights_and_get_sampling_client(): raises NotImplementedError —
-        Fireworks samples from a separate hot-load deployment, not an in-service
-        ephemeral sampling session (see SAMPLING_CLIENT_FROM_TRAINER_MESSAGE)
+
 
     The async/sync surface is otherwise complete by inheritance: the base
     ``forward_async`` / ``forward_backward_async`` / ``save_state_async``
     wrappers call our overridden sync methods, so they pick up wrapper
-    behavior unchanged. Other core methods are inherited from tinker.TrainingClient.
+    behavior unchanged. Other core methods use the owned TrainingClient runtime.
     """
 
     def __init__(
@@ -1661,6 +1349,7 @@ class FiretitanTrainingClient(TrainingClient):
         self._trainer_rdma_weight_sync_enabled = rdma_weight_sync_enabled
         super().__init__(holder=holder, model_seq_id=model_seq_id, model_id=model_id)
         self._http_admissions: dict[int, asyncio.Task[Any]] = {}
+        self._unload_future: AwaitableConcurrentFuture[types.UnloadModelResponse] | None = None
         self._http_admission_slots: asyncio.Semaphore | None = None
         # Full CP resource name of the serverless training run this model is, i.e.
         # accounts/<a>/trainingRuns/<run_id>. ``run_id`` is exposed as a property
@@ -1686,6 +1375,48 @@ class FiretitanTrainingClient(TrainingClient):
         # so that GCS paths are unique even when the deployment_id is reused.
         self.session_id: str = generate_session_id()
         logger.info("FiretitanTrainingClient session_id: %s", self.session_id)
+
+    def unload_model(self) -> APIFuture[types.UnloadModelResponse]:
+        """Unload after accepted operations finish, returning a completion future.
+
+        Full-parameter unload also clears the model's request sequence. New
+        training work is rejected once unloading starts. If unloading fails,
+        this method can retry cleanup; training stays closed because the
+        server may already have accepted the first unload.
+        """
+        model_id = self._guaranteed_model_id()
+        if self._operation_context.get():
+            raise RuntimeError("Cannot unload from within an active training operation")
+
+        async def unload() -> types.UnloadModelResponse:
+            while True:
+                with self._request_id_lock:
+                    pending = tuple(self._pending_operations)
+                if not pending:
+                    break
+                await asyncio.gather(
+                    *(asyncio.shield(asyncio.wrap_future(marker)) for marker in pending),
+                    return_exceptions=True,
+                )
+            start = time.time()
+            with self.holder.aclient(ClientConnectionPoolType.TRAIN) as client:
+                future = await client.models.unload(request=types.UnloadModelRequest(model_id=model_id))
+            return await _APIFuture(
+                types.UnloadModelResponse,
+                self.holder,
+                future,
+                request_start_time=start,
+                request_type="Unload model",
+            ).result_async()
+
+        with self._request_id_lock:
+            if self._unload_future is not None:
+                pending = self._unload_future.future()
+                if not pending.done() or (not pending.cancelled() and pending.exception() is None):
+                    return self._unload_future
+            self._unloading = True
+            self._unload_future = self.holder.run_coroutine_threadsafe(unload())
+            return self._unload_future
 
     @property
     def run_id(self) -> str | None:
@@ -1827,9 +1558,22 @@ class FiretitanTrainingClient(TrainingClient):
         slots = self._http_admission_slots
         async with super()._take_turn(turn_min, turn_max):
             await slots.acquire()
+            try:
+                self._raise_if_sequence_failed()
+            except BaseException:
+                slots.release()
+                raise
             task = asyncio.create_task(self.holder.execute_with_retries(send, request_id, chunk))
             self._http_admissions[request_id] = task
-            task.add_done_callback(lambda _task: slots.release())
+
+            def completed(upload: asyncio.Task[Any]) -> None:
+                if upload.cancelled():
+                    self._fail_sequence(asyncio.CancelledError())
+                elif (error := upload.exception()) is not None:
+                    self._fail_sequence(error)
+                slots.release()
+
+            task.add_done_callback(completed)
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
@@ -1867,87 +1611,85 @@ class FiretitanTrainingClient(TrainingClient):
         if not requests:
             raise ValueError("No data provided")
 
-        parallel = self._parallel_chunks_enabled()
-        min_rid = requests[0][0]
-        max_rid = requests[-1][0] if parallel else None
-        start_time = time.time()
+        tasks: list[asyncio.Task[Any]] = []
+        try:
+            parallel = self._parallel_chunks_enabled()
+            min_rid = requests[0][0]
+            max_rid = requests[-1][0] if parallel else None
+            start_time = time.time()
 
-        async def _submit_chunk(
-            request_id: int,
-            chunk: list[types.Datum],
-        ) -> APIFuture[types.ForwardBackwardOutput]:
-            turn_min = min_rid if parallel else request_id
-            turn_max = max_rid if parallel else None
-            if parallel and request_type == "ForwardBackward":
-                untyped_future = await self._submit_parallel_backward(
-                    request_id, turn_min, turn_max, send_chunk, chunk
-                )
-            else:
-                async with self._take_turn(turn_min, turn_max):
-                    untyped_future = await self.holder.execute_with_retries(send_chunk, request_id, chunk)
-            future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
-            return future_type(
-                types.ForwardBackwardOutput,
-                self.holder,
-                untyped_future,
-                request_start_time=start_time,
-                request_type=request_type,
-                queue_state_observer=self._queue_state_logger,
-            )
-
-        async def _submit_limited(
-            semaphore: asyncio.Semaphore,
-            request_id: int,
-            chunk: list[types.Datum],
-        ) -> APIFuture[types.ForwardBackwardOutput]:
-            async with semaphore:
-                return await _submit_chunk(request_id, chunk)
-
-        if parallel and request_type == "ForwardBackward":
-            # Start the leading sequence first on both wire versions. Shared slots
-            # bound uploads across logical calls; a slow ACK does not hold the next turn.
-            tasks = [asyncio.create_task(_submit_chunk(request_id, chunk)) for request_id, chunk in requests]
-            joined = asyncio.gather(*tasks, return_exceptions=True)
-            try:
-                results = await asyncio.shield(joined)
-            except asyncio.CancelledError:
-                await asyncio.shield(joined)
-                raise
-            for result in results:
-                if isinstance(result, BaseException):
-                    raise result
-            futures = list(results)
-        elif parallel and len(requests) > 1:
-            concurrency = _parallel_chunk_send_concurrency()
-            if concurrency == 1:
-                futures = []
-                for request_id, chunk in requests:
-                    futures.append(await _submit_chunk(request_id, chunk))
-            elif self.comms != "v2":
-                # Preserve the existing parallel submission order by default.
-                rest_semaphore = asyncio.Semaphore(concurrency - 1)
-                rest_tasks = [
-                    asyncio.create_task(_submit_limited(rest_semaphore, request_id, chunk))
-                    for request_id, chunk in requests[1:]
-                ]
+            async def _submit_chunk(
+                request_id: int,
+                chunk: list[types.Datum],
+            ) -> APIFuture[types.ForwardBackwardOutput]:
                 try:
+                    turn_min = min_rid if parallel else request_id
+                    turn_max = max_rid if parallel else None
+                    if parallel and request_type == "ForwardBackward":
+                        untyped_future = await self._submit_parallel_backward(
+                            request_id, turn_min, turn_max, send_chunk, chunk
+                        )
+                    else:
+                        async with self._take_turn(turn_min, turn_max):
+                            untyped_future = await self.holder.execute_with_retries(send_chunk, request_id, chunk)
+                    future_type = CommsV2APIFuture if self.comms == "v2" else _APIFuture
+                    return future_type(
+                        types.ForwardBackwardOutput,
+                        self.holder,
+                        untyped_future,
+                        request_start_time=start_time,
+                        request_type=request_type,
+                        queue_state_observer=self._queue_state_logger,
+                    )
+                except BaseException as error:
+                    self._fail_sequence(error)
+                    raise
+
+            async def _submit_limited(
+                semaphore: asyncio.Semaphore,
+                request_id: int,
+                chunk: list[types.Datum],
+            ) -> APIFuture[types.ForwardBackwardOutput]:
+                async with semaphore:
+                    return await _submit_chunk(request_id, chunk)
+
+            if parallel and request_type == "ForwardBackward":
+                # Start the leading sequence first on both wire versions. Shared slots
+                # bound uploads across logical calls; a slow ACK does not hold the next turn.
+                tasks = [asyncio.create_task(_submit_chunk(request_id, chunk)) for request_id, chunk in requests]
+                joined = asyncio.gather(*tasks, return_exceptions=True)
+                try:
+                    results = await asyncio.shield(joined)
+                except asyncio.CancelledError:
+                    await asyncio.shield(joined)
+                    raise
+                for result in results:
+                    if isinstance(result, BaseException):
+                        raise result
+                futures = list(results)
+            elif parallel and len(requests) > 1:
+                concurrency = _parallel_chunk_send_concurrency()
+                if concurrency == 1:
+                    futures = []
+                    for request_id, chunk in requests:
+                        futures.append(await _submit_chunk(request_id, chunk))
+                elif self.comms != "v2":
+                    # Preserve the existing parallel submission order by default.
+                    rest_semaphore = asyncio.Semaphore(concurrency - 1)
+                    tasks = [
+                        asyncio.create_task(_submit_limited(rest_semaphore, request_id, chunk))
+                        for request_id, chunk in requests[1:]
+                    ]
                     await asyncio.sleep(0)
                     first_request_id, first_chunk = requests[0]
                     first_future = await _submit_chunk(first_request_id, first_chunk)
-                    rest_futures = list(await asyncio.gather(*rest_tasks))
+                    rest_futures = list(await asyncio.gather(*tasks))
                     futures = [first_future] + rest_futures
-                except BaseException:
-                    for task in rest_tasks:
-                        task.cancel()
-                    await asyncio.gather(*rest_tasks, return_exceptions=True)
-                    raise
-            else:
-                semaphore = asyncio.Semaphore(concurrency)
-                # The trainer consumes sequence IDs in order. Start the first
-                # chunk before serializing later chunks so it can reach the
-                # trainer while the rest of this logical request is prepared.
-                tasks = []
-                try:
+                else:
+                    semaphore = asyncio.Semaphore(concurrency)
+                    # The trainer consumes sequence IDs in order. Start the first
+                    # chunk before serializing later chunks so it can reach the
+                    # trainer while the rest of this logical request is prepared.
                     for request_id, chunk in requests:
                         tasks.append(asyncio.create_task(_submit_limited(semaphore, request_id, chunk)))
                         # Conversion before the first await is synchronous.
@@ -1955,15 +1697,18 @@ class FiretitanTrainingClient(TrainingClient):
                         # before preparing another chunk on this event loop.
                         await asyncio.sleep(0)
                     futures = list(await asyncio.gather(*tasks))
-                except BaseException:
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    raise
-        else:
-            futures = list(await asyncio.gather(*[_submit_chunk(request_id, chunk) for request_id, chunk in requests]))
+            else:
+                tasks = [asyncio.create_task(_submit_chunk(request_id, chunk)) for request_id, chunk in requests]
+                futures = list(await asyncio.gather(*tasks))
 
-        return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+            return _CombinedAPIFuture(futures, combine_fwd_bwd_output_results, self.holder)
+        except BaseException as error:
+            self._fail_sequence(error)
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     async def _send_single_forward_request(
         self,
@@ -1985,6 +1730,7 @@ class FiretitanTrainingClient(TrainingClient):
             kwargs = {"extra_body": self._comms_request_body()} if self.comms == "v2" else {}
             return await client.training.forward(request=request, **kwargs)
 
+    @_admit_call
     def forward(
         self,
         data: list[types.Datum],
@@ -2023,7 +1769,7 @@ class FiretitanTrainingClient(TrainingClient):
             )
             return await combined_future
 
-        return self.holder.run_coroutine_threadsafe(_forward_async())
+        return self._submit_operation(_forward_async())
 
     async def _send_single_forward_backward_request(
         self,
@@ -2045,6 +1791,7 @@ class FiretitanTrainingClient(TrainingClient):
             kwargs = {"extra_body": self._comms_request_body()} if self.comms == "v2" else {}
             return await client.training.forward_backward(request=request, **kwargs)
 
+    @_admit_call
     def optim_step(
         self,
         adam_params: types.AdamParams,
@@ -2115,7 +1862,7 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
 
-        return self.holder.run_coroutine_threadsafe(_optim_step_async())
+        return self._submit_operation(_optim_step_async())
 
     async def optim_step_async(
         self,
@@ -2129,6 +1876,7 @@ class FiretitanTrainingClient(TrainingClient):
             emit_grad_norm_metrics=emit_grad_norm_metrics,
         )
 
+    @_admit_call
     def forward_backward(
         self,
         data: list[types.Datum],
@@ -2167,7 +1915,7 @@ class FiretitanTrainingClient(TrainingClient):
                 )
                 return await combined_future
 
-            future = self.holder.run_coroutine_threadsafe(_forward_backward_async())
+            future = self._submit_operation(_forward_backward_async())
         else:
             future = super().forward_backward(data, loss_fn, loss_fn_config)
         if loss_fn != "cross_entropy":
@@ -2196,7 +1944,7 @@ class FiretitanTrainingClient(TrainingClient):
             seq_id=request_id + 1,
         )
         with comms_context(self.comms):
-            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+            # Normalize the request before merging endpoint-specific JSON fields.
             fwd_input_dict = _serialize_input_for_extra_body(fwd_input)
             fwd_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
             extra_body = {**self._comms_request_body(), "forward_input": fwd_input_dict}
@@ -2224,7 +1972,7 @@ class FiretitanTrainingClient(TrainingClient):
             seq_id=request_id + 1,
         )
         with comms_context(self.comms):
-            # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+            # Normalize the request before merging endpoint-specific JSON fields.
             fb_input_dict = _serialize_input_for_extra_body(fb_input)
             fb_input_dict["loss_fn_config"] = {"output": output, "pooling": pooling}
             extra_body = {**self._comms_request_body(), "forward_backward_input": fb_input_dict}
@@ -2234,6 +1982,7 @@ class FiretitanTrainingClient(TrainingClient):
                     extra_body=extra_body,
                 )
 
+    @_admit_call
     def _build_embedding_requests(
         self,
         data: list[types.Datum],
@@ -2252,6 +2001,7 @@ class FiretitanTrainingClient(TrainingClient):
         _check_cos_similarity_matrix_single_chunk(natural_chunks, output=output)
         return [(self._get_request_id(), data)]
 
+    @_admit_call
     def _forward_embedding(
         self,
         data: list[types.Datum],
@@ -2273,7 +2023,7 @@ class FiretitanTrainingClient(TrainingClient):
             )
             return await combined_future
 
-        return self.holder.run_coroutine_threadsafe(_forward_embedding_async())
+        return self._submit_operation(_forward_embedding_async())
 
     async def _forward_embedding_async(
         self,
@@ -2283,6 +2033,7 @@ class FiretitanTrainingClient(TrainingClient):
     ) -> APIFuture[types.ForwardBackwardOutput]:
         return self._forward_embedding(data, pooling, output=output)
 
+    @_admit_call
     def _forward_backward_embedding(
         self,
         data: list[types.Datum],
@@ -2304,7 +2055,7 @@ class FiretitanTrainingClient(TrainingClient):
             )
             return await combined_future
 
-        return self.holder.run_coroutine_threadsafe(_forward_backward_embedding_async())
+        return self._submit_operation(_forward_backward_embedding_async())
 
     async def _forward_backward_embedding_async(
         self,
@@ -2473,19 +2224,23 @@ class FiretitanTrainingClient(TrainingClient):
                 raise ValueError(f"precomputed_forward output {index} is missing logprobs")
 
             logprob_data = out["logprobs"]
-            if len(logprob_data.data) != len(target_tokens.data):
+            logprob_count = _tensor_value_count(logprob_data)
+            target_count = _tensor_value_count(target_tokens)
+            if logprob_count != target_count:
                 raise ValueError(
                     "precomputed_forward logprobs must align with target_tokens; "
-                    f"datum {index} has {len(logprob_data.data)} logprobs and "
-                    f"{len(target_tokens.data)} target tokens"
+                    f"datum {index} has {logprob_count} logprobs and "
+                    f"{target_count} target tokens"
                 )
-            logprob = torch.tensor(logprob_data.data)
+            # Match list-based torch.tensor dtype inference without boxing values.
+            dtype = torch.get_default_dtype() if logprob_data.dtype == "float32" else torch.int64
+            logprob = torch.tensor(logprob_data._numpy.ravel(), dtype=dtype)
             if logprob_data.shape is not None:
                 try:
                     logprob = logprob.reshape(logprob_data.shape)
                 except (RuntimeError, ValueError) as err:
                     raise ValueError(f"precomputed_forward output {index} has an invalid logprob shape") from err
-            logprobs_list.append(logprob.clone().detach().requires_grad_(True))
+            logprobs_list.append(logprob.requires_grad_(True))
 
         loss, metrics = loss_fn(data, logprobs_list)
         loss.backward()
@@ -2502,7 +2257,7 @@ class FiretitanTrainingClient(TrainingClient):
                         "target_tokens": datum.loss_fn_inputs["target_tokens"],
                         # Backend CE computes -logprobs * weights.
                         "weights": types.TensorData(
-                            data=linear_weights.tolist(),
+                            data=linear_weights.numpy(),
                             dtype="float32",
                             shape=list(logprob.grad.shape),
                         ),
@@ -2540,7 +2295,7 @@ class FiretitanTrainingClient(TrainingClient):
                 loss_fn,
                 loss_type_input=loss_type_input,
             )
-        return self.holder.run_coroutine_threadsafe(
+        return self._submit_operation(
             self.forward_backward_custom_async(
                 data,
                 loss_fn,
@@ -2672,7 +2427,7 @@ class FiretitanTrainingClient(TrainingClient):
                 seq_id=request_id + 1,
             )
             with comms_context(self.comms):
-                # tinker 0.22+ requires the to_pydantic_input dance for JSON wire safety.
+                # Normalize the request before merging endpoint-specific JSON fields.
                 fb_input_dict = _serialize_input_for_extra_body(fb_input)
                 fb_input_dict["loss_fn_config"] = loss_fn_config
                 extra_body = {**self._comms_request_body(), "forward_backward_input": fb_input_dict}
@@ -2706,7 +2461,7 @@ class FiretitanTrainingClient(TrainingClient):
         num_extra_negatives: int = 0,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         """Sync wrapper for forward_backward_contrastive_async — see that docstring."""
-        return self.holder.run_coroutine_threadsafe(
+        return self._submit_operation(
             self.forward_backward_contrastive_async(
                 data,
                 num_queries=num_queries,
@@ -2734,8 +2489,9 @@ class FiretitanTrainingClient(TrainingClient):
                 )
                 return resp
 
+        future = self._submit_operation(_list())
         try:
-            result = self.holder.run_coroutine_threadsafe(_list()).result()
+            result = future.result()
             return result.get("checkpoints", [])
         except Exception as e:
             logger.warning(
@@ -2782,6 +2538,7 @@ class FiretitanTrainingClient(TrainingClient):
 
         return _validate_checkpoint_ref(checkpoint_name)
 
+    @_admit_call
     def weight_sync(self) -> APIFuture[WeightSyncResponse]:
         """Sync weights using the configured transport; enabled RDMA never falls back to FILE.
 
@@ -2844,12 +2601,13 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
 
-        return self.holder.run_coroutine_threadsafe(_submit())
+        return self._submit_operation(_submit())
 
     async def weight_sync_async(self) -> APIFuture[WeightSyncResponse]:
         """Async submission with the same native future semantics as optim_step_async."""
         return self.weight_sync()
 
+    @_admit_call
     def save_weights_for_sampler_ext(
         self,
         name: str,
@@ -2861,13 +2619,11 @@ class FiretitanTrainingClient(TrainingClient):
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
         The ``name`` is automatically suffixed with :attr:`session_id` so
-        that the resulting GCS path is unique per training session.  This
-        prevents Alluxio cache staleness when the same ``deployment_id``
-        is reused across sessions.
+        that the snapshot remains distinct per training session, including
+        when the same ``deployment_id`` is reused.
 
-        Passes the resolved ``checkpoint_type`` via the tinker SDK's
-        ``extra_body`` parameter, which merges it into the HTTP request JSON
-        body.         Full-parameter training saves a base checkpoint first and deltas
+        The resolved ``checkpoint_type`` is included in the request JSON body.
+        Full-parameter training saves a base checkpoint first and deltas
         after that by default. LoRA training always saves base checkpoints.
         Callers can override with ``checkpoint_type="base"`` or ``"delta"``.
         LoRA sessions may also pass ``checkpoint_type="merged_base"`` to fold the
@@ -2895,6 +2651,7 @@ class FiretitanTrainingClient(TrainingClient):
             identity in ``path`` and the requested snapshot name in
             ``snapshot_name``.
         """
+        _reject_checkpoint_ttl(ttl_seconds)
         resolved_checkpoint_type = self._next_sampler_checkpoint_type(checkpoint_type)
         resolved_export_precision = resolve_export_precision(
             checkpoint_type=resolved_checkpoint_type,
@@ -2904,7 +2661,7 @@ class FiretitanTrainingClient(TrainingClient):
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
         request_id = self._get_request_id()
-        return self.holder.run_coroutine_threadsafe(
+        return self._submit_operation(
             self._save_sampler_snapshot(
                 actual_name,
                 resolved_checkpoint_type=resolved_checkpoint_type,
@@ -3081,39 +2838,11 @@ class FiretitanTrainingClient(TrainingClient):
             retry_config=retry_config,
         )
 
-    def save_weights_and_get_sampling_client(
-        self,
-        name: str | None = None,
-        retry_config: Any = None,
-    ):
-        """Unsupported on FireTitan — see :data:`SAMPLING_CLIENT_FROM_TRAINER_MESSAGE`.
-
-        Tinker's managed service samples from an ephemeral in-service snapshot;
-        FireTitan hot-loads a snapshot into a separate inference deployment, so
-        the combined call has no equivalent. Raises with the two-step idiom.
-        """
-        raise NotImplementedError(SAMPLING_CLIENT_FROM_TRAINER_MESSAGE)
-
-    async def save_weights_and_get_sampling_client_async(
-        self,
-        name: str | None = None,
-        retry_config: Any = None,
-    ):
-        """Unsupported on FireTitan — see :data:`SAMPLING_CLIENT_FROM_TRAINER_MESSAGE`."""
-        raise NotImplementedError(SAMPLING_CLIENT_FROM_TRAINER_MESSAGE)
-
-    def save_weights_and_get_sampling_client_submit(
-        self,
-        retry_config: Any = None,
-    ):
-        """Unsupported on FireTitan — see :data:`SAMPLING_CLIENT_FROM_TRAINER_MESSAGE`."""
-        raise NotImplementedError(SAMPLING_CLIENT_FROM_TRAINER_MESSAGE)
-
     def get_tokenizer(self):
         """Return the HuggingFace tokenizer for this trainer's base model.
 
         Loads from the managed ``tokenizer_model`` name (e.g. ``"Qwen/Qwen3-1.7B"``),
-        set via ``from_firetitan_config`` / ``install_tinker_service_client``.
+        set via ``from_firetitan_config`` or service-client construction.
         Unlike Tinker's managed service, FireTitan does not resolve a tokenizer
         server-side, so ``tokenizer_model`` must be supplied.
         """
@@ -3121,8 +2850,11 @@ class FiretitanTrainingClient(TrainingClient):
             raise ValueError(
                 "get_tokenizer() requires a tokenizer_model. FireTitan does not "
                 "resolve tokenizers server-side; pass tokenizer_model to "
-                "from_firetitan_config()/install_tinker_service_client()."
+                "from_firetitan_config() or service-client construction."
             )
+        # lazy: tokenizer downloads are optional; transport needs no transformers.
+        from transformers import AutoTokenizer
+
         return AutoTokenizer.from_pretrained(self._tokenizer_model)
 
     def create_base_training_client(
@@ -3153,13 +2885,15 @@ class FiretitanTrainingClient(TrainingClient):
         cookbook helpers.
 
         Warns if ``name`` was already used for a DCP checkpoint in this
-        session, then delegates to the parent implementation.
+        session, then delegates to the parent implementation. The returned
+        checkpoint path is authoritative; the name is not a persistent alias.
 
         When ``timeout`` is provided, this method blocks on the returned
         future before returning it. This preserves the original return type
         while supporting call sites that expect ``save_state(name, timeout=...)``
         to wait for completion.
         """
+        _reject_checkpoint_ttl(ttl_seconds)
         if overwrite:
             raise NotImplementedError(
                 "FiretitanTrainingClient.save_state(overwrite=True) is not supported. "
@@ -3224,6 +2958,7 @@ class FiretitanTrainingClient(TrainingClient):
     ):
         return self.load_state_with_optimizer(path, weights_access_token=weights_access_token)
 
+    @_admit_call
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
         """Load HF PEFT adapter weights into a LoRA training session (weights-only).
 
@@ -3264,7 +2999,7 @@ class FiretitanTrainingClient(TrainingClient):
                 queue_state_observer=self._queue_state_logger,
             )
 
-        return self.holder.run_coroutine_threadsafe(_load_adapter_async())
+        return self._submit_operation(_load_adapter_async())
 
 
 # -- FiretitanServiceClient ----------------------------------------------------
@@ -3273,7 +3008,7 @@ class FiretitanTrainingClient(TrainingClient):
 class FiretitanServiceClient(ServiceClient):
     """ServiceClient that can create full-param (no LoRA) training clients.
 
-    Managed instances are lazy: they do not create a Tinker holder until the
+    Managed instances are lazy: they do not create a native holder until the
     SDK has provisioned or reattached a FireTitan trainer endpoint.
 
     Each training client automatically selects optimized requests when its
@@ -3282,6 +3017,12 @@ class FiretitanServiceClient(ServiceClient):
     """
 
     def __init__(self, *args, api_key: str | None = None, **kwargs):
+        project_id = kwargs.get("project_id", args[1] if len(args) > 1 else None)
+        if project_id is not None:
+            raise NotImplementedError(
+                "Fireworks training does not support Tinker project assignment. "
+                "Use Fireworks account and trainer identifiers."
+            )
         api_key = _fireworks_api_key(api_key)
         self._managed_config = kwargs.pop("managed_config", None)
         managed_base_url = kwargs.pop("managed_base_url", None)
@@ -3309,30 +3050,17 @@ class FiretitanServiceClient(ServiceClient):
         self._reference_handles_by_rank: dict[int, Any] = {}
         self._owned_inference_deployments: list[tuple[DeploymentManager, str, DeploymentCleanupOnClose]] = []
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
-        self._default_project_id: str | None = kwargs.get("project_id")
 
         if self._managed_config is not None:
             return
 
+        self._training_base_url = str(resolve_training_base_url(constructor_base_url))
         if self._fireworks_api_key is not None:
             headers = dict(kwargs.pop("default_headers", None) or {})
             headers.setdefault("X-API-Key", self._fireworks_api_key)
             kwargs["default_headers"] = headers
             kwargs.setdefault("_client_config", dict(FIRETITAN_TINKER_CLIENT_CONFIG))
-            from tinker.lib import internal_client_holder as holder_module
-
-            original_auth_provider = getattr(holder_module, "ApiKeyAuthProvider", None)
-            if original_auth_provider is None:
-                super().__init__(*args, api_key=api_key, **kwargs)
-            else:
-                with _TINKER_AUTH_PROVIDER_PATCH_LOCK:
-                    holder_module.ApiKeyAuthProvider = lambda *_, **__: _FireworksApiKeyAuthProvider(  # type: ignore[assignment]
-                        self._fireworks_api_key or ""
-                    )
-                    try:
-                        super().__init__(*args, api_key=api_key, **kwargs)
-                    finally:
-                        holder_module.ApiKeyAuthProvider = original_auth_provider
+            super().__init__(*args, api_key=api_key, **kwargs)
             return
         super().__init__(*args, api_key=api_key, **kwargs)
 
@@ -3348,12 +3076,11 @@ class FiretitanServiceClient(ServiceClient):
         return super().get_telemetry()
 
     def create_rest_client(self):
-        if not hasattr(self, "holder") and self._managed_config is not None:
-            return _LazyManagedRestClient(
-                self._managed_config,
-                user_metadata=self._default_user_metadata,
-            )
-        return super().create_rest_client()
+        endpoint = getattr(self, "_training_base_url", "").rstrip("/")
+        return RestClient(
+            getattr(self, "holder", None),
+            serverless=endpoint.endswith("/training/v1/serverless"),
+        )
 
     def _current_session_id(self) -> Any:
         """The serverless session id this service is bound to, or None (managed /
@@ -3471,25 +3198,29 @@ class FiretitanServiceClient(ServiceClient):
         logger.info(f"[sampler model (base-only)]: {sampling_model_name}")
         return sampling_model_name
 
-    def _lazy_managed_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
-        managed_config = self._managed_config
-        if managed_config is None:
-            return types.GetServerCapabilitiesResponse(supported_models=[])
-        return types.GetServerCapabilitiesResponse(
-            supported_models=[types.SupportedModel(model_name=managed_config.base_model)]
-        )
+    def _server_capabilities_source(self) -> ServiceClient:
+        if not hasattr(self, "holder"):
+            handle = self._managed_handle
+            if handle is None:
+                raise NotImplementedError(
+                    "Server capabilities are available after creating a dedicated training client. "
+                    "Model-creation responses describe the selected model's supported features."
+                )
+            return handle.service_client
+        if self._training_base_url.rstrip("/").endswith("/training/v1/serverless"):
+            raise NotImplementedError(
+                "Serverless endpoints do not expose server-wide capabilities. "
+                "Use the selected training client's model-creation capabilities."
+            )
+        return self
 
     def get_server_capabilities(self) -> types.GetServerCapabilitiesResponse:
-        if not hasattr(self, "holder"):
-            return self._lazy_managed_server_capabilities()
-        return super().get_server_capabilities()
+        return ServiceClient.get_server_capabilities(self._server_capabilities_source())
 
     async def get_server_capabilities_async(
         self,
     ) -> types.GetServerCapabilitiesResponse:
-        if not hasattr(self, "holder"):
-            return self._lazy_managed_server_capabilities()
-        return await super().get_server_capabilities_async()
+        return await ServiceClient.get_server_capabilities_async(self._server_capabilities_source())
 
     @classmethod
     def from_firetitan_config(
@@ -3799,6 +3530,13 @@ class FiretitanServiceClient(ServiceClient):
                 logger.warning("Managed service cleanup failed: %s", exc)
                 record_close_error(exc)
 
+        if holder := getattr(self, "holder", None):
+            try:
+                holder.close()
+            except Exception as exc:
+                logger.warning("Service holder cleanup failed: %s", exc)
+                record_close_error(exc)
+
         if close_error is not None:
             raise close_error
 
@@ -3934,7 +3672,9 @@ class FiretitanServiceClient(ServiceClient):
 
         if managed_config is not None:
             if base_model is not None:
-                _warn_deprecated_override("create_training_client", "base_model", base_model, managed_config.base_model)
+                _warn_deprecated_override(
+                    "create_training_client", "base_model", base_model, managed_config.base_model
+                )
             _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
             if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
                 raise ValueError(
@@ -4105,7 +3845,7 @@ class FiretitanServiceClient(ServiceClient):
         * Serverless (a connected multi-session service: ``holder`` present,
           no ``_managed_config``) returns ``None`` so resume derives
           ``base_model``/``lora_rank``/``train_*`` from the checkpoint itself
-          (the real REST client, not the lazy-managed stub). This is what lets a
+          (the serverless metadata endpoint). This is what lets a
           caller resume a *different* run's checkpoint (cross-run) and get that
           checkpoint's config.
         * SDK-managed / dedicated (an unconnected lazy service: ``_managed_config``
@@ -4428,7 +4168,7 @@ class FiretitanServiceClient(ServiceClient):
                         "base_model is ignored for serverless create_sampling_client(model_path=...); "
                         "the rollout host is bound to the training session route."
                     )
-                serverless_base_url = self._managed_base_url
+                serverless_base_url = self._training_base_url
                 serverless_base_url = serverless_base_url.rstrip("/")
                 if not serverless_base_url.endswith("/training/v1/serverless"):
                     raise ValueError(
@@ -4463,7 +4203,7 @@ class FiretitanServiceClient(ServiceClient):
                 "base_model is ignored for serverless base-only sampling; "
                 "the rollout host serves the training session's base weights."
             )
-            serverless_base_url = self._managed_base_url
+            serverless_base_url = self._training_base_url
             serverless_base_url = serverless_base_url.rstrip("/")
             if not serverless_base_url.endswith("/training/v1/serverless"):
                 raise ValueError(
@@ -4635,7 +4375,9 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        model = (
+            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        )
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,

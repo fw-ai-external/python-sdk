@@ -7,10 +7,10 @@ from typing import List, Union
 import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
-from tinker.lib import _pydantic_conv
 
 from fireworks.training.sdk._comms import get_comms, comms_context
-from fireworks.training.sdk.patches._tinker_tensor_validation_patch import CommsV2TensorData
+from fireworks.training.sdk._core.lib import _pydantic_conv
+from fireworks.training.sdk._core.lib._pydantic_conv import CommsV2TensorData
 
 
 @pytest.mark.asyncio

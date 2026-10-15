@@ -1,0 +1,2821 @@
+{
+  "baseline_commit": "02a733141632e8bc94bc1c6f5ed3718c2a2e945d",
+  "api": {
+    "FiretitanServiceClient": {
+      "close": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "create_base_training_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_deployment_sampler": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model_path",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "tokenizer",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "training_client",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "concurrency_controller",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "create_deployment_sampler_for_model": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "tokenizer",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "concurrency_controller",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "inference_url",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "create_inference_deployment_sampler": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "config",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "timeout_s",
+            "KEYWORD_ONLY",
+            "5400"
+          ],
+          [
+            "cleanup_on_close",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "tokenizer",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "concurrency_controller",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "create_lora_training_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "rank",
+            "POSITIONAL_OR_KEYWORD",
+            "32"
+          ],
+          [
+            "seed",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "train_mlp",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_attn",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_unembed",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "alpha",
+            "POSITIONAL_OR_KEYWORD",
+            "32"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "init_method",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_lora_training_client_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "rank",
+            "POSITIONAL_OR_KEYWORD",
+            "32"
+          ],
+          [
+            "seed",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "train_mlp",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_attn",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_unembed",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "alpha",
+            "POSITIONAL_OR_KEYWORD",
+            "32"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "init_method",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_reference_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "lora_rank",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "policy_client",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "user_metadata",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "create_rest_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "create_sampling_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "args",
+            "VAR_POSITIONAL",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "training_client",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "kwargs",
+            "VAR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "create_sampling_client_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model_path",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "deployment_sampler",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "training_client",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "create_training_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "lora_rank",
+            "POSITIONAL_OR_KEYWORD",
+            "0"
+          ],
+          [
+            "seed",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "train_mlp",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_attn",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "train_unembed",
+            "POSITIONAL_OR_KEYWORD",
+            "True"
+          ],
+          [
+            "lora_alpha",
+            "POSITIONAL_OR_KEYWORD",
+            "32"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "lora_init_method",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_training_client_from_state": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_training_client_from_state_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_training_client_from_state_with_optimizer": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_training_client_from_state_with_optimizer_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "projection_head_dim",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "get_server_capabilities": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_server_capabilities_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_telemetry": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "hotload_sampler_snapshot": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model_path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "list_checkpoints": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "job_id",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "page_size",
+            "KEYWORD_ONLY",
+            "200"
+          ]
+        ]
+      },
+      "promote_checkpoint": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "args",
+            "VAR_POSITIONAL",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "kwargs",
+            "VAR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "release_references": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "requires_initial_sampler_sync": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      }
+    },
+    "FiretitanTrainingClient": {
+      "create_base_training_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "base_model",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "user_metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_sampling_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model_path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "create_sampling_client_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "model_path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "forward": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "forward_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "forward_backward": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "forward_backward_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "forward_backward_contrastive": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "num_queries",
+            "KEYWORD_ONLY",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "temperature",
+            "KEYWORD_ONLY",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "pooling",
+            "KEYWORD_ONLY",
+            "last"
+          ],
+          [
+            "num_extra_negatives",
+            "KEYWORD_ONLY",
+            "0"
+          ]
+        ]
+      },
+      "forward_backward_contrastive_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "num_queries",
+            "KEYWORD_ONLY",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "temperature",
+            "KEYWORD_ONLY",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "pooling",
+            "KEYWORD_ONLY",
+            "last"
+          ],
+          [
+            "num_extra_negatives",
+            "KEYWORD_ONLY",
+            "0"
+          ]
+        ]
+      },
+      "forward_backward_custom": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_type_input",
+            "KEYWORD_ONLY",
+            "logprobs"
+          ],
+          [
+            "output",
+            "KEYWORD_ONLY",
+            "logprobs"
+          ],
+          [
+            "pooling",
+            "KEYWORD_ONLY",
+            "mean"
+          ],
+          [
+            "precomputed_forward",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "forward_backward_custom_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_fn",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "loss_type_input",
+            "KEYWORD_ONLY",
+            "logprobs"
+          ],
+          [
+            "output",
+            "KEYWORD_ONLY",
+            "logprobs"
+          ],
+          [
+            "pooling",
+            "KEYWORD_ONLY",
+            "mean"
+          ],
+          [
+            "precomputed_forward",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "forward_projection": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "data",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_info": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_info_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_telemetry": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_tokenizer": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "list_checkpoints": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "load_adapter": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "adapter_path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "load_state": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "load_state_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "load_state_with_optimizer": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "load_state_with_optimizer_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "path",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "weights_access_token",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "optim_step": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "adam_params",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "grad_accumulation_normalization",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "emit_grad_norm_metrics",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "optim_step_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "adam_params",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "grad_accumulation_normalization",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "emit_grad_norm_metrics",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "resolve_checkpoint_path": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "checkpoint_name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "source_job_id",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "save_state": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "ttl_seconds",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "overwrite",
+            "POSITIONAL_OR_KEYWORD",
+            "False"
+          ],
+          [
+            "timeout",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "save_state_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "ttl_seconds",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "overwrite",
+            "POSITIONAL_OR_KEYWORD",
+            "False"
+          ]
+        ]
+      },
+      "save_weights_and_get_sampling_client": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "save_weights_and_get_sampling_client_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "save_weights_and_get_sampling_client_submit": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "retry_config",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "save_weights_for_sampler": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "ttl_seconds",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "checkpoint_type",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "export_precision",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "metadata",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "save_weights_for_sampler_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "ttl_seconds",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "checkpoint_type",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "export_precision",
+            "KEYWORD_ONLY",
+            "None"
+          ],
+          [
+            "metadata",
+            "KEYWORD_ONLY",
+            "None"
+          ]
+        ]
+      },
+      "save_weights_for_sampler_ext": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "name",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "checkpoint_type",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "ttl_seconds",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "export_precision",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ]
+        ]
+      },
+      "weight_sync": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "weight_sync_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      }
+    },
+    "FiretitanSamplingClient": {
+      "close": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "drain_timeout_s",
+            "POSITIONAL_OR_KEYWORD",
+            "3600.0"
+          ]
+        ]
+      },
+      "compute_logprobs": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "prompt",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "compute_logprobs_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "prompt",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_base_model": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_base_model_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_telemetry": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "get_tokenizer": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "on_queue_state_change": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "queue_state",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "queue_state_reason",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ]
+        ]
+      },
+      "sample": {
+        "async": false,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "prompt",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "num_samples",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "sampling_params",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "include_prompt_logprobs",
+            "POSITIONAL_OR_KEYWORD",
+            "False"
+          ],
+          [
+            "topk_prompt_logprobs",
+            "POSITIONAL_OR_KEYWORD",
+            "0"
+          ]
+        ]
+      },
+      "sample_async": {
+        "async": true,
+        "params": [
+          [
+            "self",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "prompt",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "num_samples",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "sampling_params",
+            "POSITIONAL_OR_KEYWORD",
+            "<class 'inspect._empty'>"
+          ],
+          [
+            "include_prompt_logprobs",
+            "POSITIONAL_OR_KEYWORD",
+            "False"
+          ],
+          [
+            "topk_prompt_logprobs",
+            "POSITIONAL_OR_KEYWORD",
+            "0"
+          ]
+        ]
+      }
+    }
+  },
+  "wire": {
+    "dedicated-v1": [
+      {
+        "operation": "create_session",
+        "body": {
+          "tags": [],
+          "user_metadata": {},
+          "sdk_version": "0.23.0",
+          "type": "create_session"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "create_model",
+        "body": {
+          "session_id": "ts-fixed",
+          "model_seq_id": 0,
+          "base_model": "test/model",
+          "lora_config": {
+            "rank": 8,
+            "seed": 42,
+            "train_unembed": true,
+            "train_mlp": true,
+            "train_attn": true,
+            "alpha": 32
+          },
+          "type": "create_model"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-0",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "forward",
+        "body": {
+          "forward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "model-fixed",
+          "seq_id": 1
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-1",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "forward_backward",
+        "body": {
+          "forward_backward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "model-fixed",
+          "seq_id": 2
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-2",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "optim_step",
+        "body": {
+          "adam_params": {
+            "learning_rate": 1e-05,
+            "beta1": 0.9,
+            "beta2": 0.95,
+            "eps": 1e-12,
+            "weight_decay": 0.0,
+            "grad_clip_norm": 0.0,
+            "emit_grad_norm_metrics": "detailed"
+          },
+          "model_id": "model-fixed",
+          "seq_id": 3,
+          "type": "optim_step"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-3",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "state",
+          "seq_id": 4,
+          "overwrite": false,
+          "type": "save_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-4",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "load_weights",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "state",
+          "optimizer": false,
+          "seq_id": 5,
+          "type": "load_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-5",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights_for_sampler",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "sampler-deadbeef",
+          "seq_id": 6,
+          "type": "save_weights_for_sampler",
+          "checkpoint_type": "base"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-6",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      }
+    ],
+    "dedicated-v2": [
+      {
+        "operation": "create_session",
+        "body": {
+          "tags": [],
+          "user_metadata": {},
+          "sdk_version": "0.23.0",
+          "type": "create_session"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "create_model",
+        "body": {
+          "session_id": "ts-fixed",
+          "model_seq_id": 0,
+          "base_model": "test/model",
+          "lora_config": {
+            "rank": 8,
+            "seed": 42,
+            "train_unembed": true,
+            "train_mlp": true,
+            "train_attn": true,
+            "alpha": 32
+          },
+          "type": "create_model"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-0",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "forward",
+        "body": {
+          "forward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "model-fixed",
+          "seq_id": 1,
+          "comms": "v2"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-1",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "forward_backward",
+        "body": {
+          "forward_backward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "model-fixed",
+          "seq_id": 2,
+          "comms": "v2"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-2",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "optim_step",
+        "body": {
+          "adam_params": {
+            "learning_rate": 1e-05,
+            "beta1": 0.9,
+            "beta2": 0.95,
+            "eps": 1e-12,
+            "weight_decay": 0.0,
+            "grad_clip_norm": 0.0,
+            "emit_grad_norm_metrics": "detailed"
+          },
+          "model_id": "model-fixed",
+          "seq_id": 3,
+          "type": "optim_step"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-3",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "state",
+          "seq_id": 4,
+          "overwrite": false,
+          "type": "save_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-4",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "load_weights",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "state",
+          "optimizer": false,
+          "seq_id": 5,
+          "type": "load_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-5",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights_for_sampler",
+        "body": {
+          "model_id": "model-fixed",
+          "path": "sampler-deadbeef",
+          "seq_id": 6,
+          "type": "save_weights_for_sampler",
+          "checkpoint_type": "base"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-6",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      }
+    ],
+    "serverless-v1": [
+      {
+        "operation": "create_session",
+        "body": {
+          "tags": [],
+          "user_metadata": {},
+          "sdk_version": "0.23.0",
+          "type": "create_session"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "create_model",
+        "body": {
+          "session_id": "ts-fixed",
+          "model_seq_id": 0,
+          "base_model": "test/model",
+          "lora_config": {
+            "rank": 8,
+            "seed": 42,
+            "train_unembed": true,
+            "train_mlp": true,
+            "train_attn": true,
+            "alpha": 32
+          },
+          "type": "create_model"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-0",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "forward",
+        "body": {
+          "forward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 1
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-1",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "forward_backward",
+        "body": {
+          "forward_backward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 2
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-2",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "optim_step",
+        "body": {
+          "adam_params": {
+            "learning_rate": 1e-05,
+            "beta1": 0.9,
+            "beta2": 0.95,
+            "eps": 1e-12,
+            "weight_decay": 0.0,
+            "grad_clip_norm": 0.0,
+            "emit_grad_norm_metrics": "detailed"
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 3,
+          "type": "optim_step"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-3",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "state",
+          "seq_id": 4,
+          "overwrite": false,
+          "type": "save_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-4",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "load_weights",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "state",
+          "optimizer": false,
+          "seq_id": 5,
+          "type": "load_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-5",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights_for_sampler",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "sampler-deadbeef",
+          "seq_id": 6,
+          "type": "save_weights_for_sampler",
+          "checkpoint_type": "base"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-6",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      }
+    ],
+    "serverless-v2": [
+      {
+        "operation": "create_session",
+        "body": {
+          "tags": [],
+          "user_metadata": {},
+          "sdk_version": "0.23.0",
+          "type": "create_session"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "create_model",
+        "body": {
+          "session_id": "ts-fixed",
+          "model_seq_id": 0,
+          "base_model": "test/model",
+          "lora_config": {
+            "rank": 8,
+            "seed": 42,
+            "train_unembed": true,
+            "train_mlp": true,
+            "train_attn": true,
+            "alpha": 32
+          },
+          "type": "create_model"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-0",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "forward",
+        "body": {
+          "forward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 1,
+          "comms": "v2"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-1",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "forward_backward",
+        "body": {
+          "forward_backward_input": {
+            "data": [
+              {
+                "loss_fn_inputs": {
+                  "target_tokens": {
+                    "data": [
+                      2,
+                      3
+                    ],
+                    "dtype": "int64",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "weights": {
+                    "data": [
+                      0.25,
+                      -0.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "logprobs": {
+                    "data": [
+                      -1.25,
+                      -2.5
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  },
+                  "advantages": {
+                    "data": [
+                      0.5,
+                      1.0
+                    ],
+                    "dtype": "float32",
+                    "shape": [
+                      2
+                    ]
+                  }
+                },
+                "model_input": {
+                  "chunks": [
+                    {
+                      "tokens": [
+                        1,
+                        2
+                      ],
+                      "type": "encoded_text"
+                    }
+                  ],
+                  "routing_matrices": [
+                    "",
+                    "matrix"
+                  ]
+                }
+              }
+            ],
+            "loss_fn": "ppo",
+            "loss_fn_config": {
+              "clip_eps": 0.2,
+              "target_logprob_support": "full_vocabulary",
+              "use_unbiased_estimator": true
+            }
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 2,
+          "comms": "v2"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-2",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/x-protobuf, application/json"
+      },
+      {
+        "operation": "optim_step",
+        "body": {
+          "adam_params": {
+            "learning_rate": 1e-05,
+            "beta1": 0.9,
+            "beta2": 0.95,
+            "eps": 1e-12,
+            "weight_decay": 0.0,
+            "grad_clip_norm": 0.0,
+            "emit_grad_norm_metrics": "detailed"
+          },
+          "model_id": "run-fixed:train:0",
+          "seq_id": 3,
+          "type": "optim_step"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-3",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "state",
+          "seq_id": 4,
+          "overwrite": false,
+          "type": "save_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-4",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "load_weights",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "state",
+          "optimizer": false,
+          "seq_id": 5,
+          "type": "load_weights"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-5",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "save_weights_for_sampler",
+        "body": {
+          "model_id": "run-fixed:train:0",
+          "path": "sampler-deadbeef",
+          "seq_id": 6,
+          "type": "save_weights_for_sampler",
+          "checkpoint_type": "base"
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      },
+      {
+        "operation": "retrieve_future",
+        "body": {
+          "request_id": "result-6",
+          "allow_metadata_only": true
+        },
+        "content_type": "application/json",
+        "accept": "application/json"
+      }
+    ]
+  }
+}

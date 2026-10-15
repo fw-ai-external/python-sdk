@@ -7,6 +7,13 @@ Infrastructure and orchestration primitives for training on [Fireworks](https://
 - **Sampling** -- client-side tokenized completions (`DeploymentSampler`).
 - **Weight sync** -- checkpoint save / hotload pipeline (`WeightSyncer`).
 
+Both native entrypoints are available:
+
+```python
+from fireworks.training import sdk
+from fireworks.training import tinker
+```
+
 ## Install
 
 Use **Python 3.11+**:
@@ -115,7 +122,7 @@ into a `Datum`:
 
 ```python
 import torch
-from tinker.types.model_input import ModelInput
+from fireworks.training.sdk.types import ModelInput
 from training.renderer.supervised import datum_from_model_input_weights
 
 tokens = [151644, 8948, 198, 151645]

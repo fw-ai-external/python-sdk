@@ -205,7 +205,12 @@ class FiretitanProvisioningConfig:
             )
 
         lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
-        if self.reference_required and self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
+        if (
+            self.reference_required
+            and self.reference_training_shape_id
+            and lora_capacity > 0
+            and not self.forward_only
+        ):
             warnings.warn(
                 "reference_training_shape_id for a LoRA policy is deprecated and will be rejected "
                 "in a future release. Omit it to reuse the policy trainer with its adapter disabled; "
@@ -264,29 +269,8 @@ class _ManagedTinkerHandle:
         if holder is None and self.training_client is not None:
             holder = getattr(self.training_client, "holder", None)
         if holder is not None:
-            telemetry = holder.get_telemetry()
-            if telemetry is not None:
-                try:
-                    telemetry._trigger_flush()
-                    telemetry._wait_until_drained_sync()
-                except Exception as e:
-                    logger.warning(
-                        "Failed to drain trainer telemetry for %s: %s",
-                        self.trainer_endpoint.job_id,
-                        e,
-                    )
-                finally:
-                    try:
-                        telemetry.stop()
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to stop trainer telemetry for %s: %s",
-                            self.trainer_endpoint.job_id,
-                            e,
-                        )
             try:
-                cleanup_future = holder.run_coroutine_threadsafe(holder._async_cleanup())
-                cleanup_future.result(timeout=5.0)
+                holder.close()
             except Exception as e:
                 logger.warning(
                     "Failed to stop trainer client holder for %s: %s",

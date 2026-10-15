@@ -34,9 +34,11 @@ from __future__ import annotations
 
 import time
 import logging
+from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
 
-from transformers import PreTrainedTokenizerBase
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 from fireworks.training.sdk.client import FiretitanSamplingClient, FiretitanTrainingClient
 from fireworks.training.sdk.errors import DOCS_SDK, format_sdk_error

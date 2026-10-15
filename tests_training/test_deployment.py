@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import types as pytypes
 import asyncio
 import logging
@@ -12,8 +11,8 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from tinker import types as tinker_types
 
+from fireworks.training.sdk import types as tinker_types
 from fireworks.training.sdk.client import (
     FiretitanSampleResponse,
     FiretitanSamplingClient,
@@ -62,6 +61,7 @@ def deploy_config():
 def _make_mock_tokenizer(return_ids=None):
     tok = MagicMock()
     tok.apply_chat_template.return_value = return_ids or [1, 2, 3]
+
     # Integer stop IDs are converted to strings via decode for the completions
     # API (token-in, string-stop). Map id -> "<id>" so tests can assert on it.
     def _decode(ids, **_kwargs):
@@ -88,8 +88,10 @@ def _query_params(path: str) -> dict[str, list[str]]:
 
 def _mock_async_completions_stream(sampler, return_value):
     """Patch async_completions_stream to return a value without hitting the network."""
+
     async def _fake(*args, **kwargs):
         return return_value, ServerMetrics()
+
     sampler.async_completions_stream = _fake
 
 
@@ -127,7 +129,7 @@ class TestDeploymentSamplerHeaders:
 
 def _sample_with_firetitan_client(
     sampler,
-    fake_tinker,
+    native_sdk,
     prompt_ids,
     *,
     num_samples=1,
@@ -137,9 +139,9 @@ def _sample_with_firetitan_client(
     client = FiretitanSamplingClient(sampler)
     try:
         return client.sample(
-            prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+            prompt=native_sdk.ModelInput.from_ints(prompt_ids),
             num_samples=num_samples,
-            sampling_params=sampling_params or fake_tinker.SamplingParams(),
+            sampling_params=sampling_params or native_sdk.SamplingParams(),
             include_prompt_logprobs=include_prompt_logprobs,
         ).result(timeout=5)
     finally:
@@ -193,22 +195,17 @@ class _FakeSampledSequence:
 class _FakeSampleResponse:
     def __init__(self, sequences, prompt_logprobs=None, _prompt_logprobs_list=None):
         self.sequences = sequences
-        self.prompt_logprobs = (
-            prompt_logprobs
-            if prompt_logprobs is not None
-            else _prompt_logprobs_list
-        )
+        self.prompt_logprobs = prompt_logprobs if prompt_logprobs is not None else _prompt_logprobs_list
 
 
 @pytest.fixture
-def fake_tinker(monkeypatch):
+def native_sdk():
     fake_types = pytypes.SimpleNamespace(
         ModelInput=_FakeModelInput,
         SamplingParams=_FakeSamplingParams,
         SampledSequence=_FakeSampledSequence,
         SampleResponse=_FakeSampleResponse,
     )
-    monkeypatch.setitem(sys.modules, "tinker", pytypes.SimpleNamespace(types=fake_types))
     return fake_types
 
 
@@ -302,9 +299,7 @@ class TestCreateDeployment:
             "state": "CREATING",
         }
         mgr._post = MagicMock(return_value=resp)
-        mgr._create_deployment(
-            replace(deploy_config, accept_shapeless_risk=True)
-        )
+        mgr._create_deployment(replace(deploy_config, accept_shapeless_risk=True))
         path = mgr._post.call_args[0][0]
         assert "acceptShapelessRisk=true" in path
 
@@ -331,17 +326,13 @@ class TestCreateDeployment:
             config.validate()
 
     def test_create_can_mark_deployment_as_training_owned(self, deploy_config):
-        body = DeploymentManager._build_deployment_body(
-            replace(deploy_config, for_training=True)
-        )
+        body = DeploymentManager._build_deployment_body(replace(deploy_config, for_training=True))
 
         assert body["forTraining"] is True
         assert body["enableHotLoad"] is True
 
     def test_create_can_disable_hotload(self, mgr, deploy_config):
-        body = DeploymentManager._build_deployment_body(
-            replace(deploy_config, enable_hot_load=False)
-        )
+        body = DeploymentManager._build_deployment_body(replace(deploy_config, enable_hot_load=False))
 
         assert body["enableHotLoad"] is False
         assert body["forTraining"] is False
@@ -441,23 +432,16 @@ class TestCreateDeployment:
         mgr._get_deployment = MagicMock(return_value={"name": "dep-1", "state": "READY"})
         mgr._create_deployment(deploy_config)
 
-    def test_create_or_get_retry_reuses_deployment_id_after_conflict(
-        self, mgr, deploy_config, monkeypatch
-    ):
+    def test_create_or_get_retry_reuses_deployment_id_after_conflict(self, mgr, deploy_config, monkeypatch):
         """E2E-style retry stack test: same SDK call, same deployment ID."""
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            if (
-                request.method == "GET"
-                and request.url.path == "/v1/accounts/test-acct/deployments/dep-1"
-            ):
+            if request.method == "GET" and request.url.path == "/v1/accounts/test-acct/deployments/dep-1":
                 get_count = sum(req.method == "GET" for req in requests)
                 if get_count == 1:
-                    return httpx.Response(
-                        404, json={"error": "not found"}, request=request
-                    )
+                    return httpx.Response(404, json={"error": "not found"}, request=request)
                 return httpx.Response(
                     200,
                     json={
@@ -466,10 +450,7 @@ class TestCreateDeployment:
                     },
                     request=request,
                 )
-            if (
-                request.method == "POST"
-                and request.url.path == "/v1/accounts/test-acct/deployments"
-            ):
+            if request.method == "POST" and request.url.path == "/v1/accounts/test-acct/deployments":
                 post_count = sum(req.method == "POST" for req in requests)
                 if post_count == 1:
                     return httpx.Response(
@@ -488,9 +469,7 @@ class TestCreateDeployment:
             "fireworks.training.sdk.errors._backoff_delay",
             lambda *_args, **_kwargs: 0.0,
         )
-        monkeypatch.setattr(
-            "fireworks.training.sdk.errors.time.sleep", lambda _delay: None
-        )
+        monkeypatch.setattr("fireworks.training.sdk.errors.time.sleep", lambda _delay: None)
         mgr._sync_client.close()
         mgr._sync_client = httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -498,9 +477,7 @@ class TestCreateDeployment:
 
         post_requests = [req for req in requests if req.method == "POST"]
         get_requests = [req for req in requests if req.method == "GET"]
-        post_deployment_ids = [
-            _query_params(str(req.url))["deploymentId"][0] for req in post_requests
-        ]
+        post_deployment_ids = [_query_params(str(req.url))["deploymentId"][0] for req in post_requests]
 
         assert result == DeploymentInfo(
             deployment_id="dep-1",
@@ -540,13 +517,8 @@ class TestWaitForReady:
         assert result.state == "READY"
         assert result.deployment_id == "dep-1"
         assert result.name == "accounts/test-acct/deployments/dep-1"
-        assert (
-            result.deployment_shape_version
-            == "accounts/test-acct/deploymentShapes/s/versions/v"
-        )
-        mgr._probe_inference.assert_called_once_with(
-            "accounts/test-acct/deployments/dep-1"
-        )
+        assert result.deployment_shape_version == "accounts/test-acct/deploymentShapes/s/versions/v"
+        mgr._probe_inference.assert_called_once_with("accounts/test-acct/deployments/dep-1")
 
 
 # ---------------------------------------------------------------------------
@@ -1019,7 +991,9 @@ class TestHotload:
         mgr._sync_request = MagicMock(return_value=resp)
 
         mgr.hotload(
-            "dep-1", "accounts/test/models/m", "snap-2",
+            "dep-1",
+            "accounts/test/models/m",
+            "snap-2",
             incremental_snapshot_metadata={"previous_snapshot_identity": "snap-1"},
         )
         payload = mgr._sync_request.call_args[1]["json"]
@@ -1039,10 +1013,7 @@ class TestHotload:
             "snap-123",
         )
 
-        assert (
-            "Hotloading BASE (non-delta) snapshot 'snap-123' to deployment 'dep-1'"
-            in caplog.text
-        )
+        assert "Hotloading BASE (non-delta) snapshot 'snap-123' to deployment 'dep-1'" in caplog.text
         assert "FULL snapshot" not in caplog.text
 
     def test_hotload_retries_without_reset_prompt_cache_when_rejected(self, mgr):
@@ -1136,24 +1107,32 @@ class TestHotload:
 
 class TestWaitForHotload:
     def test_immediate_success(self, mgr):
-        mgr.hotload_check_status = MagicMock(return_value={
-            "replicas": [{
-                "current_snapshot_identity": "snap-1",
-                "loading_state": {"stage": "idle"},
-                "readiness": True,
-            }]
-        })
+        mgr.hotload_check_status = MagicMock(
+            return_value={
+                "replicas": [
+                    {
+                        "current_snapshot_identity": "snap-1",
+                        "loading_state": {"stage": "idle"},
+                        "readiness": True,
+                    }
+                ]
+            }
+        )
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
         assert result is True
 
     def test_timeout_returns_false(self, mgr):
-        mgr.hotload_check_status = MagicMock(return_value={
-            "replicas": [{
-                "identity": None,
-                "stage": "downloading",
-                "ready": False,
-            }]
-        })
+        mgr.hotload_check_status = MagicMock(
+            return_value={
+                "replicas": [
+                    {
+                        "identity": None,
+                        "stage": "downloading",
+                        "ready": False,
+                    }
+                ]
+            }
+        )
         result = mgr.wait_for_hotload("dep-1", "m", "snap-x", timeout_seconds=0.01, poll_interval=0.005)
         assert result is False
 
@@ -1161,16 +1140,20 @@ class TestWaitForHotload:
         # Some serving backends report multi-adapter completion via a
         # per-adapter ``loaded_adapters`` array rather than a single
         # ``current_snapshot_identity``. Both shapes must be accepted.
-        mgr.hotload_check_status = MagicMock(return_value={
-            "replicas": [{
-                "current_snapshot_identity": None,
-                "readiness": True,
-                "loading_state": {"stage": "idle"},
-                "loaded_adapters": [
-                    {"identity": "snap-1", "status": "loaded"},
-                ],
-            }]
-        })
+        mgr.hotload_check_status = MagicMock(
+            return_value={
+                "replicas": [
+                    {
+                        "current_snapshot_identity": None,
+                        "readiness": True,
+                        "loading_state": {"stage": "idle"},
+                        "loaded_adapters": [
+                            {"identity": "snap-1", "status": "loaded"},
+                        ],
+                    }
+                ]
+            }
+        )
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
         assert result is True
 
@@ -1178,30 +1161,38 @@ class TestWaitForHotload:
         # A non-``loaded`` status (e.g. ``loading``, ``failed``) must NOT
         # terminate the wait — the SDK keeps polling until either
         # ``status: loaded`` shows up or the timeout fires.
-        mgr.hotload_check_status = MagicMock(return_value={
-            "replicas": [{
-                "current_snapshot_identity": None,
-                "readiness": True,
-                "loading_state": {"stage": "downloading"},
-                "loaded_adapters": [
-                    {"identity": "snap-1", "status": "loading"},
-                ],
-            }]
-        })
+        mgr.hotload_check_status = MagicMock(
+            return_value={
+                "replicas": [
+                    {
+                        "current_snapshot_identity": None,
+                        "readiness": True,
+                        "loading_state": {"stage": "downloading"},
+                        "loaded_adapters": [
+                            {"identity": "snap-1", "status": "loading"},
+                        ],
+                    }
+                ]
+            }
+        )
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=0.01, poll_interval=0.005)
         assert result is False
 
     def test_error_status_records_client_snapshot_state(self, mgr):
-        mgr.hotload_check_status = MagicMock(return_value={
-            "replicas": [{
-                "current_snapshot_identity": "old-snap",
-                "readiness": False,
-                "loading_state": {
-                    "stage": "error",
-                    "target_snapshot_identity": "snap-1",
-                },
-            }]
-        })
+        mgr.hotload_check_status = MagicMock(
+            return_value={
+                "replicas": [
+                    {
+                        "current_snapshot_identity": "old-snap",
+                        "readiness": False,
+                        "loading_state": {
+                            "stage": "error",
+                            "target_snapshot_identity": "snap-1",
+                        },
+                    }
+                ]
+            }
+        )
 
         result = mgr.wait_for_hotload("dep-1", "m", "snap-1", timeout_seconds=5, poll_interval=0)
 
@@ -1210,7 +1201,9 @@ class TestWaitForHotload:
         assert "reported an error for the requested snapshot" in mgr.last_hotload_error_message
         assert "Expected client snapshot: snap-1" in mgr.last_hotload_error_message
         assert "current deployment snapshot: old-snap" in mgr.last_hotload_error_message
-        assert "Use the Fireworks training cookbook skill's hotload recovery self-check" in mgr.last_hotload_error_message
+        assert (
+            "Use the Fireworks training cookbook skill's hotload recovery self-check" in mgr.last_hotload_error_message
+        )
         assert "reattach or recreate a stale deployment" in mgr.last_hotload_error_message
         assert "full-parameter training" in mgr.last_hotload_error_message
         assert "for LoRA, fix deployment attachment" in mgr.last_hotload_error_message
@@ -1236,7 +1229,8 @@ class TestExtractLogprobs:
         lps = DeploymentSampler._extract_logprobs(choice)
         assert lps == [-0.5, -1.2]
         sampling_lps = DeploymentSampler._extract_logprobs(
-            choice, field="sampling_logprob",
+            choice,
+            field="sampling_logprob",
         )
         assert sampling_lps == [-0.6, -1.3]
 
@@ -1244,7 +1238,8 @@ class TestExtractLogprobs:
         choice = {"logprobs": {"content": [{"logprob": None}]}}
         assert DeploymentSampler._extract_logprobs(choice) is None
         assert DeploymentSampler._extract_logprobs(
-            choice, allow_none=True,
+            choice,
+            allow_none=True,
         ) == [None]
 
     def test_none_if_absent(self):
@@ -1254,7 +1249,6 @@ class TestExtractLogprobs:
 
     def test_empty_content(self):
         assert DeploymentSampler._extract_logprobs({"logprobs": {"content": []}}) is None
-
 
 
 # ---------------------------------------------------------------------------
@@ -1294,17 +1288,24 @@ class TestSampleWithTokens:
         completion_ids = [400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "hello world",
-                "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": completion_ids},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "hello world",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": completion_ids},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}],
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        )
 
         assert len(results) == 1
         c = results[0]
@@ -1318,30 +1319,41 @@ class TestSampleWithTokens:
     def test_tokenizer_called_with_messages(self):
         tok = _make_mock_tokenizer([1, 2, 3])
         sampler = _make_sampler(tokenizer=tok)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "ok", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "ok",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                    }
+                ]
+            },
+        )
 
         messages = [{"role": "user", "content": "test"}]
         asyncio.run(sampler.sample_with_tokens(messages=messages))
         tok.apply_chat_template.assert_called_once_with(
-            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
         sampler.close()
 
     def test_missing_completion_token_ids_raises(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3]))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {}}]
-        })
+        _mock_async_completions_stream(
+            sampler, {"choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {}}]}
+        )
 
         with pytest.raises(RuntimeError, match="missing completion_token_ids"):
-            asyncio.run(sampler.sample_with_tokens(
-                messages=[{"role": "user", "content": "hi"}],
-            ))
+            asyncio.run(
+                sampler.sample_with_tokens(
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+            )
         sampler.close()
 
     def test_echo_strips_verified_prefix(self):
@@ -1349,16 +1361,25 @@ class TestSampleWithTokens:
         echoed_completion_ids = [1, 100, 200, 400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "gen", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": echoed_completion_ids},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "gen",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": echoed_completion_ids},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}], echo=True,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+                echo=True,
+            )
+        )
 
         assert len(results) == 1
         c = results[0]
@@ -1374,24 +1395,35 @@ class TestSampleWithTokens:
         echoed_ids = [1, 100, 200, 400, 500]
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "gen", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": echoed_ids},
-                "logprobs": {"content": [
-                    {"logprob": 0.0, "sampling_logprob": None},
-                    {"logprob": -0.1, "sampling_logprob": -0.11},
-                    {"logprob": -0.2, "sampling_logprob": -0.21},
-                    {"logprob": -0.3, "sampling_logprob": -0.31},
-                    {"logprob": -0.4, "sampling_logprob": -0.41},
-                ]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "gen",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": echoed_ids},
+                        "logprobs": {
+                            "content": [
+                                {"logprob": 0.0, "sampling_logprob": None},
+                                {"logprob": -0.1, "sampling_logprob": -0.11},
+                                {"logprob": -0.2, "sampling_logprob": -0.21},
+                                {"logprob": -0.3, "sampling_logprob": -0.31},
+                                {"logprob": -0.4, "sampling_logprob": -0.41},
+                            ]
+                        },
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}],
-            echo=True, logprobs=True,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+                echo=True,
+                logprobs=True,
+            )
+        )
 
         c = results[0]
         assert c.logprobs_echoed is True
@@ -1403,9 +1435,12 @@ class TestSampleWithTokens:
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3, 4, 5]))
         _mock_async_completions_stream(sampler, {"choices": []})
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}], max_seq_len=5,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+                max_seq_len=5,
+            )
+        )
         assert results == []
         sampler.close()
 
@@ -1414,52 +1449,77 @@ class TestSampleWithTokens:
         long_completion = list(range(100, 200))
 
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "long", "finish_reason": "length",
-                "raw_output": {"completion_token_ids": long_completion},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "long",
+                        "finish_reason": "length",
+                        "raw_output": {"completion_token_ids": long_completion},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}], max_seq_len=50,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+                max_seq_len=50,
+            )
+        )
         assert len(results) == 0
         sampler.close()
 
     def test_logprobs_extracted(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "hi", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {
-                    "content": [{"logprob": -1.5, "sampling_logprob": -1.6}]
-                },
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "hi",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -1.5, "sampling_logprob": -1.6}]},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "x"}], logprobs=True,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "x"}],
+                logprobs=True,
+            )
+        )
         assert results[0].inference_logprobs == [-1.5]
         assert results[0].sampling_logprobs == [-1.6]
         sampler.close()
 
     def test_legacy_logprobs_fall_back_to_raw_for_full_distribution_sampling(self, caplog):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "hi", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -1.5}]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "hi",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -1.5}]},
+                    }
+                ]
+            },
+        )
 
         with caplog.at_level(logging.WARNING):
-            results = asyncio.run(sampler.sample_with_tokens(
-                messages=[{"role": "user", "content": "x"}], logprobs=True,
-            ))
+            results = asyncio.run(
+                sampler.sample_with_tokens(
+                    messages=[{"role": "user", "content": "x"}],
+                    logprobs=True,
+                )
+            )
         assert results[0].inference_logprobs == [-1.5]
         assert results[0].sampling_logprobs == [-1.5]
         assert "omitted logprobs.content[].sampling_logprob" in caplog.text
@@ -1470,37 +1530,53 @@ class TestSampleWithTokens:
 
     def test_legacy_logprobs_do_not_fall_back_when_sampling_distribution_changes(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "hi", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -1.5}]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "hi",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -1.5}]},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "x"}],
-            logprobs=True,
-            temperature=0.7,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "x"}],
+                logprobs=True,
+                temperature=0.7,
+            )
+        )
         assert results[0].inference_logprobs == [-1.5]
         assert results[0].sampling_logprobs == [None]
         sampler.close()
 
     def test_routing_matrices_extracted(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "hi", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -0.5, "routing_matrix": "AQID"}]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "hi",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.5, "routing_matrix": "AQID"}]},
+                    }
+                ]
+            },
+        )
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "x"}],
-            include_routing_matrix=True,
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "x"}],
+                include_routing_matrix=True,
+            )
+        )
         assert results[0].routing_matrices == ["AQID"]
         sampler.close()
 
@@ -1513,6 +1589,7 @@ class TestSampleWithTokens:
 class TestDefaultValues:
     def test_default_temperature_is_1(self):
         import inspect
+
         sig = inspect.signature(DeploymentSampler.async_completions_stream)
         assert sig.parameters["temperature"].default == 1.0
         sig2 = inspect.signature(DeploymentSampler.sample_with_tokens)
@@ -1527,18 +1604,23 @@ class TestDefaultValues:
 
 
 class TestSampleWithPromptTokens:
-    def test_basic_sample(self, fake_tinker):
+    def test_basic_sample(self, native_sdk):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
 
         sampler = _make_sampler(tokenizer=None)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "out",
-                "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": completion_ids},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": completion_ids},
+                    }
+                ]
+            },
+        )
 
         results = asyncio.run(sampler.sample_with_prompt_tokens(prompt_ids))
 
@@ -1551,37 +1633,50 @@ class TestSampleWithPromptTokens:
         sampler.close()
 
         sampler = _make_sampler(tokenizer=None)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "out",
-                "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": completion_ids},
-                "logprobs": {"content": [
-                    {"logprob": -0.4, "sampling_logprob": -0.41},
-                    {"logprob": -0.5, "sampling_logprob": -0.51},
-                ]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": completion_ids},
+                        "logprobs": {
+                            "content": [
+                                {"logprob": -0.4, "sampling_logprob": -0.41},
+                                {"logprob": -0.5, "sampling_logprob": -0.51},
+                            ]
+                        },
+                    }
+                ]
+            },
+        )
         response = _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             prompt_ids,
-            sampling_params=fake_tinker.SamplingParams(max_tokens=1024),
+            sampling_params=native_sdk.SamplingParams(max_tokens=1024),
         )
         assert len(response.sequences) == 1
         assert response.sequences[0].tokens == completion_ids
         assert response.sequences[0].stop_reason == "stop"
         assert response.prompt_logprobs is None
 
-    def test_does_not_call_apply_chat_template(self, fake_tinker):
+    def test_does_not_call_apply_chat_template(self, native_sdk):
         tok = MagicMock()
         sampler = _make_sampler(tokenizer=tok)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "out", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                    }
+                ]
+            },
+        )
 
         asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
 
@@ -1590,33 +1685,42 @@ class TestSampleWithPromptTokens:
 
         tok = MagicMock()
         sampler = _make_sampler(tokenizer=tok)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "out", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
+            },
+        )
         _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             [1, 2, 3],
-            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+            sampling_params=native_sdk.SamplingParams(max_tokens=1),
         )
         tok.apply_chat_template.assert_not_called()
 
-    def test_stop_str_shape_preserved(self, fake_tinker):
+    def test_stop_str_shape_preserved(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
         captured: dict[str, object] = {}
 
         async def _fake_stream(*args, **kwargs):
             captured["stop"] = kwargs.get("stop")
             return {
-                "choices": [{
-                    "text": "out", "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
-                }]
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
@@ -1632,14 +1736,14 @@ class TestSampleWithPromptTokens:
         sampler.async_completions_stream = _fake_stream
         _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             [1, 2],
-            sampling_params=fake_tinker.SamplingParams(stop=stop_strs),
+            sampling_params=native_sdk.SamplingParams(stop=stop_strs),
         )
         assert captured["stop"] == stop_strs
         assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
 
-    def test_stop_int_converted_to_strings_via_tokenizer(self, fake_tinker):
+    def test_stop_int_converted_to_strings_via_tokenizer(self, native_sdk):
         # The completions API takes string stop sequences, so integer stop IDs
         # are decoded to strings client-side before the request.
         sampler = _make_sampler()
@@ -1648,11 +1752,14 @@ class TestSampleWithPromptTokens:
         async def _fake_stream(*args, **kwargs):
             captured["stop"] = kwargs.get("stop")
             return {
-                "choices": [{
-                    "text": "out", "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
-                }]
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
@@ -1667,9 +1774,9 @@ class TestSampleWithPromptTokens:
         sampler.async_completions_stream = _fake_stream
         _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             [1, 2],
-            sampling_params=fake_tinker.SamplingParams(stop=[13, 42]),
+            sampling_params=native_sdk.SamplingParams(stop=[13, 42]),
         )
         assert captured["stop"] == ["<13>", "<42>"]
         assert all(isinstance(s, str) for s in captured["stop"])  # type: ignore[arg-type]
@@ -1682,17 +1789,21 @@ class TestSampleWithPromptTokens:
         assert results == []
         sampler.close()
 
-    def test_logprobs_extracted(self, fake_tinker):
+    def test_logprobs_extracted(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "x", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {
-                    "content": [{"logprob": -0.7, "sampling_logprob": -0.8}]
-                },
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
+            },
+        )
 
         results = asyncio.run(sampler.sample_with_prompt_tokens([1, 2], logprobs=True))
         assert results[0].inference_logprobs == [-0.7]
@@ -1700,57 +1811,67 @@ class TestSampleWithPromptTokens:
         sampler.close()
 
         sampler = _make_sampler(tokenizer=None)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "x", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [99]},
-                "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
+            },
+        )
         response = _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             [1, 2],
-            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+            sampling_params=native_sdk.SamplingParams(max_tokens=1),
         )
         assert response.sequences[0].logprobs == [-0.8]
 
-    def test_sample_falls_back_to_raw_logprobs_for_compatible_legacy_response(self, fake_tinker):
+    def test_sample_falls_back_to_raw_logprobs_for_compatible_legacy_response(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
 
         async def _fake_stream(*args, **kwargs):
             return {
-                "choices": [{
-                    "text": "x",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                    "logprobs": {"content": [{"logprob": -0.7}]},
-                }]
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7}]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
         client = FiretitanSamplingClient(sampler)
         try:
             response = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                prompt=native_sdk.ModelInput.from_ints([1, 2]),
                 num_samples=1,
-                sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                sampling_params=native_sdk.SamplingParams(max_tokens=1),
             ).result(timeout=5)
             assert response.sequences[0].logprobs == [-0.7]
         finally:
             client.close()
 
-    def test_sample_requires_sampling_logprobs_when_sampling_distribution_changes(self, fake_tinker):
+    def test_sample_requires_sampling_logprobs_when_sampling_distribution_changes(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
 
         async def _fake_stream(*args, **kwargs):
             return {
-                "choices": [{
-                    "text": "x",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                    "logprobs": {"content": [{"logprob": -0.7}]},
-                }]
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7}]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
@@ -1758,25 +1879,28 @@ class TestSampleWithPromptTokens:
         try:
             with pytest.raises(RuntimeError, match="sampling_logprob"):
                 client.sample(
-                    prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                    prompt=native_sdk.ModelInput.from_ints([1, 2]),
                     num_samples=1,
-                    sampling_params=fake_tinker.SamplingParams(max_tokens=1, temperature=0.7),
+                    sampling_params=native_sdk.SamplingParams(max_tokens=1, temperature=0.7),
                 ).result(timeout=5)
         finally:
             client.close()
 
-    def test_n_concurrent_calls(self, fake_tinker):
+    def test_n_concurrent_calls(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
         call_count = {"n": 0}
 
         async def _fake_stream(*args, **kwargs):
             call_count["n"] += 1
             return {
-                "choices": [{
-                    "text": "x", "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [99]},
-                    "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
-                }]
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [99]},
+                        "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
@@ -1791,10 +1915,10 @@ class TestSampleWithPromptTokens:
         sampler.async_completions_stream = _fake_stream
         response = _sample_with_firetitan_client(
             sampler,
-            fake_tinker,
+            native_sdk,
             [1, 2],
             num_samples=4,
-            sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+            sampling_params=native_sdk.SamplingParams(max_tokens=1),
         )
         assert call_count["n"] == 4
         assert len(response.sequences) == 4
@@ -1802,16 +1926,17 @@ class TestSampleWithPromptTokens:
 
 class TestFiretitanSamplingClient:
     def test_extends_tinker_sampling_client(self):
-        tinker = pytest.importorskip("tinker")
+        from fireworks.training.sdk._core import SamplingClient
+
         sampler = _make_sampler(tokenizer=None)
         client = FiretitanSamplingClient(sampler)
         try:
-            assert issubclass(FiretitanSamplingClient, tinker.SamplingClient)
-            assert isinstance(client, tinker.SamplingClient)
+            assert issubclass(FiretitanSamplingClient, SamplingClient)
+            assert isinstance(client, SamplingClient)
         finally:
             client.close()
 
-    def test_sample_returns_tinker_response(self, fake_tinker):
+    def test_sample_returns_tinker_response(self, native_sdk):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
         sampler = _make_sampler()
@@ -1820,24 +1945,28 @@ class TestFiretitanSamplingClient:
         async def _fake_stream(*args, **kwargs):
             captured.update(kwargs)
             return {
-                "choices": [{
-                    "text": "out",
-                    "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": completion_ids},
-                    "logprobs": {"content": [
-                        {"logprob": -0.3, "sampling_logprob": -0.31},
-                        {"logprob": -0.4, "sampling_logprob": -0.41},
-                    ]},
-                }]
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": completion_ids},
+                        "logprobs": {
+                            "content": [
+                                {"logprob": -0.3, "sampling_logprob": -0.31},
+                                {"logprob": -0.4, "sampling_logprob": -0.41},
+                            ]
+                        },
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
         client = FiretitanSamplingClient(sampler)
         try:
             response = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                prompt=native_sdk.ModelInput.from_ints(prompt_ids),
                 num_samples=1,
-                sampling_params=fake_tinker.SamplingParams(
+                sampling_params=native_sdk.SamplingParams(
                     max_tokens=2,
                     stop=[99],
                     temperature=0.7,
@@ -1864,7 +1993,7 @@ class TestFiretitanSamplingClient:
         assert captured["logprobs"] is True
 
     @pytest.mark.parametrize("ttl", [None, 60, 604800])
-    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, fake_tinker, ttl):
+    def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, native_sdk, ttl):
         sampler = _make_sampler()
         captured = {}
 
@@ -1898,7 +2027,7 @@ class TestFiretitanSamplingClient:
         client = FiretitanSamplingClient(sampler)
         try:
             response = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints([10, 20, 30]),
+                prompt=native_sdk.ModelInput.from_ints([10, 20, 30]),
                 num_samples=1,
                 sampling_params=FiretitanSamplingParams(
                     max_tokens=2,
@@ -1920,7 +2049,7 @@ class TestFiretitanSamplingClient:
         assert "top_sampling_logprobs" not in captured
         assert "top_sampling_format" not in captured
 
-    def test_sample_splits_echo_prompt_logprobs(self, fake_tinker):
+    def test_sample_splits_echo_prompt_logprobs(self, native_sdk):
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
         sampler = _make_sampler(tokenizer=None)
@@ -1929,25 +2058,29 @@ class TestFiretitanSamplingClient:
         async def _fake_stream(*args, **kwargs):
             captured.update(kwargs)
             return {
-                "choices": [{
-                    "text": "out",
-                    "finish_reason": "length",
-                    "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
-                    "logprobs": {"content": [
-                        {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
-                        {"logprob": -0.1, "sampling_logprob": None, "routing_matrix": "prompt-1"},
-                        {"logprob": -0.2, "sampling_logprob": None, "routing_matrix": "prompt-2"},
-                        {"logprob": -0.3, "sampling_logprob": -0.33, "routing_matrix": "completion-1"},
-                        {"logprob": -0.4, "sampling_logprob": -0.44, "routing_matrix": "completion-2"},
-                    ]},
-                }]
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "length",
+                        "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
+                        "logprobs": {
+                            "content": [
+                                {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
+                                {"logprob": -0.1, "sampling_logprob": None, "routing_matrix": "prompt-1"},
+                                {"logprob": -0.2, "sampling_logprob": None, "routing_matrix": "prompt-2"},
+                                {"logprob": -0.3, "sampling_logprob": -0.33, "routing_matrix": "completion-1"},
+                                {"logprob": -0.4, "sampling_logprob": -0.44, "routing_matrix": "completion-2"},
+                            ]
+                        },
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
         client = FiretitanSamplingClient(sampler)
         try:
             response = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                prompt=native_sdk.ModelInput.from_ints(prompt_ids),
                 num_samples=1,
                 sampling_params=FiretitanSamplingParams(
                     max_tokens=2,
@@ -1965,12 +2098,8 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].stop_reason == "length"
         assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
 
-    @pytest.mark.parametrize(
-        "echo,echoed_reference_rows", [(False, False), (True, False), (True, True)]
-    )
-    def test_sample_preserves_completion_sampling_support(
-        self, fake_tinker, echo, echoed_reference_rows
-    ):
+    @pytest.mark.parametrize("echo,echoed_reference_rows", [(False, False), (True, False), (True, True)])
+    def test_sample_preserves_completion_sampling_support(self, native_sdk, echo, echoed_reference_rows):
         sampler = _make_sampler(tokenizer=None)
         sampler.r3_store_id = "test"
         prompt_ids, completion_ids = [10, 20, 30], [40, 50]
@@ -1984,45 +2113,52 @@ class TestFiretitanSamplingClient:
                 {"logprob": -0.4, "sampling_logprob": -0.44},
             ]
             if echo:
-                content = [
-                    {"logprob": lp, "sampling_logprob": None}
-                    for lp in [0.0, -0.1, -0.2]
-                ] + content
-            return {"choices": [{
-                "text": "out",
-                "finish_reason": "length",
-                "raw_output": {
-                    "completion_token_ids": (prompt_ids if echo else []) + completion_ids,
-                },
-                "logprobs": {"content": content},
-                "top_sampling_format": "parquet_v1",
-                "r3_store_id": "test",
-                "top_sampling_references": {
-                    "length": row_count,
-                    "files": [{
-                        "store_id": "test",
-                        "file_id": "00000000-0000-0000-0000-000000000001",
-                        "format": "parquet_v1",
-                        "row_count": row_count,
-                        "expires_at": 9999999999,
-                    }],
-                    "spans": [{
-                        "input_token_start": 0,
-                        "file_index": 0,
-                        "file_row_start": 0,
-                        "count": row_count,
-                    }],
-                },
-            }]}, ServerMetrics()
+                content = [{"logprob": lp, "sampling_logprob": None} for lp in [0.0, -0.1, -0.2]] + content
+            return {
+                "choices": [
+                    {
+                        "text": "out",
+                        "finish_reason": "length",
+                        "raw_output": {
+                            "completion_token_ids": (prompt_ids if echo else []) + completion_ids,
+                        },
+                        "logprobs": {"content": content},
+                        "top_sampling_format": "parquet_v1",
+                        "r3_store_id": "test",
+                        "top_sampling_references": {
+                            "length": row_count,
+                            "files": [
+                                {
+                                    "store_id": "test",
+                                    "file_id": "00000000-0000-0000-0000-000000000001",
+                                    "format": "parquet_v1",
+                                    "row_count": row_count,
+                                    "expires_at": 9999999999,
+                                }
+                            ],
+                            "spans": [
+                                {
+                                    "input_token_start": 0,
+                                    "file_index": 0,
+                                    "file_row_start": 0,
+                                    "count": row_count,
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }, ServerMetrics()
 
         sampler.async_completions_stream = fake_stream
         client = FiretitanSamplingClient(sampler)
         try:
             response = client.sample(
-                prompt=fake_tinker.ModelInput.from_ints(prompt_ids),
+                prompt=native_sdk.ModelInput.from_ints(prompt_ids),
                 num_samples=1,
                 sampling_params=FiretitanSamplingParams(
-                    max_tokens=2, top_sampling_logprobs=256, r3_ttl_seconds=120,
+                    max_tokens=2,
+                    top_sampling_logprobs=256,
+                    r3_ttl_seconds=120,
                 ),
                 include_prompt_logprobs=echo,
             ).result(timeout=5)
@@ -2047,61 +2183,63 @@ class TestFiretitanSamplingClient:
         with pytest.raises(ValueError):
             FiretitanSamplingParams(top_sampling_logprobs=width)
 
-    def test_compute_logprobs_uses_prompt_logprobs(self, fake_tinker):
+    def test_compute_logprobs_uses_prompt_logprobs(self, native_sdk):
         prompt_ids = [10, 20, 30]
         sampler = _make_sampler(tokenizer=None)
 
         async def _fake_stream(*args, **kwargs):
             return {
-                "choices": [{
-                    "text": "x",
-                    "finish_reason": "length",
-                    "raw_output": {"completion_token_ids": prompt_ids + [40]},
-                    "logprobs": {"content": [
-                        {"logprob": 0.0, "sampling_logprob": None},
-                        {"logprob": -0.1, "sampling_logprob": None},
-                        {"logprob": -0.2, "sampling_logprob": None},
-                        {"logprob": -0.3, "sampling_logprob": -0.33},
-                    ]},
-                }]
+                "choices": [
+                    {
+                        "text": "x",
+                        "finish_reason": "length",
+                        "raw_output": {"completion_token_ids": prompt_ids + [40]},
+                        "logprobs": {
+                            "content": [
+                                {"logprob": 0.0, "sampling_logprob": None},
+                                {"logprob": -0.1, "sampling_logprob": None},
+                                {"logprob": -0.2, "sampling_logprob": None},
+                                {"logprob": -0.3, "sampling_logprob": -0.33},
+                            ]
+                        },
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake_stream
         client = FiretitanSamplingClient(sampler)
         try:
             with pytest.warns(UserWarning, match="training_client.forward"):
-                logprobs = client.compute_logprobs(
-                    fake_tinker.ModelInput.from_ints(prompt_ids)
-                ).result(timeout=5)
+                logprobs = client.compute_logprobs(native_sdk.ModelInput.from_ints(prompt_ids)).result(timeout=5)
         finally:
             client.close()
 
         assert logprobs == [None, -0.1, -0.2]
 
-    def test_topk_prompt_logprobs_is_explicitly_unsupported(self, fake_tinker):
+    def test_topk_prompt_logprobs_is_explicitly_unsupported(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
         client = FiretitanSamplingClient(sampler)
         try:
             with pytest.raises(NotImplementedError, match="topk_prompt_logprobs"):
                 client.sample(
-                    prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                    prompt=native_sdk.ModelInput.from_ints([1, 2]),
                     num_samples=1,
-                    sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                    sampling_params=native_sdk.SamplingParams(max_tokens=1),
                     topk_prompt_logprobs=1,
                 )
         finally:
             client.close()
 
-    def test_topk_prompt_logprobs_async_is_explicitly_unsupported(self, fake_tinker):
+    def test_topk_prompt_logprobs_async_is_explicitly_unsupported(self, native_sdk):
         sampler = _make_sampler(tokenizer=None)
         client = FiretitanSamplingClient(sampler)
         try:
             with pytest.raises(NotImplementedError, match="topk_prompt_logprobs"):
                 asyncio.run(
                     client.sample_async(
-                        prompt=fake_tinker.ModelInput.from_ints([1, 2]),
+                        prompt=native_sdk.ModelInput.from_ints([1, 2]),
                         num_samples=1,
-                        sampling_params=fake_tinker.SamplingParams(max_tokens=1),
+                        sampling_params=native_sdk.SamplingParams(max_tokens=1),
                         topk_prompt_logprobs=1,
                     )
                 )
@@ -2166,17 +2304,26 @@ class TestSampleWithTokensLegacyRegression:
     def test_legacy_path_still_renders_via_chat_template(self):
         tok = _make_mock_tokenizer([7, 8, 9])
         sampler = _make_sampler(tokenizer=tok)
-        _mock_async_completions_stream(sampler, {
-            "choices": [{
-                "text": "ok", "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [11]},
-            }]
-        })
+        _mock_async_completions_stream(
+            sampler,
+            {
+                "choices": [
+                    {
+                        "text": "ok",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [11]},
+                    }
+                ]
+            },
+        )
 
         messages = [{"role": "user", "content": "hi"}]
         asyncio.run(sampler.sample_with_tokens(messages=messages))
         tok.apply_chat_template.assert_called_once_with(
-            messages, tokenize=True, add_generation_prompt=True, return_dict=False,
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=False,
         )
         sampler.close()
 
@@ -2438,8 +2585,10 @@ class TestAdaptiveConcurrencyController:
 
     def test_step_completed_decrease_on_high_pq(self):
         ctrl = AdaptiveConcurrencyController(
-            initial_window=10, prefill_queue_target=0.5,
-            multiplicative_decrease=0.5, ema_alpha=1.0,
+            initial_window=10,
+            prefill_queue_target=0.5,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
         )
         # Simulate a step with high prefill queue.
         for _ in range(8):
@@ -2450,8 +2599,10 @@ class TestAdaptiveConcurrencyController:
 
     def test_step_completed_increase_on_low_pq(self):
         ctrl = AdaptiveConcurrencyController(
-            initial_window=4, prefill_queue_target=1.0,
-            additive_increase=2.0, ema_alpha=1.0,
+            initial_window=4,
+            prefill_queue_target=1.0,
+            additive_increase=2.0,
+            ema_alpha=1.0,
         )
         for _ in range(8):
             ctrl.release(ServerMetrics(prefill_queue_duration=0.1))
@@ -2584,8 +2735,11 @@ class TestAdaptiveConcurrencyController:
 
     def test_repeated_congestion_floors_at_min(self):
         ctrl = AdaptiveConcurrencyController(
-            initial_window=16, min_window=2, prefill_queue_target=0.1,
-            multiplicative_decrease=0.5, ema_alpha=1.0,
+            initial_window=16,
+            min_window=2,
+            prefill_queue_target=0.1,
+            multiplicative_decrease=0.5,
+            ema_alpha=1.0,
         )
         for _ in range(20):
             ctrl.release(ServerMetrics(prefill_queue_duration=5.0))
@@ -2594,8 +2748,11 @@ class TestAdaptiveConcurrencyController:
 
     def test_repeated_good_metrics_caps_at_max(self):
         ctrl = AdaptiveConcurrencyController(
-            initial_window=4, max_window=16, prefill_queue_target=1.0,
-            additive_increase=5.0, ema_alpha=1.0,
+            initial_window=4,
+            max_window=16,
+            prefill_queue_target=1.0,
+            additive_increase=5.0,
+            ema_alpha=1.0,
         )
         for _ in range(100):
             ctrl.release(ServerMetrics(prefill_queue_duration=0.01))
@@ -2635,24 +2792,24 @@ class TestStreamingCompletions:
 
     def test_streaming_with_adaptive_controller(self):
         import json as _json
+
         prompt_ids = [1, 2, 3]
         completion_ids = [400, 500]
         ctrl = AdaptiveConcurrencyController(initial_window=8, ema_alpha=1.0)
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids), concurrency_controller=ctrl)
 
         chunk_data = {
-            "choices": [{
-                "text": "hello",
-                "raw_output": {"completion_token_ids": completion_ids},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "text": "hello",
+                    "raw_output": {"completion_token_ids": completion_ids},
+                    "finish_reason": "stop",
+                }
+            ],
             "perf_metrics": {"prefill-queue-duration": "0.1"},
         }
         # SSE wire format: "data: {json}\n\n" per event
-        raw_bytes = (
-            f"data: {_json.dumps(chunk_data)}\n\n"
-            f"data: [DONE]\n\n"
-        ).encode()
+        raw_bytes = (f"data: {_json.dumps(chunk_data)}\n\ndata: [DONE]\n\n").encode()
 
         async def mock_post(*args, **kwargs):
             resp = MagicMock()
@@ -2662,15 +2819,18 @@ class TestStreamingCompletions:
 
             async def aiter_bytes():
                 yield raw_bytes
+
             resp.aiter_bytes = aiter_bytes
             return resp
 
         sampler._get_async_client = MagicMock()
         sampler._get_async_client.return_value.post = mock_post
 
-        results = asyncio.run(sampler.sample_with_tokens(
-            messages=[{"role": "user", "content": "hi"}],
-        ))
+        results = asyncio.run(
+            sampler.sample_with_tokens(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        )
         assert len(results) == 1
         assert results[0].full_tokens == prompt_ids + completion_ids
         # Metrics collected but window not adjusted yet.
@@ -2687,11 +2847,13 @@ class TestStreamingCompletions:
         prompt_ids = [1, 2, 3]
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer(prompt_ids))
         chunk_data = {
-            "choices": [{
-                "text": "hello",
-                "raw_output": {"completion_token_ids": [400, 500]},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "text": "hello",
+                    "raw_output": {"completion_token_ids": [400, 500]},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 3, "completion_tokens": 2},
             "perf_metrics": {"server-processing-time": "0.25"},
         }
@@ -2837,7 +2999,9 @@ class TestAttemptRecords:
         sampler = _make_sampler(tokenizer=None)
         sampler._release_concurrency(ServerMetrics(prefill_queue_duration=5.0))
         for attempt in range(1, 41):
-            sampler._release_concurrency(ServerMetrics(transport_error=True, retry_attempt=attempt, error="ReadTimeout"))
+            sampler._release_concurrency(
+                ServerMetrics(transport_error=True, retry_attempt=attempt, error="ReadTimeout")
+            )
         assert len(sampler.drain_metrics()) == 41
         assert "recent_prefill_queue_p95=5.0s" in sampler._recent_metrics_diagnostic()
         sampler.close()
@@ -2958,9 +3122,11 @@ class TestSseTruncationRetry:
 
         # Pin jitter to a deterministic minimum sleep.
         monkeypatch.setattr(_random, "random", lambda: 0.0)
+
         # Drop the first-attempt sleep to keep the test fast.
         async def _no_sleep(_s):
             return None
+
         monkeypatch.setattr(asyncio, "sleep", _no_sleep)
 
         sampler = _make_sampler(tokenizer=None)
@@ -2971,10 +3137,13 @@ class TestSseTruncationRetry:
             if attempts["n"] == 1:
                 raise _SSETruncationError("truncated")
             return {
-                "choices": [{
-                    "text": "ok", "finish_reason": "stop",
-                    "raw_output": {"completion_token_ids": [7]},
-                }]
+                "choices": [
+                    {
+                        "text": "ok",
+                        "finish_reason": "stop",
+                        "raw_output": {"completion_token_ids": [7]},
+                    }
+                ]
             }, ServerMetrics()
 
         sampler.async_completions_stream = _fake
@@ -3012,8 +3181,10 @@ class TestSseTruncationRetry:
         from fireworks.training.sdk.sampling import SamplingRequestError
 
         monkeypatch.setattr(_random, "random", lambda: 0.0)
+
         async def _no_sleep(_s):
             return None
+
         monkeypatch.setattr(asyncio, "sleep", _no_sleep)
 
         sampler = _make_sampler(tokenizer=None)

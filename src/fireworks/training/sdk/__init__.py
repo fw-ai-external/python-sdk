@@ -1,17 +1,22 @@
 """Fireworks training SDK public exports.
 
 The package root is intentionally lazy. Lightweight runtimes such as the TITO
-agent sidecar must not import trainer, Tinker, Torch, or orchestration modules
+agent sidecar must not import trainer, Torch, or orchestration modules
 just to reach sampling and exact-token trajectory types. Importing any public
-name below preserves the existing API and loads only that name's owning module.
+name below loads only that name's owning module.
 
-Unlike the former eager package root, importing this module alone does not
-install the optional Tinker compatibility patches. The SDK client installs them
-before using Tinker; applications that use Tinker directly must explicitly
-import :mod:`fireworks.training.sdk.patches` first.
+Native training types and clients do not require an external training SDK.
+
 """
 
 from __future__ import annotations
+
+import sys
+
+if sys.version_info < (3, 11):
+    raise ImportError(
+        "The Fireworks training SDK requires Python 3.11 or newer; the inference SDK supports Python 3.9+."
+    )
 
 from typing import Any
 from importlib import import_module
@@ -20,7 +25,25 @@ from importlib import import_module
 # small module allowlist. Keep root import side-effect-free, and update that
 # allowlist whenever a sidecar-visible export gains a new runtime dependency.
 _EXPORTS = {
-    # Tinker-compatible training client.
+    "APIFuture": ("fireworks.training.sdk._core.lib.public_interfaces.api_future", "APIFuture"),
+    "APIError": ("fireworks.training.sdk._core._exceptions", "APIError"),
+    "APIStatusError": ("fireworks.training.sdk._core._exceptions", "APIStatusError"),
+    "APIConnectionError": ("fireworks.training.sdk._core._exceptions", "APIConnectionError"),
+    "APITimeoutError": ("fireworks.training.sdk._core._exceptions", "APITimeoutError"),
+    "RequestFailedError": ("fireworks.training.sdk._core._exceptions", "RequestFailedError"),
+    "TrainingError": ("fireworks.training.sdk._core._exceptions", "TrainingError"),
+    "Datum": ("fireworks.training.sdk.types", "Datum"),
+    "ModelInput": ("fireworks.training.sdk.types", "ModelInput"),
+    "TensorData": ("fireworks.training.sdk.types", "TensorData"),
+    "AdamParams": ("fireworks.training.sdk.types", "AdamParams"),
+    "EncodedTextChunk": ("fireworks.training.sdk.types", "EncodedTextChunk"),
+    "ModelInputChunk": ("fireworks.training.sdk.types", "ModelInputChunk"),
+    "ForwardBackwardOutput": ("fireworks.training.sdk.types", "ForwardBackwardOutput"),
+    "OptimStepResponse": ("fireworks.training.sdk.types", "OptimStepResponse"),
+    "SamplingParams": ("fireworks.training.sdk.types", "SamplingParams"),
+    "StopReason": ("fireworks.training.sdk.types", "StopReason"),
+    "LoraConfig": ("fireworks.training.sdk.types", "LoraConfig"),
+    # Training clients and orchestration.
     "WeightSyncResponse": ("fireworks.training.sdk.client", "WeightSyncResponse"),
     "SaveSamplerResult": ("fireworks.training.sdk.client", "SaveSamplerResult"),
     "GradNormMetricsMode": ("fireworks.training.sdk.client", "GradNormMetricsMode"),
@@ -31,6 +54,9 @@ _EXPORTS = {
     "SamplingClientClosedError": ("fireworks.training.sdk.client", "SamplingClientClosedError"),
     "FiretitanSamplingParams": ("fireworks.training.sdk.client", "FiretitanSamplingParams"),
     "FiretitanTrainingClient": ("fireworks.training.sdk.client", "FiretitanTrainingClient"),
+    "ServiceClient": ("fireworks.training.sdk.client", "FiretitanServiceClient"),
+    "TrainingClient": ("fireworks.training.sdk.client", "FiretitanTrainingClient"),
+    "SamplingClient": ("fireworks.training.sdk.client", "FiretitanSamplingClient"),
     "FiretitanSampledSequence": ("fireworks.training.sdk.client", "FiretitanSampledSequence"),
     "TrainingAPIError": ("fireworks.training.sdk.errors", "TrainingAPIError"),
     "FiretitanProvisioningConfig": ("fireworks.training.sdk.managed", "FiretitanProvisioningConfig"),
@@ -102,19 +128,7 @@ _EXPORTS = {
     ),
     "TITOLocalDebugConfig": ("fireworks.training.sdk.tito_debug", "TITOLocalDebugConfig"),
     "TITOLocalDebugSink": ("fireworks.training.sdk.tito_debug", "TITOLocalDebugSink"),
-    # Tinker compatibility and shared training schemas.
-    "install_tinker_service_client": (
-        "fireworks.training.sdk.tinker_compat",
-        "install_tinker_service_client",
-    ),
-    "patched_tinker_service_client": (
-        "fireworks.training.sdk.tinker_compat",
-        "patched_tinker_service_client",
-    ),
-    "restore_tinker_service_client": (
-        "fireworks.training.sdk.tinker_compat",
-        "restore_tinker_service_client",
-    ),
+    # Shared training schemas.
     "WSDSchedule": ("fireworks.training.sdk.training_spec", "WSDSchedule"),
     "CosineSchedule": ("fireworks.training.sdk.training_spec", "CosineSchedule"),
     "LinearSchedule": ("fireworks.training.sdk.training_spec", "LinearSchedule"),
@@ -158,10 +172,14 @@ _EXPORTS = {
     ),
 }
 
-__all__ = sorted(_EXPORTS)
+__all__ = sorted([*_EXPORTS, "types"])
 
 
 def __getattr__(name: str) -> Any:
+    if name == "types":
+        value = import_module("fireworks.training.sdk.types")
+        globals()[name] = value
+        return value
     target = _EXPORTS.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

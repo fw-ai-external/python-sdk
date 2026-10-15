@@ -51,7 +51,23 @@ models quantize routed-expert projections. `ExportPrecision` and
 `DEFAULT_MERGED_BASE_EXPORT_PRECISION` are exported from
 `fireworks.training.sdk` for typed integrations.
 
-- automatic model-input patch for router replay (`_tinker_r3_patch.py`)
+- native model-input fields for router replay and top-K sampling references
+
+Training clients, futures, schemas and HTTP transport are owned by this SDK.
+Install `fireworks-ai[training-sdk]` for Python 3.11 or later; Tinker is not a
+required dependency. Import training data types with
+`from fireworks.training.sdk import types` or import `Datum`, `ModelInput`,
+`TensorData` and `AdamParams` directly from the package root.
+
+Existing JSON v1/v2 negotiation, request fields, retries and checkpoint paths
+are preserved. Use owned data types; returned types and exceptions belong to
+Fireworks. The SDK has no Tinker patch kit, global service replacement or
+external-class adapter. Existing external recipes should import native types
+and adapt their service/publication setup explicitly.
+
+See [Tinker Cookbook compatibility](TINKER_COMPATIBILITY.md) for supported
+interfaces, publication modes, backend gaps and explicit workarounds. In
+particular, native SDK errors must be caught through Fireworks error types.
 
 ## Minimal lifecycle example
 
@@ -166,7 +182,7 @@ sequence plus weights tensor into a right-shifted training `Datum`:
 
 ```python
 import torch
-from tinker.types.model_input import ModelInput
+from fireworks.training.sdk.types import ModelInput
 from training.renderer.supervised import datum_from_model_input_weights
 
 tokens = [151644, 8948, 198, 151645]

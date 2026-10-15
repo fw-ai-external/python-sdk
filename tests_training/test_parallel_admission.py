@@ -8,14 +8,17 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-import tinker
 
+import fireworks.training.sdk._core as tinker
 from tests_training.test_client import TestParallelChunkSubmission as _ChunkHelpers
 
 
 class _Future:
     def __init__(self, coroutine):
         self.task = asyncio.create_task(coroutine)
+
+    def future(self):
+        return self.task
 
     async def result_async(self, timeout=None):
         return await self.task
@@ -28,7 +31,7 @@ def client(monkeypatch):
         monkeypatch.setattr("fireworks.training.sdk.client." + name, helper._FakeAPIFuture)
     monkeypatch.setattr("fireworks.training.sdk.client._CombinedAPIFuture", helper._FakeCombinedAPIFuture)
     c = helper._make_client(parallel=True, send_order=[])
-    c._request_id_lock = threading.Lock()
+    c._request_id_lock = threading.RLock()
     c._request_id_counter = 0
     c._chunked_requests = lambda data: [(c._get_request_id(), data)]
     c.holder.run_coroutine_threadsafe.side_effect = _Future
@@ -65,7 +68,7 @@ def test_multichunk_forward_joins_the_same_pending_backward(client, comms):
         # Both forward chunks enter the same ACK barrier before it is released.
         for _ in range(10):
             await asyncio.sleep(0)
-        assert not forwards and not request.task.done()
+        assert not forwards and not request.future().done()
         release.set()
         assert await pending.result_async() == [1]
         assert await request.result_async() == [2, 3]
@@ -93,7 +96,7 @@ def test_slow_ack_does_not_block_the_next_group(client, comms):
         client._send_single_forward_backward_request = lambda rid, data, *_: send(rid, data)
         futures = [client.forward_backward([_datum()], "ppo") for _ in range(2)]
         await asyncio.wait_for(both_started.wait(), 1)
-        assert all(not f.task.done() for f in futures)
+        assert all(not f.future().done() for f in futures)
         release.set()
         assert [await f.result_async() for f in futures] == [[1], [2]]
 
@@ -158,7 +161,7 @@ def test_optimizer_joins_all_prior_uploads_and_refuses_failed_admission(client, 
         await asyncio.wait_for(started.wait(), 1)
         release[0].set()
         await asyncio.sleep(0.01)
-        assert not optimizer_sent and not mutation.task.done()
+        assert not optimizer_sent and not mutation.future().done()
         release[1].set()
         outcomes = await asyncio.gather(*(f.result_async() for f in groups), return_exceptions=True)
         if failed:
