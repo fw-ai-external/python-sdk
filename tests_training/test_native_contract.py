@@ -30,6 +30,11 @@ def test_native_public_method_signatures_match_frozen_baseline(cls: type) -> Non
             "async": False,
             "params": [["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"]],
         }
+    if cls is sdk_client.FiretitanServiceClient:
+        assert current.pop("delete_training_session") == {
+            "async": False,
+            "params": [["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"]],
+        }
     expected = dict(_BASELINE["api"][cls.__name__])
     if cls is sdk_client.FiretitanTrainingClient:
         for name in (

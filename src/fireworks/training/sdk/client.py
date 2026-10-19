@@ -3182,6 +3182,30 @@ class FiretitanServiceClient(ServiceClient):
         list/promote, DeleteTrainingSession). None for non-serverless services."""
         return self._serverless_training_session_name(self._current_session_id())
 
+    def delete_training_session(self) -> None:
+        """Close this service's serverless training session, releasing its
+        concurrent-run quota slot immediately. No-op for non-serverless
+        services; idempotent server-side. The trainer reclaims the session's
+        LoRA state asynchronously via idle expiry."""
+        session_id = self.training_session_id
+        if session_id is None:
+            return
+        if not self._fireworks_api_key:
+            raise RuntimeError(
+                f"Cannot resolve the account for training session {session_id!r}; the service has no API key."
+            )
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        with FireworksClient(
+            api_key=self._fireworks_api_key,
+            base_url=_fireworks_api_root_url(getattr(self, "_managed_base_url", None)),
+            additional_headers=getattr(self, "_managed_additional_headers", None),
+        ) as fw_client:
+            # The cached lookup degrades to None on a transient failure; retry
+            # here so cleanup surfaces the real error instead of skipping.
+            account = self._resolved_account_id() or fw_client.account_id
+            fw_client.delete_training_session(f"accounts/{account}/trainingSessions/{session_id}")
+
     def _enable_serverless_supervised_409_retry(self) -> None:
         """Private SFT/DPO serverless opt-in for capacity-409 retrieve retries.
 
