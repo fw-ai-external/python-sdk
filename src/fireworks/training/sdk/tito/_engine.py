@@ -1016,6 +1016,7 @@ class _LinearTrajectoryCore:
         result: SampledRequestResult,
         include_routing_matrix: bool,
         include_top_sampling: bool,
+        include_sampling_mask: bool = False,
     ) -> SampledCompletion:
         if len(result.completions) != 1:
             raise self._completion_error(
@@ -1090,6 +1091,13 @@ class _LinearTrajectoryCore:
             raise self._completion_error(
                 "tito_completion_alignment_error",
                 "top-K sampling references are not aligned with completion IDs",
+            )
+        if include_sampling_mask and (
+            completion.sampling_mask_references is None or len(completion.sampling_mask_references) != len(output)
+        ):
+            raise self._completion_error(
+                "tito_completion_alignment_error",
+                "mask sampling references are not aligned with completion IDs",
             )
         return completion
 
@@ -1347,6 +1355,10 @@ class _LinearTrajectoryCore:
                 if completion.top_sampling_references is not None:
                     sampled_arrays[f"{prefix}_top_sampling_references"] = json.dumps(
                         routing_to_wire(completion.top_sampling_references)
+                    )
+                if completion.sampling_mask_references is not None:
+                    sampled_arrays[f"{prefix}_sampling_mask_references"] = json.dumps(
+                        routing_to_wire(completion.sampling_mask_references)
                     )
         try:
             await self._record_async(
@@ -1926,7 +1938,13 @@ class _LinearTrajectoryCore:
                     echoed_prompt_logprob_count=0,
                 )
                 sampled = replace(sampled, completions=[normalized])
-            completion = self._validate_completion(plan, sampled, include_routing, include_top_sampling)
+            completion = self._validate_completion(
+                plan,
+                sampled,
+                include_routing,
+                include_top_sampling,
+                sampling_kwargs.get("sampling_mask") == "parquet_v1",
+            )
             phase = "parser"
             parsed = self._parse(request, completion)
             state.metrics.increment("parser/success")
@@ -1974,6 +1992,7 @@ class _LinearTrajectoryCore:
                     freeze_routing(completion.routing_matrices) if completion.routing_matrices is not None else None
                 ),
                 top_sampling_references=completion.top_sampling_references,
+                sampling_mask_references=completion.sampling_mask_references,
                 response_id=str(response["id"]),
                 finish_reason=completion.finish_reason,
                 prompt_disposition=plan.prompt_disposition,
@@ -2047,6 +2066,11 @@ class _LinearTrajectoryCore:
                 **(
                     {"top_sampling_references": routing_to_wire(completion.top_sampling_references)}
                     if completion.top_sampling_references is not None
+                    else {}
+                ),
+                **(
+                    {"sampling_mask_references": routing_to_wire(completion.sampling_mask_references)}
+                    if completion.sampling_mask_references is not None
                     else {}
                 ),
                 **(
@@ -2302,11 +2326,11 @@ class _LinearTrajectoryCore:
                 {"prepared_prompt_ids": prompt},
             )
             phase = "sampling_admission"
-            # Auxiliary outputs are never trained, so they skip Parquet top-K publication.
+            # Auxiliary outputs are never trained, so they skip probability-head and replay-mask publication.
             sampling_kwargs = {
                 key: value
                 for key, value in self._sampling_kwargs(state, request).items()
-                if key not in ("top_sampling_logprobs", "top_sampling_format")
+                if key not in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask")
             }
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")

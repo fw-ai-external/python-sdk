@@ -202,6 +202,26 @@ result = policy.forward_backward([datum], "cross_entropy").result()
 mean_nll = result.metrics["loss:sum"] / max(result.metrics["response_tokens"], 1.0)
 ```
 
+## Complete replay masks with a bounded SC head
+
+```python
+from fireworks.training.sdk import FiretitanSamplingParams
+
+params = FiretitanSamplingParams(
+    max_tokens=1024, temperature=1.0, top_p=0.95,
+    top_sampling_logprobs=128, sampling_mask="parquet_v1",
+)
+```
+
+Mask capture and probability-head capture are independent. Omit
+`top_sampling_logprobs` for replay-only training; omit `sampling_mask` for SC
+without replay. The SDK aligns either channel through
+`sequence.sampling_mask_references` for replay and
+`sequence.top_sampling_references` for SC, including TITO turns. Pass each to
+its matching `ModelInput` field; the two references may point to different files.
+
+Replay requires `sampling_mask`; top-k-only files are rejected.
+
 ## Error handling and retries
 
 - `errors.py` provides `request_with_retries`, structured error formatting, and status hints.

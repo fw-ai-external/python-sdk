@@ -564,6 +564,7 @@ class TITOTurn:
     inference_topk_token_ids: tuple[tuple[int, ...], ...] | None = None
     inference_topk_logprobs: tuple[tuple[float, ...], ...] | None = None
     top_sampling_references: RoutingReferences | None = None
+    sampling_mask_references: RoutingReferences | None = None
     """Completion-only Parquet top-K sampling rows, one per ``exact_completion_ids`` token."""
 
     @property

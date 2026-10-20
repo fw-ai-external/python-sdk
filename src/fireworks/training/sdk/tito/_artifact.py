@@ -108,6 +108,11 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
             if value.top_sampling_references is not None
             else {}
         ),
+        **(
+            {"sampling_mask_references": routing_to_wire(value.sampling_mask_references)}
+            if value.sampling_mask_references is not None
+            else {}
+        ),
         "routing_matrices": routing_to_wire(value.routing_matrices),
         "prompt_routing_start": value.prompt_routing_start,
         "prompt_routing_matrices": routing_to_wire(value.prompt_routing_matrices),
@@ -303,6 +308,7 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
             else tuple(tuple(row) for row in raw["inference_topk_logprobs"])
         ),
         top_sampling_references=routing_from_wire(raw.get("top_sampling_references")),
+        sampling_mask_references=routing_from_wire(raw.get("sampling_mask_references")),
         routing_matrices=routing_from_wire(raw.get("routing_matrices")),
         prompt_routing_start=raw.get("prompt_routing_start"),
         prompt_routing_matrices=routing_from_wire(raw.get("prompt_routing_matrices")),

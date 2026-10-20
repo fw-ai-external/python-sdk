@@ -734,3 +734,17 @@ async def test_cancelled_create_releases_trace_slot(tmp_path):
     trajectory_id = await core.create_trajectory_async()
     assert list(tmp_path.rglob("pending/*.jsonl"))
     await core.finish_async(trajectory_id)
+
+
+def test_failure_trace_omits_both_sampling_reference_channels(tmp_path):
+    recorder = _FailureTraceRecorder(_config(tmp_path))
+    arrays = {
+        "completion_0_full_tokens": [1, 2],
+        "completion_0_top_sampling_references": [{"spans": [1] * 500}],
+        "completion_0_sampling_mask_references": [{"spans": [2] * 500}],
+    }
+    recorder.record("call_terminal", "failed", {"error": "parse failure"}, arrays=arrays)
+    path = Path(recorder.evidence("failed")["trace_path"])
+    event = json.loads(path.read_text().splitlines()[-1])
+    assert event["arrays"] == {"completion_0_full_tokens": [1, 2]}
+    assert event["omitted_arrays"] == sorted(set(arrays) - {"completion_0_full_tokens"})

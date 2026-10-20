@@ -1,11 +1,12 @@
 # Changelog
 
-## 1.2.28 (2026-10-19)
+## 1.2.28 (2026-10-20)
 
 Full Changelog: [v1.2.27...v1.2.28](https://github.com/fw-ai-external/python-sdk/compare/v1.2.27...v1.2.28)
 
 ### Features
 * **training-sdk:** add `FiretitanServiceClient.delete_training_session()` and `FireworksClient.delete_training_session(name)` to close a serverless training session and release its concurrent-run quota slot immediately instead of waiting for idle expiry
+* **training-sdk:** capture complete replay masks independently of optional SC heads, preserving mask-only references through SSE and TITO
 
 ## 1.2.27 (2026-10-17)
 
