@@ -181,7 +181,9 @@ class FiretitanSamplingParams(types.SamplingParams):
 
     include_routing_matrix: bool = False
     top_sampling_logprobs: int | None = Field(default=None, gt=0, strict=True)
-    """When set, capture sampling support as completion-aligned Parquet references."""
+    """Capture a probability head of at most this width as completion-aligned Parquet references."""
+    sampling_mask: Literal["parquet_v1"] | None = None
+    """Capture complete replay-mask IDs; top_sampling_logprobs is optional and used only for SC."""
     # Parquet R3 retention from file creation. None uses the serving default (6h).
     r3_ttl_seconds: int | None = Field(default=None, gt=0, strict=True)
 
@@ -192,6 +194,7 @@ class FiretitanSampledSequence(types.SampledSequence):
 
     routing_matrices: list[str] | RoutingReferences | None = None
     top_sampling_references: RoutingReferences | None = None
+    sampling_mask_references: RoutingReferences | None = None
     """Sampling-support rows for generated tokens only, independent of prompt echo."""
 
 
@@ -345,13 +348,17 @@ class FiretitanSamplingClient(SamplingClient):
             kwargs["seed"] = seed
 
         if isinstance(sampling_params, FiretitanSamplingParams):
+            if sampling_params.sampling_mask is not None:
+                kwargs["sampling_mask"] = sampling_params.sampling_mask
             if sampling_params.include_routing_matrix:
                 kwargs["include_routing_matrix"] = True
             if sampling_params.top_sampling_logprobs is not None:
                 kwargs["top_sampling_logprobs"] = sampling_params.top_sampling_logprobs
                 kwargs["top_sampling_format"] = "parquet_v1"
             if (
-                sampling_params.include_routing_matrix or sampling_params.top_sampling_logprobs is not None
+                sampling_params.include_routing_matrix
+                or sampling_params.top_sampling_logprobs is not None
+                or sampling_params.sampling_mask is not None
             ) and sampling_params.r3_ttl_seconds is not None:
                 kwargs["r3_ttl_seconds"] = sampling_params.r3_ttl_seconds
 
@@ -478,6 +485,7 @@ class FiretitanSamplingClient(SamplingClient):
                         _logprobs_list=sampled_logprobs,
                         routing_matrices=routing_matrices,
                         top_sampling_references=completion.top_sampling_references,
+                        sampling_mask_references=completion.sampling_mask_references,
                     )
                 )
             else:
@@ -1305,11 +1313,12 @@ def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
     return byte_count
 
 
-def _top_sampling_references_wire_bytes(model_input: types.ModelInput) -> int:
-    references = getattr(model_input, "top_sampling_references", None)
-    if not isinstance(references, dict):
-        return 0
-    return len(json.dumps({"top_sampling_references": references}, separators=(",", ":")).encode())
+def _sampling_references_wire_bytes(model_input: types.ModelInput) -> int:
+    return sum(
+        len(json.dumps({field: references}, separators=(",", ":")).encode())
+        for field in ("top_sampling_references", "sampling_mask_references")
+        if (references := getattr(model_input, field, None)) is not None
+    )
 
 
 def _target_logprob_support(loss_fn_config: dict[str, float | str | bool] | None) -> str:
@@ -1651,7 +1660,7 @@ class FiretitanTrainingClient(TrainingClient):
             self.holder.estimate_bytes_count_in_model_input(datum.model_input)
             + sum(_tensor_value_count(value) * 10 for value in datum.loss_fn_inputs.values())
             + _routing_matrices_wire_bytes(datum.model_input)
-            + _top_sampling_references_wire_bytes(datum.model_input)
+            + _sampling_references_wire_bytes(datum.model_input)
         )
 
     async def _run_chunked_requests(
@@ -1769,9 +1778,7 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn_config: dict[str, float | str | bool] | None,
     ) -> None:
         config = loss_fn_config or {}
-        if config.get("report_policy_diagnostics") is True and not getattr(
-            self, "supports_policy_diagnostics", False
-        ):
+        if config.get("report_policy_diagnostics") is True and not getattr(self, "supports_policy_diagnostics", False):
             raise ValueError("Trainer does not advertise replay policy diagnostics; upgrade the trainer")
         if loss_fn == "reinforce":
             if not getattr(self, "supports_reinforce", False):
@@ -2389,15 +2396,16 @@ class FiretitanTrainingClient(TrainingClient):
         """Reject invalid shared-storage references; log one client-side error for other R3 issues."""
         for datum in data:
             model_input = datum.model_input
-            top_sampling = getattr(model_input, "top_sampling_references", None)
-            if isinstance(top_sampling, dict):
-                if not self.r3_store_id:
-                    raise ValueError("Parquet top-K sampling references require trainer shared storage")
-                references = RoutingReferences.from_dict(top_sampling)
-                if references.length != model_input.length:
-                    raise ValueError("Top-K sampling references must match the model input token length")
-                if any(file["store_id"] != self.r3_store_id for file in references.files):
-                    raise ValueError("Top-K sampling reference belongs to a different shared storage domain")
+            for field in ("top_sampling_references", "sampling_mask_references"):
+                top_sampling = getattr(model_input, field, None)
+                if isinstance(top_sampling, dict):
+                    if not self.r3_store_id:
+                        raise ValueError("Parquet sampling references require trainer shared storage")
+                    references = RoutingReferences.from_dict(top_sampling)
+                    if references.length != model_input.length:
+                        raise ValueError("Sampling references must match the model input token length")
+                    if any(file["store_id"] != self.r3_store_id for file in references.files):
+                        raise ValueError("Sampling reference belongs to a different shared storage domain")
             raw = getattr(model_input, "routing_references", None)
             if raw is None:
                 continue
@@ -3181,6 +3189,30 @@ class FiretitanServiceClient(ServiceClient):
         session this service owns, for CP ops (GetTrainingSession, checkpoint
         list/promote, DeleteTrainingSession). None for non-serverless services."""
         return self._serverless_training_session_name(self._current_session_id())
+
+    def delete_training_session(self) -> None:
+        """Close this service's serverless training session, releasing its
+        concurrent-run quota slot immediately. No-op for non-serverless
+        services; idempotent server-side. The trainer reclaims the session's
+        LoRA state asynchronously via idle expiry."""
+        session_id = self.training_session_id
+        if session_id is None:
+            return
+        if not self._fireworks_api_key:
+            raise RuntimeError(
+                f"Cannot resolve the account for training session {session_id!r}; the service has no API key."
+            )
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        with FireworksClient(
+            api_key=self._fireworks_api_key,
+            base_url=_fireworks_api_root_url(getattr(self, "_managed_base_url", None)),
+            additional_headers=getattr(self, "_managed_additional_headers", None),
+        ) as fw_client:
+            # The cached lookup degrades to None on a transient failure; retry
+            # here so cleanup surfaces the real error instead of skipping.
+            account = self._resolved_account_id() or fw_client.account_id
+            fw_client.delete_training_session(f"accounts/{account}/trainingSessions/{session_id}")
 
     def _enable_serverless_supervised_409_retry(self) -> None:
         """Private SFT/DPO serverless opt-in for capacity-409 retrieve retries.

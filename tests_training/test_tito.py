@@ -258,6 +258,11 @@ class FakeSampler:
                 if kwargs.get("top_sampling_format") == "parquet_v1"
                 else None
             ),
+            sampling_mask_references=(
+                _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
+                if kwargs.get("sampling_mask") == "parquet_v1"
+                else None
+            ),
         )
         return SampledRequestResult(
             completions=[completion],
@@ -535,11 +540,19 @@ async def test_policy_turn_retains_sampler_topk_distribution() -> None:
     )
 
 
-async def test_policy_turns_record_completion_only_top_sampling_references() -> None:
+@pytest.mark.parametrize(
+    "sampling_defaults",
+    [
+        {"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+        {"sampling_mask": "parquet_v1"},
+        {"sampling_mask": "parquet_v1", "top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+    ],
+)
+async def test_policy_turns_record_completion_only_top_sampling_references(sampling_defaults) -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 199, 3]))
     engine = _engine(
         sampler,
-        sampling_defaults={"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+        sampling_defaults=sampling_defaults,
     )
     trajectory_id = engine.create_trajectory()
 
@@ -547,13 +560,15 @@ async def test_policy_turns_record_completion_only_top_sampling_references() -> 
     await engine.complete(trajectory_id, _second_request())
     artifact = engine.finish(trajectory_id)
 
-    assert all(call["top_sampling_logprobs"] == 128 for call in sampler.calls)
-    assert all(call["top_sampling_format"] == "parquet_v1" for call in sampler.calls)
+    assert all(all(call[key] == value for key, value in sampling_defaults.items()) for call in sampler.calls)
     turns = [turn for segment in artifact.segments for turn in segment.turns]
-    assert [turn.top_sampling_references for turn in turns] == [
-        _top_sampling_refs(2, row_start=10),
-        _top_sampling_refs(3, row_start=20),
-    ]
+    for channel, enabled in (
+        ("top_sampling", "top_sampling_format" in sampling_defaults),
+        ("sampling_mask", "sampling_mask" in sampling_defaults),
+    ):
+        assert [getattr(turn, channel + "_references") for turn in turns] == (
+            [_top_sampling_refs(2, row_start=10), _top_sampling_refs(3, row_start=20)] if enabled else [None, None]
+        )
     restored = type(artifact).unpack(artifact.pack())
     assert [turn.top_sampling_references for segment in restored.segments for turn in segment.turns] == [
         turn.top_sampling_references for turn in turns
@@ -562,17 +577,17 @@ async def test_policy_turns_record_completion_only_top_sampling_references() -> 
     auxiliary_sampler = FakeSampler(outputs=([197, 3],))
     auxiliary = _engine(
         auxiliary_sampler,
-        sampling_defaults={"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+        sampling_defaults=sampling_defaults,
         call_classifier=lambda _request: ("auxiliary", "test_auxiliary"),
     )
     await auxiliary.complete(auxiliary.create_trajectory(), _first_request())
-    assert not {"top_sampling_format", "top_sampling_logprobs"} & auxiliary_sampler.calls[0].keys()
+    assert not {"top_sampling_format", "top_sampling_logprobs", "sampling_mask"} & auxiliary_sampler.calls[0].keys()
 
     misaligned = FakeSampler(outputs=([197, 3],))
     misaligned.top_sampling_rows_delta = -1
-    engine = _engine(misaligned, sampling_defaults={"top_sampling_logprobs": 8, "top_sampling_format": "parquet_v1"})
+    engine = _engine(misaligned, sampling_defaults=sampling_defaults)
     trajectory_id = engine.create_trajectory()
-    with pytest.raises(TITOError, match="top-K sampling references"):
+    with pytest.raises(TITOError, match="sampling references"):
         await engine.complete(trajectory_id, _first_request())
 
 

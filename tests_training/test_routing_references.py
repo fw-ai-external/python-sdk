@@ -100,7 +100,8 @@ def test_parquet_full_and_partial_echo_alignment(echo_last):
 
 @pytest.mark.parametrize("echo_last", [None, 0, 2, 5])
 @pytest.mark.parametrize("echoed_rows", [True, False])
-def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_rows):
+@pytest.mark.parametrize("column", ["top_sampling", "sampling_mask"])
+def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_rows, column):
     sampler = DeploymentSampler("http://unused", "test", "test")
     sampler.r3_store_id = "test"
     prompt = [11, 12, 13, 14, 15]
@@ -111,8 +112,8 @@ def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_r
         "text": "ok",
         "raw_output": {"completion_token_ids": ids},
         "logprobs": {"content": [{"logprob": -1.0, "sampling_logprob": -0.5} for _ in ids]},
-        "top_sampling_references": refs(rows, 100).to_dict(),
-        "top_sampling_format": "parquet_v1",
+        f"{column}_references": refs(rows, 100).to_dict(),
+        f"{column}_format": "parquet_v1",
         "r3_store_id": "test",
     }
 
@@ -126,18 +127,21 @@ def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_r
             echo_last is None,
             True,
             echo_last=echo_last,
-            top_sampling_requested=requested,
+            top_sampling_requested=requested and column == "top_sampling",
+            sampling_mask_requested=requested and column == "sampling_mask",
         )[0]
 
     result = parse(choice)
-    assert expand(result.top_sampling_references) == list(range(100 + rows - 2, 100 + rows))
+    assert expand(getattr(result, column + "_references")) == list(range(100 + rows - 2, 100 + rows))
+    other = "sampling_mask" if column == "top_sampling" else "top_sampling"
+    assert getattr(result, other + "_references") is None
     assert parse(choice, requested=False).top_sampling_references is None
     with pytest.raises(ValueError, match="acknowledge"):
         parse({**choice, "r3_store_id": "other"})
     with pytest.raises(ValueError, match="did not return"):
-        parse({key: value for key, value in choice.items() if key != "top_sampling_references"})
+        parse({key: value for key, value in choice.items() if key != f"{column}_references"})
     with pytest.raises(RuntimeError, match="align"):
-        parse({**choice, "top_sampling_references": refs(1, 100).to_dict()})
+        parse({**choice, f"{column}_references": refs(1, 100).to_dict()})
 
 
 def test_top_sampling_references_survive_model_input_wire_serialization():
@@ -195,3 +199,41 @@ def test_model_input_copy_clears_the_previous_routing_representation():
     assert restored.routing_matrix_format is None
     assert restored.routing_references is None
     assert restored.routing_matrices == ["a", "b"]
+
+
+def test_independent_mask_head_files_survive_sdk_wire():
+    from fireworks.training.sdk import ModelInput
+
+    head, mask = refs(2, 100), refs(2, 200)
+    model = ModelInput.from_ints([1, 2], top_sampling_references=head, sampling_mask_references=mask)
+    assert model.model_dump()["top_sampling_references"] == head.to_dict()
+    assert model.model_dump()["sampling_mask_references"] == mask.to_dict()
+    assert model.top_sampling_references != model.sampling_mask_references
+
+
+def test_sampling_parser_accepts_independent_mask_head_files():
+    sampler = DeploymentSampler(model="m", api_key="test", inference_url="https://example.invalid/v1")
+    sampler.r3_store_id = "test"
+    choice = {
+        "text": "x",
+        "raw_output": {"completion_token_ids": [1, 2]},
+        "logprobs": {"content": [{"logprob": -0.5, "sampling_logprob": -0.5}] * 2},
+        "top_sampling_format": "parquet_v1",
+        "sampling_mask_format": "parquet_v1",
+        "r3_store_id": "test",
+        "top_sampling_references": refs(2, 100).to_dict(),
+        "sampling_mask_references": refs(2, 200).to_dict(),
+    }
+    result = sampler._parse_completions_result(
+        {"choices": [choice]},
+        [10],
+        None,
+        True,
+        False,
+        False,
+        True,
+        top_sampling_requested=True,
+        sampling_mask_requested=True,
+    )[0]
+    assert expand(result.top_sampling_references) == [100, 101]
+    assert expand(result.sampling_mask_references) == [200, 201]

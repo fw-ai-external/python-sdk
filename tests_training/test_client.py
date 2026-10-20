@@ -3860,6 +3860,73 @@ class TestServiceTrainingSession:
         assert svc.training_session_name is None
 
 
+class _RecordingFireworksClient:
+    instances: list["_RecordingFireworksClient"] = []
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.deleted: list[str] = []
+        self.closed = False
+        _RecordingFireworksClient.instances.append(self)
+
+    @property
+    def account_id(self) -> str:
+        return "resolved-account"
+
+    def delete_training_session(self, name: str) -> None:
+        self.deleted.append(name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.closed = True
+
+
+class TestDeleteTrainingSession:
+    @pytest.fixture(autouse=True)
+    def _recording_client(self):
+        _RecordingFireworksClient.instances = []
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _RecordingFireworksClient):
+            yield
+
+    def test_deletes_owned_session_and_closes_client(self):
+        svc = _service()
+        svc._fireworks_api_key = "fw_x"
+        svc._managed_additional_headers = {"x-test": "1"}
+
+        svc.delete_training_session()
+
+        (fw_client,) = _RecordingFireworksClient.instances
+        assert fw_client.deleted == ["accounts/test-account/trainingSessions/ts-abc123"]
+        assert fw_client.kwargs["additional_headers"] == {"x-test": "1"}
+        assert fw_client.closed
+
+    def test_retries_account_lookup_after_cached_failure(self):
+        svc = _service(account_id=None)
+        svc._fireworks_api_key = "fw_x"
+
+        svc.delete_training_session()
+
+        (fw_client,) = _RecordingFireworksClient.instances
+        assert fw_client.deleted == ["accounts/resolved-account/trainingSessions/ts-abc123"]
+
+    def test_noop_for_non_serverless_session(self):
+        svc = _service(session_id="0400ab94")
+        svc._fireworks_api_key = "fw_x"
+
+        svc.delete_training_session()
+
+        assert _RecordingFireworksClient.instances == []
+
+    def test_raises_without_api_key(self):
+        svc = _service()
+        svc._fireworks_api_key = None
+
+        with pytest.raises(RuntimeError, match="no API key"):
+            svc.delete_training_session()
+
+
 class TestServerlessRunName:
     """The run is owned by each training client; the service builds its name."""
 

@@ -232,3 +232,30 @@ def test_promote_training_job_checkpoint_rejects_bad_name():
 def test_list_training_job_checkpoints_rejects_bad_parent(parent):
     with pytest.raises(ValueError):
         _client().list_training_job_checkpoints(parent)
+
+
+_NAME = "accounts/acct1/trainingSessions/ts-abcdef"
+
+
+def test_delete_training_session_sends_delete_and_returns_none():
+    c = _client()
+    paths = []
+    c._delete = lambda path, **_: paths.append(path) or _FakeResp(payload={})  # type: ignore[assignment]
+
+    assert c.delete_training_session(_NAME) is None
+    assert paths == [f"/v1/{_NAME}"]
+
+
+def test_delete_training_session_is_idempotent_on_404():
+    c = _client()
+    c._delete = lambda *_a, **_k: _FakeResp(ok=False, status=404, payload={"error": {"message": "not found"}})  # type: ignore[assignment]
+
+    assert c.delete_training_session(_NAME) is None
+
+
+def test_delete_training_session_raises_on_http_error():
+    c = _client()
+    c._delete = lambda *_a, **_k: _FakeResp(ok=False, status=403, payload={"error": {"message": "denied"}})  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError):
+        c.delete_training_session(_NAME)

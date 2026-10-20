@@ -205,7 +205,10 @@ class _FailureTraceRecorder:
                 selected_arrays = {
                     key: value
                     for key, value in (arrays or {}).items()
-                    if "routing" not in key and "topk" not in key and "top_sampling" not in key
+                    if "routing" not in key
+                    and "topk" not in key
+                    and "top_sampling" not in key
+                    and "sampling_mask" not in key
                 }
                 value = {
                     "event": event,

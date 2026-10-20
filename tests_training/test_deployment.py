@@ -2172,7 +2172,10 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
 
     @pytest.mark.parametrize("echo,echoed_reference_rows", [(False, False), (True, False), (True, True)])
-    def test_sample_preserves_completion_sampling_support(self, native_sdk, echo, echoed_reference_rows):
+    @pytest.mark.parametrize("sampling_mask,head_k", [(None, 256), ("parquet_v1", 128), ("parquet_v1", None)])
+    def test_sample_preserves_completion_sampling_support(
+        self, native_sdk, echo, echoed_reference_rows, sampling_mask, head_k
+    ):
         sampler = _make_sampler(tokenizer=None)
         sampler.r3_store_id = "test"
         prompt_ids, completion_ids = [10, 20, 30], [40, 50]
@@ -2187,7 +2190,7 @@ class TestFiretitanSamplingClient:
             ]
             if echo:
                 content = [{"logprob": lp, "sampling_logprob": None} for lp in [0.0, -0.1, -0.2]] + content
-            return {
+            response = {
                 "choices": [
                     {
                         "text": "out",
@@ -2220,7 +2223,14 @@ class TestFiretitanSamplingClient:
                         },
                     }
                 ]
-            }, ServerMetrics()
+            }
+            choice = response["choices"][0]
+            if sampling_mask:
+                choice["sampling_mask_format"] = "parquet_v1"
+                choice["sampling_mask_references"] = choice["top_sampling_references"]
+            if head_k is None:
+                del choice["top_sampling_format"], choice["top_sampling_references"]
+            return response, ServerMetrics()
 
         sampler.async_completions_stream = fake_stream
         client = FiretitanSamplingClient(sampler)
@@ -2230,7 +2240,8 @@ class TestFiretitanSamplingClient:
                 num_samples=1,
                 sampling_params=FiretitanSamplingParams(
                     max_tokens=2,
-                    top_sampling_logprobs=256,
+                    top_sampling_logprobs=head_k,
+                    sampling_mask=sampling_mask,
                     r3_ttl_seconds=120,
                 ),
                 include_prompt_logprobs=echo,
@@ -2239,22 +2250,35 @@ class TestFiretitanSamplingClient:
             client.close()
 
         sequence = response.sequences[0]
-        assert captured["top_sampling_logprobs"] == 256
-        assert captured["top_sampling_format"] == "parquet_v1"
+        references = sequence.sampling_mask_references if sampling_mask else sequence.top_sampling_references
+        assert (sequence.top_sampling_references is not None) == (head_k is not None)
+        assert (sequence.sampling_mask_references is not None) == bool(sampling_mask)
+        assert captured.get("sampling_mask") == sampling_mask
+        if sampling_mask is None:
+            assert "sampling_mask" not in captured
+        assert captured.get("top_sampling_logprobs") == head_k
+        assert captured.get("top_sampling_format") == ("parquet_v1" if head_k else None)
         assert captured["r3_ttl_seconds"] == 120
         assert "include_routing_matrix" not in captured
         assert sequence.tokens == completion_ids
         assert sequence.logprobs == [-0.33, -0.44]
-        assert len(sequence.top_sampling_references) == len(completion_ids)
-        assert sequence.top_sampling_references.spans[0]["file_row_start"] == (
-            len(prompt_ids) if echoed_reference_rows else 0
-        )
+        assert len(references) == len(completion_ids)
+        assert references.spans[0]["file_row_start"] == (len(prompt_ids) if echoed_reference_rows else 0)
         assert response.prompt_logprobs == ([None, -0.1, -0.2] if echo else None)
 
     @pytest.mark.parametrize("width", [0, -1, True, "256", 1.5])
     def test_sampling_support_width_must_be_a_positive_integer(self, width):
         with pytest.raises(ValueError):
             FiretitanSamplingParams(top_sampling_logprobs=width)
+
+    def test_sampling_mask_does_not_require_probability_head(self) -> None:
+        kwargs = FiretitanSamplingClient._sampling_kwargs(
+            FiretitanSamplingParams(sampling_mask="parquet_v1", r3_ttl_seconds=120)
+        )
+        assert kwargs["sampling_mask"] == "parquet_v1"
+        assert kwargs["r3_ttl_seconds"] == 120
+        assert "top_sampling_logprobs" not in kwargs
+        assert "top_sampling_format" not in kwargs
 
     def test_compute_logprobs_uses_prompt_logprobs(self, native_sdk):
         prompt_ids = [10, 20, 30]

@@ -22,9 +22,7 @@ pytestmark = pytest.mark.filterwarnings(
 @pytest.fixture
 def connect(monkeypatch):
     # Keep background telemetry out of the deterministic HTTP transcript.
-    monkeypatch.setattr(
-        "fireworks.training.sdk._core.lib.internal_client_holder.init_telemetry", lambda *_, **__: None
-    )
+    monkeypatch.setattr("fireworks.training.sdk._core.lib.internal_client_holder.init_telemetry", lambda *_, **__: None)
     monkeypatch.setattr(FiretitanServiceClient, "_resolved_account_id", lambda _: "test")
     resources = []
 
@@ -48,7 +46,9 @@ def connect(monkeypatch):
                 model_id = (
                     f"base-{index}"
                     if body.get("base_only")
-                    else f"run-{index}:train:0" if route == "serverless" else f"model-{index}"
+                    else f"run-{index}:train:0"
+                    if route == "serverless"
+                    else f"model-{index}"
                 )
                 pending[request_id] = {"type": "create_model", "model_id": model_id, **next(models)}
                 return httpx.Response(200, json={"request_id": request_id})
@@ -572,9 +572,7 @@ def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, infer
     manager.hotload_and_wait.return_value = True
     if (lora_rank == 0 and trainer_support != inference_support) or (lora_rank != 0 and trainer_support):
         with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
-            client._attach_sampler_backend(
-                _TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank)
-            )
+            client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
         assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
         manager.hotload_and_wait.assert_not_called()
         return
@@ -989,3 +987,51 @@ def test_project_assignment_is_rejected_before_session_creation(monkeypatch, man
             )
         else:
             FiretitanServiceClient(api_key="fw-test", project_id="unsupported-project")
+
+
+def test_mask_only_request_uses_bound_shared_storage():
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    sampler = DeploymentSampler("http://unused", "test", "test")
+    payload = {"sampling_mask": "parquet_v1"}
+    assert sampler._top_sampling_parquet_requested(payload)
+    with pytest.raises(ValueError, match="shared storage"):
+        sampler._validate_top_sampling_request(payload)
+    sampler.r3_store_id = "test"
+    sampler._validate_top_sampling_request(payload)
+
+
+def test_mask_only_sse_preserves_references_and_storage_headers():
+    from fireworks.training.sdk.sampling import DeploymentSampler
+
+    references = {"length": 1, "files": [], "spans": [{"input_token_start": 0, "count": 1}]}
+
+    async def receive(request):
+        payload = json.loads(request.content)
+        assert payload["sampling_mask"] == "parquet_v1"
+        assert "top_sampling_logprobs" not in payload
+        assert request.headers["x-fireworks-r3-store-id"] == "test"
+        assert request.headers["x-fireworks-r3-ttl-seconds"] == "120"
+        chunk = {
+            "choices": [
+                {
+                    "text": "ok",
+                    "finish_reason": "stop",
+                    "r3_store_id": "test",
+                    "sampling_mask_format": "parquet_v1",
+                    "sampling_mask_references": references,
+                }
+            ]
+        }
+        return httpx.Response(200, text="data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n")
+
+    async def run():
+        sampler = DeploymentSampler("https://inference.invalid", "test/model", "test")
+        sampler.r3_store_id = "test"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(receive)) as client:
+            sampler._async_client = client
+            result, _ = await sampler.async_completions_stream([1], sampling_mask="parquet_v1", r3_ttl_seconds=120)
+        assert result["choices"][0]["sampling_mask_references"] == references
+        assert result["choices"][0]["sampling_mask_format"] == "parquet_v1"
+
+    asyncio.run(run())

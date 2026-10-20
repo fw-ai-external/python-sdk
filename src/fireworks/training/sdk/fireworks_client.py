@@ -792,6 +792,28 @@ class FireworksClient(_RestClient):
                 break
         return rows
 
+    def delete_training_session(self, name: str) -> None:
+        """Close (delete) a serverless training session, releasing its
+        concurrent-run quota slot immediately. Idempotent: deleting an
+        already-deleted session succeeds.
+
+        Args:
+            name: Full training-session resource name
+                ``accounts/<a>/trainingSessions/<s>``.
+        """
+        resp = self._delete(f"/v1/{name}", timeout=HTTP_READ_TIMEOUT_S)
+        if resp.is_success or resp.status_code == 404:
+            return
+        raise RuntimeError(
+            format_sdk_error(
+                f"Failed to delete training session '{name}' (HTTP {resp.status_code})",
+                parse_api_error(resp),
+                "Verify the session name and that your API key resolves to the "
+                "account that owns it.",
+                docs_url=DOCS_SDK,
+            )
+        )
+
     def promote_training_job_checkpoint(
         self,
         name: str,

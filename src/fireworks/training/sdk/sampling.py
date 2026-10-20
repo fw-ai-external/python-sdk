@@ -88,6 +88,8 @@ _STORAGE_REFERENCE_FIELDS = (
     "r3_store_id",
     "top_sampling_references",
     "top_sampling_format",
+    "sampling_mask_format",
+    "sampling_mask_references",
 )
 
 # Per-attempt ServerMetrics retained between drains. A training step drains
@@ -240,9 +242,10 @@ class SampledCompletion:
     inference_topk_logprobs: List[List[float]] | None = None
     """Raw-model top-k logprobs aligned with ``inference_topk_token_ids``."""
     top_sampling_references: RoutingReferences | None = None
-    """Completion-only Parquet references to the sampler's top-K distribution.
+    sampling_mask_references: RoutingReferences | None = None
+    """Completion-only Parquet references to the sampling mask and/or probability head.
 
-    Set when ``top_sampling_format="parquet_v1"`` was requested; row ``j`` is
+    Set when ``top_sampling_format="parquet_v1"`` or ``sampling_mask="parquet_v1"`` was requested; row ``j`` is
     the post-temperature/filter distribution that produced completion token ``j``.
     """
 
@@ -370,7 +373,7 @@ class DeploymentSampler(_RestClient):
 
     @staticmethod
     def _top_sampling_parquet_requested(kwargs: Mapping[str, Any]) -> bool:
-        return kwargs.get("top_sampling_format") == "parquet_v1"
+        return kwargs.get("top_sampling_format") == "parquet_v1" or kwargs.get("sampling_mask") == "parquet_v1"
 
     def _set_shared_storage_headers(self, headers: dict[str, str], r3_ttl_seconds: int | None) -> None:
         headers[R3_STORE_HEADER] = self.r3_store_id
@@ -379,7 +382,7 @@ class DeploymentSampler(_RestClient):
 
     def _validate_top_sampling_request(self, payload: Mapping[str, Any]) -> None:
         k = payload.get("top_sampling_logprobs")
-        if type(k) is not int or k < 1:
+        if payload.get("top_sampling_format") == "parquet_v1" and (type(k) is not int or k < 1):
             raise ValueError("top_sampling_format='parquet_v1' requires a positive integer top_sampling_logprobs")
         if not self.r3_store_id:
             raise ValueError("Parquet top-K sampling requires a sampler bound to a trainer with shared storage")
@@ -419,7 +422,7 @@ class DeploymentSampler(_RestClient):
         message = error.get("message")
         return isinstance(message, str) and any(
             f"Extra inputs are not permitted, field: '{field}'" in message
-            for field in ("top_sampling_logprobs", "top_sampling_format")
+            for field in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask")
         )
 
     async def _post_completion(self, payload: dict, headers: Mapping[str, str], timeout: float) -> httpx.Response:
@@ -622,7 +625,7 @@ class DeploymentSampler(_RestClient):
             if top_sampling_parquet and self._unsupported_top_sampling_format(resp):
                 raise httpx.HTTPStatusError(
                     "Deployment does not support Parquet sampling references; "
-                    "use a serving image that supports top_sampling_format='parquet_v1'",
+                    "use a serving image that supports the requested Parquet sampling channels",
                     request=resp.request,
                     response=resp,
                 )
@@ -1461,7 +1464,8 @@ class DeploymentSampler(_RestClient):
                         echo_mode,
                         raw_logprobs_match_sampling,
                         echo_last=kwargs.get("echo_last"),
-                        top_sampling_requested=self._top_sampling_parquet_requested(kwargs),
+                        top_sampling_requested=kwargs.get("top_sampling_format") == "parquet_v1",
+                        sampling_mask_requested=kwargs.get("sampling_mask") == "parquet_v1",
                     )
                 except Exception as e:
                     # Keep the successful raw response available to the local
@@ -1611,6 +1615,7 @@ class DeploymentSampler(_RestClient):
         raw_logprobs_match_sampling: bool,
         echo_last: int | None = None,
         top_sampling_requested: bool = False,
+        sampling_mask_requested: bool = False,
     ) -> List[SampledCompletion]:
         """Parse a completions API response into SampledCompletion objects."""
         completions: List[SampledCompletion] = []
@@ -1665,17 +1670,23 @@ class DeploymentSampler(_RestClient):
                     routing_matrices = RoutingReferences.from_dict(choice["routing_references"])
                 elif routing_matrix_format != "base64_inline" or choice.get("routing_references") is not None:
                     raise ValueError("Deployment returned an unsupported R3 format")
-            top_sampling_references = None
-            if top_sampling_requested:
-                if choice.get("top_sampling_format") != "parquet_v1" or "top_sampling_references" not in choice:
-                    raise ValueError("Deployment did not return Parquet top-K sampling references")
+            sampling_references = {}
+            for requested, column in (
+                (top_sampling_requested, "top_sampling"),
+                (sampling_mask_requested, "sampling_mask"),
+            ):
+                if not requested:
+                    continue
+                if choice.get(f"{column}_format") != "parquet_v1" or f"{column}_references" not in choice:
+                    raise ValueError(f"Deployment did not return Parquet {column} references")
                 if not self.r3_store_id or choice.get("r3_store_id") != self.r3_store_id:
                     raise ValueError(
-                        "Deployment did not acknowledge Parquet top-K sampling in the trainer's shared storage domain"
+                        "Deployment did not acknowledge Parquet sampling in the trainer's shared storage domain"
                     )
-                top_sampling_references = RoutingReferences.from_dict(choice["top_sampling_references"])
-                if any(file["store_id"] != self.r3_store_id for file in top_sampling_references.files):
-                    raise ValueError("Top-K sampling references belong to a different shared storage domain")
+                references = RoutingReferences.from_dict(choice[f"{column}_references"])
+                if any(file["store_id"] != self.r3_store_id for file in references.files):
+                    raise ValueError("Sampling references belong to a different shared storage domain")
+                sampling_references[column] = references
 
             expanded_prompt_ids = choice.get("prompt_token_ids") or raw.get("prompt_token_ids")
             if expanded_prompt_ids is not None:
@@ -1725,10 +1736,12 @@ class DeploymentSampler(_RestClient):
                     topk_token_ids = topk_token_ids[drop:]
                     topk_logprobs = topk_logprobs[drop:]
                 # Echoed prompt rows carry no sampling payload; keep completion rows only.
-                if top_sampling_references is not None and len(top_sampling_references) == response_count:
-                    top_sampling_references = top_sampling_references[echo_count:]
-            if top_sampling_references is not None and len(top_sampling_references) != len(completion_ids):
-                raise RuntimeError("Top-K sampling references do not align with completion token IDs")
+                for column, references in sampling_references.items():
+                    if len(references) == response_count:
+                        sampling_references[column] = references[echo_count:]
+            for column, references in sampling_references.items():
+                if len(references) != len(completion_ids):
+                    raise RuntimeError(f"{column} references do not align with completion token IDs")
 
             full_tokens = prompt_for_full + list(completion_ids)
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
@@ -1753,7 +1766,8 @@ class DeploymentSampler(_RestClient):
                     routing_matrices=routing_matrices,
                     inference_topk_token_ids=topk_token_ids,
                     inference_topk_logprobs=topk_logprobs,
-                    top_sampling_references=top_sampling_references,
+                    top_sampling_references=sampling_references.get("top_sampling"),
+                    sampling_mask_references=sampling_references.get("sampling_mask"),
                 )
             )
 

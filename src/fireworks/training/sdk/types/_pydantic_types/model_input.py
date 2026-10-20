@@ -9,6 +9,7 @@ from fireworks.training.sdk.routing import (
     RoutingMatrixFormat,
     routing_model_input_kwargs,
     top_sampling_model_input_kwargs,
+    sampling_mask_model_input_kwargs,
 )
 from fireworks.training.sdk._core._models import StrictBase
 from fireworks.training.sdk.types.model_input_chunk import ModelInputChunk
@@ -22,6 +23,7 @@ class ModelInput(StrictBase):
     routing_references: dict | None = None
     routing_matrix_format: RoutingMatrixFormat | None = None
     top_sampling_references: dict | None = None
+    sampling_mask_references: dict | None = None
 
     @classmethod
     def from_ints(
@@ -29,11 +31,14 @@ class ModelInput(StrictBase):
         tokens: List[int],
         routing_matrices: List[str] | RoutingReferences | None = None,
         top_sampling_references: RoutingReferences | dict | None = None,
+        sampling_mask_references: RoutingReferences | dict | None = None,
     ) -> "ModelInput":
         kwargs = {"chunks": [EncodedTextChunk(tokens=tokens)]}
         kwargs.update(routing_model_input_kwargs(routing_matrices))
         if top_sampling_references is not None:
             kwargs.update(top_sampling_model_input_kwargs(top_sampling_references, len(tokens)))
+        if sampling_mask_references is not None:
+            kwargs.update(sampling_mask_model_input_kwargs(sampling_mask_references, len(tokens)))
         return cls(**kwargs)
 
     def to_ints(self) -> List[int]:
