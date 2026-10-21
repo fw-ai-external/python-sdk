@@ -14,7 +14,7 @@ on:
 
 jobs:
   smoke-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.python-version == '3.9' && 'ubuntu-22.04' || 'ubuntu-latest' }}
     timeout-minutes: 10
     # Release-triggered publish runs carry the release tag in head_branch.
     # Manual republish runs use main, so verify those through workflow_dispatch

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.31 (2026-10-21)
+
+Full Changelog: [v1.2.30...v1.2.31](https://github.com/fw-ai-external/python-sdk/compare/v1.2.30...v1.2.31)
+
+### Bug Fixes
+* **ci:** run the Python 3.9 post-publish smoke test on Ubuntu 22.04, where setup-python provides compatible interpreter builds
+
 ## 1.2.30 (2026-10-21)
 
 Full Changelog: [v1.2.29...v1.2.30](https://github.com/fw-ai-external/python-sdk/compare/v1.2.29...v1.2.30)
