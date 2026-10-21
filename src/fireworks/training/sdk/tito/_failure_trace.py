@@ -353,11 +353,27 @@ def dump_tito_failure_trace(
     reject symlinks in every path component below it and non-regular files.
     Returns an existing path, or None if local storage could not accept it.
     """
+    return _dump_failure_trace(
+        _default_recorder, artifact, error, code=code, source_trace=source_trace, source_trace_root=source_trace_root
+    )
+
+
+def _dump_failure_trace(
+    recorder: _FailureTraceRecorder,
+    artifact: TITOTrajectoryArtifact | None,
+    error: BaseException,
+    *,
+    code: str,
+    source_trace: Path | None = None,
+    source_trace_root: Path | None = None,
+) -> str | None:
+    if not recorder.config.enabled:
+        return None
     if artifact is None:
         if source_trace is None:
             return None
         key = "collected-" + source_trace.stem + "-" + secrets.token_hex(8)
-        return _default_recorder.retain_collected_trace(key, source_trace, source_trace_root)
+        return recorder.retain_collected_trace(key, source_trace, source_trace_root)
     key = "artifact-" + artifact.trajectory_id + "-" + secrets.token_hex(8)
     try:
         payload = {
@@ -369,15 +385,15 @@ def dump_tito_failure_trace(
         if source_trace is not None:
             try:
                 with _open_collected_trace(source_trace, source_trace_root) as incoming:
-                    limit = _default_recorder.config.max_trajectory_bytes
+                    limit = recorder.config.max_trajectory_bytes
                     if os.fstat(incoming.fileno()).st_size <= limit:
                         payload["collected_trace_jsonl"] = incoming.read(limit).decode("utf-8")
             except (OSError, ValueError, UnicodeError) as exc:
                 payload["collected_trace_error"] = type(exc).__name__
-        _default_recorder.record("call_terminal", key, payload)
-        evidence = _default_recorder.evidence(key)
+        recorder.record("call_terminal", key, payload)
+        evidence = recorder.evidence(key)
         if evidence.get("trace_storage_error") and source_trace is not None:
-            path = _default_recorder.retain_collected_trace(key, source_trace, source_trace_root)
+            path = recorder.retain_collected_trace(key, source_trace, source_trace_root)
             if path is not None:
                 logger.warning("TITO retained collected trace without oversized artifact: %s", path)
                 return path
@@ -385,10 +401,10 @@ def dump_tito_failure_trace(
     except Exception as exc:
         logger.warning("TITO artifact failure trace unavailable: %s", type(exc).__name__)
         if source_trace is not None:
-            return _default_recorder.retain_collected_trace(key, source_trace, source_trace_root)
+            return recorder.retain_collected_trace(key, source_trace, source_trace_root)
         return None
     finally:
-        _default_recorder.close_trajectory(key, "completed")
+        recorder.close_trajectory(key, "completed")
 
 
 __all__ = ["TITOFailureTraceConfig", "dump_tito_failure_trace"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import stat
+import base64
 from pathlib import Path
 from dataclasses import replace
 
@@ -12,11 +13,142 @@ import pytest
 
 from fireworks.training.sdk import TITOSidecar, TITOFailureTraceConfig
 from tests_training.test_tito import FakeSampler, FakeRenderer
+from fireworks.training.sdk.tito import _failure_trace
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 
 
 def _config(path: Path, **overrides) -> TITOFailureTraceConfig:
     return TITOFailureTraceConfig(root_dir=path.resolve(), min_free_bytes=0, **overrides)
+
+
+async def test_sidecar_dump_shares_runtime_store_and_retention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_root = tmp_path / "global"
+    monkeypatch.setattr(_failure_trace, "_default_recorder", _FailureTraceRecorder(_config(global_root)))
+    root = tmp_path / "sidecar"
+    sidecar = TITOSidecar.from_deployment_sampler(
+        FakeSampler(),
+        renderer=FakeRenderer(fail_parse=True),
+        max_context_tokens=4096,
+        max_output_tokens=128,
+        failure_trace_config=_config(root, max_failed_traces=1),
+    )
+    await sidecar.start()
+    try:
+        async with httpx.AsyncClient(trust_env=False) as client:
+            endpoint = await sidecar.create_trajectory_async()
+            response = await client.post(
+                endpoint.openai_base_url + "/chat/completions",
+                headers={"authorization": "Bearer " + endpoint.api_key},
+                json={"messages": [{"role": "user", "content": "q"}]},
+            )
+            runtime_path = Path(response.json()["error"]["trace_path"])
+            artifact = await sidecar.finish_trajectory(endpoint.trajectory_id)
+            dumped = sidecar.dump_failure_trace(artifact, ValueError("invalid reward"), code="reward_invalid")
+            assert dumped is not None
+            adapter_path = Path(dumped)
+            assert adapter_path.is_relative_to(root)
+            assert stat.S_IMODE(adapter_path.stat().st_mode) == 0o600
+            payload = json.loads(adapter_path.read_text().splitlines()[-1])["payload"]
+            assert base64.b64decode(payload["artifact_base64"]) == artifact.pack()
+            assert not runtime_path.exists()
+            endpoint = await sidecar.create_trajectory_async()
+            response = await client.post(
+                endpoint.openai_base_url + "/chat/completions",
+                headers={"authorization": "Bearer " + endpoint.api_key},
+                json={"messages": [{"role": "user", "content": "next"}]},
+            )
+            retained = Path(response.json()["error"]["trace_path"])
+            assert retained.is_file()
+            assert not adapter_path.exists()
+    finally:
+        await sidecar.close()
+    assert retained.is_file()
+    assert not global_root.exists()
+
+
+@pytest.mark.parametrize("policy", ["disabled", "unwritable", "symlink", "oversized"])
+async def test_sidecar_dump_never_falls_back_to_global_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    policy: str,
+) -> None:
+    global_root = tmp_path / "global"
+    monkeypatch.setattr(_failure_trace, "_default_recorder", _FailureTraceRecorder(_config(global_root)))
+    root = tmp_path / "sidecar"
+    if policy == "unwritable":
+        root.write_text("not a directory")
+    elif policy == "symlink":
+        target = tmp_path / "outside"
+        target.mkdir(mode=0o700)
+        root.symlink_to(target, target_is_directory=True)
+    config = TITOFailureTraceConfig(
+        root_dir=root.absolute(),
+        enabled=policy != "disabled",
+        min_free_bytes=0,
+        max_trajectory_bytes=1 if policy == "oversized" else 32 * 1024 * 1024,
+    )
+    sidecar = TITOSidecar.from_deployment_sampler(
+        FakeSampler(),
+        renderer=FakeRenderer(),
+        max_context_tokens=4096,
+        max_output_tokens=128,
+        failure_trace_config=config,
+    )
+    await sidecar.start()
+    try:
+        endpoint = await sidecar.create_trajectory_async()
+        artifact = await sidecar.finish_trajectory(endpoint.trajectory_id)
+        assert sidecar.dump_failure_trace(artifact, ValueError("invalid reward"), code="reward_invalid") is None
+    finally:
+        await sidecar.close()
+    assert not global_root.exists()
+    assert not list(tmp_path.rglob("*.jsonl"))
+
+
+@pytest.mark.parametrize("source_kind", ["regular", "symlink", "outside"])
+def test_sidecar_dump_collected_trace_uses_configured_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_kind: str,
+) -> None:
+    global_root = tmp_path / "global"
+    monkeypatch.setattr(_failure_trace, "_default_recorder", _FailureTraceRecorder(_config(global_root)))
+    source = tmp_path / "collected.jsonl"
+    source.write_text('{"event":"call_terminal"}\n')
+    trusted_root = tmp_path
+    if source_kind == "symlink":
+        link = tmp_path / "linked.jsonl"
+        link.symlink_to(source)
+        source = link
+    elif source_kind == "outside":
+        trusted_root = tmp_path / "trial"
+        trusted_root.mkdir()
+    root = tmp_path / "sidecar"
+    sidecar = TITOSidecar.from_deployment_sampler(
+        FakeSampler(),
+        renderer=FakeRenderer(),
+        max_context_tokens=4096,
+        max_output_tokens=128,
+        failure_trace_config=_config(root),
+    )
+    retained = sidecar.dump_failure_trace(
+        None,
+        ValueError("finalization failed"),
+        code="artifact_invalid",
+        source_trace=source,
+        source_trace_root=trusted_root,
+    )
+    if source_kind == "regular":
+        assert retained is not None
+        assert Path(retained).is_relative_to(root)
+        assert Path(retained).read_bytes() == source.read_bytes()
+    else:
+        assert retained is None
+        assert not list(root.rglob("*.jsonl"))
+    assert not global_root.exists()
 
 
 @pytest.mark.parametrize("stream", [False, True])
