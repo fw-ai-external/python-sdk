@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.28"
+version = "1.2.29"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -9,6 +9,7 @@ authors = [
 ]
 
 dependencies = [
+  "certifi>=2026.10.19",
   "httpx>=0.23.0, <1",
   "pydantic>=1.9.0, <3",
   "typing-extensions>=4.14, <5",

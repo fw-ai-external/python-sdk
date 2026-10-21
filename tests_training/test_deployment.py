@@ -2908,20 +2908,9 @@ class TestStreamingCompletions:
         # SSE wire format: "data: {json}\n\n" per event
         raw_bytes = (f"data: {_json.dumps(chunk_data)}\n\ndata: [DONE]\n\n").encode()
 
-        async def mock_post(*args, **kwargs):
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.raise_for_status = MagicMock()
-            resp.headers = {}
-
-            async def aiter_bytes():
-                yield raw_bytes
-
-            resp.aiter_bytes = aiter_bytes
-            return resp
-
-        sampler._get_async_client = MagicMock()
-        sampler._get_async_client.return_value.post = mock_post
+        sampler._async_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200, content=raw_bytes))
+        )
 
         results = asyncio.run(
             sampler.sample_with_tokens(
@@ -2956,20 +2945,11 @@ class TestStreamingCompletions:
         }
         raw_bytes = f"data: {_json.dumps(chunk_data)}\n\ndata: [DONE]\n\n".encode()
 
-        async def mock_post(*args, **kwargs):
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.raise_for_status = MagicMock()
-            resp.headers = {"x-request-id": "req-1"}
-
-            async def aiter_bytes():
-                yield raw_bytes
-
-            resp.aiter_bytes = aiter_bytes
-            return resp
-
-        sampler._get_async_client = MagicMock()
-        sampler._get_async_client.return_value.post = mock_post
+        sampler._async_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, content=raw_bytes, headers={"x-request-id": "req-1"})
+            )
+        )
 
         asyncio.run(sampler.sample_with_tokens(messages=[{"role": "user", "content": "hi"}]))
 

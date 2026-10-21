@@ -2,7 +2,38 @@
 
 from __future__ import annotations
 
-from typing import Any
+import re
+from typing import Any, Mapping
+
+
+class _UpstreamStreamError(RuntimeError):
+    """An inference stream explicitly failed, regardless of its wire HTTP status."""
+
+    def __init__(self, payload: Any = None, *, finish_reason: str | None = None) -> None:
+        error = payload.get("error") if isinstance(payload, Mapping) else None
+        error = error if isinstance(error, Mapping) else {}
+        self.upstream_status = None
+        for status in (error.get("status_code"), error.get("status")):
+            if isinstance(status, int) and not isinstance(status, bool) and 400 <= status <= 599:
+                self.upstream_status = status
+                break
+        self.upstream_error_code = self._tag(error.get("code"))
+        self.upstream_error_type = self._tag(error.get("type"))
+        self.upstream_finish_reason = self._tag(finish_reason)
+        super().__init__("upstream inference reported an unsuccessful completion stream")
+
+    @staticmethod
+    def _tag(value: Any) -> str | None:
+        if isinstance(value, int) and not isinstance(value, bool):
+            value = str(value)
+        return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", value) else None
+
+
+class _SSEProtocolError(ValueError):
+    """A completion event could not be decoded without losing stream data."""
+
+    code = "tito_sdk_sampling_parse_error"
+    origin = "sdk_parser"
 
 
 class _SSETruncationError(RuntimeError):

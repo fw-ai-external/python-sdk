@@ -12,6 +12,7 @@ whitelisted fields.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping
 
 # ---------------------------------------------------------------------------
@@ -32,16 +33,17 @@ ERROR_KIND_HTTP_STATUS = "http_status"
 ERROR_KIND_SSE_TRUNCATION = "sse_truncation"
 ERROR_KIND_CONNECTION = "connection"
 ERROR_KIND_TIMEOUT = "timeout"
+ERROR_KIND_UPSTREAM_STREAM = "upstream_stream"
 
 
 def extract_request_id(headers: Mapping[str, str] | None) -> str | None:
-    """Return the first present server/gateway request id header, or ``None``."""
+    """Return bounded opaque correlation text with control characters escaped."""
     if not headers:
         return None
     for name in REQUEST_ID_RESPONSE_HEADERS:
         value = headers.get(name)
         if value:
-            return str(value)
+            return re.sub(r"[\x00-\x1f\x7f]", lambda match: f"\\x{ord(match.group()):02x}", str(value)[:256])
     return None
 
 
@@ -72,6 +74,12 @@ class SamplingRequestError(RuntimeError):
         final_status: int | None = None,
         final_error_kind: str | None = None,
         request_id: str | None = None,
+        wire_status: int | None = None,
+        upstream_response_id: str | None = None,
+        upstream_error_code: str | None = None,
+        upstream_error_type: str | None = None,
+        upstream_finish_reason: str | None = None,
+        retry_budget_exhausted: bool | None = None,
         context: Mapping[str, Any] | None = None,
     ) -> None:
         self.logical_request_id = logical_request_id
@@ -80,6 +88,12 @@ class SamplingRequestError(RuntimeError):
         self.final_status = final_status
         self.final_error_kind = final_error_kind
         self.request_id = request_id  # server/gateway request id of the last attempt
+        self.wire_status = wire_status
+        self.upstream_response_id = upstream_response_id
+        self.upstream_error_code = upstream_error_code
+        self.upstream_error_type = upstream_error_type
+        self.upstream_finish_reason = upstream_finish_reason
+        self.retry_budget_exhausted = retry_budget_exhausted
         self.context = clean_context(context)
         super().__init__(message if message is not None else self._build_message())
 
@@ -111,6 +125,17 @@ class SamplingRequestError(RuntimeError):
         }
         if self.context:
             record["context"] = dict(self.context)
+        for key in (
+            "wire_status",
+            "upstream_response_id",
+            "upstream_error_code",
+            "upstream_error_type",
+            "upstream_finish_reason",
+            "retry_budget_exhausted",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                record[key] = value
         return record
 
 

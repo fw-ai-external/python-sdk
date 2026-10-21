@@ -550,13 +550,17 @@ async def test_malformed_http_200_sse_retains_wire_body_and_discards_trajectory(
         assert response.status_code == 422
         error = response.json()["error"]
         assert error["code"] == "tito_sdk_sampling_parse_error"
+        assert error["origin"] == "sdk_parser"
         assert error["discard_trajectory"] is True
+        assert "upstream_error_code" not in error
         assert error["server_attempts"][-1]["status_code"] == 200
         assert error["server_attempts"][-1]["response_request_id"] == "bad-sse"
         terminal = json.loads(Path(error["trace_path"]).read_text().splitlines()[-1])
         assert terminal["payload"]["upstream_completion"]["sse_body"] == wire_body
         assert terminal["payload"]["upstream_completion"]["body_truncated"] is False
-        assert (await sidecar.finish_trajectory(endpoint.trajectory_id)).status == "failed"
+        artifact = await sidecar.finish_trajectory(endpoint.trajectory_id)
+        assert artifact.status == "failed"
+        assert not artifact.segments
     finally:
         await sidecar.close()
         await sampler._async_client.aclose()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import json
 import time
 import uuid
@@ -54,7 +55,11 @@ from fireworks.training.sdk.tito._types import (
     _server_attempt_value,
 )
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
-from fireworks.training.sdk.sampling_observability import SamplingRequestError, extract_request_id
+from fireworks.training.sdk.sampling_observability import (
+    ERROR_KIND_UPSTREAM_STREAM,
+    SamplingRequestError,
+    extract_request_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +108,7 @@ class _TrajectoryState:
     transport_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     discard_error: TITOError | None = None
     terminalizing: bool = False
+    termination_intent: _TerminationIntent | None = None
     last_policy_commit_at: float | None = None
     sampler_calls: int = 0
     metrics: _MetricAccumulator = field(default_factory=_MetricAccumulator)
@@ -120,6 +126,30 @@ class _Tombstone:
     reason: str | None
     terminal_at: float
     metrics: _MetricAccumulator
+    termination_intent: _TerminationIntent
+
+
+@dataclass(frozen=True)
+class _TerminationIntent:
+    action: str
+    requested_status: TITOTrajectoryStatus
+    status: TITOTrajectoryStatus
+    reason: str | None
+    started_at: float
+    cause_code: str | None = None
+    cause_origin: str | None = None
+
+    def as_context(self) -> dict[str, Any]:
+        context = {
+            "terminal_action": self.action,
+            "requested_terminal_status": self.requested_status,
+            "terminal_status": self.status,
+            "terminal_reason": self.reason,
+            "terminal_started_at": self.started_at,
+        }
+        if self.cause_code is not None:
+            context.update(cause_error_code=self.cause_code, cause_origin=self.cause_origin)
+        return context
 
 
 @dataclass(frozen=True)
@@ -527,6 +557,10 @@ class _LinearTrajectoryCore:
                     "tito_trajectory_closed",
                     410,
                     "trajectory terminalization is in progress",
+                    context={
+                        **(state.termination_intent.as_context() if state.termination_intent is not None else {}),
+                        "termination_phase": "closing",
+                    },
                 )
             return state
         tombstone = self._tombstone
@@ -549,12 +583,18 @@ class _LinearTrajectoryCore:
                         "outcome": "rejected",
                         "error_code": "tito_trajectory_closed",
                         "terminal_status": tombstone.status,
+                        **tombstone.termination_intent.as_context(),
                     },
                 )
             raise TITOError(
                 "tito_trajectory_closed",
                 410,
                 f"trajectory is already {tombstone.status}",
+                context={
+                    **tombstone.termination_intent.as_context(),
+                    "terminal_at": tombstone.terminal_at,
+                    "termination_phase": "terminal",
+                },
             )
         raise TITOError("tito_trajectory_not_found", 404, "unknown trajectory")
 
@@ -1024,6 +1064,11 @@ class _LinearTrajectoryCore:
                 f"expected one completion, got {len(result.completions)}",
             )
         completion = result.completions[0]
+        if completion.finish_reason not in ("stop", "length", "tool_calls"):
+            raise self._completion_error(
+                "tito_sampler_finish_contract_error",
+                "sampler returned a completion without a supported successful finish reason",
+            )
         prompt = tuple(completion.full_tokens[: completion.prompt_len])
         output = tuple(completion.full_tokens[completion.prompt_len :])
         if prompt != plan.prepared_prompt_ids:
@@ -1117,7 +1162,10 @@ class _LinearTrajectoryCore:
                 "local TITO parser rejected the sampled output; discard this trajectory",
                 origin="sdk_parser",
                 discard_trajectory=True,
-                context={"parser_error_type": type(parser_error).__name__},
+                context={
+                    **self._parser_context(request, completion, parser_error),
+                    "parser_reason_code": self._parser_tag(getattr(parser_error, "reason_code", "unclassified")),
+                },
             ) from parser_error
         except Exception as parser_error:
             raise TITOError(
@@ -1126,8 +1174,28 @@ class _LinearTrajectoryCore:
                 "local TITO parser raised an unexpected exception; discard this trajectory",
                 origin="sdk_parser",
                 discard_trajectory=True,
-                context={"parser_error_type": type(parser_error).__name__},
+                context=self._parser_context(request, completion, parser_error),
             ) from parser_error
+
+    def _parser_context(
+        self, request: TITOChatRequest, completion: SampledCompletion, error: Exception
+    ) -> dict[str, Any]:
+        return {
+            "parser_error_type": type(error).__name__,
+            "finish_reason": completion.finish_reason
+            if completion.finish_reason in {"stop", "length", "tool_calls"}
+            else "unknown",
+            "prompt_tokens": completion.prompt_len,
+            "completion_tokens": len(completion.full_tokens) - completion.prompt_len,
+            "requested_max_tokens": request.max_tokens,
+            "max_output_tokens": self.max_output_tokens,
+            "renderer_id": self._parser_tag(self.renderer.renderer_id),
+            "renderer_certification_id": self._parser_tag(getattr(self.renderer, "certification_id", None)),
+        }
+
+    @staticmethod
+    def _parser_tag(value: Any) -> str:
+        return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:@-]{1,128}", value) else "unclassified"
 
     @staticmethod
     def _operation_error(error: Exception, phase: str) -> TITOError:
@@ -1139,17 +1207,43 @@ class _LinearTrajectoryCore:
                 "upstream inference returned an HTTP error",
                 origin="server",
                 should_retry=status in {408, 429, 500, 502, 503, 504},
-                context={"upstream_status": status, "upstream_request_id": extract_request_id(error.response.headers)},
+                context={
+                    "upstream_status": status,
+                    "wire_status": status,
+                    "upstream_request_id": extract_request_id(error.response.headers),
+                    "phase": phase,
+                    "transport_hop": "sidecar_to_inference",
+                },
             )
         if isinstance(error, SamplingRequestError):
+            if error.final_error_kind == ERROR_KIND_UPSTREAM_STREAM:
+                return TITOError(
+                    "tito_server_stream_error",
+                    error.final_status if error.final_status is not None and error.final_status >= 400 else 502,
+                    "upstream inference reported a stream failure",
+                    origin="server",
+                    context={
+                        **error.as_error_record(),
+                        "upstream_status": error.final_status,
+                        "phase": phase,
+                        "transport_hop": "sidecar_to_inference",
+                        "retry_scope": "logical_request",
+                    },
+                )
             return TITOError(
                 "tito_server_http_error" if error.final_status is not None else "tito_transport_error",
-                error.final_status or 502,
-                "upstream sampling exhausted its retry budget",
+                error.final_status if error.final_status is not None and error.final_status >= 400 else 502,
+                f"upstream sampling failed ({error.final_error_kind or 'unknown'}); retry policy completed",
                 origin="server" if error.final_status is not None else "transport",
                 # The sampler already exhausted its bounded retries. Do not
                 # multiply them in the OpenAI client talking to this sidecar.
-                context={**error.as_error_record(), "upstream_status": error.final_status},
+                context={
+                    **error.as_error_record(),
+                    "upstream_status": error.final_status,
+                    "phase": phase,
+                    "transport_hop": "sidecar_to_inference",
+                    "retry_scope": "logical_request",
+                },
             )
         if isinstance(error, (httpx.RequestError, ConnectionError, TimeoutError)):
             return TITOError(
@@ -1158,6 +1252,13 @@ class _LinearTrajectoryCore:
                 "upstream inference transport failed",
                 origin="transport",
                 should_retry=True,
+                context={
+                    "logical_request_id": getattr(error, "logical_request_id", None),
+                    "request_id": getattr(error, "_fireworks_response_request_id", None),
+                    "wire_status": getattr(error, "_fireworks_wire_status", None),
+                    "phase": phase,
+                    "transport_hop": "sidecar_to_inference",
+                },
             )
         attempts = getattr(error, "server_attempts", ())
         if phase == "completion_validation" or (phase == "inference" and attempts and attempts[-1].status_code == 200):
@@ -1167,7 +1268,13 @@ class _LinearTrajectoryCore:
                 "local SDK could not decode a successful sampling response; discard this trajectory",
                 origin="sdk_parser",
                 discard_trajectory=True,
-                context={"parser_error_type": type(error).__name__},
+                context={
+                    "parser_error_type": type(error).__name__,
+                    "phase": phase,
+                    "wire_status": getattr(error, "_fireworks_wire_status", None),
+                    "request_id": getattr(error, "_fireworks_response_request_id", None),
+                    "upstream_response_id": getattr(error, "_fireworks_upstream_response_id", None),
+                },
             )
         return TITOError(
             "tito_sdk_internal_error",
@@ -1288,8 +1395,15 @@ class _LinearTrajectoryCore:
                 upstream_attempts=attempts,
                 server_attempts=[_server_attempt_value(attempt) for attempt in server_attempts or ()],
                 logical_request_id=logical_request_id,
-                upstream_response_id=sampled.upstream_response_id if sampled is not None else None,
             )
+            if sampled is not None:
+                error.context.update(attempts=sampled.attempts, upstream_response_id=sampled.upstream_response_id)
+                if sampled.server_attempts:
+                    last_attempt = sampled.server_attempts[-1]
+                    error.context.update(
+                        request_id=last_attempt.response_request_id,
+                        wire_status=last_attempt.status_code,
+                    )
             if error.discard_trajectory:
                 # Poison the trajectory before diagnostic I/O can yield or be
                 # cancelled; its successful prefix must never become trainable.
@@ -2684,6 +2798,51 @@ class _LinearTrajectoryCore:
                 "cannot terminalize while a sidecar call is in flight",
             )
 
+    @staticmethod
+    def _termination_reason(reason: str | None) -> str | None:
+        if reason is None or re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", reason):
+            return reason
+        return "caller_supplied_reason"
+
+    def _begin_terminalization(
+        self,
+        state: _TrajectoryState,
+        status: TITOTrajectoryStatus,
+        reason: str | None,
+        *,
+        action: str,
+    ) -> tuple[TITOTrajectoryStatus, str | None]:
+        requested_status = status
+        cause = state.discard_error
+        if cause is not None:
+            status, reason = "failed", cause.code
+        state.termination_intent = _TerminationIntent(
+            action=action,
+            requested_status=requested_status,
+            status=status,
+            reason=self._termination_reason(reason),
+            started_at=time.time(),
+            cause_code=self._termination_reason(cause.code) if cause is not None else None,
+            cause_origin=cause.origin if cause is not None else None,
+        )
+        state.terminalizing = True
+        return status, reason
+
+    def _clear_termination_intent(self, state: _TrajectoryState) -> None:
+        if self._state is not state:
+            return
+        intent = state.termination_intent
+        state.terminalizing = False
+        state.termination_intent = None
+        if intent is not None:
+            try:
+                context = intent.as_context()
+                context.pop("terminal_reason", None)
+                context.pop("cause_error_code", None)
+                logger.warning("TITO terminalization did not complete", extra={"tito_termination": context})
+            except Exception:
+                pass
+
     def _terminal_payload(
         self,
         state: _TrajectoryState,
@@ -2694,6 +2853,7 @@ class _LinearTrajectoryCore:
         terminal_reason = self._terminal_closed_reason(status)
         return {
             "reason": reason,
+            **(state.termination_intent.as_context() if state.termination_intent is not None else {}),
             "metrics": state.metrics.snapshot().flattened(),
             "segments": [
                 {
@@ -2720,6 +2880,14 @@ class _LinearTrajectoryCore:
             reason=reason,
             terminal_at=time.time(),
             metrics=state.metrics,
+            termination_intent=replace(
+                state.termination_intent
+                or _TerminationIntent(
+                    action=status, requested_status=status, status=status, reason=None, started_at=time.time()
+                ),
+                status=status,
+                reason=self._termination_reason(reason),
+            ),
         )
         self._state = None
         self._tombstone = tombstone
@@ -2821,9 +2989,9 @@ class _LinearTrajectoryCore:
                 409,
                 "a sidecar call cannot terminalize its own trajectory",
             )
-        state.terminalizing = True
-        if state.discard_error is not None:
-            status, reason = "failed", state.discard_error.code
+        status, reason = self._begin_terminalization(
+            state, status, reason, action="fail" if status == "failed" else "abandon"
+        )
         finished_at = time.time()
         prior_summary = {name: state.metrics.distributions.get(name) for name in self._trajectory_summary_names()}
         try:
@@ -2858,8 +3026,7 @@ class _LinearTrajectoryCore:
                 raise
             return self._trajectory_result(state, finished_at, status=status, reason=reason)
         finally:
-            if self._state is state:
-                state.terminalizing = False
+            self._clear_termination_intent(state)
 
     async def _wait_for_transport(self, trajectory_id: str) -> None:
         state = self._require_active(trajectory_id)
@@ -2959,8 +3126,16 @@ class _LinearTrajectoryCore:
         state = self._require_active(trajectory_id)
         state.transport_tasks.difference_update({task for task in state.transport_tasks if task.done()})
         self._ensure_no_in_flight(state)
-        if state.discard_error is not None:
-            status, reason = "failed", state.discard_error.code
+        status, reason = self._begin_terminalization(
+            state,
+            status,
+            reason,
+            action={
+                "completed": "finish",
+                "abandoned": "abandon",
+                "failed": "fail",
+            }[status],
+        )
         finished_at = time.time()
         prior_summary = {name: state.metrics.distributions.get(name) for name in self._trajectory_summary_names()}
         try:
@@ -2969,6 +3144,8 @@ class _LinearTrajectoryCore:
         except BaseException:
             self._restore_trajectory_summary(state, prior_summary)
             raise
+        finally:
+            self._clear_termination_intent(state)
         return self._trajectory_result(
             state,
             finished_at,
@@ -2981,11 +3158,9 @@ class _LinearTrajectoryCore:
 
     async def finish_async(self, trajectory_id: str) -> TITOTrajectoryArtifact:
         state = self._require_active(trajectory_id)
-        state.terminalizing = True
+        status, reason = self._begin_terminalization(state, "completed", None, action="finish")
         try:
             self._ensure_no_in_flight(state)
-            status = "failed" if state.discard_error is not None else "completed"
-            reason = state.discard_error.code if state.discard_error is not None else None
             finished_at = time.time()
             prior_summary = {name: state.metrics.distributions.get(name) for name in self._trajectory_summary_names()}
             try:
@@ -2997,8 +3172,7 @@ class _LinearTrajectoryCore:
                 raise
             return self._trajectory_result(state, finished_at, status=status, reason=reason)
         finally:
-            if self._state is state:
-                state.terminalizing = False
+            self._clear_termination_intent(state)
 
     def abandon(self, trajectory_id: str, reason: str) -> TITOTrajectoryArtifact:
         return self._terminalize_sync_result(trajectory_id, "abandoned", reason)
@@ -3011,7 +3185,7 @@ class _LinearTrajectoryCore:
         current = asyncio.current_task()
         state = self._state
         if state is not None:
-            state.terminalizing = True
+            status, reason = self._begin_terminalization(state, "abandoned", "sidecar_shutdown", action="shutdown")
         tasks = {
             task
             for state in (() if state is None else (state,))
@@ -3020,24 +3194,26 @@ class _LinearTrajectoryCore:
         }
         for task in tasks:
             task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
         terminalization_error: TITOError | None = None
-        if state is not None:
-            try:
-                await self._terminalize_async(state, "abandoned", "sidecar_shutdown")
-            except TITOError as exc:
-                if exc.code != "tito_debug_storage_error":
-                    raise
-                terminalization_error = exc
-                # Durable debug closure is fail-closed, but shutdown must still
-                # retire the in-memory trajectory and release its token arrays.
-                await self._terminalize_async(
-                    state,
-                    "abandoned",
-                    "sidecar_shutdown_debug_failure",
-                    False,
-                )
+        try:
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            if state is not None:
+                try:
+                    await self._terminalize_async(state, status, reason)
+                except TITOError as exc:
+                    if exc.code != "tito_debug_storage_error":
+                        raise
+                    terminalization_error = exc
+                    await self._terminalize_async(
+                        state,
+                        status,
+                        reason if state.discard_error is not None else "sidecar_shutdown_debug_failure",
+                        False,
+                    )
+        finally:
+            if state is not None:
+                self._clear_termination_intent(state)
         if terminalization_error is not None:
             raise TITOError(
                 "tito_debug_storage_error",
