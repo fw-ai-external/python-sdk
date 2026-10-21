@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.29 (2026-10-21)
+
+Full Changelog: [v1.2.28...v1.2.29](https://github.com/fw-ai-external/python-sdk/compare/v1.2.28...v1.2.29)
+
+### Features
+* **training-sdk:** let a serverless `FiretitanServiceClient` sample a base model or another run's saved checkpoints without creating a model and without using a concurrent-training-run slot, via standalone sampler routes
+* **training-sdk:** make `FiretitanSamplingClient` picklable across worker processes (connection state, shared-storage R3 binding, fixed concurrency limit), and add credential-free sampler handles with `get_sampler_handle()` / `FiretitanSamplingClient.from_sampler_handle(handle, api_key=None)`
+
+### Bug Fixes
+* **training-sdk:** bind a training client's shared-storage (R3) store to a sampler only when it targets that service's own training session, and reject empty or cross-account `model_path` values before any request
+
 ## 1.2.28 (2026-10-20)
 
 Full Changelog: [v1.2.27...v1.2.28](https://github.com/fw-ai-external/python-sdk/compare/v1.2.27...v1.2.28)

@@ -22,6 +22,7 @@ import re
 import json
 import time
 import uuid
+import base64
 import asyncio
 import logging
 import warnings
@@ -29,8 +30,8 @@ import threading
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, Callable, Optional, NamedTuple
 from contextlib import nullcontext, asynccontextmanager
-from dataclasses import fields, replace, dataclass, is_dataclass
-from collections.abc import Sequence, AsyncGenerator
+from dataclasses import asdict, fields, replace, dataclass, is_dataclass
+from collections.abc import Mapping, Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
 import numpy as np
@@ -55,7 +56,8 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
 )
-from fireworks.training.sdk.concurrency import SamplingConcurrencyController
+from fireworks.training.sdk.concurrency import FixedConcurrencyController, SamplingConcurrencyController
+from fireworks.training.sdk._rest_client import _RestClient
 from fireworks.training.sdk._core._client import resolve_training_base_url
 from fireworks.training.sdk._core.lib.comms import CommsV2APIFuture
 from fireworks.training.sdk._snapshot_chain import (
@@ -66,6 +68,7 @@ from fireworks.training.sdk._snapshot_chain import (
     resolve_next_checkpoint_type,
 )
 from fireworks.training.sdk._core.lib.telemetry import Telemetry
+from fireworks.training.sdk.sampling_observability import clean_context
 from fireworks.training.sdk._core.lib._pydantic_conv import to_pydantic_input
 from fireworks.training.sdk._core.lib.capacity_retry import (
     _mark_serverless_supervised_409_retry,
@@ -75,7 +78,7 @@ from fireworks.training.sdk._core.lib.queue_state_logger import QueueStateLogger
 from fireworks.training.sdk._core.lib.client_connection_pool_type import ClientConnectionPoolType
 from fireworks.training.sdk._core.lib.public_interfaces.api_future import APIFuture, AwaitableConcurrentFuture
 from fireworks.training.sdk._core.lib.public_interfaces.rest_client import RestClient
-from fireworks.training.sdk._core.lib.public_interfaces.service_client import ServiceClient
+from fireworks.training.sdk._core.lib.public_interfaces.service_client import ServiceClient, _get_default_headers
 from fireworks.training.sdk._core.lib.public_interfaces.training_client import (
     TrainingClient,
     _admit_call,
@@ -223,6 +226,76 @@ class SamplingClientClosedError(RuntimeError):
     """
 
 
+_API_KEY_HEADER_MARKERS = ("authorization", "api-key", "apikey")
+# Cloudflare Access id + secret are one credential pair; handles drop both so
+# a worker's environment pair is never mixed with a producer's.
+_CREDENTIAL_HEADER_MARKERS = _API_KEY_HEADER_MARKERS + ("cf-access-client", "secret", "token", "password", "cookie")
+
+
+def _is_api_key_header(name: str) -> bool:
+    """Whether a header carries the Fireworks API key (or another bearer)."""
+    lowered = name.lower()
+    return any(marker in lowered for marker in _API_KEY_HEADER_MARKERS)
+
+
+def _serverless_caller_headers(default_headers: Mapping[str, str] | None) -> dict[str, str]:
+    """Headers the training holder sends (environment defaults such as
+    Cloudflare Access, plus caller ``default_headers``), for serverless ops sent
+    outside the holder. The API key is added per request instead."""
+    headers = _get_default_headers() | dict(default_headers or {})
+    return {key: value for key, value in headers.items() if not _is_api_key_header(key)}
+
+
+def _is_credential_header(name: str) -> bool:
+    """Whether a header may carry a credential; sampler handles never include these."""
+    lowered = name.lower()
+    return any(marker in lowered for marker in _CREDENTIAL_HEADER_MARKERS)
+
+
+@dataclass(frozen=True)
+class _SamplingClientPickleState:
+    """What a ``FiretitanSamplingClient`` is rebuilt from in another process."""
+
+    inference_url: str
+    model: str
+    additional_headers: dict[str, str]
+    request_context: dict[str, Any] | None
+    r3_store_id: str | None
+    r3_binding_required: bool
+    fixed_concurrency: int | None
+    api_key: str | None = None
+
+
+def _unpickle_firetitan_sampling_client(
+    state: _SamplingClientPickleState, tokenizer: Any | None = None
+) -> "FiretitanSamplingClient":
+    """Rebuild a ``FiretitanSamplingClient`` from a pickle or sampler handle."""
+    api_key = state.api_key or _fireworks_api_key(None)
+    if not api_key:
+        raise RuntimeError(
+            "This sampler handle carries no credentials: set FIREWORKS_API_KEY or pass api_key= "
+            "to FiretitanSamplingClient.from_sampler_handle."
+        )
+    client = FiretitanSamplingClient.create(
+        inference_url=state.inference_url,
+        model=state.model,
+        api_key=api_key,
+        tokenizer=tokenizer,
+        additional_headers=state.additional_headers,
+        concurrency_controller=(
+            FixedConcurrencyController(state.fixed_concurrency) if state.fixed_concurrency is not None else None
+        ),
+    )
+    client.deployment_sampler._r3_binding_required = state.r3_binding_required
+    if state.r3_store_id is not None:
+        # Re-negotiate the trainer shared-storage binding; the matrix format
+        # upgrade stays lazy (first request probes inference support).
+        client.deployment_sampler.negotiate_routing_matrix_format("parquet_v1", state.r3_store_id)
+    if state.request_context is not None:
+        client.deployment_sampler._request_context = dict(state.request_context)
+    return client
+
+
 class FiretitanSamplingClient(SamplingClient):
     """Tinker-compatible sampling wrapper backed by a ``DeploymentSampler``.
 
@@ -268,6 +341,72 @@ class FiretitanSamplingClient(SamplingClient):
             additional_headers=additional_headers,
         )
         return cls(sampler)
+
+    def _pickle_state(self) -> _SamplingClientPickleState:
+        sampler = self.deployment_sampler
+        # A fixed limit is caller configuration and carries over; any other
+        # controller holds per-process state, so each process gets the default.
+        controller = sampler.concurrency_controller
+        fixed_concurrency = controller.window_size if isinstance(controller, FixedConcurrencyController) else None
+        return _SamplingClientPickleState(
+            inference_url=sampler.base_url,
+            model=sampler.model,
+            additional_headers=dict(sampler.additional_headers or {}),
+            # Only the recognized identity keys ever reach an error report, so
+            # only those are worth carrying (a credential would never be used).
+            request_context=clean_context(sampler._request_context) or None,
+            # The durable R3 state is the negotiated shared-storage binding; the
+            # matrix format starts base64_inline and upgrades lazily on first use.
+            r3_store_id=sampler.r3_store_id,
+            r3_binding_required=bool(getattr(sampler, "_r3_binding_required", False)),
+            fixed_concurrency=fixed_concurrency,
+            api_key=sampler.api_key,
+        )
+
+    def __reduce__(self):
+        """Pickle the client for multi-process use (Tinker parity).
+
+        Like Tinker's ``SamplingClient``, the pickle carries the connection
+        state including the API key and headers, so a worker needs no
+        environment of its own. Each unpickled copy gets a fresh event loop,
+        HTTP clients and concurrency controller. The tokenizer is pickled with
+        the client, so it must be picklable (HuggingFace tokenizers are). Use
+        ``get_sampler_handle`` to hand a sampler to another process without
+        credentials.
+        """
+        return (_unpickle_firetitan_sampling_client, (self._pickle_state(), self.deployment_sampler.tokenizer))
+
+    def get_sampler_handle(self) -> str:
+        """A string handle to this client's sampler, with no credentials.
+
+        A pickle-free alternative for passing the sampler to another process:
+        ``FiretitanSamplingClient.from_sampler_handle`` creates a client for the
+        same sampler that authenticates with that process's credentials. The
+        handle drops the API key and credential-like headers, and does not carry
+        the tokenizer.
+        """
+        state = self._pickle_state()
+        headers = {key: value for key, value in state.additional_headers.items() if not _is_credential_header(key)}
+        state = replace(state, additional_headers=headers, api_key=None)
+        payload = json.dumps(asdict(state), separators=(",", ":"))
+        return base64.urlsafe_b64encode(payload.encode()).decode()
+
+    @staticmethod
+    def from_sampler_handle(
+        handle: str, *, api_key: str | None = None, tokenizer: Any | None = None
+    ) -> "FiretitanSamplingClient":
+        """Create a client for the sampler behind ``handle``.
+
+        Authenticates with ``api_key``, or ``FIREWORKS_API_KEY`` from this
+        process's environment.
+        """
+        fields_ = json.loads(base64.urlsafe_b64decode(handle))
+        state = _SamplingClientPickleState(**{**fields_, "api_key": api_key})
+        # Credential headers were dropped when the handle was built; the
+        # receiving process supplies its own from its environment (e.g.
+        # Cloudflare Access), without overriding carried headers.
+        state = replace(state, additional_headers=_serverless_caller_headers(state.additional_headers))
+        return _unpickle_firetitan_sampling_client(state, tokenizer)
 
     @staticmethod
     def _training_types():
@@ -879,6 +1018,34 @@ def _is_serverless_session_id(session_id: Any) -> bool:
     name only applies to ``ts-`` sessions.
     """
     return isinstance(session_id, str) and session_id.startswith("ts-")
+
+
+_TRAINING_SESSION_CHECKPOINT_RE = re.compile(
+    r"^(?:accounts/(?P<account>[^/]+)/)?(?:trainingSessions/)?(?P<session_id>ts-[A-Za-z0-9-]+)(?:/checkpoints/(?P<checkpoint>.+))?$"
+)
+
+
+def _parse_training_session_checkpoint_path(model_path: Any) -> Optional[tuple[str | None, str, str | None]]:
+    """Parse a ``model_path`` that explicitly targets an existing training
+    session's checkpoint, instead of the trainer-side checkpoint format
+    (``<account>/run-.../step-...``) that is resolved against the caller's own
+    session.
+
+    Recognized forms (``accounts/`` and ``checkpoints/`` prefixes optional):
+
+    - ``accounts/<a>/trainingSessions/<ts>/checkpoints/<ckpt>``
+    - ``trainingSessions/<ts>/checkpoints/<ckpt>``
+    - ``<ts>/checkpoints/<ckpt>``
+
+    Returns ``(account_or_None, session_id, checkpoint_or_None)``, or ``None``
+    when ``model_path`` does not name a training session.
+    """
+    if not isinstance(model_path, str):
+        return None
+    match = _TRAINING_SESSION_CHECKPOINT_RE.match(model_path.strip().strip("/"))
+    if match is None or not _is_serverless_session_id(match.group("session_id")):
+        return None
+    return match.group("account"), match.group("session_id"), match.group("checkpoint")
 
 
 def _run_id_from_model_id(model_id: Any) -> str | None:
@@ -3123,6 +3290,7 @@ class FiretitanServiceClient(ServiceClient):
         self._fireworks_api_key = api_key if api_key and not api_key.startswith("tml-") else None
         self._created_training_configs: set[_TrainingKey] = set()
         self._training_clients: list[FiretitanTrainingClient] = []
+        self._created_base_model = False
         self._allow_duplicate_training_configs = False
         self._sampler_backend: Any | None = None
         self._reference_handle: Any | None = None
@@ -3137,6 +3305,7 @@ class FiretitanServiceClient(ServiceClient):
             return
 
         self._training_base_url = str(resolve_training_base_url(constructor_base_url))
+        self._serverless_caller_headers = _serverless_caller_headers(kwargs.get("default_headers"))
         if self._fireworks_api_key is not None:
             headers = dict(kwargs.pop("default_headers", None) or {})
             headers.setdefault("X-API-Key", self._fireworks_api_key)
@@ -3258,7 +3427,8 @@ class FiretitanServiceClient(ServiceClient):
                     additional_headers=getattr(self, "_managed_additional_headers", None),
                 ).account_id
             except Exception:
-                account = None
+                # Possibly transient: leave the cache unset so a later call retries.
+                return None
         self._cp_account_id = account
         return account
 
@@ -3285,9 +3455,36 @@ class FiretitanServiceClient(ServiceClient):
         # the model_path here is expected in the format of "account_id/run-abc.../step-1-test1234" which is returned from the trainer side
         checkpoint = str(model_path).strip().strip("/")
         session_id = self.training_session_id
-        account = self._resolved_account_id()
+        account = None
 
-        sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}/checkpoints/{checkpoint}"
+        # A model_path that names a training session targets that session's
+        # rollout-host route directly. This is the standalone sampling path: a
+        # fresh service (e.g. a per-activity harness process) can sample an
+        # existing session's checkpoints without calling create_model, and so
+        # without consuming a concurrent-training-run slot.
+        parsed = _parse_training_session_checkpoint_path(checkpoint)
+        if parsed is not None:
+            target_account, target_session_id, target_checkpoint = parsed
+            account = target_account
+            session_id = target_session_id
+            checkpoint = target_checkpoint or ""
+        if account is None:
+            # Only look the account up when the path does not name it.
+            account = self._resolved_account_id()
+
+        if account is None or session_id is None:
+            raise ValueError(
+                "serverless sampling requires a resolvable Fireworks account id and a training "
+                "session; pass model_path as accounts/<account>/trainingSessions/<ts>/checkpoints/<ckpt> "
+                "to target an existing session's rollout host."
+            )
+
+        if checkpoint:
+            sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}/checkpoints/{checkpoint}"
+        else:
+            # No checkpoints segment: the rollout host serves the base weights
+            # of the targeted session.
+            sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}"
         logger.info(f"[sampler model]: {sampling_model_name}")
         return sampling_model_name
 
@@ -3303,6 +3500,97 @@ class FiretitanServiceClient(ServiceClient):
         sampling_model_name = f"accounts/{account}/trainingSessions/{session_id}"
         logger.info(f"[sampler model (base-only)]: {sampling_model_name}")
         return sampling_model_name
+
+    def _samples_remote_target(self, model: Any) -> bool:
+        """Whether a serverless sampler model name targets a standalone
+        sampler route or a training session other than this service's own."""
+        if not isinstance(model, str):
+            return False
+        if "/trainingSamplers/" in model:
+            return True
+        _, sep, rest = model.partition("/trainingSessions/")
+        if not sep:
+            return False
+        return rest.split("/", 1)[0] != self.training_session_id
+
+    def _session_has_model(self) -> bool:
+        """Whether this service created a model, which gives its session a
+        rollout-host route."""
+        return bool(getattr(self, "_training_clients", None)) or getattr(self, "_created_base_model", False)
+
+    def _owns_serverless_run(self, run_id: str) -> bool:
+        """Whether a training client created on this service owns ``run_id``,
+        so its checkpoints are reachable through this service's session route."""
+        return any(client.run_id == run_id for client in getattr(self, "_training_clients", []))
+
+    def _samples_checkpoint_through_session(self, checkpoint: str) -> bool:
+        """Whether ``checkpoint`` routes through a session route rather than a
+        standalone sampler route."""
+        if _parse_training_session_checkpoint_path(checkpoint) is not None:
+            return True
+        parts = checkpoint.split("/")
+        if len(parts) < 3:
+            # A short session-relative name only resolves on this service's own session.
+            return self._session_has_model()
+        return self._owns_serverless_run(parts[1])
+
+    def _standalone_sampler_account(self) -> str:
+        account = self._resolved_account_id()
+        if account is None:
+            raise ValueError("standalone serverless sampling requires a resolvable Fireworks account id.")
+        return account
+
+    def _standalone_checkpoint_sampling_model_name(self, checkpoint: str) -> tuple[str, str]:
+        """Model name and source run for sampling a saved checkpoint with no
+        training session: ``checkpoint`` is the ``<account>/<run_id>/<name>``
+        path ``save_weights_for_sampler`` returns."""
+        parts = checkpoint.split("/")
+        if (
+            len(parts) < 3
+            or not _CHECKPOINT_RUN_ID_RE.fullmatch(parts[1])
+            or not all(_CHECKPOINT_DNS_LABEL_RE.fullmatch(part) for part in parts)
+        ):
+            raise ValueError(
+                f"model_path {checkpoint!r} must be a sampler checkpoint path <account>/<run_id>/<name> "
+                "as returned by save_weights_for_sampler."
+            )
+        account = self._standalone_sampler_account()
+        if parts[0] != account:
+            raise ValueError(
+                f"model_path {checkpoint!r} belongs to account {parts[0]!r}; this service's API key is for {account!r}."
+            )
+        model = f"accounts/{account}/trainingSamplers/checkpoints/{checkpoint}"
+        training_run = f"accounts/{account}/trainingRuns/{parts[1]}"
+        return model, training_run
+
+    def _serverless_sampling_headers(self) -> dict[str, str]:
+        """Headers for every serverless sampling request (route bind and
+        completions): the training holder's headers plus managed routing headers."""
+        return {
+            **(getattr(self, "_serverless_caller_headers", None) or {}),
+            **(getattr(self, "_managed_additional_headers", None) or {}),
+        }
+
+    def _bind_standalone_sampler_route(
+        self,
+        serverless_base_url: str,
+        *,
+        base_model: str | None = None,
+        training_run: str | None = None,
+    ) -> None:
+        """Have the gateway write the route a standalone sampler needs. This
+        creates no training run and uses no concurrent-training-run quota."""
+        body = {"base_model": base_model} if base_model is not None else {"training_run": training_run}
+        with _RestClient(
+            api_key=self._require_fireworks_api_key("serverless sampling"),
+            base_url=serverless_base_url,
+            additional_headers=self._serverless_sampling_headers(),
+        ) as rest:
+            response = rest._post("/api/v1/create_sampling_route", json=body)
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Failed to create a standalone serverless sampler route ({response.status_code}): {response.text}"
+            )
 
     def _server_capabilities_source(self) -> ServiceClient:
         if not hasattr(self, "holder"):
@@ -4214,18 +4502,24 @@ class FiretitanServiceClient(ServiceClient):
             or ``optim_step`` on this client — it exists solely for
             reference log-prob computation.
         """
-        return _create_base_only_training_client(
+        training_client = _create_base_only_training_client(
             self.holder,
             base_model,
             self._user_metadata(user_metadata),
             request_type="CreateModel",
         )
+        self._created_base_model = True
+        return training_client
 
     def create_sampling_client(self, *args, training_client: FiretitanTrainingClient | None = None, **kwargs):
         sampler = self._create_sampling_client(*args, **kwargs)
         # A reused deployment backend must not change an earlier handle's protocol.
         sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding()
         sampler.deployment_sampler._r3_binding_required = False
+        if training_client is None and self._samples_remote_target(sampler.deployment_sampler.model):
+            # Another session's or a standalone sampler's rollouts are not this
+            # service's training data: bind R3 only when the caller asks.
+            return sampler
         if training_client is None:
             handle = getattr(self, "_managed_handle", None)
             clients = getattr(handle, "training_clients", None) or getattr(self, "_training_clients", [])
@@ -4283,8 +4577,17 @@ class FiretitanServiceClient(ServiceClient):
                         "serverless sampling requires FiretitanServiceClient base_url to end with "
                         f"/training/v1/serverless; got {serverless_base_url!r}."
                     )
-                serverless_model = self._serverless_sampling_model_name(model_path)
-                additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
+                checkpoint = str(model_path).strip().strip("/")
+                if not checkpoint:
+                    raise ValueError("model_path must not be empty; pass base_model to sample base weights.")
+                if self._samples_checkpoint_through_session(checkpoint):
+                    serverless_model = self._serverless_sampling_model_name(model_path)
+                else:
+                    # A checkpoint from a run this service did not create has no
+                    # route on this service's session: bind a standalone one.
+                    serverless_model, training_run = self._standalone_checkpoint_sampling_model_name(checkpoint)
+                    self._bind_standalone_sampler_route(serverless_base_url, training_run=training_run)
+                additional_headers = self._serverless_sampling_headers()
                 return FiretitanSamplingClient.create(
                     inference_url=serverless_base_url,
                     model=serverless_model,
@@ -4303,14 +4606,6 @@ class FiretitanServiceClient(ServiceClient):
             and managed_config is None
             and self.training_session_id is not None
         ):
-            # base_model selects base-only routing but its value is not used: the
-            # rollout host is bound to the training session's base weights. Warn so
-            # a caller who asked for a different reference model isn't silently
-            # regularizing against the session base (mirrors the model_path branch).
-            logger.warning(
-                "base_model is ignored for serverless base-only sampling; "
-                "the rollout host serves the training session's base weights."
-            )
             serverless_base_url = self._training_base_url
             serverless_base_url = serverless_base_url.rstrip("/")
             if not serverless_base_url.endswith("/training/v1/serverless"):
@@ -4318,8 +4613,24 @@ class FiretitanServiceClient(ServiceClient):
                     "serverless sampling requires FiretitanServiceClient base_url to end with "
                     f"/training/v1/serverless; got {serverless_base_url!r}."
                 )
-            serverless_model = self._serverless_base_sampling_model_name()
-            additional_headers = dict(getattr(self, "_managed_additional_headers", None) or {})
+            if self._session_has_model():
+                # base_model selects base-only routing but its value is not used:
+                # the rollout host is bound to the training session's base weights.
+                # Warn so a caller who asked for a different reference model isn't
+                # silently regularizing against the session base.
+                logger.warning(
+                    "base_model is ignored for serverless base-only sampling; "
+                    "the rollout host serves the training session's base weights."
+                )
+                serverless_model = self._serverless_base_sampling_model_name()
+            else:
+                # No model on this service's session, so no session route: bind a
+                # standalone route for base_model itself.
+                account = self._standalone_sampler_account()
+                self._bind_standalone_sampler_route(serverless_base_url, base_model=base_model)
+                serverless_model = f"accounts/{account}/trainingSamplers/{base_model}"
+                logger.info(f"[sampler model (standalone base-only)]: {serverless_model}")
+            additional_headers = self._serverless_sampling_headers()
             return FiretitanSamplingClient.create(
                 inference_url=serverless_base_url,
                 model=serverless_model,

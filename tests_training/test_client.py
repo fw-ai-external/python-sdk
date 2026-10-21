@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import base64
+import pickle
 import asyncio
 import logging
 import warnings
@@ -25,6 +27,7 @@ from fireworks.training.sdk.client import (
     SaveSamplerResult,
     GradNormMetricsMode,
     FiretitanServiceClient,
+    FiretitanSamplingClient,
     FiretitanTrainingClient,
     _r3_request_issues,
     generate_session_id,
@@ -33,6 +36,7 @@ from fireworks.training.sdk.client import (
     qualify_snapshot_name,
     _count_response_tokens,
     _is_serverless_session_id,
+    _serverless_caller_headers,
     _BaseOnlyCreateModelRequest,
     _model_input_position_count,
     _serialize_input_for_extra_body,
@@ -48,6 +52,7 @@ from fireworks.training.sdk.managed import (
 )
 from fireworks.training.sdk._constants import CLEANUP_DEPLOYMENT_ON_CLOSE_SCALE_TO_ZERO
 from fireworks.training.sdk.deployment import DeploymentConfig
+from fireworks.training.sdk.concurrency import FixedConcurrencyController
 from fireworks.training.sdk._core.lib._auth_token_provider import ApiKeyAuthProvider as _FireworksApiKeyAuthProvider
 from fireworks.training.sdk._core.lib.public_interfaces.api_future import AwaitableConcurrentFuture
 
@@ -1719,9 +1724,7 @@ class TestFiretitanServiceClientManagedCompat:
             32,
             128,
         ]
-        assert [
-            call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list
-        ] == [
+        assert [call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list] == [
             1,
             1,
             1,
@@ -2420,6 +2423,10 @@ class TestFiretitanServiceClientManagedCompat:
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        # This service created run-1, so its checkpoints route through its own session.
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+        ]
 
         sampler = svc.create_sampling_client(model_path="test-account/run-1/step-1")
 
@@ -2428,6 +2435,455 @@ class TestFiretitanServiceClientManagedCompat:
         assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
         assert sampler.deployment_sampler.additional_headers == {"X-Test-Header": "1"}
+        sampler.close()
+
+    @pytest.mark.parametrize(
+        "model_path,expected_model",
+        [
+            (
+                "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+                "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            ),
+            (
+                "trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+                "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            ),
+            (
+                "ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+                "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            ),
+            # Session path alone: that session's base weights.
+            (
+                "accounts/test-account/trainingSessions/ts-remote456",
+                "accounts/test-account/trainingSessions/ts-remote456",
+            ),
+        ],
+    )
+    def test_create_sampling_client_targets_remote_session_checkpoint(self, model_path, expected_model):
+        # A model_path that names a training session routes to that session's
+        # rollout host, not the caller's own (unbound) session — the standalone
+        # path that avoids create_model and its concurrent-run slot.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-own789")
+
+        sampler = svc.create_sampling_client(model_path=model_path)
+
+        assert sampler.deployment_sampler.model == expected_model
+        sampler.close()
+
+    @staticmethod
+    def _standalone_sampler_service():
+        # A fresh serverless service that never called create_model: its own
+        # session has no route, like a per-activity eval worker.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-fresh000")
+        svc._training_clients = []
+        return svc
+
+    @staticmethod
+    def _patch_sampler_route_post(status_code=200, text=""):
+        rest = MagicMock()
+        rest._post.return_value = SimpleNamespace(status_code=status_code, text=text)
+        rest_cls = MagicMock()
+        rest_cls.return_value.__enter__.return_value = rest
+        return patch("fireworks.training.sdk.client._RestClient", rest_cls), rest_cls, rest
+
+    def test_create_sampling_client_standalone_base_model_binds_route(self):
+        # Tinker parity: create_sampling_client(base_model=...) with no
+        # create_model anywhere binds its own route and uses no training quota.
+        svc = self._standalone_sampler_service()
+        patcher, rest_cls, rest = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+        rest_cls.assert_called_once()
+        assert rest_cls.call_args.kwargs["base_url"] == "https://api.example.com/training/v1/serverless"
+        rest._post.assert_called_once_with(
+            "/api/v1/create_sampling_route", json={"base_model": "accounts/fireworks/models/qwen3p5-9b"}
+        )
+        assert (
+            sampler.deployment_sampler.model
+            == "accounts/test-account/trainingSamplers/accounts/fireworks/models/qwen3p5-9b"
+        )
+        sampler.close()
+
+    def test_create_sampling_client_standalone_checkpoint_binds_route(self):
+        # A checkpoint saved by another process's run (training may have ended)
+        # samples with no create_model on this service.
+        svc = self._standalone_sampler_service()
+        patcher, _, rest = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(model_path="test-account/run-99999999999999999999999999999999/step-5")
+
+        rest._post.assert_called_once_with(
+            "/api/v1/create_sampling_route",
+            json={"training_run": "accounts/test-account/trainingRuns/run-99999999999999999999999999999999"},
+        )
+        assert (
+            sampler.deployment_sampler.model
+            == "accounts/test-account/trainingSamplers/checkpoints/test-account/run-99999999999999999999999999999999/step-5"
+        )
+        sampler.close()
+
+    def test_create_sampling_client_standalone_rejects_cross_account_checkpoint(self):
+        svc = self._standalone_sampler_service()
+        patcher, _, rest = self._patch_sampler_route_post()
+        with patcher, pytest.raises(ValueError, match="belongs to account"):
+            svc.create_sampling_client(model_path="other-account/run-99999999999999999999999999999999/step-5")
+        rest._post.assert_not_called()
+
+    def test_create_sampling_client_standalone_surfaces_bind_failure(self):
+        # e.g. a gateway without create_sampling_route, or a gated pool.
+        svc = self._standalone_sampler_service()
+        patcher, _, _ = self._patch_sampler_route_post(status_code=403, text="pool is early access")
+        with patcher, pytest.raises(RuntimeError, match="403"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+
+    def test_create_sampling_client_session_path_does_not_bind(self):
+        # A model_path naming a live session keeps using that session's route.
+        svc = self._standalone_sampler_service()
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(
+                model_path="accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-1/step-2"
+            )
+        rest_cls.assert_not_called()
+        assert (
+            sampler.deployment_sampler.model
+            == "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-1/step-2"
+        )
+        sampler.close()
+
+    def test_create_sampling_client_standalone_rejects_malformed_checkpoint(self):
+        svc = self._standalone_sampler_service()
+        patcher, _, rest = self._patch_sampler_route_post()
+        run = "run-" + "9" * 32
+        with patcher:
+            for model_path in (
+                f"test-account/{run}/../../victim/{run}/step-5",
+                f"test-account/{run}/step_5",
+                "test-account/run-9/step-5",
+            ):
+                with pytest.raises(ValueError, match="sampler checkpoint path"):
+                    svc.create_sampling_client(model_path=model_path)
+        rest._post.assert_not_called()
+
+    def test_create_sampling_client_short_path_uses_own_session(self):
+        # A session-relative name still targets this service's own session once
+        # it created a model; it never binds a standalone route.
+        svc = self._standalone_sampler_service()
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+        ]
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(model_path="step-5")
+        rest_cls.assert_not_called()
+        assert (
+            sampler.deployment_sampler.model == "accounts/test-account/trainingSessions/ts-fresh000/checkpoints/step-5"
+        )
+        sampler.close()
+
+    @pytest.mark.parametrize("model_path", ["", "  ", "/", "//"])
+    @pytest.mark.parametrize("has_model", [False, True])
+    def test_create_sampling_client_rejects_empty_model_path(self, model_path, has_model):
+        svc = self._standalone_sampler_service()
+        svc._created_base_model = has_model
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher, pytest.raises(ValueError, match="model_path must not be empty"):
+            svc.create_sampling_client(model_path=model_path)
+        rest_cls.assert_not_called()
+
+    def test_create_sampling_client_base_model_after_reference_model_uses_session(self, caplog):
+        # create_base_training_client binds the session without a run-scoped
+        # training client; base sampling must stay on that session.
+        svc = self._standalone_sampler_service()
+        svc._created_base_model = True
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher, caplog.at_level(logging.WARNING):
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/other")
+        rest_cls.assert_not_called()
+        assert sampler.deployment_sampler.model == "accounts/test-account/trainingSessions/ts-fresh000"
+        assert "base_model is ignored" in caplog.text
+        sampler.close()
+
+    def test_create_sampling_client_standalone_forwards_default_headers(self):
+        svc = self._standalone_sampler_service()
+        svc._serverless_caller_headers = {"X-Custom": "a"}
+        svc._managed_additional_headers = {"X-Routing": "b"}
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+        assert rest_cls.call_args.kwargs["additional_headers"] == {"X-Custom": "a", "X-Routing": "b"}
+        sampler.close()
+
+    def test_create_sampling_client_standalone_unresolved_account_sends_nothing(self):
+        svc = self._standalone_sampler_service()
+        svc._cp_account_id = None
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher, pytest.raises(ValueError, match="resolvable Fireworks account"):
+            svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+        rest_cls.assert_not_called()
+
+    def test_create_sampling_client_standalone_requires_account(self):
+        # No account in the path and none resolvable: fail loudly instead of
+        # baking "None" into the route.
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = None
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-own789")
+
+        with pytest.raises(ValueError, match="resolvable Fireworks account"):
+            svc.create_sampling_client(
+                model_path="ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2"
+            )
+
+    def test_sampler_handle_keeps_only_recognized_request_context_and_restores_env_access(self, monkeypatch):
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456",
+            api_key="fw_main",
+            additional_headers={"X-Keep": "1"},
+        )
+        sampler.deployment_sampler._request_context = {"session": "ts-remote456", "junk": "secret-value"}
+        handle = sampler.get_sampler_handle()
+        sampler.close()
+        assert b"secret-value" not in base64.urlsafe_b64decode(handle)
+
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_worker")
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "cf-id")
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "cf-secret")
+        restored = FiretitanSamplingClient.from_sampler_handle(handle)
+        try:
+            # The receiving process adds its own Cloudflare Access headers.
+            assert restored.deployment_sampler.additional_headers == {
+                "X-Keep": "1",
+                "CF-Access-Client-Id": "cf-id",
+                "CF-Access-Client-Secret": "cf-secret",
+            }
+            assert restored.deployment_sampler._request_context == {"session": "ts-remote456"}
+        finally:
+            restored.close()
+
+    def test_firetitan_sampling_client_pickle_roundtrip(self, monkeypatch):
+        # Tinker parity: the pickle carries the connection state, credentials
+        # included, so a worker needs no environment of its own.
+        monkeypatch.delenv("FIREWORKS_API_KEY", raising=False)
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            api_key="fw_main",
+            additional_headers={"X-Test-Header": "1"},
+        )
+        restored = pickle.loads(pickle.dumps(sampler))
+        try:
+            assert restored.deployment_sampler.api_key == "fw_main"
+            assert restored.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
+            assert (
+                restored.deployment_sampler.model
+                == "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2"
+            )
+            assert restored.deployment_sampler.additional_headers == {"X-Test-Header": "1"}
+            # In-flight accounting is per process: workers get their own controller.
+            assert (
+                restored.deployment_sampler.concurrency_controller
+                is not sampler.deployment_sampler.concurrency_controller
+            )
+        finally:
+            sampler.close()
+            restored.close()
+
+    def test_firetitan_sampling_client_sampler_handle_carries_no_credentials(self, monkeypatch):
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            api_key="fw_main_secret",
+            additional_headers={
+                "Authorization": "Bearer fw_hdr_secret",
+                "X-Fireworks-Api-Key": "fw_hdr_key",
+                "CF-Access-Client-Secret": "cf_hdr_secret",
+                "X-Keep": "1",
+            },
+            concurrency_controller=FixedConcurrencyController(7),
+        )
+        sampler.deployment_sampler.negotiate_routing_matrix_format("parquet_v1", "store-1")
+        handle = sampler.get_sampler_handle()
+        sampler.close()
+        decoded = base64.urlsafe_b64decode(handle)
+        for secret in (b"fw_main_secret", b"fw_hdr_secret", b"fw_hdr_key", b"cf_hdr_secret"):
+            assert secret not in decoded
+
+        monkeypatch.delenv("FIREWORKS_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="no credentials"):
+            FiretitanSamplingClient.from_sampler_handle(handle)
+
+        restored = FiretitanSamplingClient.from_sampler_handle(handle, api_key="fw_worker")
+        try:
+            assert restored.deployment_sampler.api_key == "fw_worker"
+            assert (
+                restored.deployment_sampler.model
+                == "accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2"
+            )
+            assert restored.deployment_sampler.additional_headers == {"X-Keep": "1"}
+            assert restored.deployment_sampler.r3_store_id == "store-1"
+            assert restored.deployment_sampler.concurrency_controller.window_size == 7
+        finally:
+            restored.close()
+
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_env")
+        from_env = FiretitanSamplingClient.from_sampler_handle(handle)
+        try:
+            assert from_env.deployment_sampler.api_key == "fw_env"
+        finally:
+            from_env.close()
+
+    def test_firetitan_sampling_client_pickle_preserves_negotiated_routing(self, monkeypatch):
+        # A negotiated parquet_v1 R3 binding must survive pickling to workers.
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test")
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456/checkpoints/test-account/run-0123456789abcdef0123456789abcdef/step-2",
+            api_key="fw_test",
+        )
+        sampler.deployment_sampler.negotiate_routing_matrix_format("parquet_v1", "store-1")
+        restored = pickle.loads(pickle.dumps(sampler))
+        try:
+            assert restored.deployment_sampler.r3_store_id == "store-1"
+            # The matrix-format upgrade stays lazy: a freshly negotiated sampler
+            # starts base64_inline and probes parquet on the first request.
+            assert restored.deployment_sampler.routing_matrix_format == "base64_inline"
+        finally:
+            sampler.close()
+            restored.close()
+
+    def test_serverless_caller_headers_keep_cloudflare_access_and_drop_api_keys(self, monkeypatch):
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "cf-id")
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "cf-secret")
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_env")
+        headers = _serverless_caller_headers({"X-Custom": "a", "X-Fireworks-Api-Key": "fw_hdr"})
+        assert headers == {"CF-Access-Client-Id": "cf-id", "CF-Access-Client-Secret": "cf-secret", "X-Custom": "a"}
+
+    def test_sampler_handle_uses_the_worker_cloudflare_pair(self, monkeypatch):
+        # A handle never mixes a producer's Cloudflare id with a worker's
+        # secret: both headers drop together, and the worker env supplies its
+        # own pair.
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456",
+            api_key="fw_main",
+            additional_headers={"CF-Access-Client-Id": "cf-id-a", "CF-Access-Client-Secret": "cf-secret-a"},
+        )
+        handle = sampler.get_sampler_handle()
+        sampler.close()
+
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_worker")
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "cf-id-b")
+        monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "cf-secret-b")
+        restored = FiretitanSamplingClient.from_sampler_handle(handle)
+        try:
+            assert restored.deployment_sampler.additional_headers == {
+                "CF-Access-Client-Id": "cf-id-b",
+                "CF-Access-Client-Secret": "cf-secret-b",
+            }
+        finally:
+            restored.close()
+
+    def test_create_sampling_client_standalone_samples_with_bind_headers(self):
+        svc = self._standalone_sampler_service()
+        svc._serverless_caller_headers = {"CF-Access-Client-Id": "cf-id", "X-Custom": "a"}
+        svc._managed_additional_headers = {"X-Routing": "b"}
+        patcher, rest_cls, _ = self._patch_sampler_route_post()
+        with patcher:
+            sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
+        expected = {"CF-Access-Client-Id": "cf-id", "X-Custom": "a", "X-Routing": "b"}
+        assert rest_cls.call_args.kwargs["additional_headers"] == expected
+        assert sampler.deployment_sampler.additional_headers == expected
+        sampler.close()
+
+    def test_firetitan_sampling_client_pickle_keeps_r3_guard_and_fixed_concurrency(self, monkeypatch):
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_worker")
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com/training/v1/serverless",
+            model="accounts/test-account/trainingSessions/ts-remote456",
+            api_key="fw_main",
+            concurrency_controller=FixedConcurrencyController(7),
+        )
+        sampler.deployment_sampler._r3_binding_required = True
+        restored = pickle.loads(pickle.dumps(sampler))
+        try:
+            assert restored.deployment_sampler._r3_binding_required is True
+            controller = restored.deployment_sampler.concurrency_controller
+            assert isinstance(controller, FixedConcurrencyController)
+            assert controller.window_size == 7
+            assert controller is not sampler.deployment_sampler.concurrency_controller
+        finally:
+            sampler.close()
+            restored.close()
+
+    @pytest.mark.parametrize(
+        "model_path,expect_bound",
+        [
+            ("test-account/run-1/step-1", True),
+            (
+                "accounts/test-account/trainingSessions/ts-remote456/checkpoints/"
+                + "test-account/run-0123456789abcdef0123456789abcdef/step-2",
+                False,
+            ),
+        ],
+    )
+    def test_create_sampling_client_binds_r3_only_for_own_session(self, model_path, expect_bound):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc._cp_account_id = "test-account"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="parquet_v1", r3_store_id="store-own")
+        ]
+
+        sampler = svc.create_sampling_client(model_path=model_path)
+        try:
+            assert sampler.deployment_sampler.r3_store_id == ("store-own" if expect_bound else None)
+        finally:
+            sampler.close()
+
+    def test_create_sampling_client_account_qualified_path_skips_account_lookup(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._sampler_backend = None
+        svc._managed_config = None
+        svc._managed_base_url = "https://api.example.com/training/v1/serverless"
+        svc._training_base_url = "https://api.example.com/training/v1/serverless"
+        svc._managed_additional_headers = {}
+        svc._fireworks_api_key = "fw_test"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-own789")
+        model = "accounts/test-account/trainingSessions/ts-remote456"
+
+        with patch.object(FiretitanServiceClient, "_resolved_account_id", side_effect=AssertionError("lookup")):
+            sampler = svc.create_sampling_client(model_path=model)
+        assert sampler.deployment_sampler.model == model
         sampler.close()
 
     def test_create_sampling_client_rejects_non_serverless_base_url(self):
@@ -2454,6 +2910,9 @@ class TestFiretitanServiceClientManagedCompat:
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+        ]
 
         sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
 
@@ -2478,6 +2937,9 @@ class TestFiretitanServiceClientManagedCompat:
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+        ]
 
         with caplog.at_level(logging.WARNING):
             sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
@@ -2507,6 +2969,9 @@ class TestFiretitanServiceClientManagedCompat:
         svc._fireworks_api_key = "fw_test"
         svc._cp_account_id = None  # _resolved_account_id() degrades to None.
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        svc._training_clients = [
+            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+        ]
 
         with pytest.raises(ValueError, match="resolvable Fireworks"):
             svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
@@ -3603,9 +4068,7 @@ class TestCreateTrainingClientInitMethod:
                 return False
 
         svc.holder.aclient.return_value = _ClientContext()
-        svc.holder.run_coroutine_threadsafe.side_effect = lambda coro: SimpleNamespace(
-            result=lambda: asyncio.run(coro)
-        )
+        svc.holder.run_coroutine_threadsafe.side_effect = lambda coro: SimpleNamespace(result=lambda: asyncio.run(coro))
         return svc, requests
 
     @classmethod
@@ -3951,6 +4414,27 @@ class TestAccountResolutionBestEffort:
         assert svc.training_session_id == "ts-abc123"  # id still surfaced
         assert svc.training_session_name is None  # name degrades, no crash
         assert svc._serverless_run_name("run-x:train:0") is None
+
+    def test_failed_account_lookup_is_retried(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        calls = []
+
+        class _Flaky:
+            def __init__(self, **kwargs):
+                calls.append(kwargs)
+
+            @property
+            def account_id(self):
+                if len(calls) == 1:
+                    raise RuntimeError("transient")
+                return "resolved-account"
+
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _Flaky):
+            assert svc._resolved_account_id() is None
+            assert svc._resolved_account_id() == "resolved-account"
+            assert svc._resolved_account_id() == "resolved-account"
+        assert len(calls) == 2
 
     def test_account_cached(self):
         svc = _service()  # pre-cached account
