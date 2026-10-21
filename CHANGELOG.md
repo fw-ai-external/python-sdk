@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.30 (2026-10-21)
+
+Full Changelog: [v1.2.29...v1.2.30](https://github.com/fw-ai-external/python-sdk/compare/v1.2.29...v1.2.30)
+
+### Bug Fixes
+* **training-sdk:** retain adapter-rejected TITO artifacts through the sidecar's configured private trace store and shared retention limits
+
 ## 1.2.29 (2026-10-21)
 
 Full Changelog: [v1.2.28...v1.2.29](https://github.com/fw-ai-external/python-sdk/compare/v1.2.28...v1.2.29)

@@ -9,6 +9,7 @@ import asyncio
 import secrets
 import ipaddress
 from typing import Any, Mapping, Callable
+from pathlib import Path
 from collections import OrderedDict
 
 from fireworks.training.sdk.sampling import DeploymentSampler
@@ -30,7 +31,11 @@ from fireworks.training.sdk.tito._engine import (
     _ExactTokenSampler,
     _LinearTrajectoryCore,
 )
-from fireworks.training.sdk.tito._failure_trace import TITOFailureTraceConfig, _FailureTraceRecorder
+from fireworks.training.sdk.tito._failure_trace import (
+    TITOFailureTraceConfig,
+    _dump_failure_trace,
+    _FailureTraceRecorder,
+)
 
 _FORBIDDEN_AFFINITY_HEADERS = frozenset({"x-multi-turn-session-id", "x-session-affinity"})
 _REQUEST_LOCAL_HEADERS = frozenset({"authorization", "x-api-key", "x-fireworks-session-id"})
@@ -280,6 +285,35 @@ class TITOSidecar:
             engine.require_active()
             raise AssertionError("active trajectory failure returned no artifact")
         return artifact
+
+    def dump_failure_trace(
+        self,
+        artifact: TITOTrajectoryArtifact | None,
+        error: BaseException,
+        *,
+        code: str,
+        source_trace: Path | None = None,
+        source_trace_root: Path | None = None,
+    ) -> str | None:
+        """Retain rejected artifacts using this sidecar's failure-trace policy.
+
+        Uses the same directory, privacy checks, enablement and aggregate
+        retention limits as runtime failures; never falls back to the global
+        store. Returns a local path or None if capture is disabled or storage
+        cannot accept it. Retained paths may be evicted by later failures.
+
+        Collected traces require a trusted ``source_trace_root`` as in
+        ``dump_tito_failure_trace``. This performs synchronous filesystem I/O;
+        async callers should use ``asyncio.to_thread``.
+        """
+        return _dump_failure_trace(
+            self._failure_recorder,
+            artifact,
+            error,
+            code=code,
+            source_trace=source_trace,
+            source_trace_root=source_trace_root,
+        )
 
     async def start(self, port: int = 0) -> None:
         """Start the HTTP adapter on the configured interface (default loopback)."""
