@@ -10,6 +10,8 @@ Full Changelog: [v1.2.28...v1.2.29](https://github.com/fw-ai-external/python-sdk
 * **training-sdk:** add stable TITO parser reason codes and payload-free renderer, finish, token-count, and budget diagnostics while preserving parser discard behavior
 
 ### Bug Fixes
+* **dependencies:** require certifi 2026.10.19 or newer to reject compromised eMudhra certificate chains
+* **dependencies:** update locked aiohttp to 3.14.4 and its required yarl dependency to 1.25.1 to address the SDK security audit findings
 * **training-sdk:** bind a training client's shared-storage (R3) store to a sampler only when it targets that service's own training session, and reject empty or cross-account `model_path` values before any request
 * **training-sdk:** reject unsuccessful inference streams before committing TITO turns, retain upstream request/status and retry diagnostics, and report known trajectory termination intent in closing/closed errors
 
