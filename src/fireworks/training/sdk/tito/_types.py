@@ -6,7 +6,7 @@ import json
 import math
 import hashlib
 from types import MappingProxyType
-from typing import Any, Union, Literal, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Union, Literal, Mapping, Protocol, Sequence, get_args, runtime_checkable
 from dataclasses import field, dataclass
 
 from fireworks.training.sdk.routing import RoutingReferences
@@ -24,6 +24,7 @@ TITOCallOutcome = Literal[
 ]
 TITOEmission = Literal["completed", "ambiguous"]
 TITOTrajectoryStatus = Literal["active", "completed", "abandoned", "failed"]
+TITOErrorOrigin = Literal["sdk", "sdk_parser", "server", "transport", "adapter", "environment", "unknown"]
 TITOPromptDisposition = Literal["append", "realign", "new_segment"]
 TITOPromptMode = Literal["full_history", "incremental"]
 
@@ -627,6 +628,10 @@ class TITOCallResult:
 class TITOParseError(ValueError):
     """The renderer recognized malformed or protocol-unsafe sampled output."""
 
+    def __init__(self, *args: object, reason_code: str = "unclassified") -> None:
+        super().__init__(*args)
+        self.reason_code = reason_code
+
 
 class TITOError(RuntimeError):
     def __init__(
@@ -636,14 +641,14 @@ class TITOError(RuntimeError):
         message: str,
         *,
         should_retry: bool = False,
-        origin: str = "sdk",
+        origin: TITOErrorOrigin = "sdk",
         discard_trajectory: bool = False,
         context: Mapping[str, Any] | None = None,
     ) -> None:
         self.code = code
         self.status = status
         self.should_retry = should_retry
-        self.origin = origin
+        self.origin = origin if origin in get_args(TITOErrorOrigin) else "unknown"
         self.discard_trajectory = discard_trajectory
         self.context = dict(context or {})
         super().__init__(message)
@@ -669,3 +674,6 @@ class TITOError(RuntimeError):
 
     def openai_body(self) -> dict[str, Any]:
         return {"error": self.as_error_record()}
+
+    def __reduce__(self) -> tuple:
+        return type(self), (self.code, self.status, str(self)), self.__dict__

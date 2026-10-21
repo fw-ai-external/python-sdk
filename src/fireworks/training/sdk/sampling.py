@@ -13,20 +13,19 @@ from math import ceil
 from typing import TYPE_CHECKING, Any, List, Literal, Mapping, Iterator
 from contextlib import contextmanager
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import replace, dataclass
 
 import httpx
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
 
-from fireworks.training.sdk._sse import _SSEDecoder, _SSETruncationError
+from fireworks.training.sdk._sse import _SSEDecoder, _SSEProtocolError, _SSETruncationError, _UpstreamStreamError
 from fireworks.training.sdk.errors import (
     DOCS_SDK,
     format_sdk_error,
     parse_retry_after,
     _is_serverless_gateway_url,
-    async_request_with_retries,
     _attach_training_error_source,
     _serverless_gateway_source_error,
 )
@@ -48,6 +47,7 @@ from fireworks.training.sdk.sampling_observability import (
     ERROR_KIND_CONNECTION,
     ERROR_KIND_HTTP_STATUS,
     ERROR_KIND_SSE_TRUNCATION,
+    ERROR_KIND_UPSTREAM_STREAM,
     SamplingRequestError,
     DeploymentSamplerTimeoutError,
     clean_context,
@@ -62,11 +62,13 @@ def _sampling_response_evidence(response: httpx.Response, prompt: list[int]) -> 
     """Keep HTTP-200 stream decoding failures distinct from transport failures."""
     try:
         yield
-    except (_SSETruncationError, httpx.RequestError):
-        raise
     except Exception as error:
-        error._fireworks_http_status = response.status_code
+        error._fireworks_wire_status = response.status_code
         error._fireworks_response_request_id = extract_request_id(response.headers)
+        error._fireworks_upstream_response_id = response.extensions.get("fireworks_upstream_response_id")
+        error._fireworks_response_evidence = response
+        if not isinstance(error, (_SSETruncationError, httpx.RequestError)):
+            error._fireworks_http_status = response.status_code
         error._fireworks_prompt_token_ids = tuple(prompt)
         # The HTTP client buffers the response before SSE decoding. Retain a
         # bounded copy locally without adding payloads to attempt telemetry.
@@ -207,7 +209,7 @@ class ServerMetrics:
             completion_tokens=completion_tokens,
             http_status_code=http_status_code,
             retry_attempt=retry_attempt,
-            response_request_id=_string("x-request-id"),
+            response_request_id=extract_request_id(normalized),
             backend_host=_string("backend-host"),
             deployment=_string("deployment"),
             pod_template_hash=_string("pod-template-hash"),
@@ -426,16 +428,23 @@ class DeploymentSampler(_RestClient):
         )
 
     async def _post_completion(self, payload: dict, headers: Mapping[str, str], timeout: float) -> httpx.Response:
-        # Sampling owns retries; do not multiply its budget in the transport.
-        return await async_request_with_retries(
-            self._get_async_client().post,
-            f"{self.base_url}/inference/v1/completions",
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-            retry_status_codes=(),
-            retry_exceptions=(),
+        client = self._get_async_client()
+        request = client.build_request(
+            "POST", f"{self.base_url}/inference/v1/completions", headers=headers, json=payload, timeout=timeout
         )
+        response = await client.send(request, stream=True)
+        try:
+            with _sampling_response_evidence(response, payload.get("prompt", [])):
+                await response.aread()
+        except BaseException:
+            try:
+                await response.aclose()
+            except Exception:
+                pass
+            raise
+        else:
+            await response.aclose()
+        return response
 
     async def _probe_routing_matrix_format(self, headers: Mapping[str, str], timeout: float) -> None:
         response = await self._post_completion(
@@ -642,25 +651,47 @@ class DeploymentSampler(_RestClient):
                 first_token_time: float | None = None
                 upstream_response_id: str | None = None
 
-                # Track whether the stream ended cleanly. A well-formed completion
-                # must close with [DONE] and/or set finish_reason. A clean TCP close
-                # without either signals server-side mid-stream truncation.
-                has_seen_done = False
-                has_seen_finish_reason = False
-
                 decoder = _SSEDecoder()
                 async for sse in decoder.aiter_events(resp):
-                    if sse.data.startswith("[DONE]"):
-                        has_seen_done = True
+                    if sse.event == "error":
+                        try:
+                            error_payload = json.loads(sse.data)
+                        except (ValueError, TypeError):
+                            error_payload = None
+                        if isinstance(error_payload, dict) and isinstance(error_payload.get("id"), str):
+                            upstream_response_id = error_payload["id"][:256]
+                            resp.extensions["fireworks_upstream_response_id"] = upstream_response_id
+                        error = _UpstreamStreamError(error_payload)
+                        error._fireworks_upstream_response_id = upstream_response_id
+                        raise error
+                    if sse.data.strip() == "[DONE]":
                         break
+                    if not sse.data.strip():
+                        continue
 
                     try:
                         chunk = json.loads(sse.data)
-                    except (ValueError, TypeError):
-                        continue
+                    except (ValueError, TypeError) as exc:
+                        if sse.event in {"ping", "heartbeat", "keepalive"}:
+                            continue
+                        raise _SSEProtocolError("invalid JSON in completion stream") from exc
 
-                    if upstream_response_id is None and chunk.get("id"):
-                        upstream_response_id = str(chunk["id"])
+                    if not isinstance(chunk, dict):
+                        raise _SSEProtocolError("completion stream event must be an object")
+
+                    if upstream_response_id is None and isinstance(chunk.get("id"), str):
+                        upstream_response_id = chunk["id"][:256]
+                        resp.extensions["fireworks_upstream_response_id"] = upstream_response_id
+                    if chunk.get("error") is not None:
+                        error = _UpstreamStreamError(chunk)
+                        error._fireworks_upstream_response_id = upstream_response_id
+                        raise error
+                    if chunk.get("usage") is not None and not isinstance(chunk["usage"], dict):
+                        raise _SSEProtocolError("completion usage must be an object")
+                    if not isinstance(chunk.get("choices", []), list) or any(
+                        not isinstance(choice, dict) for choice in chunk.get("choices", [])
+                    ):
+                        raise _SSEProtocolError("completion choices must be a list of objects")
 
                     for choice in chunk.get("choices", []):
                         routing_metadata.update(
@@ -680,8 +711,11 @@ class DeploymentSampler(_RestClient):
 
                         fr = choice.get("finish_reason")
                         if fr:
+                            if fr not in ("stop", "length", "tool_calls"):
+                                error = _UpstreamStreamError(finish_reason=fr)
+                                error._fireworks_upstream_response_id = upstream_response_id
+                                raise error
                             finish_reason = fr
-                            has_seen_finish_reason = True
 
                         ro = choice.get("raw_output")
                         if ro:
@@ -695,14 +729,8 @@ class DeploymentSampler(_RestClient):
                     if "perf_metrics" in chunk:
                         perf_metrics_dict = chunk["perf_metrics"]
 
-                if not raw_output and not has_seen_done and not has_seen_finish_reason:
-                    raise _SSETruncationError(
-                        "Transient server-side error: the inference deployment "
-                        "closed the SSE stream mid-generation without sending "
-                        "[DONE], finish_reason, or raw_output. The SDK is "
-                        "retrying. If this persists across all retry attempts, "
-                        "contact the Fireworks team."
-                    )
+                if finish_reason is None:
+                    raise _SSETruncationError("inference stream ended without a successful finish reason")
 
                 client_ttft = (first_token_time - t0) if first_token_time else None
                 elapsed = time.monotonic() - t0
@@ -728,7 +756,7 @@ class DeploymentSampler(_RestClient):
 
                 assembled_choice: dict[str, Any] = {
                     "text": accumulated_text,
-                    "finish_reason": finish_reason or "stop",
+                    "finish_reason": finish_reason,
                 }
                 assembled_choice.update(routing_metadata)
                 if accumulated_logprobs:
@@ -1254,6 +1282,8 @@ class DeploymentSampler(_RestClient):
 
     @staticmethod
     def _classify_transient(transient: BaseException) -> str:
+        if isinstance(transient, _UpstreamStreamError):
+            return ERROR_KIND_UPSTREAM_STREAM
         if isinstance(transient, _SSETruncationError):
             return ERROR_KIND_SSE_TRUNCATION
         if isinstance(transient, httpx.TimeoutException):
@@ -1280,6 +1310,10 @@ class DeploymentSampler(_RestClient):
         kwargs: dict[str, Any],
         diagnostic_context: Any,
     ) -> SamplingRequestError:
+        response = getattr(transient, "_fireworks_response_evidence", None) or getattr(transient, "response", None)
+        wire_status = getattr(transient, "_fireworks_wire_status", None)
+        if wire_status is None and response is not None:
+            wire_status = response.status_code
         common = dict(
             logical_request_id=logical_request_id,
             model=self.model,
@@ -1288,6 +1322,17 @@ class DeploymentSampler(_RestClient):
             final_error_kind=final_error_kind,
             request_id=request_id,
             context=context,
+            wire_status=wire_status,
+            upstream_response_id=getattr(transient, "_fireworks_upstream_response_id", None),
+            upstream_error_code=getattr(transient, "upstream_error_code", None),
+            upstream_error_type=getattr(transient, "upstream_error_type", None),
+            upstream_finish_reason=getattr(transient, "upstream_finish_reason", None),
+            retry_budget_exhausted=(
+                attempts == self._RETRY_MAX_ATTEMPTS
+                and (
+                    not isinstance(transient, _UpstreamStreamError) or final_status in self._RETRY_HTTP_TRANSIENT_CODES
+                )
+            ),
         )
         if self._is_timeout_like_transient(transient):
             # Preserve the existing rich timeout diagnostic as the message while
@@ -1300,6 +1345,10 @@ class DeploymentSampler(_RestClient):
             error = SamplingRequestError(**common)
 
         self._attach_serverless_gateway_source(error, transient)
+        for name in ("_fireworks_sampled_response", "_fireworks_prompt_token_ids"):
+            value = getattr(transient, name, None)
+            if value is not None:
+                setattr(error, name, value)
         return error
 
     def _attach_serverless_gateway_source(
@@ -1384,9 +1433,23 @@ class DeploymentSampler(_RestClient):
                     **kwargs,
                 )
                 server_metrics.retry_attempt = attempt
+            except _UpstreamStreamError as e:
+                attempt_record = ServerMetrics(
+                    http_status_code=getattr(e, "_fireworks_wire_status", None),
+                    response_request_id=getattr(e, "_fireworks_response_request_id", None),
+                    retry_attempt=attempt,
+                    error=ERROR_KIND_UPSTREAM_STREAM,
+                )
+                server_metrics = replace(attempt_record, http_status_code=e.upstream_status)
+                transient, label = e, "upstream stream error"
             except _SSETruncationError as e:
                 # HTTP 200 whose stream closed before completing.
-                attempt_record = ServerMetrics(http_status_code=200, retry_attempt=attempt, error="SSE truncation")
+                attempt_record = ServerMetrics(
+                    http_status_code=getattr(e, "_fireworks_wire_status", 200),
+                    response_request_id=getattr(e, "_fireworks_response_request_id", None),
+                    retry_attempt=attempt,
+                    error="SSE truncation",
+                )
                 transient, label = e, "SSE truncation"
             except httpx.HTTPStatusError as e:
                 if e.response.status_code not in self._RETRY_HTTP_TRANSIENT_CODES:
@@ -1517,23 +1580,32 @@ class DeploymentSampler(_RestClient):
                 )
 
             # Extract payload-free failure facts for this attempt.
-            response = getattr(transient, "response", None)
-            status = getattr(response, "status_code", None)
-            request_id = extract_request_id(getattr(response, "headers", None))
+            response = getattr(transient, "_fireworks_response_evidence", None) or getattr(transient, "response", None)
+            wire_status = getattr(response, "status_code", None)
+            status = (
+                transient.upstream_status
+                if isinstance(transient, _UpstreamStreamError)
+                else (wire_status if isinstance(transient, httpx.HTTPStatusError) else None)
+            )
+            request_id = getattr(transient, "_fireworks_response_request_id", None) or extract_request_id(
+                getattr(response, "headers", None)
+            )
             error_kind = self._classify_transient(transient)
+            retryable = not isinstance(transient, _UpstreamStreamError) or status in self._RETRY_HTTP_TRANSIENT_CODES
             retry_after_s = parse_retry_after(response) if response is not None else None
             server_attempts.append(
                 SampledServerAttempt(
                     index=attempt,
-                    outcome="retryable_error",
-                    status_code=status,
+                    outcome="retryable_error" if retryable else "failed",
+                    status_code=wire_status,
                     error_kind=error_kind,
                     response_request_id=request_id,
-                    server_metrics=server_metrics,
+                    upstream_response_id=getattr(transient, "_fireworks_upstream_response_id", None),
+                    server_metrics=attempt_record if attempt_record is not None else server_metrics,
                 )
             )
 
-            if attempt == self._RETRY_MAX_ATTEMPTS:
+            if attempt == self._RETRY_MAX_ATTEMPTS or not retryable:
                 notify = getattr(self._concurrency_controller, "note_retry_exhausted", None)
                 if callable(notify):
                     notify(server_metrics)
