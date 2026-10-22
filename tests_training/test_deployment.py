@@ -2647,7 +2647,7 @@ class TestAdaptiveConcurrencyController:
 
         asyncio.run(_test())
 
-    def test_adjustment_interval_counts_releases_without_metrics(self):
+    def test_prefill_adjustment_interval_ignores_releases_without_metrics(self) -> None:
         ctrl = AdaptiveConcurrencyController(
             initial_window=10,
             prefill_queue_target=0.5,
@@ -2659,7 +2659,18 @@ class TestAdaptiveConcurrencyController:
         assert ctrl.window_size == 10
 
         ctrl.release(None)
+        assert ctrl.window_size == 10
+
+        ctrl.release(ServerMetrics(prefill_queue_duration=2.0))
         assert ctrl.window_size == 5
+
+    def test_status_adjustment_interval_counts_releases_without_metrics(self) -> None:
+        ctrl = AdaptiveConcurrencyController(initial_window=10, adjustment_interval=2)
+        ctrl.release(ServerMetrics(http_status_code=200))
+        assert ctrl.window_size == 10
+
+        ctrl.release(None)
+        assert ctrl.window_size == 11
 
     def test_adjustment_interval_restarts_at_step_boundaries(self):
         ctrl = AdaptiveConcurrencyController(
