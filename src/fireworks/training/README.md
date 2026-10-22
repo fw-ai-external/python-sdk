@@ -59,6 +59,25 @@ main(cfg)
 
 For runnable recipes (GRPO, DPO, SFT, etc.), see the [Training Cookbook](https://github.com/fw-ai/cookbook/blob/main/training/README.md).
 
+## Recovering sampling concurrency
+
+`DeploymentSampler` uses `AdaptiveConcurrencyController` by default. Its request
+window is separate from a recipe's number of active questions or trajectories.
+Dedicated deployments provide prefill queue duration; serverless deployments
+use HTTP 429/503 and transport failures instead. A large window cannot create
+serving capacity that the deployment does not have.
+
+Dedicated feedback is evaluated after at most `min(adjustment_interval, window_size)`
+accepted fresh queue observations. Status-only responses and missing metrics do
+not advance this interval. Feedback from attempts admitted before the latest window
+reduction is ignored, and healthy feedback clears a previously congested average.
+A transport-driven reduction also clears buffered pre-cut queue feedback, even
+when the window is already at its minimum.
+This allows recovery during a long rollout, without waiting for an optimizer
+step. Persistent fresh congestion still reduces the window. Explicit
+`adjustment_interval=0` retains step-only adjustment; serverless retry behavior
+and the default window bounds are unchanged.
+
 ## Weight sync transport
 
 The managed SDK and cookbook select RDMA automatically only
