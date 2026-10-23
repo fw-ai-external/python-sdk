@@ -150,6 +150,10 @@ class ServerMetrics:
     """Resolved deployment resource returned by the serving stack."""
     pod_template_hash: str | None = None
     """Selected serving replica-set hash, when exposed by the deployment."""
+    client_request_started_at: float | None = None
+    """Client monotonic timestamp after this attempt acquired an inference slot.
+    Used to distinguish old in-flight feedback after a concurrency reduction;
+    it is not a wall-clock timestamp or a server-provided header."""
 
     @staticmethod
     def from_headers(
@@ -1418,6 +1422,7 @@ class DeploymentSampler(_RestClient):
 
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             await self._acquire_concurrency()
+            attempt_started_at = time.monotonic()
             server_metrics: ServerMetrics | None = None
             # Telemetry-only record for failures the controller never observes.
             attempt_record: ServerMetrics | None = None
@@ -1514,6 +1519,9 @@ class DeploymentSampler(_RestClient):
                 # rollout timeout or scheduler shutdown), and contract/parser
                 # failures may bypass the retryable exception branches above.
                 # Every successful acquire must release exactly once.
+                for metrics in (server_metrics, attempt_record):
+                    if metrics is not None:
+                        metrics.client_request_started_at = attempt_started_at
                 self._release_concurrency(server_metrics, attempt_record)
 
             if transient is None:

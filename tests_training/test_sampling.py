@@ -174,6 +174,72 @@ class _CountingController:
         return {"window": 1.0}
 
 
+@pytest.mark.parametrize("round_counts", [(8,), (4, 4)])
+def test_attempt_admission_time_is_recorded_for_fixed_and_staged_sampling(
+    monkeypatch: pytest.MonkeyPatch, round_counts: tuple[int, ...]
+) -> None:
+    clock = [10.0]
+    monkeypatch.setattr("fireworks.training.sdk.sampling.time.monotonic", lambda: clock[0])
+
+    class Controller(_CountingController):
+        async def acquire(self) -> None:
+            await super().acquire()
+            # Waiting for admission must not become part of this timestamp.
+            clock[0] += 10.0
+
+    controller = Controller()
+    sampler = _make_sampler(concurrency_controller=controller)
+    admitted_times = []
+
+    async def stream(**_kwargs: object) -> tuple[dict, ServerMetrics]:
+        admitted_times.append(clock[0])
+        clock[0] += 2.0
+        return _SUCCESS[0], ServerMetrics(prefill_queue_duration=0.05)
+
+    sampler.async_completions_stream = stream
+
+    async def sample() -> None:
+        for count in round_counts:
+            results = await sampler.sample_with_prompt_tokens([1, 2, 3], n=count)
+            assert len(results) == count
+
+    try:
+        asyncio.run(sample())
+        metrics = sampler.drain_metrics()
+        assert len(metrics) == sum(round_counts)
+        assert [m.client_request_started_at for m in metrics] == admitted_times
+        assert controller.acquired == controller.released == sum(round_counts)
+    finally:
+        sampler.close()
+
+
+def test_retry_feedback_uses_each_attempts_admission_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [10.0]
+    monkeypatch.setattr("fireworks.training.sdk.sampling.time.monotonic", lambda: clock[0])
+
+    class Controller(_CountingController):
+        async def acquire(self) -> None:
+            await super().acquire()
+            clock[0] += 10.0
+
+    controller = Controller()
+    sampler = _make_sampler(concurrency_controller=controller)
+    _install_stream(sampler, [_http_error(503), (_SUCCESS[0], ServerMetrics())])
+
+    async def backoff(*_args: object, **_kwargs: object) -> float:
+        return 1.0
+
+    sampler._backoff_after_transient = backoff
+    try:
+        asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+        metrics = sampler.drain_metrics()
+        assert [m.client_request_started_at for m in metrics] == [20.0, 30.0]
+        assert [m.http_status_code for m in metrics] == [503, None]
+        assert controller.acquired == controller.released == 2
+    finally:
+        sampler.close()
+
+
 @pytest.fixture
 def no_sleep(monkeypatch):
     """Patch backoff sleeps to no-ops and record requested durations."""
