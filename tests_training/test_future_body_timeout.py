@@ -30,10 +30,12 @@ class _ResponseBody:
         chunks: list[bytes],
         *,
         delay: float = 0,
+        chunk_delay: float = 0,
         stall: bool = False,
     ) -> None:
         self._chunks = chunks
         self._delay = delay
+        self._chunk_delay = chunk_delay
         self._stall = stall
         self._index = 0
         self._delay_applied = False
@@ -49,6 +51,8 @@ class _ResponseBody:
             self._delay_applied = True
             await asyncio.sleep(self._delay)
         if self._index < len(self._chunks):
+            if self._chunk_delay:
+                await asyncio.sleep(self._chunk_delay)
             chunk = self._chunks[self._index]
             self._index += 1
             return chunk
@@ -219,7 +223,7 @@ def test_stalled_body_closes_and_repolls_the_same_future(monkeypatch: Any) -> No
         transport = _StallFirstTransport()
         client, http_client = _client_for_transport(transport)
         monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS", 0.05)
-        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS", 0.05)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS", 0.05)
         request_id = "future-stalled-body"
         try:
             result = await asyncio.wait_for(
@@ -251,7 +255,7 @@ def test_header_and_body_have_independent_deadlines(monkeypatch: Any) -> None:
         )
         client, http_client = _client_for_transport(transport)
         monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS", timeout)
-        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS", timeout)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS", timeout)
         started = time.monotonic()
         try:
             result = await asyncio.wait_for(
@@ -270,6 +274,88 @@ def test_header_and_body_have_independent_deadlines(monkeypatch: Any) -> None:
     asyncio.run(run())
 
 
+def test_progressing_body_can_outlive_the_idle_deadline(monkeypatch: Any) -> None:
+    async def run() -> None:
+        timeout = 0.1
+        transport = _DelayedTransport(header_delay=0.06, body_delay=0)
+        transport.response.content = _ResponseBody([b'{"ok":', b"true", b"}"], chunk_delay=0.06)
+        client, http_client = _client_for_transport(transport)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS", timeout)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS", timeout)
+        started = time.monotonic()
+        try:
+            result = await asyncio.wait_for(_make_future(_Holder(client), "future-progress")._result_async(), timeout=2)
+        finally:
+            await http_client.aclose()
+
+        assert result == {"ok": True}
+        assert time.monotonic() - started > 2 * timeout
+        assert len(transport.requests) == 1
+        assert transport.response.closed.is_set()
+
+    asyncio.run(run())
+
+
+def test_progress_does_not_extend_explicit_future_timeout(monkeypatch: Any) -> None:
+    async def run() -> None:
+        transport = _SingleResponseTransport(
+            _PyqwestResponse(_ResponseBody([b'{"ok":', b"true", b"}"], chunk_delay=0.06))
+        )
+        client, http_client = _client_for_transport(transport)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS", 0.1)
+        try:
+            with pytest.raises(TimeoutError, match="Timeout of 0.1 seconds"):
+                await _make_future(_Holder(client), "future-total-timeout")._result_async(timeout=0.1)
+        finally:
+            await http_client.aclose()
+
+        assert len(transport.requests) == 1
+        assert transport.response.closed.is_set()
+
+    asyncio.run(run())
+
+
+def test_cancelling_body_read_closes_response() -> None:
+    async def run() -> None:
+        response = _PyqwestResponse(_ResponseBody([b'{"ok":'], stall=True))
+        transport = _SingleResponseTransport(response)
+        client, http_client = _client_for_transport(transport)
+        task = asyncio.create_task(_make_future(_Holder(client), "future-cancel")._result_async())
+        try:
+            await asyncio.wait_for(response.content.started.wait(), timeout=1)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        finally:
+            await http_client.aclose()
+
+        assert len(transport.requests) == 1
+        assert response.closed.is_set()
+
+    asyncio.run(run())
+
+
+def test_stalled_error_body_is_bounded_and_closed(monkeypatch: Any) -> None:
+    async def run() -> None:
+        response = _PyqwestResponse(_ResponseBody([b'{"error":'], stall=True), status=503)
+        transport = _SingleResponseTransport(response)
+        client, http_client = _client_for_transport(transport)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS", 0.05)
+        try:
+            outcome = await asyncio.wait_for(
+                _make_future(_Holder(client), "future-error-body")._fetch_via_rest(api_future_impl._LoopState(), 0),
+                timeout=1,
+            )
+        finally:
+            await http_client.aclose()
+
+        assert isinstance(outcome, api_future_impl._TransportError)
+        assert outcome.kind == api_future_impl._TransportErrorKind.RETRY_WITH_BACKOFF
+        assert response.closed.is_set()
+
+    asyncio.run(run())
+
+
 def test_protobuf_result_still_deserializes(monkeypatch: Any) -> None:
     async def run() -> None:
         message = tinker_public_pb2.ForwardBackwardOutput(
@@ -284,7 +370,7 @@ def test_protobuf_result_still_deserializes(monkeypatch: Any) -> None:
         )
         client, http_client = _client_for_transport(transport)
         monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS", 0.2)
-        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS", 0.2)
+        monkeypatch.setattr(api_future_impl, "_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS", 0.2)
         try:
             result = await _make_future(
                 _Holder(client),
