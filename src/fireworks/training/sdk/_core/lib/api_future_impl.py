@@ -46,7 +46,7 @@ U = TypeVar("U")
 # Sentinel object to indicate that the function hasn't been called yet
 _UNCOMPUTED = object()
 _RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS = 45.0
-_RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS = 45.0
+_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS = 45.0
 _DIAGNOSTIC_HEADERS = frozenset(
     {
         "content-type",
@@ -185,9 +185,7 @@ def _rest_queue_state_to_enum(value: str) -> QueueState:
     return _REST_QUEUE_STATE_TO_ENUM.get(value, QueueState.UNKNOWN)
 
 
-def _rest_status_error_to_transport_error(
-    e: core.APIStatusError, *, supervised_retry: bool = False
-) -> _TransportError:
+def _rest_status_error_to_transport_error(e: core.APIStatusError, *, supervised_retry: bool = False) -> _TransportError:
     status = e.response.status_code
     try_again_body: dict[str, Any] | None = None
     if status == 408:
@@ -284,7 +282,15 @@ class _APIFuture(APIFuture[T]):  # pyright: ignore[reportUnusedClass]
                 iteration += 1
                 self._check_timeout(timeout, iteration, start_time)
 
-                fetched = await self._fetch_via_rest(state, iteration)
+                if timeout is None:
+                    fetched = await self._fetch_via_rest(state, iteration)
+                else:
+                    remaining = max(0.0, timeout - (time.time() - start_time))
+                    try:
+                        fetched = await asyncio.wait_for(self._fetch_via_rest(state, iteration), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        self._check_timeout(timeout, iteration, start_time)
+                        raise
                 if isinstance(fetched, _TransportError):
                     await self._handle_transport_error(fetched, state, iteration, start_time)
                     continue
@@ -441,27 +447,39 @@ class _APIFuture(APIFuture[T]):  # pyright: ignore[reportUnusedClass]
         async def _retrieve_response() -> dict[str, Any] | _SuccessProto:
             with self.holder.aclient(ClientConnectionPoolType.RETRIEVE_PROMISE) as client:
                 retrieve_streaming = async_to_streamed_response_wrapper(client.futures.retrieve)
-                async with retrieve_streaming(
+                stream_context = retrieve_streaming(
                     request=FutureRetrieveRequest(
                         request_id=self.request_id,
                         allow_metadata_only=state.allow_metadata_only,
                     ),
-                    timeout=_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS,
+                    # pyqwest combines read/write into a whole-request deadline.
+                    # Bound headers and body inactivity ourselves instead.
+                    timeout=httpx.Timeout(_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS, read=None),
                     extra_headers=headers,
                     max_retries=0,
-                ) as response:
-                    body = await asyncio.wait_for(response.read(), timeout=_RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS)
+                )
+                async with contextlib.AsyncExitStack() as responses:
+                    response = await asyncio.wait_for(
+                        responses.enter_async_context(stream_context),
+                        timeout=_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS,
+                    )
+                    chunks = []
+                    body_iterator = response.iter_bytes().__aiter__()
+                    while True:
+                        try:
+                            chunk = await asyncio.wait_for(
+                                body_iterator.__anext__(), timeout=_RETRIEVE_FUTURE_BODY_IDLE_TIMEOUT_SECONDS
+                            )
+                        except StopAsyncIteration:
+                            break
+                        chunks.append(chunk)
+                    body = b"".join(chunks)
                     if "application/x-protobuf" in response.headers.get("content-type", ""):
                         return _SuccessProto(proto_bytes=body)
                     return cast(dict[str, Any], orjson.loads(body))
 
         try:
-            # The generated client may consume a non-2xx body before yielding
-            # the streaming response, so retain a combined outer safety bound.
-            result = await asyncio.wait_for(
-                _retrieve_response(),
-                timeout=_RETRIEVE_FUTURE_HEADER_TIMEOUT_SECONDS + _RETRIEVE_FUTURE_BODY_TIMEOUT_SECONDS,
-            )
+            result = await _retrieve_response()
         except core.APIStatusError as exc:
             return _rest_status_error_to_transport_error(
                 exc,
@@ -543,9 +561,9 @@ class _APIFuture(APIFuture[T]):  # pyright: ignore[reportUnusedClass]
                 self._queue_state_observer.on_queue_state_change(outcome.queue_state, outcome.queue_state_reason)
             return None
         if isinstance(outcome, _MetadataOnly):
-            assert (
-                state.allow_metadata_only
-            ), "got metadata_only but the flag was off — server should not emit this twice"
+            assert state.allow_metadata_only, (
+                "got metadata_only but the flag was off — server should not emit this twice"
+            )
             state.allow_metadata_only = False
             await stack.enter_async_context(
                 self.holder._inflight_response_bytes_semaphore.acquire(outcome.payload_size)

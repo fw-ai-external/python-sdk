@@ -755,9 +755,7 @@ except ImportError:
 
     class _DefaultAioHttpClient(httpx.AsyncClient):
         def __init__(self, **_kwargs: Any) -> None:
-            raise RuntimeError(
-                "To use the aiohttp client you must have installed the package with the `aiohttp` extra"
-            )
+            raise RuntimeError("To use the aiohttp client you must have installed the package with the `aiohttp` extra")
 
 else:
 
@@ -852,9 +850,7 @@ class AsyncAPIClient(BaseClient[httpx.AsyncClient, AsyncStream[Any]]):
             else:
                 timeout = DEFAULT_TIMEOUT
 
-        if http_client is not None and not isinstance(
-            http_client, httpx.AsyncClient
-        ):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if http_client is not None and not isinstance(http_client, httpx.AsyncClient):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(
                 f"Invalid `http_client` argument; Expected an instance of `httpx.AsyncClient` but got {type(http_client)}"
             )
@@ -1057,7 +1053,10 @@ class AsyncAPIClient(BaseClient[httpx.AsyncClient, AsyncStream[Any]]):
                 # If the response is streamed then we need to explicitly read the response
                 # to completion before attempting to access the response text.
                 if not err.response.is_closed:
-                    await err.response.aread()
+                    try:
+                        await err.response.aread()
+                    finally:
+                        await err.response.aclose()
 
                 log.debug("Re-raising status error")
                 raise self._make_status_error_from_response(err.response) from None
