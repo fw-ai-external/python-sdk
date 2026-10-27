@@ -148,6 +148,10 @@ class FiretitanProvisioningConfig:
     managed_by: str | None = None
     skip_validations: bool = False
     disable_speculative_decoding: bool = False
+    draft_model: str | None = None
+    """Speculator for the rollout deployment. See :attr:`DeploymentConfig.draft_model`."""
+    draft_token_count: int | None = None
+    """Speculation tokens per step. See :attr:`DeploymentConfig.draft_token_count`."""
     hot_load_transition_type: str | None = None
     """``"ASYNC"``/``"SYNC"`` hot-load transition for the rollout deployment.
 
@@ -181,6 +185,12 @@ class FiretitanProvisioningConfig:
             "hot_load_transition_type",
             normalize_hot_load_transition_type(self.hot_load_transition_type),
         )
+        if self.draft_token_count is not None and self.draft_token_count < 0:
+            raise ValueError(f"draft_token_count must be >= 0, got {self.draft_token_count}")
+        if self.disable_speculative_decoding and (self.draft_model or self.draft_token_count):
+            raise ValueError("draft_model and draft_token_count cannot be combined with disable_speculative_decoding")
+        if self.draft_model and not self.draft_token_count:
+            raise ValueError("draft_token_count must be a positive integer when draft_model is set")
         if self.replica_count is None:
             object.__setattr__(self, "replica_count", 1)
         elif self.replica_count == 0:
@@ -1013,6 +1023,8 @@ def _create_or_reattach_deployment_result(
         # not be coupled to unvalidated training-shape tests.
         skip_shape_validation=False,
         disable_speculative_decoding=config.disable_speculative_decoding,
+        draft_model=config.draft_model,
+        draft_token_count=config.draft_token_count,
         extra_args=config.deployment_extra_args,
         extra_values=config.deployment_extra_values,
         preemptible=config.preemptible,

@@ -184,6 +184,14 @@ class DeploymentConfig:
     unless no compatible shape exists for the model.
     """
     disable_speculative_decoding: bool = False
+    draft_model: str | None = None
+    """Speculator for the deployment: ``"mtp"``, ``"dspark"``, or a draft model
+    resource name. Leave unset to use the base model's default speculator.
+    Cannot be combined with ``disable_speculative_decoding``."""
+    draft_token_count: int | None = None
+    """Candidate tokens generated per speculation step. Required (positive)
+    whenever ``draft_model`` is set. Cannot be combined with
+    ``disable_speculative_decoding``."""
     extra_args: list[str] | None = None
     """Opaque serving arguments for testing. Requires a superuser API key."""
     extra_values: dict[str, str] | None = None
@@ -232,6 +240,12 @@ class DeploymentConfig:
                 "accept_shapeless_risk cannot be combined with deployment_shape "
                 f"{self.deployment_shape!r}: it is an explicit opt-out of deployment shapes"
             )
+        if self.draft_token_count is not None and self.draft_token_count < 0:
+            raise ValueError(f"draft_token_count must be >= 0, got {self.draft_token_count}")
+        if self.disable_speculative_decoding and (self.draft_model or self.draft_token_count):
+            raise ValueError("draft_model and draft_token_count cannot be combined with disable_speculative_decoding")
+        if self.draft_model and not self.draft_token_count:
+            raise ValueError("draft_token_count must be a positive integer when draft_model is set")
         expected_shape = (self.expected_deployment_shape or "").strip()
         if not expected_shape:
             return
@@ -444,6 +458,10 @@ class DeploymentManager(_RestClient):
             body["deploymentShape"] = config.deployment_shape
         else:
             body["acceleratorType"] = config.accelerator_type
+        if config.draft_model:
+            body["draftModel"] = config.draft_model
+        if config.draft_token_count:
+            body["draftTokenCount"] = config.draft_token_count
         if config.extra_args:
             flat = []
             for arg in config.extra_args:
