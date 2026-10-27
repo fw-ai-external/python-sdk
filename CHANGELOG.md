@@ -1,5 +1,8 @@
 # Changelog
 
+### Features
+* **dpo-jobs:** accept `evaluation_dataset` and `eval_auto_carveout` on DPO job create for held-out preference evaluation
+
 ### Bug Fixes
 * **ci:** run the Python 3.9 post-publish smoke test on Ubuntu 22.04, where setup-python provides compatible interpreter builds
 
