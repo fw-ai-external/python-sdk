@@ -61,6 +61,8 @@ class DpoJobsResource(SyncAPIResource):
         aws_s3_config: dpo_job_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
+        eval_auto_carveout: bool | Omit = omit,
+        evaluation_dataset: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         renderer_hugging_face_repo_id: str | Omit = omit,
         reservation_target: str | Omit = omit,
@@ -83,6 +85,11 @@ class DpoJobsResource(SyncAPIResource):
           aws_s3_config: The AWS configuration for S3 dataset access.
 
           azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
+          eval_auto_carveout: Whether to auto-carve the dataset for eval. Supported for DPO only, not ORPO.
+
+          evaluation_dataset: The name of a separate preference dataset to use for held-out evaluation.
+              Supported for DPO only, not ORPO.
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
@@ -119,6 +126,8 @@ class DpoJobsResource(SyncAPIResource):
                     "aws_s3_config": aws_s3_config,
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
+                    "eval_auto_carveout": eval_auto_carveout,
+                    "evaluation_dataset": evaluation_dataset,
                     "loss_config": loss_config,
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "reservation_target": reservation_target,
@@ -456,6 +465,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
         aws_s3_config: dpo_job_create_params.AwsS3Config | Omit = omit,
         azure_blob_storage_config: dpo_job_create_params.AzureBlobStorageConfig | Omit = omit,
         display_name: str | Omit = omit,
+        eval_auto_carveout: bool | Omit = omit,
+        evaluation_dataset: str | Omit = omit,
         loss_config: ReinforcementLearningLossConfig | Omit = omit,
         renderer_hugging_face_repo_id: str | Omit = omit,
         reservation_target: str | Omit = omit,
@@ -478,6 +489,11 @@ class AsyncDpoJobsResource(AsyncAPIResource):
           aws_s3_config: The AWS configuration for S3 dataset access.
 
           azure_blob_storage_config: The Azure configuration for Azure Blob Storage dataset access.
+
+          eval_auto_carveout: Whether to auto-carve the dataset for eval. Supported for DPO only, not ORPO.
+
+          evaluation_dataset: The name of a separate preference dataset to use for held-out evaluation.
+              Supported for DPO only, not ORPO.
 
           loss_config: Loss configuration for the training job. If not specified, defaults to DPO loss.
               Set method to ORPO for ORPO training.
@@ -514,6 +530,8 @@ class AsyncDpoJobsResource(AsyncAPIResource):
                     "aws_s3_config": aws_s3_config,
                     "azure_blob_storage_config": azure_blob_storage_config,
                     "display_name": display_name,
+                    "eval_auto_carveout": eval_auto_carveout,
+                    "evaluation_dataset": evaluation_dataset,
                     "loss_config": loss_config,
                     "renderer_hugging_face_repo_id": renderer_hugging_face_repo_id,
                     "reservation_target": reservation_target,
