@@ -64,6 +64,15 @@ class DpoJob(BaseModel):
 
     display_name: Optional[str] = FieldInfo(alias="displayName", default=None)
 
+    eval_auto_carveout: Optional[bool] = FieldInfo(alias="evalAutoCarveout", default=None)
+    """Whether to auto-carve the dataset for eval. Supported for DPO only, not ORPO."""
+
+    evaluation_dataset: Optional[str] = FieldInfo(alias="evaluationDataset", default=None)
+    """The name of a separate preference dataset to use for held-out evaluation.
+
+    Supported for DPO only, not ORPO.
+    """
+
     loss_config: Optional[ReinforcementLearningLossConfig] = FieldInfo(alias="lossConfig", default=None)
     """
     Loss configuration for the training job. If not specified, defaults to DPO loss.
