@@ -279,6 +279,27 @@ async def test_openai_stream_assembler_keeps_parallel_calls_separate() -> None:
         await sidecar.close()
 
 
+async def test_openai_stream_assembler_reads_requested_usage() -> None:
+    sidecar = _sidecar()
+    await sidecar.start()
+    try:
+        trajectory = sidecar.create_trajectory()
+        async with AsyncOpenAI(base_url=trajectory.openai_base_url, api_key=trajectory.api_key) as client:
+            async with client.chat.completions.stream(
+                model="policy",
+                messages=[{"role": "user", "content": "q"}],
+                stream_options={"include_usage": True},
+            ) as stream:
+                result = await stream.get_final_completion()
+        assert [call.function.name for call in result.choices[0].message.tool_calls] == ["search", "run"]
+        assert result.usage is not None
+        # _ToolRenderer emits one token per argument character plus the stop token.
+        assert result.usage.completion_tokens == len("|".join(_ARGUMENTS)) + 1
+        assert result.usage.total_tokens == result.usage.prompt_tokens + result.usage.completion_tokens
+    finally:
+        await sidecar.close()
+
+
 @pytest.mark.skipif(not os.environ.get("FIREWORKS_TITO_DOCKER_TEST_IMAGE"), reason="optional Docker integration")
 async def test_bridge_container_can_reach_host_sidecar_without_host_networking() -> None:
     config = json.loads(
