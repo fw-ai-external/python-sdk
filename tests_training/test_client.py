@@ -1363,6 +1363,52 @@ class TestFiretitanServiceClientManagedCompat:
         )
 
         assert svc._managed_config.disable_speculative_decoding is False
+        assert svc._managed_config.draft_model is None
+        assert svc._managed_config.draft_token_count is None
+
+    def test_from_firetitan_config_accepts_draft_model_and_token_count(self):
+        svc = FiretitanServiceClient.from_firetitan_config(
+            api_key="fw-key",
+            base_url=None,
+            base_model="accounts/acct/models/base",
+            training_shape_id="accounts/acct/trainingShapes/shape",
+            draft_model="mtp",
+            draft_token_count=3,
+        )
+
+        assert svc._managed_config.draft_model == "mtp"
+        assert svc._managed_config.draft_token_count == 3
+
+    def test_from_firetitan_config_rejects_negative_draft_token_count(self):
+        with pytest.raises(ValueError, match="draft_token_count must be >= 0"):
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-key",
+                base_url=None,
+                base_model="accounts/acct/models/base",
+                training_shape_id="accounts/acct/trainingShapes/shape",
+                draft_token_count=-1,
+            )
+
+    def test_from_firetitan_config_requires_token_count_with_draft_model(self):
+        with pytest.raises(ValueError, match="draft_token_count must be a positive integer"):
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-key",
+                base_url=None,
+                base_model="accounts/acct/models/base",
+                training_shape_id="accounts/acct/trainingShapes/shape",
+                draft_model="mtp",
+            )
+
+    def test_from_firetitan_config_rejects_draft_fields_with_disabled_speculation(self):
+        with pytest.raises(ValueError, match="cannot be combined with disable_speculative_decoding"):
+            FiretitanServiceClient.from_firetitan_config(
+                api_key="fw-key",
+                base_url=None,
+                base_model="accounts/acct/models/base",
+                training_shape_id="accounts/acct/trainingShapes/shape",
+                draft_model="mtp",
+                disable_speculative_decoding=True,
+            )
 
     def test_from_firetitan_config_rejects_conflicting_aliases(self):
         with pytest.raises(ValueError, match="Pass only one alias"):

@@ -906,6 +906,58 @@ class TestHotLoadTransitionType:
     def test_preemptible_omitted_when_false(self, deploy_config):
         assert "preemptible" not in DeploymentManager._build_deployment_body(deploy_config)
 
+    def test_draft_fields_omitted_when_unset(self, deploy_config):
+        body = DeploymentManager._build_deployment_body(deploy_config)
+
+        assert "draftModel" not in body
+        assert "draftTokenCount" not in body
+
+    def test_draft_fields_included_when_set(self):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            draft_model="accounts/test/models/draft",
+            draft_token_count=4,
+        )
+
+        body = DeploymentManager._build_deployment_body(config)
+
+        assert body["draftModel"] == "accounts/test/models/draft"
+        assert body["draftTokenCount"] == 4
+
+    def test_draft_fields_conflict_with_disabled_speculation(self):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            draft_model="mtp",
+            disable_speculative_decoding=True,
+        )
+
+        with pytest.raises(ValueError, match="cannot be combined with disable_speculative_decoding"):
+            DeploymentManager._build_deployment_body(config)
+
+    @pytest.mark.parametrize("draft_token_count", [None, 0])
+    def test_draft_model_requires_positive_token_count(self, draft_token_count):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            draft_model="mtp",
+            draft_token_count=draft_token_count,
+        )
+
+        with pytest.raises(ValueError, match="draft_token_count must be a positive integer"):
+            DeploymentManager._build_deployment_body(config)
+
+    def test_negative_draft_token_count_is_rejected(self):
+        config = DeploymentConfig(
+            deployment_id="dep-1",
+            base_model="accounts/test/models/qwen3-1p7b",
+            draft_token_count=-1,
+        )
+
+        with pytest.raises(ValueError, match="draft_token_count must be >= 0"):
+            DeploymentManager._build_deployment_body(config)
+
     @pytest.mark.parametrize(
         ("configured", "expected"),
         [("ASYNC", "ASYNC"), ("SYNC", "SYNC"), ("sync", "SYNC"), (" async ", "ASYNC")],
