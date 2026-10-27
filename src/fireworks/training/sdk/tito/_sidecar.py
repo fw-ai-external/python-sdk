@@ -505,6 +505,8 @@ class TITOSidecar:
                 raise
             return response
 
+        stream_options = payload.get("stream_options")
+        include_usage = isinstance(stream_options, dict) and stream_options.get("include_usage") is True
         prepared = asyncio.Event()
         task = asyncio.create_task(
             engine.complete(
@@ -620,9 +622,22 @@ class TITOSidecar:
                     }
                 ],
             }
+            if include_usage:
+                delta["usage"] = None
+                terminal["usage"] = None
             encoded_delta = json.dumps(delta, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             await _write_sse(b"data: " + encoded_delta + b"\n\n", "assistant")
             await _write_sse(b"data: " + _canonical_bytes(terminal) + b"\n\n", "terminal")
+            if include_usage:
+                usage_chunk = {
+                    "id": delta["id"],
+                    "object": "chat.completion.chunk",
+                    "created": delta["created"],
+                    "model": delta["model"],
+                    "choices": [],
+                    "usage": dict(result.response)["usage"],
+                }
+                await _write_sse(b"data: " + _canonical_bytes(usage_chunk) + b"\n\n", "usage")
             await _write_sse(b"data: [DONE]\n\n", "done")
             await response.write_eof()
             if committed is not None:
