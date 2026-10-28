@@ -35,6 +35,13 @@ def test_native_public_method_signatures_match_frozen_baseline(cls: type) -> Non
             "async": False,
             "params": [["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"]],
         }
+        assert current.pop("log_training_metrics") == {
+            "async": False,
+            "params": [
+                ["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
+                ["record", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
+            ],
+        }
     if cls is sdk_client.FiretitanSamplingClient:
         # Credential-free sampler handles (Tinker get_sampler_handle / from_sampler_handle).
         assert current.pop("get_sampler_handle") == {
