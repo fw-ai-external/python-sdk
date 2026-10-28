@@ -4524,3 +4524,121 @@ class TestAccountResolutionBestEffort:
         with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _FakeFireworksClient):
             assert svc._resolved_account_id() == "test-account"
         assert seen["mid"] == "unset"  # no premature None observed mid-resolution
+
+
+class TestLogTrainingMetricsAccount:
+    """The first report must resolve the account. The missing-cache sentinel is not an id."""
+
+    def test_unset_cache_resolves_before_writing(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        posted: list[tuple[str, list]] = []
+
+        class _Recording:
+            def __init__(self, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def _resolve_account_id(self, *, max_wait_time=None):
+                assert max_wait_time == 0
+                return "acct-1"
+
+            def log_rlor_trainer_job_metrics(self, name, records):
+                posted.append((name, records))
+
+        with (
+            patch("fireworks.training.sdk.fireworks_client.FireworksClient", _Recording),
+            patch.object(FiretitanServiceClient, "trainer_job_id", new_callable=PropertyMock, return_value="job-1"),
+        ):
+            svc.log_training_metrics({"step": 2, "train/loss": 0.5})
+
+        assert posted == [
+            (
+                "accounts/acct-1/rlorTrainerJobs/job-1",
+                [{"step": 2, "metrics": {"train/loss": 0.5}}],
+            )
+        ]
+        assert svc._cp_account_id == "acct-1"
+
+    def test_cached_account_is_reused(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        svc._cp_account_id = "cached-acct"
+        posted: list[str] = []
+
+        class _Recording:
+            def __init__(self, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def _resolve_account_id(self, *, max_wait_time=None):
+                raise AssertionError("cached account should not be looked up again")
+
+            def log_rlor_trainer_job_metrics(self, name, records):
+                posted.append(name)
+
+        with (
+            patch("fireworks.training.sdk.fireworks_client.FireworksClient", _Recording),
+            patch.object(FiretitanServiceClient, "trainer_job_id", new_callable=PropertyMock, return_value="job-1"),
+        ):
+            svc.log_training_metrics({"step": 1, "train/loss": 0.25})
+
+        assert posted == ["accounts/cached-acct/rlorTrainerJobs/job-1"]
+
+    def test_serverless_session_does_not_post(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
+        posted: list[str] = []
+
+        class _Recording:
+            def __init__(self, **kwargs):
+                posted.append("constructed")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def log_rlor_trainer_job_metrics(self, name, records):
+                posted.append(name)
+
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _Recording):
+            svc.log_training_metrics({"step": 1, "train/loss": 0.25})
+
+        assert posted == []
+
+    def test_managed_parent_does_not_post(self):
+        svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
+        svc._fireworks_api_key = "fw_x"
+        svc._managed_config = SimpleNamespace(managed_by="managed-sft-job")
+        posted: list[str] = []
+
+        class _Recording:
+            def __init__(self, **kwargs):
+                posted.append("constructed")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def log_rlor_trainer_job_metrics(self, name, records):
+                posted.append(name)
+
+        with patch("fireworks.training.sdk.fireworks_client.FireworksClient", _Recording):
+            svc.log_training_metrics({"step": 1, "train/loss": 0.25})
+
+        assert posted == []

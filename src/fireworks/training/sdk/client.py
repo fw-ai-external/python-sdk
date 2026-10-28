@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 import json
+import math
 import time
 import uuid
 import base64
@@ -3358,6 +3359,73 @@ class FiretitanServiceClient(ServiceClient):
         session this service owns, for CP ops (GetTrainingSession, checkpoint
         list/promote, DeleteTrainingSession). None for non-serverless services."""
         return self._serverless_training_session_name(self._current_session_id())
+
+    def _reports_client_metrics(self) -> bool:
+        """Whether this service should append script metrics to its trainer job.
+
+        A serverless session shares one trainer, so its loss does not belong on
+        that job. A managed SFT or DPO job already records metrics on the
+        parent; the child trainer is marked with ``managed_by``. A customer
+        RLOR job has neither.
+        """
+        if self.training_session_id is not None:
+            return False
+        config = getattr(self, "_managed_config", None)
+        managed_by = getattr(config, "managed_by", None)
+        return not (isinstance(managed_by, str) and managed_by)
+
+    def log_training_metrics(self, record: dict[str, Any]) -> None:
+        """Append one training-script metric record onto a customer RLOR job.
+
+        Serverless sessions and managed child trainers return without writing.
+        ``record`` is the dictionary ``log_metrics`` already sends to W&B,
+        including ``step``.
+        """
+        if not self._reports_client_metrics():
+            return
+        step = record.get("step")
+        if isinstance(step, bool) or not isinstance(step, (int, float)):
+            raise ValueError("metric record is missing a numeric step")
+        metrics: dict[str, float] = {}
+        for key, value in record.items():
+            if key in {"step", "session_id"}:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            number = float(value)
+            if not math.isfinite(number):
+                continue
+            metrics[str(key)] = number
+        if not metrics:
+            return
+        if not self._fireworks_api_key:
+            raise RuntimeError("Cannot report training metrics without a Fireworks API key")
+        # lazy: fireworks_client imports the service client
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        with FireworksClient(
+            api_key=self._fireworks_api_key,
+            base_url=_fireworks_api_root_url(getattr(self, "_managed_base_url", None)),
+            additional_headers=getattr(self, "_managed_additional_headers", None),
+        ) as fw_client:
+            # "unset" is the missing-cache sentinel from getattr, not an account id.
+            # Dedicated trainers usually have not called _resolved_account_id yet.
+            cached = getattr(self, "_cp_account_id", "unset")
+            if cached == "unset":
+                # One attempt. The default account lookup retries for five
+                # minutes, which would stall the training step.
+                account = fw_client._resolve_account_id(max_wait_time=0)
+                self._cp_account_id = account
+            else:
+                account = cached
+            if not isinstance(account, str) or not account:
+                raise RuntimeError("Cannot report training metrics without a resolved account id")
+            name = f"accounts/{account}/rlorTrainerJobs/{self.trainer_job_id}"
+            body_record: dict[str, Any] = {"step": int(step), "metrics": metrics}
+            session_id = record.get("session_id")
+            if isinstance(session_id, str) and session_id:
+                body_record["session_id"] = session_id
+            fw_client.log_rlor_trainer_job_metrics(name, [body_record])
 
     def delete_training_session(self) -> None:
         """Close this service's serverless training session, releasing its
