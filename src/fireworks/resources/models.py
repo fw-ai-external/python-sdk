@@ -610,9 +610,7 @@ class ModelsResource(SyncAPIResource):
         *,
         account_id: str | None = None,
         config_only: bool | Omit = omit,
-        skip_hf_config_validation: bool | Omit = omit,
-        trust_remote_code: bool | Omit = omit,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        skip_hf_config_validation: bool | Omit = omit,        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
         extra_query: Query | None = None,
@@ -626,8 +624,6 @@ class ModelsResource(SyncAPIResource):
           config_only: If true, skip tokenizer and parameter name validation.
 
           skip_hf_config_validation: If true, skip the Hugging Face config validation.
-
-          trust_remote_code: If true, trusts remote code when validating the Hugging Face config.
 
           extra_headers: Send extra headers
 
@@ -656,9 +652,7 @@ class ModelsResource(SyncAPIResource):
                 query=maybe_transform(
                     {
                         "config_only": config_only,
-                        "skip_hf_config_validation": skip_hf_config_validation,
-                        "trust_remote_code": trust_remote_code,
-                    },
+                        "skip_hf_config_validation": skip_hf_config_validation,                    },
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),
@@ -1233,9 +1227,7 @@ class AsyncModelsResource(AsyncAPIResource):
         *,
         account_id: str | None = None,
         config_only: bool | Omit = omit,
-        skip_hf_config_validation: bool | Omit = omit,
-        trust_remote_code: bool | Omit = omit,
-        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
+        skip_hf_config_validation: bool | Omit = omit,        # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
         # The extra values given here take precedence over values defined on the client or passed to this method.
         extra_headers: Headers | None = None,
         extra_query: Query | None = None,
@@ -1249,8 +1241,6 @@ class AsyncModelsResource(AsyncAPIResource):
           config_only: If true, skip tokenizer and parameter name validation.
 
           skip_hf_config_validation: If true, skip the Hugging Face config validation.
-
-          trust_remote_code: If true, trusts remote code when validating the Hugging Face config.
 
           extra_headers: Send extra headers
 
@@ -1279,9 +1269,7 @@ class AsyncModelsResource(AsyncAPIResource):
                 query=await async_maybe_transform(
                     {
                         "config_only": config_only,
-                        "skip_hf_config_validation": skip_hf_config_validation,
-                        "trust_remote_code": trust_remote_code,
-                    },
+                        "skip_hf_config_validation": skip_hf_config_validation,                    },
                     model_validate_upload_params.ModelValidateUploadParams,
                 ),
             ),

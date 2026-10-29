@@ -113,9 +113,18 @@ class _RestClient:
             self._account_id = self._resolve_account_id()
         return self._account_id
 
-    def _resolve_account_id(self) -> str:
-        """Resolve account ID by calling GET /v1/accounts with the current API key."""
-        resp = self._get("/v1/accounts?pageSize=2")
+    def _resolve_account_id(self, *, max_wait_time: float | None = None) -> str:
+        """Resolve account ID by calling GET /v1/accounts with the current API key.
+
+        ``max_wait_time`` caps the shared retry budget. Metric reporting passes
+        0 so a training step does not wait out the default five-minute budget
+        when the control plane is unreachable.
+        """
+        kwargs = {}
+        if max_wait_time is not None:
+            kwargs["max_wait_time"] = max_wait_time
+            kwargs["timeout"] = 5
+        resp = self._get("/v1/accounts?pageSize=2", **kwargs)
         resp.raise_for_status()
         data = resp.json()
         accounts = data.get("accounts", []) or []
@@ -213,9 +222,13 @@ class _RestClient:
 
     def _post(self, path: str, **kwargs):
         url = f"{self.base_url}{path}"
+        retry = kwargs.pop("retry", True)
         kwargs.setdefault("headers", self._headers())
         kwargs.setdefault("timeout", 60)
-        return request_with_retries(self._sync_client.post, url, **kwargs)
+        post = self._sync_client.post
+        if not retry:
+            return post(url, **kwargs)
+        return request_with_retries(post, url, **kwargs)
 
     def _delete(self, path: str, **kwargs):
         url = f"{self.base_url}{path}"
