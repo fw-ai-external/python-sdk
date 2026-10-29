@@ -17,6 +17,3 @@ class ModelValidateUploadParams(TypedDict, total=False):
 
     skip_hf_config_validation: Annotated[bool, PropertyInfo(alias="skipHfConfigValidation")]
     """If true, skip the Hugging Face config validation."""
-
-    trust_remote_code: Annotated[bool, PropertyInfo(alias="trustRemoteCode")]
-    """If true, trusts remote code when validating the Hugging Face config."""
