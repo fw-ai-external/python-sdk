@@ -606,7 +606,6 @@ class TestModels:
             account_id="account_id",
             config_only=True,
             skip_hf_config_validation=True,
-            trust_remote_code=True,
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
@@ -1242,7 +1241,6 @@ class TestAsyncModels:
             account_id="account_id",
             config_only=True,
             skip_hf_config_validation=True,
-            trust_remote_code=True,
         )
         assert_matches_type(ModelValidateUploadResponse, model, path=["response"])
 
