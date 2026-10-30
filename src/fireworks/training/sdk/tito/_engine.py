@@ -1291,6 +1291,8 @@ class _LinearTrajectoryCore:
         parsed: TITOParsedAssistant,
         finish_reason: str,
         model: str,
+        *,
+        usage: Mapping[str, Any],
     ) -> dict[str, Any]:
         return {
             "id": f"chatcmpl-{turn_id}",
@@ -1304,7 +1306,25 @@ class _LinearTrajectoryCore:
                     "finish_reason": finish_reason,
                 }
             ],
+            "usage": dict(usage),
         }
+
+    @staticmethod
+    def _usage(
+        *,
+        prompt_tokens: int,
+        completion_tokens: int,
+        server_metrics: ServerMetrics | None,
+    ) -> dict[str, Any]:
+        usage: dict[str, Any] = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        }
+        cached = None if server_metrics is None else server_metrics.cached_prompt_tokens
+        if cached is not None and 0 <= cached <= prompt_tokens:
+            usage["prompt_tokens_details"] = {"cached_tokens": cached}
+        return usage
 
     def _call_record(
         self,
@@ -2077,6 +2097,11 @@ class _LinearTrajectoryCore:
                 parsed,
                 completion.finish_reason,
                 str(getattr(self.sampler, "model", request.model)),
+                usage=self._usage(
+                    prompt_tokens=len(plan.prepared_prompt_ids),
+                    completion_tokens=len(output_ids),
+                    server_metrics=sampled.server_metrics,
+                ),
             )
             turn = TITOTurn(
                 turn_id=turn_id,
@@ -2526,13 +2551,18 @@ class _LinearTrajectoryCore:
             phase = "parser"
             parsed = self._parse(request, completion)
             state.metrics.increment("parser/success")
+            output_ids = tuple(completion.full_tokens[completion.prompt_len :])
             response = self._response(
                 uuid.uuid4().hex,
                 parsed,
                 completion.finish_reason,
                 str(getattr(self.sampler, "model", request.model)),
+                usage=self._usage(
+                    prompt_tokens=len(prompt),
+                    completion_tokens=len(output_ids),
+                    server_metrics=sampled.server_metrics,
+                ),
             )
-            output_ids = tuple(completion.full_tokens[completion.prompt_len :])
             phase = "debug_complete"
             await self._record_async(
                 state,

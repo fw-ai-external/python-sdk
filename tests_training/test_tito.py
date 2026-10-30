@@ -2226,6 +2226,146 @@ async def test_http_sse_same_key_replay_waits_for_transport_preparation() -> Non
         await sidecar.close()
 
 
+def _sse_data_chunks(text: str) -> list[dict[str, Any]]:
+    return [json.loads(line.removeprefix("data: ")) for line in text.splitlines() if line.startswith("data: {")]
+
+
+def _expected_usage(prompt_tokens: int) -> dict[str, Any]:
+    # FakeSampler samples two tokens and reports all but two prompt tokens as cached.
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": 2,
+        "total_tokens": prompt_tokens + 2,
+        "prompt_tokens_details": {"cached_tokens": prompt_tokens - 2},
+    }
+
+
+@pytest.mark.parametrize("kind", ["policy", "auxiliary"])
+async def test_http_json_response_reports_exact_token_usage(kind: str) -> None:
+    sampler = FakeSampler(outputs=([197, 3],))
+    sidecar = TITOSidecar.from_deployment_sampler(
+        sampler,  # type: ignore[arg-type]
+        renderer=FakeRenderer(),
+        max_context_tokens=256,
+        max_output_tokens=32,
+        call_classifier=((lambda _request: ("auxiliary", "test_auxiliary")) if kind == "auxiliary" else None),
+    )
+    await sidecar.start()
+    trajectory = sidecar.create_trajectory()
+    assert trajectory.openai_base_url and trajectory.api_key
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            response = await client.post(
+                f"{trajectory.openai_base_url}/chat/completions",
+                headers={"authorization": f"Bearer {trajectory.api_key}"},
+                json={"model": "policy", "messages": [{"role": "user", "content": "q"}]},
+            )
+        assert response.status_code == 200
+        assert response.json()["usage"] == _expected_usage(len(sampler.calls[0]["prompt"]))
+    finally:
+        await sidecar.close()
+
+
+async def test_http_sse_include_usage_streams_final_usage_chunk() -> None:
+    sampler = FakeSampler(outputs=([197, 3],))
+    sidecar = TITOSidecar.from_deployment_sampler(
+        sampler,  # type: ignore[arg-type]
+        renderer=FakeRenderer(),
+        max_context_tokens=256,
+        max_output_tokens=32,
+    )
+    await sidecar.start()
+    trajectory = sidecar.create_trajectory()
+    assert trajectory.openai_base_url and trajectory.api_key
+    headers = {
+        "authorization": f"Bearer {trajectory.api_key}",
+        "idempotency-key": "usage-stream-operation",
+    }
+    body = {
+        "model": "policy",
+        "messages": [{"role": "user", "content": "q"}],
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            first = await client.post(f"{trajectory.openai_base_url}/chat/completions", headers=headers, json=body)
+            replay = await client.post(f"{trajectory.openai_base_url}/chat/completions", headers=headers, json=body)
+        assert len(sampler.calls) == 1
+        for response in (first, replay):
+            assert response.status_code == 200
+            assert response.text.rstrip().endswith("data: [DONE]")
+            delta, terminal, usage = _sse_data_chunks(response.text)
+            assert delta["usage"] is None
+            assert terminal["usage"] is None
+            assert terminal["choices"][0]["finish_reason"] == "stop"
+            assert usage["id"] == delta["id"]
+            assert usage["object"] == "chat.completion.chunk"
+            assert usage["choices"] == []
+            assert usage["usage"] == _expected_usage(len(sampler.calls[0]["prompt"]))
+    finally:
+        await sidecar.close()
+
+
+@pytest.mark.parametrize(
+    "stream_options",
+    [{}, {"stream_options": None}, {"stream_options": {}}, {"stream_options": {"include_usage": False}}],
+)
+async def test_http_sse_omits_usage_unless_requested(stream_options: dict[str, Any]) -> None:
+    sampler = FakeSampler(outputs=([197, 3],))
+    sidecar = TITOSidecar.from_deployment_sampler(
+        sampler,  # type: ignore[arg-type]
+        renderer=FakeRenderer(),
+        max_context_tokens=256,
+        max_output_tokens=32,
+    )
+    await sidecar.start()
+    trajectory = sidecar.create_trajectory()
+    assert trajectory.openai_base_url and trajectory.api_key
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            response = await client.post(
+                f"{trajectory.openai_base_url}/chat/completions",
+                headers={"authorization": f"Bearer {trajectory.api_key}"},
+                json={
+                    "model": "policy",
+                    "messages": [{"role": "user", "content": "q"}],
+                    "stream": True,
+                    **stream_options,
+                },
+            )
+        assert response.status_code == 200
+        chunks = _sse_data_chunks(response.text)
+        assert len(chunks) == 2
+        assert all("usage" not in chunk for chunk in chunks)
+    finally:
+        await sidecar.close()
+
+
+@pytest.mark.parametrize(
+    ("server_metrics", "details"),
+    [
+        (None, None),
+        (ServerMetrics(), None),
+        (ServerMetrics(cached_prompt_tokens=0), {"cached_tokens": 0}),
+        (ServerMetrics(cached_prompt_tokens=3), {"cached_tokens": 3}),
+        (ServerMetrics(cached_prompt_tokens=6), None),
+        (ServerMetrics(cached_prompt_tokens=-1), None),
+    ],
+)
+def test_usage_reports_cached_prompt_tokens_only_within_prompt(
+    server_metrics: ServerMetrics | None,
+    details: dict[str, int] | None,
+) -> None:
+    usage = _LinearTrajectoryCore._usage(  # noqa: SLF001
+        prompt_tokens=5,
+        completion_tokens=2,
+        server_metrics=server_metrics,
+    )
+    assert usage["total_tokens"] == 7
+    assert usage.get("prompt_tokens_details") == details
+
+
 @pytest.mark.parametrize("kind", ["policy", "auxiliary"])
 async def test_http_sse_rejects_sampling_admission_before_committing_200(
     kind: str,

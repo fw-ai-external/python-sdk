@@ -108,13 +108,7 @@ $ ./scripts/format
 
 ## Publishing and releases
 
-Changes made to this repository via the automated release PR pipeline should publish to PyPI automatically. If
-the changes aren't made through the automated pipeline, you may want to make releases manually.
-
-### Publish with a GitHub workflow
-
-You can release to package managers by using [the `Publish PyPI` GitHub action](https://www.github.com/fw-ai-external/python-sdk/actions/workflows/publish-pypi.yml). A manual run requires the exact existing release tag to publish. After a manual republish, run `Post-Publish Smoke Test` with the exact version because automatic post-publish verification is reserved for release-triggered publishes. The workflow requires `PYPI_TOKEN` to be configured as an organization or repository secret with publish access to the `fireworks-ai` PyPI project.
-
-### Publish manually
-
-If you need to manually release a package, you can run the `bin/publish-pypi` script with `PYPI_TOKEN` set in the environment.
+Releases are managed by the maintainers' private CI after the reviewed promotion
+PR merges. The version, tag, and published distributions identify the same source.
+This repository has no publishing workflow or stored release credentials.
+Contact a maintainer to retry a failed release.

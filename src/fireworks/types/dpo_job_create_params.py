@@ -29,6 +29,15 @@ class DpoJobCreateParams(TypedDict, total=False):
 
     display_name: Annotated[str, PropertyInfo(alias="displayName")]
 
+    eval_auto_carveout: Annotated[bool, PropertyInfo(alias="evalAutoCarveout")]
+    """Whether to auto-carve the dataset for eval. Supported for DPO only, not ORPO."""
+
+    evaluation_dataset: Annotated[str, PropertyInfo(alias="evaluationDataset")]
+    """The name of a separate preference dataset to use for held-out evaluation.
+
+    Supported for DPO only, not ORPO.
+    """
+
     loss_config: Annotated[ReinforcementLearningLossConfig, PropertyInfo(alias="lossConfig")]
     """
     Loss configuration for the training job. If not specified, defaults to DPO loss.

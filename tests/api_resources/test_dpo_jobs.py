@@ -47,6 +47,8 @@ class TestDpoJobs:
                 "tenant_id": "tenantId",
             },
             display_name="displayName",
+            eval_auto_carveout=True,
+            evaluation_dataset="evaluationDataset",
             loss_config={
                 "dpo": {
                     "beta": 0.25,
@@ -430,6 +432,8 @@ class TestAsyncDpoJobs:
                 "tenant_id": "tenantId",
             },
             display_name="displayName",
+            eval_auto_carveout=True,
+            evaluation_dataset="evaluationDataset",
             loss_config={
                 "dpo": {
                     "beta": 0.25,

@@ -238,6 +238,31 @@ class FireworksClient(_RestClient):
             )
         return moe
 
+    def log_rlor_trainer_job_metrics(self, name: str, records: list[dict[str, Any]]) -> None:
+        """Append training-script metrics to an RLOR trainer job.
+
+        ``name`` is ``accounts/<account>/rlorTrainerJobs/<job>``. ``records``
+        are ``{"step": int, "metrics": {str: float}}`` objects.
+
+        The POST is not retried. The server appends, so a retry after a lost
+        response would write the same step twice.
+        """
+        if not name.startswith("accounts/") or "/rlorTrainerJobs/" not in name:
+            raise ValueError(
+                f"Invalid trainer job name {name!r}. Expected accounts/<account>/rlorTrainerJobs/<job>."
+            )
+        resp = self._post(
+            f"/v1/{name}:logMetrics",
+            json={"name": name, "records": records},
+            timeout=HTTP_READ_TIMEOUT_S,
+            retry=False,
+        )
+        if not resp.is_success:
+            raise RuntimeError(
+                f"Failed to report training metrics for {name!r} "
+                f"(HTTP {resp.status_code}): {parse_api_error(resp)}"
+            )
+
     def _get_operation(self, name: str) -> dict:
         """Fetch operation state from the control plane.
 
