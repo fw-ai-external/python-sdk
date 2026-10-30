@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.31 (2026-10-29)
+## 1.2.31 (2026-10-30)
 
 Full Changelog: [v1.2.30...v1.2.31](https://github.com/fw-ai-external/python-sdk/compare/v1.2.30...v1.2.31)
 
@@ -8,6 +8,7 @@ Full Changelog: [v1.2.30...v1.2.31](https://github.com/fw-ai-external/python-sdk
 * **dpo-jobs:** accept `evaluation_dataset` and `eval_auto_carveout` on DPO job create for held-out preference evaluation
 
 ### Bug Fixes
+* **ci:** publish through GitHub OIDC and synchronize release metadata privately without stored public-repository credentials
 * **ci:** run the Python 3.9 post-publish smoke test on Ubuntu 22.04, where setup-python provides compatible interpreter builds
 * **training-sdk:** report OpenAI `usage` (exact prompt, completion, and cached prompt token counts) on TITO sidecar chat responses, and stream the final usage chunk when a request sets `stream_options.include_usage`, so harness auto-compaction sees real context usage
 
