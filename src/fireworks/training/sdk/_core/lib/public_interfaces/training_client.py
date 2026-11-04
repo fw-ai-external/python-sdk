@@ -1030,4 +1030,6 @@ def _get_tokenizer(model_id: types.ModelID, holder: InternalClientHolder) -> Pre
     model_name = info.model_data.model_name
     assert model_name is not None, "This shouldn't happen: model_name is None"
 
-    return _load_tokenizer_from_model_info(model_name, info.model_data.tokenizer_id)
+    return _load_tokenizer_from_model_info(
+        model_name, info.model_data.tokenizer_id, model_arch=getattr(info.model_data, "arch", None)
+    )

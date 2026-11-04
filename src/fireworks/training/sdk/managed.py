@@ -177,6 +177,9 @@ class FiretitanProvisioningConfig:
     weight_sync_transport: Literal["RDMA"] | None = None
     """Compatibility option; eligible runtimes negotiate RDMA automatically."""
 
+    base_model_type: str = ""
+    """Restrict-only tokenizer context; never changes model dispatch or placement."""
+
     def __post_init__(self) -> None:
         if self.weight_sync_transport not in (None, "RDMA"):
             raise ValueError("weight_sync_transport must be 'RDMA' or None")
@@ -621,6 +624,9 @@ def _create_managed_tinker_client(
             training_client = service_client.create_training_client(**create_model_kwargs)
             # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
             training_client._tokenizer_model = config.tokenizer_model
+            training_client._tokenizer_base_model = (
+                "deepseek_v4" if config.base_model_type == "deepseek_v4" else config.base_model
+            )
             handle.training_client = training_client
             handle.training_clients.append(training_client)
 

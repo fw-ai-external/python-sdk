@@ -15,6 +15,7 @@ import fireworks.training.sdk._core as core
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core._utils import lru_cache
 from fireworks.training.sdk._core.lib.sidecar import SidecarRPC, SidecarHandle, create_sidecar_handle
+from fireworks.training.sdk.tokenizer_identity import is_deepseek_v4_model_name, requires_code_free_tokenizer_loading
 from fireworks.training.sdk._core.lib.telemetry import Telemetry, capture_exceptions
 from fireworks.training.sdk._core.lib.retry_handler import RetryConfig, RetryHandler
 from fireworks.training.sdk._core.lib.api_future_impl import QueueState, QueueStateObserver, _APIFuture
@@ -483,7 +484,9 @@ def _get_retry_handler(
 
 
 @lru_cache(maxsize=32)
-def _load_tokenizer_from_model_info(model_name: str, tokenizer_id: str | None = None) -> PreTrainedTokenizer:
+def _load_tokenizer_from_model_info(
+    model_name: str, tokenizer_id: str | None = None, *, model_arch: str | None = None
+) -> PreTrainedTokenizer:
     """Load a tokenizer given a model name and optional tokenizer_id.
 
     This is a shared helper used by both TrainingClient and SamplingClient.
@@ -534,5 +537,15 @@ def _load_tokenizer_from_model_info(model_name: str, tokenizer_id: str | None = 
             "trust_remote_code": True,
             "revision": "b5aabbfb20227ed42becbf5541dbffd213942c58",
         }
+
+    if (
+        is_deepseek_v4_model_name(model_name)
+        or model_arch == "DeepseekV4ForCausalLM"
+        or requires_code_free_tokenizer_loading(tokenizer_id, revision=kwargs.get("revision"))
+    ):
+        # Recognized official DeepSeek V4 data ships no remote code; an
+        # explicit False resolves the identical tokenizer class and keeps any
+        # checkpoint-staged Python inert.
+        kwargs["trust_remote_code"] = False
 
     return AutoTokenizer.from_pretrained(tokenizer_id, fast=True, **kwargs)

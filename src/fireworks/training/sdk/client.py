@@ -41,6 +41,7 @@ from pydantic import Field, BaseModel, field_validator
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
+from fireworks.training.sdk.tokenizer_identity import is_deepseek_v4_model_name, requires_code_free_tokenizer_loading
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
@@ -1597,6 +1598,7 @@ class FiretitanTrainingClient(TrainingClient):
         self._saved_state_names: set[str] = set()
         self._sampler_backend: Any | None = None
         self._tokenizer_model: str | None = None
+        self._tokenizer_base_model: str | None = None
         self._lora_rank = lora_rank
         self._sampler_checkpoint_saved = False
         self._first_sampler_checkpoint_type = self._normalize_sampler_checkpoint_type(first_sampler_checkpoint_type)
@@ -3105,6 +3107,13 @@ class FiretitanTrainingClient(TrainingClient):
         # lazy: tokenizer downloads are optional; transport needs no transformers.
         from transformers import AutoTokenizer
 
+        if is_deepseek_v4_model_name(
+            getattr(self, "_tokenizer_base_model", None)
+        ) or requires_code_free_tokenizer_loading(self._tokenizer_model):
+            # Recognized official DeepSeek V4 data ships no remote code; an
+            # explicit False resolves the identical tokenizer class and keeps
+            # any checkpoint-staged Python inert.
+            return AutoTokenizer.from_pretrained(self._tokenizer_model, trust_remote_code=False)
         return AutoTokenizer.from_pretrained(self._tokenizer_model)
 
     def create_base_training_client(
@@ -4127,6 +4136,9 @@ class FiretitanServiceClient(ServiceClient):
                     create_model_kwargs["projection_head_dim"] = configured_projection_head_dim
                 training_client = managed_handle.service_client.create_training_client(**create_model_kwargs)
                 training_client._tokenizer_model = managed_config.tokenizer_model
+                training_client._tokenizer_base_model = (
+                    "deepseek_v4" if managed_config.base_model_type == "deepseek_v4" else managed_config.base_model
+                )
                 if managed_handle.sampler_backend is not None:
                     training_client._attach_sampler_backend(managed_handle.sampler_backend)
                 managed_handle.training_clients.append(training_client)
@@ -4134,7 +4146,9 @@ class FiretitanServiceClient(ServiceClient):
 
         if managed_config is not None:
             if base_model is not None:
-                _warn_deprecated_override("create_training_client", "base_model", base_model, managed_config.base_model)
+                _warn_deprecated_override(
+                    "create_training_client", "base_model", base_model, managed_config.base_model
+                )
             _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
             if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
                 raise ValueError(
@@ -4862,7 +4876,9 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        model = (
+            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        )
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,
