@@ -15,7 +15,7 @@ import warnings
 from typing import Any, Coroutine
 
 
-class _AsyncCreateProxy:
+class _AsyncCreateProxy(Coroutine[Any, Any, Any]):
     # Both awaitable and directly async-iterable so we support:
     #   resp = await client.acreate(...)
     #   async for chunk in client.acreate(stream=True, ...)   # langchain pattern
@@ -24,6 +24,15 @@ class _AsyncCreateProxy:
 
     def __await__(self) -> Any:
         return self._coro.__await__()
+
+    def send(self, value: Any) -> Any:
+        return self._coro.send(value)
+
+    def throw(self, *args: Any) -> Any:
+        return self._coro.throw(*args)
+
+    def close(self) -> None:
+        self._coro.close()
 
     def __aiter__(self) -> Any:
         return self._aiter()
@@ -51,8 +60,7 @@ def _patch_acreate_aliases() -> None:  # pyright: ignore[reportUnusedFunction]
 
         def _acreate(self: Any, *args: Any, _orig: Any = original_create, **kwargs: Any) -> _AsyncCreateProxy:
             warnings.warn(
-                "acreate() is deprecated, use create() instead. "
-                "The async client's create() is already a coroutine.",
+                "acreate() is deprecated, use create() instead. The async client's create() is already a coroutine.",
                 DeprecationWarning,
                 stacklevel=2,
             )
