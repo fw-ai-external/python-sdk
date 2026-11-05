@@ -12,7 +12,7 @@ This SDK repo contains auto-generated code from Stainless outside of `src/firewo
 
 ## Skill lives in the cookbook
 
-There is **no** skill in this repo. The maintained Claude Code skills for the training SDK ship in the cookbook: [`skills/dev/` in fw-ai/cookbook](https://github.com/fw-ai/cookbook/tree/main/skills/dev) for day-to-day training work, with [`skills/research/`](https://github.com/fw-ai/cookbook/tree/main/skills/research) for research-grade work (coming soon). Clone the cookbook and Claude picks them up. The cookbook is the reference implementation — every SDK call an agent typically needs is exercised in `training/recipes/*.py`, and the skills point the agent at those files directly.
+The maintained training skills ship in [`fw-ai-external/cookbook`](https://github.com/fw-ai-external/cookbook/tree/main/skills): `research` for planning, `configure` for execution, and `debug` for troubleshooting, with `fireworks-training` carrying shared references. Install them using the [installation guide](https://github.com/fw-ai-external/cookbook/blob/main/skills/GETTING-STARTED.md). Cookbook recipes under `training/recipes/` provide runnable SDK examples.
 
 Do not duplicate the skill here. Two sources go stale; one does not.
 

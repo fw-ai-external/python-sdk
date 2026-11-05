@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.32 (2026-11-05)
+
+Full Changelog: [v1.2.31...v1.2.32](https://github.com/fw-ai-external/python-sdk/compare/v1.2.31...v1.2.32)
+
+### Documentation
+* Update cookbook links to `fw-ai-external/cookbook` and document installing released recipes from `fireworks-training-cookbook` on PyPI.
+
 ## 1.2.31 (2026-11-04)
 
 Full Changelog: [v1.2.30...v1.2.31](https://github.com/fw-ai-external/python-sdk/compare/v1.2.30...v1.2.31)
