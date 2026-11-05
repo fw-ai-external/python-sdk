@@ -37,11 +37,17 @@ print(f"Fireworks SDK {fireworks.__version__}: {FiretitanServiceClient.__name__}
 PYTHON
 ```
 
-For runnable recipes, follow the [Training Cookbook setup](https://github.com/fw-ai/cookbook/blob/main/training/README.md#getting-started).
+For runnable recipes, follow the [Training Cookbook setup](https://github.com/fw-ai-external/cookbook/blob/main/training/README.md#getting-started).
 Advanced: API-only environments can use the smaller `[training-sdk]` extra,
 which omits local ML dependencies such as PyTorch and W&B.
 
 ## Quick start
+
+The recipe example below also requires the cookbook package:
+
+```bash
+python -m pip install --upgrade fireworks-training-cookbook
+```
 
 ```python
 from training.recipes.rl_loop import Config, main
@@ -57,7 +63,7 @@ cfg = Config(
 main(cfg)
 ```
 
-For runnable recipes (GRPO, DPO, SFT, etc.), see the [Training Cookbook](https://github.com/fw-ai/cookbook/blob/main/training/README.md).
+For runnable recipes (GRPO, DPO, SFT, etc.), see the [Training Cookbook](https://github.com/fw-ai-external/cookbook/blob/main/training/README.md).
 
 ## Recovering sampling concurrency
 

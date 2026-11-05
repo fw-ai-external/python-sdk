@@ -218,6 +218,7 @@ def test_upload_directory_registers_all_shards_once_and_validates(
         # Both headers are part of the signed URL's signature.
         assert headers["Content-Type"] == "application/octet-stream"
         assert headers["X-Goog-Content-Length-Range"] == f"{size},{size}"
+        assert headers["X-Goog-If-Generation-Match"] == "0"
         assert headers["Content-Length"] == str(size)
         # Signed URLs must never receive Fireworks credentials.
         assert "authorization" not in headers

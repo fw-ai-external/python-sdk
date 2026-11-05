@@ -25,10 +25,9 @@ Typical use, for a dataset whose files are uploaded by the caller::
 2. Refuses datasets that require client-side (CMEK) encryption: this helper
    does not encrypt, so it fails closed rather than upload plaintext. Use
    ``firectl dataset create`` for CMEK datasets.
-3. Registers every shard in a single ``get_upload_endpoint`` request (the
-   endpoint overwrites the dataset's registered files on each call, so
-   per-shard requests would drop earlier shards), and requires a signed URL
-   for every shard.
+3. Registers every shard in the first ``get_upload_endpoint`` request. Later
+   requests must supply the same file set. It requires a signed URL for every
+   shard.
 4. PUTs each shard's bytes to its signed URL with a plain HTTP client that
    carries no Fireworks credentials. Signed URLs expire after one hour, so the
    complete set is re-requested before a later shard if the earlier ones took
@@ -209,7 +208,7 @@ def upload_dataset_shards(
     with httpx.Client(timeout=_UPLOAD_TIMEOUT) as http:
         for index, filename in enumerate(filename_to_size):
             if index > 0 and time.monotonic() - signed_at > _SIGNED_URL_REFRESH_AFTER_SECONDS:
-                # Re-send the complete map: the endpoint overwrites the registered files.
+                # Re-send the complete map: the endpoint keeps the registered set fixed.
                 signed_urls = request_signed_urls()
                 signed_at = time.monotonic()
             size = filename_to_size[filename]
@@ -221,6 +220,7 @@ def upload_dataset_shards(
                         # Both headers are part of the URL signature.
                         "Content-Type": "application/octet-stream",
                         "X-Goog-Content-Length-Range": f"{size},{size}",
+                        "X-Goog-If-Generation-Match": "0",
                     },
                 )
             upload_response.raise_for_status()

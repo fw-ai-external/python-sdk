@@ -30,7 +30,7 @@ python -m pip install --upgrade 'fireworks-ai[training]>=1.2.11,<2'
 
 Training calls require a training-scoped Fireworks API key.
 See the [training setup and verification](src/fireworks/training/README.md#install)
-or the [Training Cookbook](https://github.com/fw-ai/cookbook/blob/main/training/README.md#getting-started)
+or the [Training Cookbook](https://github.com/fw-ai-external/cookbook/blob/main/training/README.md#getting-started)
 for runnable recipes.
 
 To stop a running or stuck managed training job while keeping its job record,
@@ -436,6 +436,7 @@ response = httpx.put(
     headers={
         "Content-Type": "application/octet-stream",
         "x-goog-content-length-range": f"{file_size},{file_size}",
+        "x-goog-if-generation-match": "0",
     },
 )
 response.raise_for_status()
