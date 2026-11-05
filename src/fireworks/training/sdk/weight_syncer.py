@@ -51,6 +51,7 @@ from fireworks.training.sdk.deployment import (
     DEFAULT_DELTA_COMPRESSION,
     DeploymentManager,
     DeploymentSampler,
+    ResetPromptCacheMode,
 )
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
@@ -88,8 +89,13 @@ class WeightSyncer:
     """If True, send a warmup request after each successful hotload."""
     warmup_max_retries: int = 10
     """Max retries for post-hotload warmup (default 10 x 10s = ~100s)."""
-    reset_prompt_cache: bool = True
-    """If True, reset the prompt cache on the deployment after hotloading."""
+    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
+    """Future-request prefix-cache policy; defaults to preserving existing sessions.
+
+    Accepts ``all``, ``new_session``, ``none``, or deprecated True/False
+    (all/none, with a migration warning).
+    Active KV across async hotload is unaffected.
+    """
     lora_rank: int = 0
     """When > 0, force all checkpoints to ``base`` type (no delta chain).
 

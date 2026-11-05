@@ -1028,6 +1028,36 @@ class TestHotload:
         mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
         call_kwargs = mgr._sync_request.call_args[1]
         assert call_kwargs["json"]["identity"] == "snap-123"
+        assert call_kwargs["json"]["reset_prompt_cache"] == "new_session"
+
+    @pytest.mark.parametrize(
+        "policy,expected",
+        [("all", "all"), ("new_session", "new_session"), ("none", "none")],
+    )
+    def test_hotload_serializes_cache_policy(self, mgr, policy, expected):
+        mgr._sync_request = MagicMock(return_value=self._response(200))
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=policy)
+        assert mgr._sync_request.call_args.kwargs["json"]["reset_prompt_cache"] == expected
+
+    @pytest.mark.parametrize("value,policy", [(True, "all"), (False, "none")])
+    def test_legacy_boolean_policy_warns_with_migration(self, mgr, value, policy):
+        mgr._sync_request = MagicMock(return_value=self._response(200))
+        with pytest.warns(DeprecationWarning, match=f"use reset_prompt_cache='{policy}' instead"):
+            mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=value)
+        assert mgr._sync_request.call_args.kwargs["json"]["reset_prompt_cache"] == policy
+
+    @pytest.mark.parametrize("policy", ["new_session", "none"])
+    @pytest.mark.parametrize("known_unsupported", [False, True])
+    def test_hotload_never_silently_drops_cache_policy(self, mgr, policy, known_unsupported):
+        if known_unsupported:
+            mgr._hotload_reset_prompt_cache_supported = False
+        response = self._response(400, {"error": {"message": "reset_prompt_cache: Extra inputs are not permitted"}})
+        response.raise_for_status.side_effect = RuntimeError("unsupported policy")
+        mgr._sync_request = MagicMock(return_value=response)
+        with pytest.raises(RuntimeError, match="unsupported policy"):
+            mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=policy)
+        mgr._sync_request.assert_called_once()
+        assert mgr._sync_request.call_args.kwargs["json"]["reset_prompt_cache"] == policy
 
     def test_hotload_headers_include_additional_headers(self, mgr):
         headers = mgr._hotload_headers("dep-1", "accounts/test/models/m")
@@ -1077,14 +1107,15 @@ class TestHotload:
         success = self._response(200, {})
         mgr._sync_request = MagicMock(side_effect=[unsupported, success, success])
 
-        mgr.hotload("dep-1", "accounts/test/models/m", "snap-123")
-        mgr.hotload("dep-1", "accounts/test/models/m", "snap-456")
+        with pytest.warns(DeprecationWarning, match="Boolean reset_prompt_cache is deprecated"):
+            mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=True)
+        mgr.hotload("dep-1", "accounts/test/models/m", "snap-456", reset_prompt_cache="all")
 
         first_payload = mgr._sync_request.call_args_list[0].kwargs["json"]
         retry_payload = mgr._sync_request.call_args_list[1].kwargs["json"]
         second_call_payload = mgr._sync_request.call_args_list[2].kwargs["json"]
 
-        assert first_payload["reset_prompt_cache"] is True
+        assert first_payload["reset_prompt_cache"] == "all"
         assert "reset_prompt_cache" not in retry_payload
         assert "reset_prompt_cache" not in second_call_payload
         assert mgr._hotload_reset_prompt_cache_supported is False

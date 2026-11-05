@@ -4,6 +4,9 @@
 
 Full Changelog: [v1.2.31...v1.2.32](https://github.com/fw-ai-external/python-sdk/compare/v1.2.31...v1.2.32)
 
+### Features
+* **training-sdk:** support `all`, `new_session`, and `none` sampler hotload prefix-cache policies through managed service configuration and low-level hotload APIs, default to `new_session`, and retain legacy boolean inputs with migration warnings. Document that the multi-LoRA proxy accepts these policies as no-ops.
+
 ### Documentation
 * Update cookbook links to `fw-ai-external/cookbook` and document installing released recipes from `fireworks-training-cookbook` on PyPI.
 

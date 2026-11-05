@@ -3708,7 +3708,13 @@ class FiretitanServiceClient(ServiceClient):
         project_id: str | None = None,
         **managed_config_kwargs,
     ) -> "FiretitanServiceClient":
-        """Create a lazy SDK-managed FireTitan service client for recipes."""
+        """Create a lazy SDK-managed FireTitan service client for recipes.
+
+        Pass ``reset_prompt_cache="all"``, ``"new_session"`` (default), or
+        ``"none"`` as a managed config keyword to control future-request prefix
+        reuse across sampler hotloads. Deprecated True/False inputs mean
+        all/none and emit a migration warning.
+        """
         api_key = _fireworks_api_key(api_key)
         base_url = _fireworks_base_url(base_url)
         if managed_config is None:
@@ -4146,9 +4152,7 @@ class FiretitanServiceClient(ServiceClient):
 
         if managed_config is not None:
             if base_model is not None:
-                _warn_deprecated_override(
-                    "create_training_client", "base_model", base_model, managed_config.base_model
-                )
+                _warn_deprecated_override("create_training_client", "base_model", base_model, managed_config.base_model)
             _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
             if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
                 raise ValueError(
@@ -4876,9 +4880,7 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = (
-            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
-        )
+        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,

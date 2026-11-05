@@ -3253,7 +3253,7 @@ class TestTrainingClientSamplingHelpers:
             base_model="accounts/acct/models/base",
             snapshot_identity="sampler-path",
             incremental_snapshot_metadata=None,
-            reset_prompt_cache=True,
+            reset_prompt_cache="new_session",
             timeout_seconds=123,
             path=None,
             cmek_resource=None,
