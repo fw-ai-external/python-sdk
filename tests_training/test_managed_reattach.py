@@ -7,12 +7,16 @@ The reconciliation fails fast *before* mutating the deployment.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from unittest.mock import MagicMock
 
 import pytest
 
+from fireworks.training.sdk._rdma import _RdmaSamplerBackend
+from fireworks.training.sdk.client import FiretitanServiceClient
 from fireworks.training.sdk.managed import (
     _ManagedTinkerConfig,
+    _TinkerSamplerBackend,
     _attach_managed_deployment,
     _deployment_shape_conflict,
     _create_or_reattach_deployment,
@@ -23,6 +27,46 @@ from fireworks.training.sdk.deployment import DeploymentInfo, DeploymentManager
 SHAPE = "accounts/acct/deploymentShapes/rft-x"
 SHAPE_V1 = f"{SHAPE}/versions/1"
 SHAPE_V2 = f"{SHAPE}/versions/2"
+
+
+@pytest.mark.parametrize(
+    "policy,expected",
+    [("all", "all"), ("new_session", "new_session"), ("none", "none"), (True, "all"), (False, "none")],
+)
+def test_managed_service_forwards_cache_policy_to_file_and_rdma(policy, expected) -> None:
+    warning = (
+        pytest.warns(DeprecationWarning, match=f"reset_prompt_cache='{expected}'")
+        if isinstance(policy, bool)
+        else nullcontext()
+    )
+    with warning:
+        service = FiretitanServiceClient.from_firetitan_config(
+            api_key="test-key", base_model="accounts/acct/models/base", deployment_id="dep-1", reset_prompt_cache=policy
+        )
+    config = service._managed_config
+    assert config.reset_prompt_cache == expected
+    deploy_mgr = MagicMock(spec=DeploymentManager)
+    deploy_mgr.account_id = "acct"
+    deploy_mgr.hotload_api_url = "https://inference.invalid"
+    deploy_mgr.get.return_value = DeploymentInfo(deployment_id="dep-1", name="dep-1", state="READY")
+    deploy_mgr.reattach_trainer.return_value = deploy_mgr.get.return_value
+    _, backend, _, _ = _attach_managed_deployment(
+        deploy_mgr, config, trainer_job_name="accounts/acct/rlorTrainerJobs/job-1", deployment_shape=None
+    )
+    backend.hotload_saved_snapshot("step-1")
+    assert deploy_mgr.hotload_and_wait.call_args.kwargs["reset_prompt_cache"] == expected
+    publication = _RdmaSamplerBackend(backend).publication_request()
+    assert publication["reset_prompt_cache"] == expected
+
+
+def test_managed_cache_policy_defaults_and_validation() -> None:
+    assert _ManagedTinkerConfig(base_model="test/model").reset_prompt_cache == "new_session"
+    manager = MagicMock(account_id="acct", hotload_api_url="https://inference.invalid")
+    backend = _TinkerSamplerBackend(manager, "dep-1", "test/model")
+    assert _RdmaSamplerBackend(backend).publication_request()["reset_prompt_cache"] == "new_session"
+    for policy in ("invalid", None, 1):
+        with pytest.raises(ValueError, match="reset_prompt_cache must be"):
+            _ManagedTinkerConfig(base_model="test/model", reset_prompt_cache=policy)
 
 
 @pytest.mark.parametrize("deployment_model", ["accounts/acct/models/base-fp8", "accounts/acct/models/base-nvfp4"])
@@ -66,10 +110,7 @@ class TestDeploymentShapeConflict:
         assert _deployment_shape_conflict(SHAPE_V1, SHAPE_V2) is False
 
     def test_version_pinned_different_shape_conflicts(self):
-        assert (
-            _deployment_shape_conflict(SHAPE_V1, "accounts/acct/deploymentShapes/other/versions/2")
-            is True
-        )
+        assert _deployment_shape_conflict(SHAPE_V1, "accounts/acct/deploymentShapes/other/versions/2") is True
 
 
 class _FakeDeployManager:

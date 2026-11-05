@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import time
 import logging
-from typing import TYPE_CHECKING, Any
+import warnings
+from typing import TYPE_CHECKING, Any, Literal
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
@@ -33,6 +34,23 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DELTA_COMPRESSION = "arc_v2"
 DEFAULT_CHECKSUM_FORMAT = "alder32"
+ResetPromptCacheMode = Literal["all", "new_session", "none"]
+
+
+def normalize_reset_prompt_cache(value: ResetPromptCacheMode | bool) -> ResetPromptCacheMode:
+    """Preserve legacy boolean semantics while using the serving policy names."""
+    if isinstance(value, bool):
+        policy: ResetPromptCacheMode = "all" if value else "none"
+        warnings.warn(
+            f"Boolean reset_prompt_cache is deprecated; use reset_prompt_cache={policy!r} instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return policy
+    if isinstance(value, str) and value in ("all", "new_session", "none"):
+        return value
+    raise ValueError("reset_prompt_cache must be 'all', 'new_session', 'none', True, or False")
+
 
 HOT_LOAD_TRANSITION_TYPE_ASYNC = "ASYNC"
 HOT_LOAD_TRANSITION_TYPE_SYNC = "SYNC"
@@ -833,7 +851,7 @@ class DeploymentManager(_RestClient):
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
-        reset_prompt_cache: bool = True,
+        reset_prompt_cache: ResetPromptCacheMode | bool = "new_session",
         timeout: int = 60,
         path: str | None = None,
         cmek_resource: str | None = None,
@@ -846,7 +864,15 @@ class DeploymentManager(_RestClient):
             snapshot_identity: Snapshot identity to load.
             incremental_snapshot_metadata: For delta loads — must include
                 previous_snapshot_identity, compression_format, checksum_format.
-            reset_prompt_cache: Whether to reset the prompt cache after loading.
+            reset_prompt_cache: Future-request prefix-cache policy. ``new_session``
+                (default) preserves existing sessions across hotload and gives new
+                sessions a fresh cache namespace. ``all`` resets every session's
+                namespace; ``none`` preserves all namespaces. Reuse requires a
+                stable prompt_cache_key (or user), a matching prefix, and available
+                cache entries. Active KV across async hotload is unaffected.
+                Legacy True/False mean ``all``/``none`` and emit a deprecation
+                warning. The multi-LoRA proxy accepts this option but currently
+                treats every policy as a no-op; it has no LoRA-scoped cache reset.
             timeout: Request timeout in seconds.
             path: Optional object-storage URI (``gs://bucket/prefix/``) the
                 serving side may use to fetch the snapshot bytes when the
@@ -859,6 +885,7 @@ class DeploymentManager(_RestClient):
                 forwarded as ``x-fireworks-hot-load-cmek-resource`` alongside
                 ``path`` so a CMEK-aware serving runtime decrypts the source.
         """
+        reset_prompt_cache = normalize_reset_prompt_cache(reset_prompt_cache)
         headers = self._hotload_headers(
             deployment_id,
             base_model,
@@ -882,7 +909,11 @@ class DeploymentManager(_RestClient):
             detail_suffix,
         )
 
-        include_reset_prompt_cache = self._hotload_reset_prompt_cache_supported is not False
+        # Older backends default to all. Never drop a policy whose omission
+        # would silently change the caller's cache semantics.
+        include_reset_prompt_cache = (
+            reset_prompt_cache != "all" or self._hotload_reset_prompt_cache_supported is not False
+        )
 
         def _payload(include_reset: bool) -> dict[str, Any]:
             payload: dict[str, Any] = {"identity": snapshot_identity}
@@ -899,7 +930,12 @@ class DeploymentManager(_RestClient):
             json=_payload(include_reset_prompt_cache),
             timeout=timeout,
         )
-        if not resp.is_success and include_reset_prompt_cache and self._reset_prompt_cache_unsupported(resp):
+        if (
+            not resp.is_success
+            and include_reset_prompt_cache
+            and reset_prompt_cache == "all"
+            and self._reset_prompt_cache_unsupported(resp)
+        ):
             logger.info("Hotload API rejected reset_prompt_cache; retrying without it")
             self._hotload_reset_prompt_cache_supported = False
             resp = self._sync_request(
@@ -1117,7 +1153,7 @@ class DeploymentManager(_RestClient):
         base_model: str,
         snapshot_identity: str,
         incremental_snapshot_metadata: dict[str, Any] | None = None,
-        reset_prompt_cache: bool = True,
+        reset_prompt_cache: ResetPromptCacheMode | bool = "new_session",
         timeout_seconds: int = HOTLOAD_WAIT_TIMEOUT_S,
         path: str | None = None,
         cmek_resource: str | None = None,

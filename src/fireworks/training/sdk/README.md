@@ -114,6 +114,51 @@ syncer = WeightSyncer(
 syncer.save_and_hotload("step-1")
 ```
 
+### Prefix-cache policy across weight updates
+
+SDK sampler hotloads default to `reset_prompt_cache="new_session"`. Set the
+policy on `FiretitanProvisioningConfig`, pass it directly through
+`FiretitanServiceClient.from_firetitan_config(...)`, or set it on low-level
+`WeightSyncer` / `DeploymentManager.hotload(...)` calls:
+
+```python
+service = FiretitanServiceClient.from_firetitan_config(
+    base_model="accounts/fireworks/models/qwen3-8b",
+    reset_prompt_cache="new_session",
+)
+```
+
+| Policy | Future requests after a successful hotload |
+| --- | --- |
+| `new_session` (default) | Existing sessions retain their prefix-cache namespace; new sessions use the new snapshot's namespace. |
+| `all` | Every session uses the new snapshot's namespace, preventing reuse of the old prefix cache. |
+| `none` | Existing and new sessions keep using the unchanged cache namespace. |
+
+Legacy `True` and `False` remain accepted as `all` and `none`, with a
+`DeprecationWarning` naming the equivalent string. Migrate boolean inputs to
+the named policies; boolean support is retained for compatibility and has no
+scheduled removal version. To retain the old
+SDK default, set `reset_prompt_cache="all"` explicitly. Existing sessions need a
+stable `prompt_cache_key` (or `user`); reuse also depends on prefix matching,
+routing and cache availability. Reused KV may have been computed under earlier
+weights. This policy does not reset active KV in a request that survives async
+hotload, and it does not keep old weights pinned for a session.
+
+These namespace semantics apply to supported native serving backends. The
+multi-LoRA serving backend accepts all three values (and legacy booleans) but
+currently treats them as no-ops. Setting `new_session` on that backend does not
+enable cross-update cache reuse.
+
+RDMA always forwards the selected policy to the trainer's weight-sync API,
+including explicit `all`. Supporting trainer runtimes default an omitted policy
+to `new_session`, so requests from older SDKs adopt this default after that
+runtime update. To request a full reset, explicitly select `all` through a
+supporting SDK. RDMA requests require a trainer runtime that accepts
+`reset_prompt_cache`; older strict runtimes reject the new field rather than
+silently applying a different policy. FILE hotloads on serving backends that
+reject the field can use the legacy omission fallback only for `all`;
+`new_session` and `none` errors are propagated.
+
 Trainer provisioning has separate wait budgets. `pending_timeout_s` controls
 how long `TrainerJobManager` waits for GPU capacity while the job is
 `JOB_STATE_PENDING` (48 hours by default). `timeout_s` starts after placement

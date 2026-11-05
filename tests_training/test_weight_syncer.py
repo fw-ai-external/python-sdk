@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from fireworks.training.sdk.client import SaveSamplerResult
 from fireworks.training.sdk.weight_syncer import WeightSyncer
 
@@ -310,3 +312,12 @@ class TestSnapshotIdentityPlumbing:
         assert kwargs["snapshot_identity"] == "step-0-base-sess"
         assert kwargs["path"] is None
         deploy.get.assert_not_called()
+
+
+@pytest.mark.parametrize("policy", ["new_session", "all", "none"])
+def test_weight_syncer_forwards_prompt_cache_policy(policy):
+    tracker = _make_tracker()
+    tracker.reset_prompt_cache = policy
+    tracker._deployment_checked = True
+    tracker.save_and_hotload("step-1")
+    assert tracker.deploy_mgr.hotload_and_wait.call_args.kwargs["reset_prompt_cache"] == policy

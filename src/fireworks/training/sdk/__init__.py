@@ -79,6 +79,7 @@ _EXPORTS = {
     "DeploymentInfo": ("fireworks.training.sdk.deployment", "DeploymentInfo"),
     "DeploymentConfig": ("fireworks.training.sdk.deployment", "DeploymentConfig"),
     "DeploymentManager": ("fireworks.training.sdk.deployment", "DeploymentManager"),
+    "ResetPromptCacheMode": ("fireworks.training.sdk.deployment", "ResetPromptCacheMode"),
     # Lightweight deployment sampling.
     "ServerMetrics": ("fireworks.training.sdk.sampling", "ServerMetrics"),
     "DeploymentSampler": ("fireworks.training.sdk.sampling", "DeploymentSampler"),

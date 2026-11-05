@@ -40,6 +40,8 @@ from fireworks.training.sdk.deployment import (
     DeploymentConfig,
     DeploymentManager,
     DeploymentSampler,
+    ResetPromptCacheMode,
+    normalize_reset_prompt_cache,
     normalize_hot_load_transition_type,
     _effective_hot_load_transition_type,
 )
@@ -180,7 +182,16 @@ class FiretitanProvisioningConfig:
     base_model_type: str = ""
     """Restrict-only tokenizer context; never changes model dispatch or placement."""
 
+    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
+    """Future-request prefix-cache policy: ``all``, ``new_session`` (default), or ``none``.
+
+    Existing sessions keep their cache namespace under ``new_session``. Use a
+    stable prompt_cache_key (or user) across turns. This does not invalidate
+    active KV during async hotload. Deprecated True/False inputs mean ``all``/``none`` and emit a warning.
+    """
+
     def __post_init__(self) -> None:
+        object.__setattr__(self, "reset_prompt_cache", normalize_reset_prompt_cache(self.reset_prompt_cache))
         if self.weight_sync_transport not in (None, "RDMA"):
             raise ValueError("weight_sync_transport must be 'RDMA' or None")
         object.__setattr__(
@@ -218,12 +229,7 @@ class FiretitanProvisioningConfig:
             )
 
         lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
-        if (
-            self.reference_required
-            and self.reference_training_shape_id
-            and lora_capacity > 0
-            and not self.forward_only
-        ):
+        if self.reference_required and self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
             warnings.warn(
                 "reference_training_shape_id for a LoRA policy is deprecated and will be rejected "
                 "in a future release. Omit it to reuse the policy trainer with its adapter disabled; "
@@ -349,7 +355,7 @@ class _TinkerSamplerBackend:
     hot_load_bucket_url: str | None = None
     cmek_resource: str | None = None
     hotload_timeout_s: int = HOTLOAD_TIMEOUT_S
-    reset_prompt_cache: bool = True
+    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
     lora_rank: int = 0
     compression_format: str = DEFAULT_DELTA_COMPRESSION
     allow_rdma: bool = True
@@ -484,6 +490,7 @@ def _attach_managed_deployment(
         hot_load_bucket_url=deployment.hot_load_bucket_url,
         cmek_resource=cmek_resource,
         hotload_timeout_s=config.hotload_timeout_s,
+        reset_prompt_cache=config.reset_prompt_cache,
         lora_rank=_trainer_lora_capacity(config),
         allow_rdma=_rdma_candidate(config),
     )

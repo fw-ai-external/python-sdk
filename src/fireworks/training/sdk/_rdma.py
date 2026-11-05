@@ -6,6 +6,8 @@ import uuid
 from typing import Any
 from dataclasses import field, dataclass
 
+from fireworks.training.sdk.deployment import normalize_reset_prompt_cache
+
 
 @dataclass
 class _RdmaSamplerBackend:
@@ -24,6 +26,7 @@ class _RdmaSamplerBackend:
             "hotload_url": sampler.deploy_mgr.hotload_api_url.rstrip("/") + "/hot_load/v1/models/hot_load",
             "hotload_headers": sampler.deploy_mgr._hotload_headers(sampler.deployment_id, sampler.base_model),
             "operation_id": str(uuid.uuid4()),
+            "reset_prompt_cache": normalize_reset_prompt_cache(sampler.reset_prompt_cache),
         }
 
     def hotload_saved_snapshot(self, model_path: str) -> bool:
