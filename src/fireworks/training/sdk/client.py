@@ -1683,7 +1683,7 @@ class FiretitanTrainingClient(TrainingClient):
             if required:
                 raise RuntimeError("RDMA weight sync is enabled but the sampler backend does not support RDMA")
             return sampler
-        eligible = sampler.allow_rdma and self._lora_rank == 0 and self.run_name is None and not sampler.cmek_resource
+        eligible = sampler.allow_rdma and self.run_name is None and not sampler.cmek_resource
         if not eligible and not required:
             # Legacy LoRA/session deployments need not expose base-model hotload
             # status. The rollout enforces its flag at FILE publication as well.
@@ -1691,6 +1691,7 @@ class FiretitanTrainingClient(TrainingClient):
         state = sampler.deploy_mgr.hotload_check_status(sampler.deployment_id, sampler.base_model)
         replicas = state.get("replicas", [])
         receiver_support = [replica.get("supports_rdma_weight_sync") is True for replica in replicas]
+        receiver_lora_support = [replica.get("supports_rdma_lora_weight_sync") is True for replica in replicas]
         receiver_enabled = [replica.get("rdma_weight_sync_enabled") for replica in replicas]
         required = required or any(receiver_support) or any(flag is True for flag in receiver_enabled)
         if not required:
@@ -1701,6 +1702,7 @@ class FiretitanTrainingClient(TrainingClient):
             or not trainer_support
             or not receiver_support
             or not all(receiver_support)
+            or (self._lora_rank != 0 and not all(receiver_lora_support))
             or any(flag is False for flag in receiver_enabled)
         ):
             raise RuntimeError(
