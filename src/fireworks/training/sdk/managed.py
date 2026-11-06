@@ -829,7 +829,11 @@ def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
 def _rdma_candidate(config: _ManagedTinkerConfig) -> bool:
     """Allow capability negotiation without changing platform-owned resources."""
     return (
-        config.create_deployment and config.lora_rank == 0 and config.max_lora_rank is None and not config.forward_only
+        config.create_deployment
+        # LoRA capacity does not imply a multi-session trainer: cookbook also
+        # uses max_lora_rank for dedicated jobs. Each created client must still
+        # negotiate explicit trainer and rollout support before using RDMA.
+        and not config.forward_only
     )
 
 

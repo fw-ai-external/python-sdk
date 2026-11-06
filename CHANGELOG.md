@@ -5,6 +5,7 @@
 Full Changelog: [v1.2.32...v1.2.33](https://github.com/fw-ai-external/python-sdk/compare/v1.2.32...v1.2.33)
 
 ### Features
+* **training-sdk:** support dedicated LoRA full-weight synchronization over RDMA, with capability negotiation and managed provisioning checks
 * **training-sdk:** load reviewed Kimi K3 and K3.1 tokenizers without executing checkpoint Python, with shared vocabulary and distinct packaged chat encoders.
 
 ### Bug Fixes
