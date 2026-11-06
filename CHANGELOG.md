@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.33 (2026-11-06)
+
+Full Changelog: [v1.2.32...v1.2.33](https://github.com/fw-ai-external/python-sdk/compare/v1.2.32...v1.2.33)
+
+### Features
+* **training-sdk:** load reviewed Kimi K3 and K3.1 tokenizers without executing checkpoint Python, with shared vocabulary and distinct packaged chat encoders.
+
+### Bug Fixes
+* **training-sdk:** preserve message sampling, saved fast-tokenizer overrides and chat-profile save/reload behavior on code-free Kimi loading paths.
+* **training-sdk:** follow the November 5 Kimi K3.1 release encoder, which rejects the invalid `medium` thinking effort without changing vocabulary or image-token IDs.
+
 ## 1.2.32 (2026-11-05)
 
 Full Changelog: [v1.2.31...v1.2.32](https://github.com/fw-ai-external/python-sdk/compare/v1.2.31...v1.2.32)

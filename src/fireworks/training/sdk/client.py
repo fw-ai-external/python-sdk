@@ -41,7 +41,12 @@ from pydantic import Field, BaseModel, field_validator
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
-from fireworks.training.sdk.tokenizer_identity import is_deepseek_v4_model_name, requires_code_free_tokenizer_loading
+from fireworks.training.sdk.tokenizer_identity import (
+    is_deepseek_v4_model_name,
+    is_kimi_k3_k31_model_name,
+    is_kimi_k3_k31_tokenizer_source,
+    requires_code_free_tokenizer_loading,
+)
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
@@ -3107,6 +3112,16 @@ class FiretitanTrainingClient(TrainingClient):
         # lazy: tokenizer downloads are optional; transport needs no transformers.
         from transformers import AutoTokenizer
 
+        if is_kimi_k3_k31_model_name(
+            getattr(self, "_tokenizer_base_model", None)
+        ) or is_kimi_k3_k31_tokenizer_source(self._tokenizer_model):
+            # Recognized reviewed Kimi K3/K3.1 data: build the id-identical
+            # fast tokenizer from reviewed installed code. Checkpoint Python
+            # (the auto_map TikTokenTokenizer) is never imported, and an
+            # explicit trust_remote_code elsewhere cannot reopen it.
+            from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
+
+            return load_native_tokenizer(self._tokenizer_model)
         if is_deepseek_v4_model_name(
             getattr(self, "_tokenizer_base_model", None)
         ) or requires_code_free_tokenizer_loading(self._tokenizer_model):

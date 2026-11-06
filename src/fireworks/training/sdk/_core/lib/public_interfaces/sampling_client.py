@@ -15,7 +15,12 @@ import fireworks.training.sdk._core as core
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core._utils import lru_cache
 from fireworks.training.sdk._core.lib.sidecar import SidecarRPC, SidecarHandle, create_sidecar_handle
-from fireworks.training.sdk.tokenizer_identity import is_deepseek_v4_model_name, requires_code_free_tokenizer_loading
+from fireworks.training.sdk.tokenizer_identity import (
+    is_deepseek_v4_model_name,
+    is_kimi_k3_k31_model_name,
+    is_kimi_k3_k31_tokenizer_source,
+    requires_code_free_tokenizer_loading,
+)
 from fireworks.training.sdk._core.lib.telemetry import Telemetry, capture_exceptions
 from fireworks.training.sdk._core.lib.retry_handler import RetryConfig, RetryHandler
 from fireworks.training.sdk._core.lib.api_future_impl import QueueState, QueueStateObserver, _APIFuture
@@ -537,6 +542,18 @@ def _load_tokenizer_from_model_info(
             "trust_remote_code": True,
             "revision": "b5aabbfb20227ed42becbf5541dbffd213942c58",
         }
+
+    if (
+        is_kimi_k3_k31_model_name(model_name)
+        or model_arch in ("KimiK3ForConditionalGeneration", "KimiK31ForConditionalGeneration")
+        or is_kimi_k3_k31_tokenizer_source(tokenizer_id, revision=kwargs.get("revision"))
+    ):
+        # Recognized reviewed Kimi K3/K3.1 data: build the id-identical fast
+        # tokenizer from reviewed installed code. Checkpoint Python (the
+        # auto_map TikTokenTokenizer) is never imported.
+        from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
+
+        return load_native_tokenizer(tokenizer_id, revision=kwargs.get("revision"))
 
     if (
         is_deepseek_v4_model_name(model_name)

@@ -505,3 +505,156 @@ def test_other_model_kimi_policies_and_revisions_remain_unchanged(monkeypatch, t
     sampling_client._load_tokenizer_from_model_info.cache_clear()
     sampling_client._load_tokenizer_from_model_info("unmigrated-model", tokenizer)
     assert calls == [{"fast": True, "trust_remote_code": True, "revision": revision}]
+
+
+# ---------------------------------------------------------------------------
+# Kimi K3/K3.1 identity (local only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model_name,expected",
+    [
+        (None, False),
+        ("", False),
+        # Reviewed canonical IDs: the digest-pinned HF repositories and the
+        # registry-onboarded Fireworks resource IDs.
+        ("moonshotai/Kimi-K3", True),
+        ("moonshotai/Kimi-K3.1-Pro", True),
+        ("accounts/fireworks/models/kimi-k3", True),
+        ("accounts/fireworks/models/kimi-k3p1-pro", True),
+        # Registry-style normalization: strip, trailing slashes, case.
+        ("accounts/fireworks/models/kimi-k3/", True),
+        ("MOONSHOTAI/KIMI-K3.1-PRO", True),
+        (" moonshotai/Kimi-K3 ", True),
+        # The exact architecture model_type strings are independently
+        # selected control-plane context.
+        ("kimi_k3", True),
+        ("kimi_k31", True),
+        ("Kimi_K31/", True),
+        # Substrings, basenames, ancestors, namespaces and forks never
+        # contribute identity.
+        ("accounts/team/models/kimi-k3-finetune", False),
+        ("accounts/fireworks/models/kimi-k3p1-pro/finetune-x", False),
+        ("acme/Kimi-K3", False),
+        ("moonshotai/Kimi-K30", False),
+        ("accounts/fireworks/models/kimi-k3p10", False),
+        ("kimi", False),
+        ("kimi_k3_k31", False),
+        # Kimi K2 stays outside the K3/K3.1 set.
+        ("moonshotai/Kimi-K2-Thinking", False),
+        ("moonshotai/Kimi-K2.6", False),
+        ("kimi_k2", False),
+        ("Qwen/Qwen3-8B", False),
+    ],
+)
+def test_kimi_model_name_policy_exact_reviewed_ids(model_name, expected):
+    assert identity.is_kimi_k3_k31_model_name(model_name) is expected
+
+
+def test_kimi_reviewed_hub_sources_cannot_fail_open_on_metadata_fetch(monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise AssertionError("reviewed Kimi Hub sources must not need advisory reads")
+
+    monkeypatch.setattr(identity, "_hub_download", unavailable)
+    for source in identity.KIMI_K3_K31_REPOSITORIES:
+        assert identity.is_kimi_k3_k31_tokenizer_source(source)
+
+
+def test_kimi_empty_and_missing_inputs_are_not_recognized() -> None:
+    assert identity.is_kimi_k3_k31_tokenizer_source(None) is False
+    assert identity.is_kimi_k3_k31_tokenizer_source("") is False
+    assert identity.is_kimi_k3_k31_tokenizer_source("/nonexistent/path/xyz") is False
+
+
+@pytest.mark.parametrize("model_type", ["kimi_k3", "kimi_k31"])
+def test_kimi_config_model_type_branch(tmp_path: Path, model_type: str) -> None:
+    (tmp_path / "config.json").write_text(json.dumps({"model_type": model_type}))
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is True
+
+
+def test_kimi_other_model_type_is_not_recognized(tmp_path: Path) -> None:
+    (tmp_path / "config.json").write_text(json.dumps({"model_type": "qwen3"}))
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is False
+
+
+@pytest.mark.parametrize("model_type", ["qwen3", "llama", "new_model_family"])
+def test_kimi_explicit_other_model_type_precedes_shared_vocab_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_type: str
+) -> None:
+    """Shared vocabulary bytes must not change an explicitly selected family."""
+    (tmp_path / "config.json").write_text(json.dumps({"model_type": model_type}))
+    vocab = tmp_path / "tiktoken.model"
+    vocab.write_bytes(b"shared vocab bytes")
+    config = tmp_path / "tokenizer_config.json"
+    config.write_bytes(b"shared tokenizer config")
+    monkeypatch.setattr(identity, "KIMI_K3_K31_TIKTOKEN_MODEL_SHA256", hashlib.sha256(vocab.read_bytes()).hexdigest())
+    monkeypatch.setattr(
+        identity,
+        "KIMI_K3_K31_TOKENIZER_CONFIG_SHA256",
+        frozenset({hashlib.sha256(config.read_bytes()).hexdigest()}),
+    )
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is False
+    assert identity.requires_code_free_tokenizer_loading(str(tmp_path)) is True
+
+
+def test_kimi_configless_digest_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vocab = tmp_path / "tiktoken.model"
+    vocab.write_bytes(b"shared vocab bytes")
+    config = tmp_path / "tokenizer_config.json"
+    config.write_bytes(b"shared tokenizer config")
+    monkeypatch.setattr(identity, "KIMI_K3_K31_TIKTOKEN_MODEL_SHA256", hashlib.sha256(vocab.read_bytes()).hexdigest())
+    monkeypatch.setattr(
+        identity,
+        "KIMI_K3_K31_TOKENIZER_CONFIG_SHA256",
+        frozenset({hashlib.sha256(config.read_bytes()).hexdigest()}),
+    )
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is True
+    vocab.write_bytes(b"different bytes")
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is False
+
+
+def test_kimi_vocab_digest_alone_is_not_enough(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both the shared vocabulary and a pinned tokenizer_config must match."""
+    vocab = tmp_path / "tiktoken.model"
+    vocab.write_bytes(b"shared vocab bytes")
+    (tmp_path / "tokenizer_config.json").write_bytes(b"unreviewed config bytes")
+    monkeypatch.setattr(identity, "KIMI_K3_K31_TIKTOKEN_MODEL_SHA256", hashlib.sha256(vocab.read_bytes()).hexdigest())
+    assert identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path)) is False
+
+
+def test_kimi_same_artifact_renamed_has_same_decision(tmp_path: Path) -> None:
+    """Directory names never contribute identity: the same artifact keeps the
+    decision its data earns under every name."""
+    for name in ("totally-unrelated-name", "Kimi-K3.1-clone", "kimi-k3p1-pro"):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "config.json").write_text(json.dumps({"model_type": "kimi_k31"}))
+        assert identity.is_kimi_k3_k31_tokenizer_source(str(directory)) is True, name
+        (directory / "config.json").write_text(json.dumps({"model_type": "qwen3"}))
+        assert identity.is_kimi_k3_k31_tokenizer_source(str(directory)) is False, name
+
+
+def test_kimi_absent_metadata_renamed_does_not_gain_identity(tmp_path: Path) -> None:
+    for name in ("Kimi-K3.1-Pro", "kimi-k3", "kimi_k31"):
+        directory = tmp_path / name
+        directory.mkdir()
+        assert identity.is_kimi_k3_k31_tokenizer_source(str(directory)) is False, name
+
+
+def test_kimi_model_type_sentinel_is_context_but_never_source_identity(monkeypatch) -> None:
+    """``kimi_k31`` (the exact model_type) is valid selected context, yet as a
+    tokenizer SOURCE it is recognized only through data: with advisory reads
+    unavailable it must not be recognized by the string alone."""
+    assert identity.is_kimi_k3_k31_model_name(identity.KIMI_K31_MODEL_TYPE) is True
+
+    reads = []
+
+    def unavailable(repo_id, filename, **_kwargs):
+        reads.append((repo_id, filename))
+        return None
+
+    monkeypatch.setattr(identity, "_hub_download", unavailable)
+    monkeypatch.setattr(identity, "_hub_kimi_k3_k31_data_matches", lambda *_args, **_kwargs: False)
+    assert identity.is_kimi_k3_k31_tokenizer_source("kimi_k31") is False
+    assert reads == [("kimi_k31", "config.json")]
