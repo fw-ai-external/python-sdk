@@ -49,6 +49,7 @@ from fireworks.training.sdk.concurrency import SamplingConcurrencyController
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
 )
+from fireworks.training.sdk.tokenizer_identity import is_code_free_model_name
 
 if TYPE_CHECKING:
     from fireworks.training.sdk._rdma import _RdmaSamplerBackend
@@ -632,7 +633,7 @@ def _create_managed_tinker_client(
             # Let get_tokenizer() load from the HF tokenizer name without a get_info RPC.
             training_client._tokenizer_model = config.tokenizer_model
             training_client._tokenizer_base_model = (
-                "deepseek_v4" if config.base_model_type == "deepseek_v4" else config.base_model
+                config.base_model_type if is_code_free_model_name(config.base_model_type) else config.base_model
             )
             handle.training_client = training_client
             handle.training_clients.append(training_client)

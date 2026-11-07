@@ -12,6 +12,7 @@ Full Changelog: [v1.2.32...v1.2.33](https://github.com/fw-ai-external/python-sdk
 ### Bug Fixes
 * **training-sdk:** preserve message sampling, saved fast-tokenizer overrides and chat-profile save/reload behavior on code-free Kimi loading paths.
 * **training-sdk:** follow the November 5 Kimi K3.1 release encoder, which rejects the invalid `medium` thinking effort without changing vocabulary or image-token IDs.
+* **training-sdk:** keep DeepSeek V4.1 tokenizer and renderer loading in installed code, including explicit base-model context and opaque managed tokenizer paths.
 
 ## 1.2.32 (2026-11-05)
 

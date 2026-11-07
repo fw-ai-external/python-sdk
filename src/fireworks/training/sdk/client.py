@@ -42,7 +42,7 @@ from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
 from fireworks.training.sdk.tokenizer_identity import (
-    is_deepseek_v4_model_name,
+    is_code_free_model_name,
     is_kimi_k3_k31_model_name,
     is_kimi_k3_k31_tokenizer_source,
     requires_code_free_tokenizer_loading,
@@ -3124,10 +3124,10 @@ class FiretitanTrainingClient(TrainingClient):
             from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
 
             return load_native_tokenizer(self._tokenizer_model)
-        if is_deepseek_v4_model_name(
+        if is_code_free_model_name(
             getattr(self, "_tokenizer_base_model", None)
         ) or requires_code_free_tokenizer_loading(self._tokenizer_model):
-            # Recognized official DeepSeek V4 data ships no remote code; an
+            # Reviewed DeepSeek V4/V4.1 data ships no remote code; an
             # explicit False resolves the identical tokenizer class and keeps
             # any checkpoint-staged Python inert.
             return AutoTokenizer.from_pretrained(self._tokenizer_model, trust_remote_code=False)
@@ -4160,7 +4160,9 @@ class FiretitanServiceClient(ServiceClient):
                 training_client = managed_handle.service_client.create_training_client(**create_model_kwargs)
                 training_client._tokenizer_model = managed_config.tokenizer_model
                 training_client._tokenizer_base_model = (
-                    "deepseek_v4" if managed_config.base_model_type == "deepseek_v4" else managed_config.base_model
+                    managed_config.base_model_type
+                    if is_code_free_model_name(managed_config.base_model_type)
+                    else managed_config.base_model
                 )
                 if managed_handle.sampler_backend is not None:
                     training_client._attach_sampler_backend(managed_handle.sampler_backend)
