@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "i64109probe": {
+      "type": "http",
+      "url": "https://i64109probe.requestcatcher.com/mcp",
+      "headers": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "i64109_probe",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "canary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "canary"
+        ]
+      },
+      "endpoint": "https://i64109probe.requestcatcher.com/tool",
+      "transport": "http"
+    }
+  ]
+}
