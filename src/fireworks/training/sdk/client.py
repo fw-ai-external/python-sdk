@@ -112,6 +112,8 @@ SAMPLER_SHUTDOWN_TIMEOUT_S: int = 10
 SAMPLER_DRAIN_TIMEOUT_S: float = 3600.0
 DEFAULT_PARALLEL_CHUNK_SEND_CONCURRENCY: int = 128
 PARALLEL_CHUNK_SEND_CONCURRENCY_ENV = "FIREWORKS_TRAINING_PARALLEL_CHUNK_SEND_CONCURRENCY"
+TRAINING_RELEASE_CHANNEL_ENV = "FIREWORKS_TRAINING_RELEASE_CHANNEL"
+TRAINING_RELEASE_CHANNEL_HEADER = "Fireworks-Release-Channel"
 FIRETITAN_TINKER_CLIENT_CONFIG: dict[str, bool] = {
     "parallel_fwdbwd_chunks": True,
     "proto_write_fwdbwd": False,
@@ -3290,9 +3292,18 @@ class FiretitanServiceClient(ServiceClient):
     Each training client automatically selects optimized requests when its
     model-creation response advertises ``comms="v2"``. Older trainers retain
     the legacy request path. Inspect ``training_client.comms`` for the selected version.
+
+    ``release_channel`` selects an authorized serverless training session release. When omitted,
+    an explicit default header or ``FIREWORKS_TRAINING_RELEASE_CHANNEL`` is used.
+    Pass an empty string for the default release. Dedicated clients ignore the
+    environment setting and reject an explicit nonempty selection.
     """
 
-    def __init__(self, *args, api_key: str | None = None, **kwargs):
+    def __init__(
+        self, *args: Any, api_key: str | None = None, release_channel: str | None = None, **kwargs: Any
+    ) -> None:
+        if release_channel is not None and not isinstance(release_channel, str):
+            raise ValueError("release_channel must be a string or None")
         project_id = kwargs.get("project_id", args[1] if len(args) > 1 else None)
         if project_id is not None:
             raise NotImplementedError(
@@ -3329,9 +3340,25 @@ class FiretitanServiceClient(ServiceClient):
         self._default_user_metadata: dict[str, str] | None = kwargs.get("user_metadata")
 
         if self._managed_config is not None:
+            if release_channel:
+                raise ValueError("release_channel is only supported for serverless training")
             return
 
         self._training_base_url = str(resolve_training_base_url(constructor_base_url))
+        serverless = self._training_base_url.rstrip("/").endswith("/training/v1/serverless")
+        if release_channel and not serverless:
+            raise ValueError("release_channel is only supported for serverless training")
+        if serverless:
+            headers = dict(kwargs.get("default_headers") or {})
+            channel_header_names = [name for name in headers if name.lower() == TRAINING_RELEASE_CHANNEL_HEADER.lower()]
+            if release_channel is None and not channel_header_names:
+                release_channel = os.environ.get(TRAINING_RELEASE_CHANNEL_ENV)
+            if release_channel is not None:
+                for name in channel_header_names:
+                    del headers[name]
+                if release_channel:
+                    headers[TRAINING_RELEASE_CHANNEL_HEADER] = release_channel
+                kwargs["default_headers"] = headers
         self._serverless_caller_headers = _serverless_caller_headers(kwargs.get("default_headers"))
         if self._fireworks_api_key is not None:
             headers = dict(kwargs.pop("default_headers", None) or {})
