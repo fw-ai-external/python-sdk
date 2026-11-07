@@ -55,8 +55,10 @@ def test_managed_config_defaults_use_reservation_true_and_accepts_opt_out():
     "overrides,enabled",
     [
         ({}, True),
-        ({"lora_rank": 8}, False),
-        ({"max_lora_rank": 8}, False),
+        ({"lora_rank": 8}, True),
+        ({"lora_rank": 8, "forward_only": True}, False),
+        ({"lora_rank": 8, "extra_values": {"testValue": "test-value"}}, True),
+        ({"max_lora_rank": 8}, True),
         ({"forward_only": True}, False),
         ({"create_deployment": False}, False),
         ({"extra_values": {"testValue": "test-value"}}, True),

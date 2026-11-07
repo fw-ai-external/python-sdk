@@ -43,6 +43,12 @@ class DeploymentShape(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the deployment shape."""
 
+    created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
+    """The email address of the user who created this deployment shape.
+
+    Only returned to members of the deployment shape's account.
+    """
+
     description: Optional[str] = None
     """The description of the deployment shape.
 

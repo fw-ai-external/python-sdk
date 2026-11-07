@@ -46,9 +46,7 @@ def connect(monkeypatch):
                 model_id = (
                     f"base-{index}"
                     if body.get("base_only")
-                    else f"run-{index}:train:0"
-                    if route == "serverless"
-                    else f"model-{index}"
+                    else f"run-{index}:train:0" if route == "serverless" else f"model-{index}"
                 )
                 pending[request_id] = {"type": "create_model", "model_id": model_id, **next(models)}
                 return httpx.Response(200, json={"request_id": request_id})
@@ -549,11 +547,13 @@ def test_old_response_model_accepts_router_replay_capability():
     assert response.model_id == "test"
 
 
+@pytest.mark.parametrize("capacity", [None, 16], ids=["legacy-config", "cookbook-capacity"])
 @pytest.mark.parametrize("lora_rank", [0, 8], ids=["full", "lora"])
 @pytest.mark.parametrize("trainer_support", [False, True], ids=["old-trainer", "new-trainer"])
 @pytest.mark.parametrize("inference_support", [False, True], ids=["old-inference", "new-inference"])
-def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, inference_support):
-    from fireworks.training.sdk.managed import _TinkerSamplerBackend
+@pytest.mark.parametrize("lora_support", [False, True])
+def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, inference_support, lora_support, capacity):
+    from fireworks.training.sdk.managed import _rdma_candidate, _ManagedTinkerConfig, _TinkerSamplerBackend
 
     # Missing fields reproduce the response of old images, rather than requiring
     # those images to learn how to advertise a negative capability.
@@ -568,24 +568,33 @@ def test_weight_sync_transport_matrix(connect, lora_rank, trainer_support, infer
     )
     manager._hotload_headers.return_value = {}
     replica = {"supports_rdma_weight_sync": True} if inference_support else {}
+    replica["supports_rdma_lora_weight_sync"] = lora_support
     manager.hotload_check_status.return_value = {"replicas": [replica]}
     manager.hotload_and_wait.return_value = True
-    if (lora_rank == 0 and trainer_support != inference_support) or (lora_rank != 0 and trainer_support):
+    config = _ManagedTinkerConfig(base_model="test/model", max_lora_rank=capacity)
+    backend = _TinkerSamplerBackend(
+        manager,
+        "rollout",
+        "test/model",
+        lora_rank=lora_rank,
+        allow_rdma=_rdma_candidate(config),
+    )
+    expected_rdma = trainer_support and inference_support and (lora_rank == 0 or lora_support)
+    if (trainer_support or inference_support) and not expected_rdma:
         with pytest.raises(RuntimeError, match="FILE fallback is not allowed"):
-            client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
+            client._attach_sampler_backend(backend)
         assert not any(op in ("weight_sync", "save_weights_for_sampler") for op, _ in calls)
         manager.hotload_and_wait.assert_not_called()
         return
-    client._attach_sampler_backend(_TinkerSamplerBackend(manager, "rollout", "test/model", lora_rank=lora_rank))
+    client._attach_sampler_backend(backend)
 
-    expected_rdma = lora_rank == 0 and trainer_support and inference_support
     assert client.supports_rdma_weight_sync is expected_rdma
     result = client.weight_sync().result(timeout=5)
     submitted = [op for op, _ in calls if op in ("weight_sync", "save_weights_for_sampler")]
     assert submitted == (["weight_sync"] if expected_rdma else ["save_weights_for_sampler"])
     assert manager.hotload_and_wait.call_count == (0 if expected_rdma else 1)
     assert (result.optimizer_version is not None) is expected_rdma
-    assert manager.hotload_check_status.call_count == (2 if lora_rank == 0 else 0)
+    assert manager.hotload_check_status.call_count == 2
 
 
 def _weight_sync_client(connect, *, weight_sync_status=200, rdma=True):
