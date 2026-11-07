@@ -282,8 +282,18 @@ def test_reviewed_shared_bytes_block_sdk_checkpoint_code(
 
 
 @pytest.mark.parametrize("override", ["local", "kimi"])
+@pytest.mark.parametrize(
+    "selected_model",
+    [
+        "accounts/fireworks/models/deepseek-v4-flash-0731",
+        "accounts/fireworks/models/deepseek-v41-flash",
+        "accounts/fireworks/models/deepseek-v4p1-flash",
+        "deepseek_v41_text",
+        "deepseek_v4.1_text",
+    ],
+)
 def test_sdk_v4_model_context_cannot_lose_policy_on_tokenizer_override(
-    unidentified_v4_tokenizer, monkeypatch, override
+    unidentified_v4_tokenizer, monkeypatch, override, selected_model
 ):
     """Synthetic Hub staging keeps the actual HF loader/code execution intact."""
     import transformers
@@ -306,7 +316,7 @@ def test_sdk_v4_model_context_cannot_lose_policy_on_tokenizer_override(
     tokenizer = None
     try:
         tokenizer = sampling_client._load_tokenizer_from_model_info(
-            "accounts/fireworks/models/deepseek-v4-flash-0731",
+            selected_model,
             str(directory) if override == "local" else "moonshotai/Kimi-K2.6",
         )
     except ValueError as exc:
@@ -322,6 +332,11 @@ def test_sdk_v4_model_context_cannot_lose_policy_on_tokenizer_override(
     [
         ("accounts/fireworks/models/deepseek-v4-flash-0731", ""),
         ("accounts/customer/models/production-model", "deepseek_v4"),
+        ("accounts/fireworks/models/deepseek-v41-flash", ""),
+        ("accounts/customer/models/production-model", "deepseek_v41"),
+        ("accounts/customer/models/production-model", "deepseek_v41_text"),
+        ("accounts/customer/models/production-model", "deepseek_v4.1"),
+        ("accounts/customer/models/production-model", "deepseek_v4.1_text"),
     ],
 )
 def test_managed_training_client_retains_base_identity_for_tokenizer(
@@ -439,7 +454,12 @@ def test_model_type_sentinel_is_context_but_never_source_identity(monkeypatch) -
     assert reads == [("deepseek_v4", "config.json")]
 
 
-def test_core_training_tokenizer_uses_existing_architecture_metadata(unidentified_v4_tokenizer, monkeypatch):
+@pytest.mark.parametrize(
+    "model_arch", ["DeepseekV4ForCausalLM", "DeepseekV41ForCausalLM", "DeepseekV41ForConditionalGeneration"]
+)
+def test_core_training_tokenizer_uses_existing_architecture_metadata(
+    unidentified_v4_tokenizer, monkeypatch, model_arch
+):
     """An opaque model name can still constrain policy from get_info metadata."""
     import asyncio
     from types import SimpleNamespace
@@ -454,9 +474,7 @@ def test_core_training_tokenizer_uses_existing_architecture_metadata(unidentifie
     directory, original, marker = unidentified_v4_tokenizer
     info = types.GetInfoResponse(
         model_id="test-model",
-        model_data=types.ModelData(
-            arch="DeepseekV4ForCausalLM", model_name="renamed-model", tokenizer_id=str(directory)
-        ),
+        model_data=types.ModelData(arch=model_arch, model_name="renamed-model", tokenizer_id=str(directory)),
     )
 
     class Holder:
