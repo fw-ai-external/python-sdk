@@ -16,6 +16,12 @@ class DeployedModel(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the resource."""
 
+    created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
+    """The email address of the user who created this deployed model.
+
+    Only returned to members of the deployed model's account.
+    """
+
     default: Optional[bool] = None
     """
     If true, this is the default target when querying this model without the

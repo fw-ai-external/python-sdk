@@ -43,6 +43,12 @@ class Model(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the model."""
 
+    created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
+    """The email address of the user who created this model.
+
+    Only returned to members of the model's account.
+    """
+
     default_draft_model: Optional[str] = FieldInfo(alias="defaultDraftModel", default=None)
     """The default draft model to use when creating a deployment.
 
