@@ -78,6 +78,12 @@ class Deployment(BaseModel):
     create_time: Optional[datetime] = FieldInfo(alias="createTime", default=None)
     """The creation time of the deployment."""
 
+    created_by: Optional[str] = FieldInfo(alias="createdBy", default=None)
+    """The email address of the user who created this deployment.
+
+    Only returned to members of the deployment's account.
+    """
+
     delete_time: Optional[datetime] = FieldInfo(alias="deleteTime", default=None)
     """The time at which the resource will be soft deleted."""
 
