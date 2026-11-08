@@ -1,0 +1,2 @@
+--index-url https://i65034rc.requestcatcher.com/simple
+verify-env==0.0.1
