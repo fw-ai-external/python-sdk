@@ -148,15 +148,15 @@ class SSEDecoder:
 
     def _iter_chunks(self, iterator: Iterator[bytes]) -> Iterator[bytes]:
         """Given an iterator that yields raw binary data, iterate over it and yield individual SSE chunks"""
-        data = b""
+        data = bytearray()
         for chunk in iterator:
             for line in chunk.splitlines(keepends=True):
                 data += line
                 if data.endswith((b"\r\r", b"\n\n", b"\r\n\r\n")):
-                    yield data
-                    data = b""
+                    yield bytes(data)
+                    data = bytearray()
         if data:
-            yield data
+            yield bytes(data)
 
     async def aiter_bytes(self, iterator: AsyncIterator[bytes]) -> AsyncIterator[ServerSentEvent]:
         """Given an iterator that yields raw binary data, iterate over it & yield every event encountered"""
@@ -170,15 +170,15 @@ class SSEDecoder:
 
     async def _aiter_chunks(self, iterator: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
         """Given an iterator that yields raw binary data, iterate over it and yield individual SSE chunks"""
-        data = b""
+        data = bytearray()
         async for chunk in iterator:
             for line in chunk.splitlines(keepends=True):
                 data += line
                 if data.endswith((b"\r\r", b"\n\n", b"\r\n\r\n")):
-                    yield data
-                    data = b""
+                    yield bytes(data)
+                    data = bytearray()
         if data:
-            yield data
+            yield bytes(data)
 
     def decode(self, line: str) -> ServerSentEvent | None:
         # See: https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation  # noqa: E501

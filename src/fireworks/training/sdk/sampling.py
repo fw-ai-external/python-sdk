@@ -226,7 +226,7 @@ class SampledCompletion:
 
     Contains the full token sequence (prompt + completion) needed for training,
     with prompt tokens from client-side tokenization and completion tokens from
-    the deployment's ``raw_output`` response.
+    the deployment's exact token-ID response.
     """
 
     text: str
@@ -288,7 +288,7 @@ class DeploymentSampler(_RestClient):
 
     Uses a local HuggingFace tokenizer to apply chat templates and tokenize
     prompts, then sends token IDs to the ``/inference/v1/completions`` endpoint
-    (token-in, token-out).  Completion token IDs come back via ``raw_output``.
+    (token-in, token-out).  Completion token IDs come back via SSE token deltas.
 
     BOS and special tokens are handled by the tokenizer's chat template --
     no manual prepend is needed.
@@ -554,8 +554,12 @@ class DeploymentSampler(_RestClient):
         if "routing_matrix_format" in kwargs:
             raise ValueError("routing_matrix_format is selected by the trainer-bound sampler")
         http_timeout = kwargs.pop("http_timeout", 600)
-        if kwargs.get("images"):
-            kwargs.setdefault("return_token_ids", True)
+        if kwargs.get("raw_output"):
+            raise ValueError(
+                "DeploymentSampler requires raw_output=False; use the inference client for raw diagnostics"
+            )
+        kwargs["raw_output"] = False
+        kwargs["return_token_ids"] = True
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
@@ -647,9 +651,11 @@ class DeploymentSampler(_RestClient):
             with _sampling_response_evidence(resp, prompt):
                 accumulated_text = ""
                 accumulated_logprobs: list[dict] = []
+                accumulated_token_ids: list[int] | None = None
+                server_prompt_ids: list[int] | None = None
+                missing_token_ids = False
                 finish_reason = None
                 usage_info = None
-                raw_output = None
                 routing_metadata = {}
                 perf_metrics_dict: dict[str, str] | None = None
                 first_token_time: float | None = None
@@ -698,6 +704,8 @@ class DeploymentSampler(_RestClient):
                         raise _SSEProtocolError("completion choices must be a list of objects")
 
                     for choice in chunk.get("choices", []):
+                        if choice.get("index", 0) != 0:
+                            raise _SSEProtocolError("streaming completions require n=1")
                         routing_metadata.update(
                             {key: choice[key] for key in _STORAGE_REFERENCE_FIELDS if key in choice}
                         )
@@ -708,10 +716,37 @@ class DeploymentSampler(_RestClient):
                             accumulated_text += text_delta
 
                         lp = choice.get("logprobs")
+                        content = lp.get("content") if isinstance(lp, dict) else None
                         if lp and isinstance(lp, dict):
-                            content = lp.get("content")
                             if isinstance(content, list):
                                 accumulated_logprobs.extend(content)
+
+                        token_ids = choice.get("token_ids")
+                        if token_ids is not None:
+                            if not isinstance(token_ids, list) or any(type(token) is not int for token in token_ids):
+                                raise _SSEProtocolError("completion token_ids must be a list of integers")
+                            if content is not None:
+                                if not isinstance(content, list) or len(content) != len(token_ids):
+                                    raise _SSEProtocolError("completion token IDs and logprobs are not aligned")
+                                if any(
+                                    not isinstance(row, dict)
+                                    or (row.get("token_id") is not None and row["token_id"] != token)
+                                    for token, row in zip(token_ids, content)
+                                ):
+                                    raise _SSEProtocolError("completion token IDs disagree with logprob token IDs")
+                            if accumulated_token_ids is None:
+                                accumulated_token_ids = []
+                            accumulated_token_ids.extend(token_ids)
+                        elif text_delta or content:
+                            missing_token_ids = True
+
+                        prompt_ids = choice.get("prompt_token_ids")
+                        if prompt_ids is not None:
+                            if not isinstance(prompt_ids, list) or any(type(token) is not int for token in prompt_ids):
+                                raise _SSEProtocolError("prompt_token_ids must be a list of integers")
+                            if server_prompt_ids is not None and prompt_ids != server_prompt_ids:
+                                raise _SSEProtocolError("prompt token IDs changed within the completion stream")
+                            server_prompt_ids = prompt_ids
 
                         fr = choice.get("finish_reason")
                         if fr:
@@ -720,10 +755,6 @@ class DeploymentSampler(_RestClient):
                                 error._fireworks_upstream_response_id = upstream_response_id
                                 raise error
                             finish_reason = fr
-
-                        ro = choice.get("raw_output")
-                        if ro:
-                            raw_output = ro
 
                     if "usage" in chunk:
                         usage_info = chunk["usage"]
@@ -735,6 +766,21 @@ class DeploymentSampler(_RestClient):
 
                 if finish_reason is None:
                     raise _SSETruncationError("inference stream ended without a successful finish reason")
+
+                if missing_token_ids or accumulated_token_ids is None or server_prompt_ids is None:
+                    raise _SSEProtocolError(
+                        "deployment did not return complete token IDs; serving must support return_token_ids and prompt_token_ids"
+                    )
+                if payload.get("logprobs") and len(accumulated_logprobs) != len(accumulated_token_ids):
+                    raise _SSEProtocolError("completion token IDs and logprobs are not aligned")
+                generated_count = usage_info.get("completion_tokens") if usage_info else None
+                echo_count = payload.get("echo_last")
+                if echo_count is None:
+                    echo_count = len(server_prompt_ids) if payload.get("echo") else 0
+                if type(generated_count) is int and type(echo_count) is int:
+                    expected_count = generated_count + min(echo_count, len(server_prompt_ids))
+                    if len(accumulated_token_ids) != expected_count:
+                        raise _SSEProtocolError("completion token count disagrees with usage")
 
                 client_ttft = (first_token_time - t0) if first_token_time else None
                 elapsed = time.monotonic() - t0
@@ -761,12 +807,12 @@ class DeploymentSampler(_RestClient):
                 assembled_choice: dict[str, Any] = {
                     "text": accumulated_text,
                     "finish_reason": finish_reason,
+                    "token_ids": accumulated_token_ids,
+                    "prompt_token_ids": server_prompt_ids,
                 }
                 assembled_choice.update(routing_metadata)
                 if accumulated_logprobs:
                     assembled_choice["logprobs"] = {"content": accumulated_logprobs}
-                if raw_output:
-                    assembled_choice["raw_output"] = raw_output
                 result: dict[str, Any] = {"choices": [assembled_choice]}
                 if upstream_response_id is not None:
                     result["id"] = upstream_response_id
@@ -938,9 +984,14 @@ class DeploymentSampler(_RestClient):
         sampler entry point for renderer-backed RL rollouts where the prompt has
         already been built from a token-native renderer.
 
-        Concurrency control, ``raw_output`` echo semantics, ``max_seq_len`` filtering,
+        Concurrency control, echo semantics, ``max_seq_len`` filtering,
         and logprob extraction are inherited from :meth:`_do_one_completion` and
         :meth:`_parse_completions_result`.
+
+        By default, collect exact token IDs from SSE deltas and
+        omit the duplicate raw snapshot. This requires a deployment that returns
+        incremental token IDs. ``raw_output=True`` is not supported by this sampler;
+        use the inference client directly for raw diagnostics.
 
         Pass ``images`` (base64 data URLs) for vision models with an unexpanded
         token prompt (one ``<|image_pad|>`` token per image). The server expands
@@ -1092,7 +1143,7 @@ class DeploymentSampler(_RestClient):
 
     # Per-completion retry covers two transient server-side classes:
     # 1. SSE truncation: the deployment closes the stream mid-generation
-    #    without [DONE]/finish_reason/raw_output. Surfaces as a RuntimeError
+    #    without [DONE]/finish_reason/token_ids. Surfaces as a RuntimeError
     #    raised from async_completions_stream.
     # 2. Transient HTTP / connection errors right after a fresh deployment
     #    or hotload: 408/429/502/503/504 plus httpx connection-level errors.
@@ -1415,6 +1466,8 @@ class DeploymentSampler(_RestClient):
         diagnostic_context = kwargs.pop("timeout_diagnostic_context", None)
         sampling_context = kwargs.pop("sampling_context", None)
         raw_logprobs_match_sampling = self._raw_logprobs_match_sampling_params(temperature, kwargs)
+        kwargs.setdefault("raw_output", False)
+        kwargs["return_token_ids"] = True
         # One stable id for this logical request, constant across every retry and
         # sent as X-Request-Id so a failure is searchable in server logs.
         logical_request_id = logical_request_id or uuid.uuid4().hex
@@ -1433,7 +1486,6 @@ class DeploymentSampler(_RestClient):
                     prompt=prompt_ids,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    raw_output=True,
                     logical_request_id=logical_request_id,
                     **kwargs,
                 )
@@ -1702,16 +1754,15 @@ class DeploymentSampler(_RestClient):
         for choice in result.get("choices", []):
             text = choice.get("text", "")
             finish_reason = choice.get("finish_reason", "unknown")
-            raw = choice.get("raw_output") or {}
-            completion_ids = raw.get("completion_token_ids")
+            completion_ids = choice.get("token_ids")
 
             if completion_ids is None:
                 raise RuntimeError(
                     format_sdk_error(
-                        "Deployment did not return raw_output token IDs",
-                        f"The API response is missing completion_token_ids. Got choice keys: {list(choice.keys())}",
-                        "The sampler requested raw_output=True, which is required for token-in RL rollouts. "
-                        "Use a deployment path that returns raw_output.completion_token_ids for completions.",
+                        "Deployment did not return completion token IDs",
+                        f"The API response is missing choice.token_ids. Got choice keys: {list(choice.keys())}",
+                        "Token-in RL rollouts require exact completion token IDs. "
+                        "Serving must return incremental token IDs and server prompt IDs.",
                         docs_url=DOCS_SDK,
                         show_support=True,
                     )
@@ -1768,14 +1819,14 @@ class DeploymentSampler(_RestClient):
                     raise ValueError("Sampling references belong to a different shared storage domain")
                 sampling_references[column] = references
 
-            expanded_prompt_ids = choice.get("prompt_token_ids") or raw.get("prompt_token_ids")
+            expanded_prompt_ids = choice.get("prompt_token_ids")
             if expanded_prompt_ids is not None:
                 prompt_for_full = [int(x) for x in expanded_prompt_ids]
             else:
                 prompt_for_full = list(prompt_ids)
 
             # With echo=True the API returns P+C tokens in
-            # completion_token_ids and logprobs cover all P+C positions.
+            # choice.token_ids and logprobs cover all P+C positions.
             # Strip the prompt prefix (verified by actual content match)
             # and drop the unconditional first-token logprob to get
             # P+C-1 training-aligned entries.

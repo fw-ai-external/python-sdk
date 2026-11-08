@@ -84,15 +84,15 @@ class _SSEDecoder:
     @staticmethod
     async def _aiter_chunks(stream: Any) -> Any:
         """Reassemble raw bytes into SSE chunks (delimited by blank lines)."""
-        buf = b""
+        buf = bytearray()
         async for raw in stream.aiter_bytes():
             for line in raw.splitlines(keepends=True):
                 buf += line
                 if buf.endswith((b"\r\r", b"\n\n", b"\r\n\r\n")):
-                    yield buf
-                    buf = b""
+                    yield bytes(buf)
+                    buf = bytearray()
         if buf:
-            yield buf
+            yield bytes(buf)
 
     async def aiter_events(self, response: Any) -> Any:
         """Yield :class:`_SSEEvent` objects from an ``httpx.Response``."""

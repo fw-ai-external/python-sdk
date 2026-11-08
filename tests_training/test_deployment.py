@@ -1378,7 +1378,7 @@ class TestSampleWithTokens:
                     {
                         "text": "hello world",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": completion_ids},
+                        "token_ids": completion_ids,
                     }
                 ]
             },
@@ -1409,7 +1409,7 @@ class TestSampleWithTokens:
                     {
                         "text": "ok",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                     }
                 ]
             },
@@ -1427,11 +1427,9 @@ class TestSampleWithTokens:
 
     def test_missing_completion_token_ids_raises(self):
         sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2, 3]))
-        _mock_async_completions_stream(
-            sampler, {"choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {}}]}
-        )
+        _mock_async_completions_stream(sampler, {"choices": [{"text": "ok", "finish_reason": "stop"}]})
 
-        with pytest.raises(RuntimeError, match="missing completion_token_ids"):
+        with pytest.raises(RuntimeError, match="missing choice.token_ids"):
             asyncio.run(
                 sampler.sample_with_tokens(
                     messages=[{"role": "user", "content": "hi"}],
@@ -1451,7 +1449,7 @@ class TestSampleWithTokens:
                     {
                         "text": "gen",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": echoed_completion_ids},
+                        "token_ids": echoed_completion_ids,
                     }
                 ]
             },
@@ -1485,7 +1483,7 @@ class TestSampleWithTokens:
                     {
                         "text": "gen",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": echoed_ids},
+                        "token_ids": echoed_ids,
                         "logprobs": {
                             "content": [
                                 {"logprob": 0.0, "sampling_logprob": None},
@@ -1539,7 +1537,7 @@ class TestSampleWithTokens:
                     {
                         "text": "long",
                         "finish_reason": "length",
-                        "raw_output": {"completion_token_ids": long_completion},
+                        "token_ids": long_completion,
                     }
                 ]
             },
@@ -1563,7 +1561,7 @@ class TestSampleWithTokens:
                     {
                         "text": "hi",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -1.5, "sampling_logprob": -1.6}]},
                     }
                 ]
@@ -1589,7 +1587,7 @@ class TestSampleWithTokens:
                     {
                         "text": "hi",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -1.5}]},
                     }
                 ]
@@ -1620,7 +1618,7 @@ class TestSampleWithTokens:
                     {
                         "text": "hi",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -1.5}]},
                     }
                 ]
@@ -1647,7 +1645,7 @@ class TestSampleWithTokens:
                     {
                         "text": "hi",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.5, "routing_matrix": "AQID"}]},
                     }
                 ]
@@ -1699,7 +1697,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": completion_ids},
+                        "token_ids": completion_ids,
                     }
                 ]
             },
@@ -1723,7 +1721,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": completion_ids},
+                        "token_ids": completion_ids,
                         "logprobs": {
                             "content": [
                                 {"logprob": -0.4, "sampling_logprob": -0.41},
@@ -1755,7 +1753,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                     }
                 ]
             },
@@ -1775,7 +1773,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -1800,7 +1798,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -1839,7 +1837,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -1881,7 +1879,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "x",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -1901,7 +1899,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "x",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -1924,7 +1922,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "x",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7}]},
                     }
                 ]
@@ -1951,7 +1949,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "x",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7}]},
                     }
                 ]
@@ -1980,7 +1978,7 @@ class TestSampleWithPromptTokens:
                     {
                         "text": "x",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [99]},
+                        "token_ids": [99],
                         "logprobs": {"content": [{"logprob": -0.7, "sampling_logprob": -0.8}]},
                     }
                 ]
@@ -2032,7 +2030,7 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": completion_ids},
+                        "token_ids": completion_ids,
                         "logprobs": {
                             "content": [
                                 {"logprob": -0.3, "sampling_logprob": -0.31},
@@ -2118,10 +2116,8 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {
-                            "prompt_token_ids": expanded,
-                            "completion_token_ids": expanded + completion_ids,
-                        },
+                        "token_ids": expanded + completion_ids,
+                        "prompt_token_ids": expanded,
                         "logprobs": {"content": prompt_rows + completion_rows},
                     }
                 ]
@@ -2160,7 +2156,7 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "out",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [40, 50]},
+                        "token_ids": [40, 50],
                         "logprobs": {
                             "content": [
                                 {
@@ -2218,7 +2214,7 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "out",
                         "finish_reason": "length",
-                        "raw_output": {"completion_token_ids": prompt_ids + completion_ids},
+                        "token_ids": prompt_ids + completion_ids,
                         "logprobs": {
                             "content": [
                                 {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
@@ -2278,9 +2274,7 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "out",
                         "finish_reason": "length",
-                        "raw_output": {
-                            "completion_token_ids": (prompt_ids if echo else []) + completion_ids,
-                        },
+                        "token_ids": (prompt_ids if echo else []) + completion_ids,
                         "logprobs": {"content": content},
                         "top_sampling_format": "parquet_v1",
                         "r3_store_id": "test",
@@ -2373,7 +2367,7 @@ class TestFiretitanSamplingClient:
                     {
                         "text": "x",
                         "finish_reason": "length",
-                        "raw_output": {"completion_token_ids": prompt_ids + [40]},
+                        "token_ids": prompt_ids + [40],
                         "logprobs": {
                             "content": [
                                 {"logprob": 0.0, "sampling_logprob": None},
@@ -2491,7 +2485,7 @@ class TestSampleWithTokensLegacyRegression:
                     {
                         "text": "ok",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [11]},
+                        "token_ids": [11],
                     }
                 ]
             },
@@ -2993,7 +2987,8 @@ class TestStreamingCompletions:
             "choices": [
                 {
                     "text": "hello",
-                    "raw_output": {"completion_token_ids": completion_ids},
+                    "token_ids": completion_ids,
+                    "prompt_token_ids": prompt_ids,
                     "finish_reason": "stop",
                 }
             ],
@@ -3030,7 +3025,8 @@ class TestStreamingCompletions:
             "choices": [
                 {
                     "text": "hello",
-                    "raw_output": {"completion_token_ids": [400, 500]},
+                    "token_ids": [400, 500],
+                    "prompt_token_ids": prompt_ids,
                     "finish_reason": "stop",
                 }
             ],
@@ -3092,9 +3088,9 @@ class TestAttemptRecords:
 
     @staticmethod
     def _success():
-        return {
-            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {"completion_token_ids": [7]}}]
-        }, ServerMetrics(server_processing_time=0.1)
+        return {"choices": [{"text": "ok", "finish_reason": "stop", "token_ids": [7]}]}, ServerMetrics(
+            server_processing_time=0.1
+        )
 
     def _run(self, monkeypatch, failures, *, controller=None):
         self._no_backoff(monkeypatch)
@@ -3203,9 +3199,19 @@ class TestAttemptRecords:
         controller.release = lambda metrics=None: released.append(metrics)
         sampler = _make_sampler(tokenizer=None)
         sampler._concurrency_controller = controller
-        # HTTP 200 whose choice lacks raw_output.completion_token_ids: the real
-        # stream succeeds and the real parser rejects it.
-        chunk = {"choices": [{"text": "ok", "finish_reason": "stop"}]}
+        # Complete token deltas pass stream validation, but a reordered echo
+        # prefix must fail in the completion parser and mark the same attempt.
+        chunk = {
+            "choices": [
+                {
+                    "text": "ok",
+                    "finish_reason": "stop",
+                    "token_ids": [3, 2, 1, 7],
+                    "prompt_token_ids": [1, 2, 3],
+                }
+            ],
+            "usage": {"completion_tokens": 1},
+        }
         raw = f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
 
         async def _post(payload, headers, timeout):
@@ -3221,8 +3227,8 @@ class TestAttemptRecords:
             return resp
 
         sampler._post_completion = _post
-        with pytest.raises(RuntimeError):
-            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3]))
+        with pytest.raises(RuntimeError, match="echoed suffix"):
+            asyncio.run(sampler.sample_with_prompt_tokens([1, 2, 3], echo=True))
         records = sampler.drain_metrics()
         sampler.close()
         assert len(records) == 1
@@ -3255,7 +3261,7 @@ class TestAttemptRecords:
             sampler.routing_matrix_format = "base64_inline"
 
         chunk = {
-            "choices": [{"text": "ok", "finish_reason": "stop", "raw_output": {"completion_token_ids": [7]}}],
+            "choices": [{"text": "ok", "finish_reason": "stop", "token_ids": [7], "prompt_token_ids": [1, 2, 3]}],
             "usage": {"completion_tokens": 1},
         }
         raw = f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
@@ -3312,7 +3318,7 @@ class TestSseTruncationRetry:
                     {
                         "text": "ok",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [7]},
+                        "token_ids": [7],
                     }
                 ]
             }, ServerMetrics()

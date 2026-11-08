@@ -23,10 +23,8 @@ from fireworks.training.sdk.concurrency import AdaptiveConcurrencyController
 _CHOICE: dict[str, Any] = {
     "text": "out",
     "finish_reason": "stop",
-    "raw_output": {"completion_token_ids": [40, 50]},
-    "logprobs": {
-        "content": [{"logprob": -0.3, "sampling_logprob": -0.3}, {"logprob": -0.4, "sampling_logprob": -0.4}]
-    },
+    "token_ids": [40, 50],
+    "logprobs": {"content": [{"logprob": -0.3, "sampling_logprob": -0.3}, {"logprob": -0.4, "sampling_logprob": -0.4}]},
 }
 
 

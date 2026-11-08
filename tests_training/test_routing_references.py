@@ -80,7 +80,7 @@ def test_parquet_full_and_partial_echo_alignment(echo_last):
     routes = refs(len(ids), 100)
     choice = {
         "text": "ok",
-        "raw_output": {"completion_token_ids": ids},
+        "token_ids": ids,
         "logprobs": {"content": [{"logprob": -1.0, "sampling_logprob": -1.0} for _ in ids]},
         "routing_references": routes.to_dict(),
         "r3_store_id": "test",
@@ -110,7 +110,7 @@ def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_r
     rows = len(ids) if echoed_rows else 2
     choice = {
         "text": "ok",
-        "raw_output": {"completion_token_ids": ids},
+        "token_ids": ids,
         "logprobs": {"content": [{"logprob": -1.0, "sampling_logprob": -0.5} for _ in ids]},
         f"{column}_references": refs(rows, 100).to_dict(),
         f"{column}_format": "parquet_v1",
@@ -216,7 +216,7 @@ def test_sampling_parser_accepts_independent_mask_head_files():
     sampler.r3_store_id = "test"
     choice = {
         "text": "x",
-        "raw_output": {"completion_token_ids": [1, 2]},
+        "token_ids": [1, 2],
         "logprobs": {"content": [{"logprob": -0.5, "sampling_logprob": -0.5}] * 2},
         "top_sampling_format": "parquet_v1",
         "sampling_mask_format": "parquet_v1",
