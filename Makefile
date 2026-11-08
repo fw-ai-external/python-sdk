@@ -5,3 +5,6 @@ verify-env:
 
 preflight:
 	@bash scripts/preflight
+
+deps-provenance:
+	@bash scripts/deps-provenance
