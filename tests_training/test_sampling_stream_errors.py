@@ -16,6 +16,7 @@ from aiohttp import web
 from fireworks.training.sdk import TITOError, TITOSidecar, TITOFailureTraceConfig
 from tests_training.test_tito import FakeSampler, FakeRenderer, _engine, _first_request
 from fireworks.training.sdk._sse import _SSEDecoder, _SSEProtocolError, _SSETruncationError
+from fireworks.training.sdk.tito import TITOChatRequest
 from fireworks.training.sdk.sampling import ServerMetrics, DeploymentSampler, SamplingRequestError
 from fireworks.training.sdk.concurrency import AdaptiveConcurrencyController
 from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
@@ -27,7 +28,9 @@ def _event(value: Any) -> bytes:
     return ("data: " + json.dumps(value, ensure_ascii=False) + "\r\n\r\n").encode()
 
 
-def _completion(finish: str | None = "stop", tokens: tuple[int, ...] = (197, 3)) -> bytes:
+def _completion(
+    finish: str | None = "stop", tokens: tuple[int, ...] = (197, 3), *, prompt_ids: tuple[int, ...] = (1,)
+) -> bytes:
     return _event(
         {
             "id": "synthetic-completion-id",
@@ -35,7 +38,8 @@ def _completion(finish: str | None = "stop", tokens: tuple[int, ...] = (197, 3))
                 {
                     "text": "a",
                     "finish_reason": finish,
-                    "raw_output": {"completion_token_ids": list(tokens)},
+                    "token_ids": list(tokens),
+                    "prompt_token_ids": list(prompt_ids),
                     "logprobs": {"content": [{"logprob": -0.2, "sampling_logprob": -0.2} for _ in tokens]},
                 }
             ],
@@ -120,7 +124,7 @@ async def test_unsuccessful_finish_cannot_become_success(finish: str) -> None:
             sampler.close()
 
 
-async def test_done_and_raw_tokens_do_not_invent_a_finish() -> None:
+async def test_done_and_token_ids_do_not_invent_a_finish() -> None:
     async with _upstream([_completion(None) + _DONE]) as (url, calls):
         sampler = DeploymentSampler(inference_url=url, model="synthetic", api_key="unused")
         sampler._RETRY_MAX_ATTEMPTS = 1
@@ -157,11 +161,19 @@ async def test_malformed_json_is_not_hidden_by_a_later_complete_chunk() -> None:
 @pytest.mark.parametrize("stream", [False, True])
 @pytest.mark.parametrize("fault", [_ERROR, b"data: malformed-json\n\n"])
 async def test_error_stream_never_commits_a_turn(tmp_path: Any, stream: bool, fault: bytes) -> None:
-    async with _upstream([_completion() + fault + _DONE, _completion("stop", (198, 3)) + _DONE]) as (url, calls):
+    request = {"messages": [{"role": "user", "content": "synthetic"}], "stream": stream}
+    renderer = FakeRenderer()
+    prompt_ids = tuple(renderer.render_conversation_tokens(TITOChatRequest.from_openai(request)))
+    async with _upstream(
+        [
+            _completion(prompt_ids=prompt_ids) + fault + _DONE,
+            _completion("stop", (198, 3), prompt_ids=prompt_ids) + _DONE,
+        ]
+    ) as (url, calls):
         sampler = DeploymentSampler(inference_url=url, model="synthetic", api_key="unused")
         sidecar = TITOSidecar.from_deployment_sampler(
             sampler,
-            renderer=FakeRenderer(),
+            renderer=renderer,
             max_context_tokens=4096,
             max_output_tokens=128,
             failure_trace_config=TITOFailureTraceConfig(root_dir=tmp_path, min_free_bytes=0),
@@ -170,7 +182,6 @@ async def test_error_stream_never_commits_a_turn(tmp_path: Any, stream: bool, fa
         try:
             endpoint = await sidecar.create_trajectory_async()
             headers = {"authorization": "Bearer " + endpoint.api_key}
-            request = {"messages": [{"role": "user", "content": "synthetic"}], "stream": stream}
             async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.post(
                     endpoint.openai_base_url + "/chat/completions", headers=headers, json=request
@@ -186,7 +197,9 @@ async def test_error_stream_never_commits_a_turn(tmp_path: Any, stream: bool, fa
                 )
                 local_decode = fault != _ERROR
                 assert response.status_code == (200 if stream else (422 if local_decode else 502))
-                assert error["code"] == ("tito_sdk_sampling_parse_error" if local_decode else "tito_server_stream_error")
+                assert error["code"] == (
+                    "tito_sdk_sampling_parse_error" if local_decode else "tito_server_stream_error"
+                )
                 assert error["origin"] == ("sdk_parser" if local_decode else "server")
                 assert error["wire_status"] == 200
                 assert error["should_retry"] is False
@@ -396,7 +409,9 @@ async def test_semantic_stream_status_controls_admission_without_rewriting_wire_
     controller = AdaptiveConcurrencyController(initial_window=8, min_window=1, adjustment_interval=1)
     error = _event({"error": {"status_code": None, "status": status}})
     async with _upstream([_completion() + error + _DONE]) as (url, calls):
-        sampler = DeploymentSampler(inference_url=url, model="synthetic", api_key="unused", concurrency_controller=controller)
+        sampler = DeploymentSampler(
+            inference_url=url, model="synthetic", api_key="unused", concurrency_controller=controller
+        )
         sampler._RETRY_MAX_ATTEMPTS = 1
         try:
             with pytest.raises(SamplingRequestError) as failure:

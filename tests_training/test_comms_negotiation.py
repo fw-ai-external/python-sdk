@@ -46,7 +46,9 @@ def connect(monkeypatch):
                 model_id = (
                     f"base-{index}"
                     if body.get("base_only")
-                    else f"run-{index}:train:0" if route == "serverless" else f"model-{index}"
+                    else f"run-{index}:train:0"
+                    if route == "serverless"
+                    else f"model-{index}"
                 )
                 pending[request_id] = {"type": "create_model", "model_id": model_id, **next(models)}
                 return httpx.Response(200, json={"request_id": request_id})
@@ -279,7 +281,10 @@ def test_r3_probe_is_lazy_shared_and_only_unknown_format_falls_back(
             return httpx.Response(probe_status, json=_r3_probe_result() if probe_status == 200 else error)
         assert body.get("routing_matrix_format") == ("parquet_v1" if probe_status == 200 else None)
         assert bool(body.get("include_routing_matrix")) == (probe_status != 200)
-        return httpx.Response(200, text='data: {"choices":[{"text":"ok","finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"text":"ok","token_ids":[3],"prompt_token_ids":[1,2],"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        )
 
     def unexpected_probe(request):
         raise AssertionError(f"Binding must not call {request.url}")
@@ -430,7 +435,10 @@ def test_old_replica_after_successful_probe_retries_inline_once():
             )
         assert body["include_routing_matrix"] is True
         assert "x-fireworks-r3-store-id" not in request.headers
-        return httpx.Response(200, text='data: {"choices":[{"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"token_ids":[3],"prompt_token_ids":[1,2],"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        )
 
     sampler = DeploymentSampler("https://inference.invalid", "test/model", "fw-test")
     sampler.negotiate_routing_matrix_format("parquet_v1", "nfs-test")
@@ -480,7 +488,10 @@ def test_sampler_binding_is_independent_for_reused_deployment(
                     },
                 )
             )
-        return httpx.Response(200, text='data: {"choices":[{"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"token_ids":[3],"prompt_token_ids":[1,2],"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        )
 
     monkeypatch.setattr(
         "fireworks.training.sdk._rest_client._make_async_client",
@@ -1018,6 +1029,8 @@ def test_mask_only_sse_preserves_references_and_storage_headers():
     async def receive(request):
         payload = json.loads(request.content)
         assert payload["sampling_mask"] == "parquet_v1"
+        assert payload["raw_output"] is False
+        assert payload["return_token_ids"] is True
         assert "top_sampling_logprobs" not in payload
         assert request.headers["x-fireworks-r3-store-id"] == "test"
         assert request.headers["x-fireworks-r3-ttl-seconds"] == "120"
@@ -1026,6 +1039,8 @@ def test_mask_only_sse_preserves_references_and_storage_headers():
                 {
                     "text": "ok",
                     "finish_reason": "stop",
+                    "token_ids": [2],
+                    "prompt_token_ids": [1],
                     "r3_store_id": "test",
                     "sampling_mask_format": "parquet_v1",
                     "sampling_mask_references": references,

@@ -1034,7 +1034,7 @@ async def test_trajectory_engine_uses_real_deployment_sampler_request_path() -> 
                     {
                         "text": "a",
                         "finish_reason": "stop",
-                        "raw_output": {"completion_token_ids": [197, 3]},
+                        "token_ids": [197, 3],
                     }
                 ],
             },

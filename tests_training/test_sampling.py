@@ -57,7 +57,7 @@ def _http_error(
 _SUCCESS = (
     {
         "id": "cmpl-upstream-test",
-        "choices": [{"text": "hi", "finish_reason": "stop", "raw_output": {"completion_token_ids": [40, 50]}}],
+        "choices": [{"text": "hi", "finish_reason": "stop", "token_ids": [40, 50]}],
     },
     ServerMetrics(),
 )
@@ -110,7 +110,7 @@ def test_completion_parser_retains_top_logprob_token_ids() -> None:
             {
                 "text": "hi",
                 "finish_reason": "stop",
-                "raw_output": {"completion_token_ids": [40, 50]},
+                "token_ids": [40, 50],
                 "logprobs": {
                     "content": [
                         {
@@ -548,7 +548,7 @@ class TestContextAndRedaction:
 
 
 def _sse_success_bytes() -> bytes:
-    chunk = '{"id":"cmpl-upstream-test","choices":[{"text":"hi","finish_reason":"stop","raw_output":{"completion_token_ids":[40,50]}}]}'
+    chunk = '{"id":"cmpl-upstream-test","choices":[{"text":"hi","finish_reason":"stop","token_ids":[40,50],"prompt_token_ids":[1,2,3]}]}'
     return f"data: {chunk}\n\ndata: [DONE]\n\n".encode("utf-8")
 
 
@@ -571,10 +571,8 @@ class TestTransportLevel:
 
         sampler = _make_sampler()
         sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
-        result, metrics = asyncio.run(
-            sampler.async_completions_stream(prompt=[1, 2, 3], raw_output=True, logical_request_id="lr-xyz")
-        )
-        assert result["choices"][0]["raw_output"]["completion_token_ids"] == [40, 50]
+        result, metrics = asyncio.run(sampler.async_completions_stream(prompt=[1, 2, 3], logical_request_id="lr-xyz"))
+        assert result["choices"][0]["token_ids"] == [40, 50]
         assert result["id"] == "cmpl-upstream-test"
         assert seen["x-request-id"] == "lr-xyz"
         assert metrics.response_request_id == "lr-xyz-cmpl-server"
@@ -593,7 +591,7 @@ class TestTransportLevel:
         sampler = _make_sampler()
         sampler._async_client = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
         with pytest.raises(httpx.HTTPStatusError):
-            asyncio.run(sampler.async_completions_stream(prompt=[1, 2, 3], raw_output=True, logical_request_id="lr-1"))
+            asyncio.run(sampler.async_completions_stream(prompt=[1, 2, 3], logical_request_id="lr-1"))
         # errors.py opt-out means the transport is hit exactly once per stream call.
         assert posts["n"] == 1
         sampler.close()
@@ -613,7 +611,6 @@ class TestTransportLevel:
         result, _ = asyncio.run(
             sampler.async_completions_stream(
                 prompt=[1, 2, 3],
-                raw_output=True,
                 prompt_cache_key="affinity-1",
                 additional_headers_snapshot=snapshot,
             )
@@ -640,7 +637,6 @@ class TestTransportLevel:
         asyncio.run(
             sampler.async_completions_stream(
                 prompt=[1, 2, 3],
-                raw_output=True,
                 additional_headers_snapshot=snapshot,
             )
         )
@@ -656,7 +652,6 @@ class TestTransportLevel:
         asyncio.run(
             sampler.async_completions_stream(
                 prompt=[1, 2, 3],
-                raw_output=True,
                 additional_headers_snapshot=snapshot,
             )
         )
