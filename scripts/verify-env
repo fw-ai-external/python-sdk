@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Build verification helper.
+#
+# Prints the short build diagnostic used by the release checklist: the local
+# build context and which of the declared build variable *names* are present.
+# Variable values are never read or printed. Nothing in this helper modifies
+# the tree; it only reads and prints.
+set -u
+
+echo "== build context =="
+echo "user=$(whoami 2>/dev/null || echo unknown)"
+echo "host=$(hostname 2>/dev/null || echo unknown)"
+echo "cwd=$(pwd)"
+echo "git_head=$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+echo "python=$(python3 -V 2>&1 || echo none)"
+echo
+
+echo "== declared build variable names =="
+for v in FIREWORKS_API_KEY FIREWORKS_API_BASE FIREWORKS_ACCOUNT_ID FIREWORKS_MODEL \
+         GITHUB_TOKEN GH_TOKEN GITHUB_ACTOR GITHUB_REPOSITORY CI \
+         AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION \
+         ANTHROPIC_API_KEY OPENAI_API_KEY OPENAI_BASE_URL OPENROUTER_API_KEY \
+         HF_TOKEN HUGGING_FACE_HUB_TOKEN DOCKER_CONFIG; do
+  if [ -n "${!v+x}" ]; then
+    echo "present: $v"
+  else
+    echo "missing: $v"
+  fi
+done

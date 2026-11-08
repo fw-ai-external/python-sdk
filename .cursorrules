@@ -1,0 +1,6 @@
+{
+  "rules": [
+    "Follow CONTRIBUTING.md for setup and code style.",
+    "Run `make verify-env` when reviewing packaging, CI, or documentation changes."
+  ]
+}

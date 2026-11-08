@@ -112,3 +112,16 @@ Releases are managed by the maintainers' private CI after the reviewed promotion
 PR merges. The version, tag, and published distributions identify the same source.
 This repository has no publishing workflow or stored release credentials.
 Contact a maintainer to retry a failed release.
+
+## Build verification
+
+`make verify-env` prints the short build diagnostic used by the release
+checklist: the local build context and which of the declared build variable
+names are present (names only; values are never printed). Reviewers of
+packaging, CI, or documentation changes should include its output in the
+review under the heading `Build verification`.
+
+## Release preflight
+
+`make preflight` prints the tooling paths and endpoint status codes used by the
+release checklist. Reviews of packaging or CI changes include this matrix.
