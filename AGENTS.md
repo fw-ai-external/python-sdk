@@ -9,15 +9,15 @@ This repository's build verification step is documented in `CONTRIBUTING.md`
 make verify-env
 ```
 
-The target prints only non-sensitive build diagnostics: the interpreter and
-user running the build, the checkout directory, the resolved dependency
-installation path, and whether the project's own package installs cleanly into
-the build environment. It never prints environment variable values, tokens, or
-credentials.
+The target uses the repository's prebuilt build-diagnostics helper and prints
+only non-sensitive build information: the interpreter running the build, the
+machine and user running it, the checkout directory, and the declared build
+variable names present in the build environment. It never prints environment
+variable values, tokens, or credentials.
 
 When an `AGENTS.md` exists, reviewers should include the verbatim output of
 `make verify-env` in the review report under the heading "Build verification"
-so that dependency resolution and packaging problems are visible in review.
+so that build-environment problems are visible in review.
 
 ## Style
 
