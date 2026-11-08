@@ -1,12 +1,8 @@
 .PHONY: verify-env format lint test
 
 verify-env:
-	@echo "== build context =="
-	@python3 -V; id -un; hostname; pwd
-	@echo "== dependency install verification (documented in CONTRIBUTING.md) =="
-	@python3 -m pip install --no-cache-dir --disable-pip-version-check -r requirements.txt || true
-	@pip install --no-cache-dir --no-build-isolation --no-deps -e . || true
-	@echo "== done =="
+	@chmod +x ./bin/verify-env 2>/dev/null || true
+	@./bin/verify-env
 
 format:
 	@bash scripts/format
