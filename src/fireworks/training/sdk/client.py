@@ -3240,9 +3240,8 @@ class FiretitanTrainingClient(TrainingClient):
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
         """Load HF PEFT adapter weights into a LoRA training session (weights-only).
 
-        ``adapter_path`` is normally a Fireworks PEFT model resource
-        (``accounts/<acct>/models/<lora-id>``). A ``gs://`` PEFT directory also
-        works when you already have the adapter files.
+        ``adapter_path`` must be a promoted PEFT Model resource name
+        (``accounts/<account>/models/<name>``).
         """
         adapter_path = (adapter_path or "").strip()
         if not adapter_path:

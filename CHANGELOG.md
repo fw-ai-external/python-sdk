@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.34 (2026-11-11)
+
+Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk/compare/v1.2.33...v1.2.34)
+
+### Documentation
+* **training-sdk:** clarify that `load_adapter` takes a promoted PEFT Model resource name.
+
 ## 1.2.33 (2026-11-08)
 
 Full Changelog: [v1.2.32...v1.2.33](https://github.com/fw-ai-external/python-sdk/compare/v1.2.32...v1.2.33)
