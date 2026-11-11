@@ -4,6 +4,9 @@
 
 Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk/compare/v1.2.33...v1.2.34)
 
+### Bug Fixes
+* **training-sdk:** retain up to 5,000 failed TITO traces by default, with 256 MiB of history per trajectory and an aggregate byte budget that accommodates the retention count; preserve explicit smaller limits and the free-space floor.
+
 ### Documentation
 * **training-sdk:** clarify that `load_adapter` takes a promoted PEFT Model resource name.
 
