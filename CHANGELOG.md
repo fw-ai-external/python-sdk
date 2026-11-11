@@ -9,6 +9,7 @@ Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk
 
 ### Documentation
 * **training-sdk:** clarify that `load_adapter` takes a promoted PEFT Model resource name.
+* **supervised fine-tuning jobs, DPO jobs:** managed supervised fine-tuning, DPO and ORPO no longer accept new jobs, and existing jobs can't be resumed: `create(...)` and `resume(...)` on `client.supervised_fine_tuning_jobs` and `client.dpo_jobs` now raise `BadRequestError`. Train new models with the Training API instead; see the [migration guide](https://docs.fireworks.ai/fine-tuning/training-api/migrate-from-managed). Jobs that are already running keep running, and `get`, `list`, `cancel` and `delete` keep working. The SDK itself is unchanged: the server enforces this.
 
 ## 1.2.33 (2026-11-08)
 
