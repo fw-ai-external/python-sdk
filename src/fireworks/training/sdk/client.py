@@ -2812,6 +2812,11 @@ class FiretitanTrainingClient(TrainingClient):
         because legacy sampler saves do not report it. RDMA negotiation, API, and
         publication errors are surfaced without a FILE retry.
 
+        An RDMA deployment remains bound to its first trainer session. Reuse
+        that session for subsequent updates; a new trainer session requires a
+        new deployment. Resetting a dedicated trainer session after RDMA sync
+        has started is rejected before unloading its models.
+
         Save resumable checkpoints separately with ``save_state()``.
         """
         from fireworks.training.sdk._rdma import _RdmaSamplerBackend
