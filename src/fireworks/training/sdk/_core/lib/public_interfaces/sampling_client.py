@@ -562,6 +562,7 @@ def _load_tokenizer_from_model_info(
 
     if (
         is_code_free_model_name(model_name)
+        or is_code_free_model_name(model_arch)
         or model_arch in {"DeepseekV4ForCausalLM", "DeepseekV41ForCausalLM", "DeepseekV41ForConditionalGeneration"}
         or requires_code_free_tokenizer_loading(tokenizer_id, revision=kwargs.get("revision"))
     ):

@@ -9,6 +9,8 @@ Currently covered families:
 
 * DeepSeek V4 (``deepseek_v4``), recognized by ``tokenizer.json`` digests;
 * DeepSeek V4.1, restricted separately without selecting a V4 renderer;
+* GLM-5 / GLM-5.3 / GLM-5.3-Flash, restricted by exact selected context,
+  model configuration or their shared fast-tokenizer data, not chat identity;
 * Kimi K3 / K3.1 (``kimi_k3`` / ``kimi_k31``), recognized by the shared
   tiktoken vocabulary digest plus a pinned ``tokenizer_config.json`` digest.
   The two models ship byte-identical ``tiktoken.model`` vocabularies and
@@ -35,8 +37,45 @@ DEEPSEEK_V4_REPOSITORIES = frozenset({"deepseek-ai/DeepSeek-V4-Flash-0731", "dee
 # intermediate SDK carrying the module with an older policy revision falls
 # back to the pinned snapshot instead of inheriting the older behavior.
 # Capability history: "deepseek-v4-tokenizer-identity/separate-family-and-code-policy"
-# covered DeepSeek V4 only; the current value also covers V4.1 and saved Kimi profiles.
-TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31-tokenizer-identity/saved-native-profiles-v3"
+# covered DeepSeek V4 only; the current value also covers V4.1, saved Kimi profiles and GLM.
+TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31+glm5-tokenizer-identity/code-free-v4"
+
+GLM5_MODEL_TYPES = frozenset({"glm_moe_dsa", "glm5_next", "glm5_next_text"})
+GLM5_REPOSITORIES = frozenset(
+    {
+        "zai-org/GLM-5",
+        "zai-org/GLM-5-FP8",
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-BF16",
+        "zai-org/GLM-5.3-Flash",
+        "zai-org/GLM-5.3-Flash-BF16",
+    }
+)
+GLM5_MODEL_NAMES = frozenset(
+    {
+        "zai-org/glm-5",
+        "zai-org/glm-5-fp8",
+        "zai-org/glm-5.3",
+        "zai-org/glm-5.3-bf16",
+        "zai-org/glm-5.3-flash",
+        "zai-org/glm-5.3-flash-bf16",
+        "accounts/fireworks/models/glm-5",
+        "accounts/fireworks/models/glm-5p3",
+        "accounts/fireworks/models/glm-5p3-flash",
+        "glm5",
+        "glm53",
+        "glm53_flash",
+        "glmmoedsaforcausallm",
+        "glm5nextforconditionalgeneration",
+    }
+)
+GLM5_RENDERER_NAMES = frozenset(
+    name + suffix for name in ("glm5", "glm53", "glm53_flash") for suffix in ("", "_interleaved", "_preserve_thinking")
+) | {"glm5_release"}
+# The original and fast-tokenizer save_pretrained forms are byte-identical.
+GLM5_TOKENIZER_JSON_SHA256 = frozenset({"19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d"})
+_GLM5_TOKENIZER_JSON_SIZES = frozenset({20_217_442})
+_GLM5_TOKENIZER_JSON_GIT_BLOB_SHA1 = frozenset({"32d3bec9f21d17cd2cc753762094ff38fa45a006"})
 
 # Official DeepSeek V4 ``tokenizer.json`` content digests:
 # 1. The hub snapshot form (identical for DeepSeek-V4-Flash-0731 and
@@ -210,7 +249,7 @@ def is_kimi_k3_k31_model_name(model_name: str | None) -> bool:
 
 def is_code_free_model_name(model_name: str | None) -> bool:
     """Restrictive selected context, never semantic renderer identity."""
-    if is_deepseek_v4_model_name(model_name):
+    if is_deepseek_v4_model_name(model_name) or is_glm5_model_name(model_name):
         return True
     if not model_name:
         return False
@@ -221,6 +260,14 @@ def is_code_free_model_name(model_name: str | None) -> bool:
         "accounts/fireworks/models/deepseek-v4.1-flash",
         "accounts/fireworks/models/deepseek-v4p1-flash",
     }
+
+
+def is_glm5_model_name(model_name: str | None) -> bool:
+    """Restrict exact GLM context without assigning a shared chat profile."""
+    if not model_name:
+        return False
+    normalized = model_name.strip().rstrip("/").lower()
+    return normalized in GLM5_MODEL_TYPES | GLM5_MODEL_NAMES | GLM5_RENDERER_NAMES
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -303,7 +350,7 @@ def _head_tokenizer_json_metadata(model: str, revision: str | None) -> Any:
         return None
 
 
-def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False) -> bool | None:
+def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False, include_glm: bool = False) -> bool | None:
     """Prefilter decision from HEAD metadata: True/False, or None for bytes.
 
     ``False`` is returned only when byte inequality is proven by a supported
@@ -329,6 +376,10 @@ def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False) -> bo
         sizes = sizes | _DEEPSEEK_V41_TOKENIZER_JSON_SIZES
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
         blobs = blobs | _DEEPSEEK_V41_TOKENIZER_JSON_GIT_BLOB_SHA1
+    if include_glm:
+        sizes |= _GLM5_TOKENIZER_JSON_SIZES
+        digests |= GLM5_TOKENIZER_JSON_SHA256
+        blobs |= _GLM5_TOKENIZER_JSON_GIT_BLOB_SHA1
     size_matches = (size in sizes) if size is not None else None
     if len(etag) == 64 and _HEX_RE.match(etag):
         if etag in digests:
@@ -369,7 +420,7 @@ def _hub_offline() -> bool:
 
 
 def _download_tokenizer_json_matches(
-    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False
+    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False, include_glm: bool = False
 ) -> bool:
     path = _hub_download(model, "tokenizer.json", revision=revision, local_files_only=local_files_only)
     if path is None:
@@ -377,11 +428,13 @@ def _download_tokenizer_json_matches(
     digests = DEEPSEEK_V4_TOKENIZER_JSON_SHA256
     if include_v41:
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
+    if include_glm:
+        digests |= GLM5_TOKENIZER_JSON_SHA256
     return _sha256(path) in digests
 
 
 def _hub_tokenizer_json_matches(
-    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False
+    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False, include_glm: bool = False
 ) -> bool:
     """Whether the Hub ``tokenizer.json`` is a pinned official form.
 
@@ -395,7 +448,11 @@ def _hub_tokenizer_json_matches(
     """
     if local_files_only or _hub_offline() or not _official_hub_endpoint():
         return _download_tokenizer_json_matches(
-            model, revision=revision, local_files_only=local_files_only, include_v41=include_v41
+            model,
+            revision=revision,
+            local_files_only=local_files_only,
+            include_v41=include_v41,
+            include_glm=include_glm,
         )
     metadata = _head_tokenizer_json_metadata(model, revision)
     if metadata is _HEAD_ABSENT:
@@ -405,7 +462,10 @@ def _hub_tokenizer_json_matches(
         pinned = _pinned_commit(metadata)
         if pinned is not None:
             decision = _metadata_decision(
-                getattr(metadata, "size", None), getattr(metadata, "etag", None), include_v41=include_v41
+                getattr(metadata, "size", None),
+                getattr(metadata, "etag", None),
+                include_v41=include_v41,
+                include_glm=include_glm,
             )
             if decision is not None:
                 return decision
@@ -413,7 +473,7 @@ def _hub_tokenizer_json_matches(
         # Without a valid commit pin the metadata answer is unusable: no
         # metadata negative, full byte reads at the caller's revision.
     return _download_tokenizer_json_matches(
-        model, revision=revision_for_download, local_files_only=False, include_v41=include_v41
+        model, revision=revision_for_download, local_files_only=False, include_v41=include_v41, include_glm=include_glm
     )
 
 
@@ -500,7 +560,7 @@ def requires_code_free_tokenizer_loading(
 ) -> bool:
     """Restrict recognized reviewed data to installed tokenizer/processor code.
 
-    Covers DeepSeek V4/V4.1 and Kimi K3/K3.1. A shared reviewed tokenizer digest
+    Covers DeepSeek V4/V4.1, Kimi K3/K3.1 and GLM-5 releases. A shared reviewed tokenizer digest
     is restrictive even when mutable
     ``model_type`` names another family. Unlike semantic family recognition,
     this must not select a renderer or encoder: it only keeps checkpoint
@@ -606,6 +666,9 @@ def _tokenizer_source_matches(
         model_types.update(DEEPSEEK_V41_MODEL_TYPES)
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
         repositories = repositories | DEEPSEEK_V41_REPOSITORIES
+        model_types.update(GLM5_MODEL_TYPES)
+        digests |= GLM5_TOKENIZER_JSON_SHA256
+        repositories |= GLM5_REPOSITORIES
     local_dir = Path(model)
     if local_dir.is_dir():
         config = _read_json(local_dir / "config.json")
@@ -636,5 +699,9 @@ def _tokenizer_source_matches(
             if explicit_family_wins:
                 return False
     return _hub_tokenizer_json_matches(
-        model, revision=revision, local_files_only=local_files_only, include_v41=not explicit_family_wins
+        model,
+        revision=revision,
+        local_files_only=local_files_only,
+        include_v41=not explicit_family_wins,
+        include_glm=not explicit_family_wins,
     )

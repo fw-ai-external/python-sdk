@@ -37,6 +37,54 @@ def test_other_model_type_is_not_recognized(tmp_path: Path) -> None:
     assert identity.is_deepseek_v4_tokenizer_source(str(tmp_path)) is False
 
 
+@pytest.mark.parametrize("model_type", ["glm_moe_dsa", "glm5_next", "glm5_next_text"])
+def test_glm_context_restricts_code_without_selecting_v4(tmp_path: Path, model_type: str) -> None:
+    (tmp_path / "config.json").write_text(json.dumps({"model_type": model_type}))
+    assert identity.requires_code_free_tokenizer_loading(str(tmp_path))
+    assert identity.is_glm5_model_name(model_type)
+    assert identity.is_code_free_model_name(model_type)
+    assert not identity.is_deepseek_v4_tokenizer_source(str(tmp_path))
+    assert not identity.is_kimi_k3_k31_tokenizer_source(str(tmp_path))
+    assert not identity.is_glm5_model_name(f"customer/{model_type}-unrelated")
+
+
+@pytest.mark.parametrize(
+    "context",
+    sorted(identity.GLM5_MODEL_NAMES | identity.GLM5_RENDERER_NAMES | identity.GLM5_MODEL_TYPES),
+)
+def test_glm_selected_context_cannot_drop_restrictive_loading_policy(context: str) -> None:
+    assert identity.is_code_free_model_name(context)
+    assert not identity.is_deepseek_v4_model_name(context)
+    assert not identity.is_code_free_model_name(f"customer/{context}-unrelated")
+
+
+@pytest.mark.parametrize("base_model", ["zai-org/GLM-5", "zai-org/GLM-5.3", "zai-org/GLM-5.3-Flash"])
+def test_glm_sdk_context_restricts_an_opaque_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, base_model: str
+) -> None:
+    # lazy: tokenizer loading is optional for SDK transport consumers.
+    from transformers import AutoTokenizer
+
+    from fireworks.training.sdk.client import FiretitanTrainingClient
+    from fireworks.training.sdk._core.lib.public_interfaces.sampling_client import _load_tokenizer_from_model_info
+
+    calls = []
+    sentinel = object()
+
+    def load(source: str, **kwargs: Any) -> Any:
+        assert source == str(tmp_path)
+        calls.append(kwargs.get("trust_remote_code"))
+        return sentinel
+
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", load)
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client._tokenizer_model = str(tmp_path)
+    client._tokenizer_base_model = base_model
+    assert client.get_tokenizer() is sentinel
+    assert _load_tokenizer_from_model_info(base_model, str(tmp_path)) is sentinel
+    assert calls == [False, False]
+
+
 @pytest.mark.parametrize("model_type", ["qwen3", "llama", "new_model_family"])
 def test_explicit_other_model_type_precedes_shared_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_type: str
