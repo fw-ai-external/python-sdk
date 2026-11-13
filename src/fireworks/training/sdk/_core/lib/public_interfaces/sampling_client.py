@@ -503,7 +503,12 @@ def _load_tokenizer_from_model_info(
     Returns:
         The loaded PreTrainedTokenizer
     """
+    # lazy: tokenizer dependencies and their compatibility backport are optional.
     from transformers.models.auto.tokenization_auto import AutoTokenizer
+
+    from fireworks.training.sdk.tokenizer_compat import patch_duplicate_mistral_regex_kwarg
+
+    patch_duplicate_mistral_regex_kwarg()
 
     model_name = model_name.split(":")[0]
 

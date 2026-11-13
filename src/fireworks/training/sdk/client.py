@@ -3116,9 +3116,13 @@ class FiretitanTrainingClient(TrainingClient):
         # lazy: tokenizer downloads are optional; transport needs no transformers.
         from transformers import AutoTokenizer
 
-        if is_kimi_k3_k31_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or is_kimi_k3_k31_tokenizer_source(self._tokenizer_model):
+        from fireworks.training.sdk.tokenizer_compat import patch_duplicate_mistral_regex_kwarg
+
+        patch_duplicate_mistral_regex_kwarg()
+
+        if is_kimi_k3_k31_model_name(getattr(self, "_tokenizer_base_model", None)) or is_kimi_k3_k31_tokenizer_source(
+            self._tokenizer_model
+        ):
             # Recognized reviewed Kimi K3/K3.1 data: build the id-identical
             # fast tokenizer from reviewed installed code. Checkpoint Python
             # (the auto_map TikTokenTokenizer) is never imported, and an
