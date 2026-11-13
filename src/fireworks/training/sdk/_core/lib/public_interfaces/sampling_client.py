@@ -17,8 +17,11 @@ from fireworks.training.sdk._core._utils import lru_cache
 from fireworks.training.sdk._core.lib.sidecar import SidecarRPC, SidecarHandle, create_sidecar_handle
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
+    is_minimax_m2_model_name,
     is_kimi_k3_k31_model_name,
+    is_minimax_m2_tokenizer_source,
     is_kimi_k3_k31_tokenizer_source,
+    is_standard_tokenizer_model_name,
     requires_code_free_tokenizer_loading,
 )
 from fireworks.training.sdk._core.lib.telemetry import Telemetry, capture_exceptions
@@ -563,6 +566,9 @@ def _load_tokenizer_from_model_info(
     if (
         is_code_free_model_name(model_name)
         or is_code_free_model_name(model_arch)
+        or is_standard_tokenizer_model_name(model_name)
+        or is_standard_tokenizer_model_name(model_arch)
+        or is_standard_tokenizer_model_name(tokenizer_id)
         or model_arch in {"DeepseekV4ForCausalLM", "DeepseekV41ForCausalLM", "DeepseekV41ForConditionalGeneration"}
         or requires_code_free_tokenizer_loading(tokenizer_id, revision=kwargs.get("revision"))
     ):
@@ -571,4 +577,27 @@ def _load_tokenizer_from_model_info(
         # checkpoint-staged Python inert.
         kwargs["trust_remote_code"] = False
 
+    if any(is_minimax_m2_model_name(name) for name in (model_name, model_arch)) or is_minimax_m2_tokenizer_source(
+        tokenizer_id
+    ):
+        return _load_minimax_tokenizer_json(tokenizer_id, fast=True, **kwargs)
+
     return AutoTokenizer.from_pretrained(tokenizer_id, fast=True, **kwargs)
+
+
+def _load_minimax_tokenizer_json(tokenizer_id: str, **kwargs: Any) -> PreTrainedTokenizer:
+    # lazy: both SDK clients need this optional reader only for selected MiniMax data.
+    import transformers
+    from transformers.models.auto.tokenization_auto import AutoTokenizer, get_tokenizer_config
+
+    kwargs["trust_remote_code"] = False
+    tokenizer_backend = getattr(transformers, "TokenizersBackend", None)
+    if tokenizer_backend is None:
+        # Preserve each caller's prior installed-code reader and keyword arguments.
+        return AutoTokenizer.from_pretrained(tokenizer_id, **kwargs)
+    config = get_tokenizer_config(tokenizer_id, **kwargs)
+    declared_flags = {key: config[key] for key in ("add_bos_token", "add_eos_token") if key in config}
+    tokenizer = tokenizer_backend.from_pretrained(tokenizer_id, **{**declared_flags, **kwargs})
+    # The generic installed reader needs no checkpoint-code map on export.
+    tokenizer.init_kwargs.pop("auto_map", None)
+    return tokenizer

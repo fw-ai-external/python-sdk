@@ -43,8 +43,11 @@ from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
+    is_minimax_m2_model_name,
     is_kimi_k3_k31_model_name,
+    is_minimax_m2_tokenizer_source,
     is_kimi_k3_k31_tokenizer_source,
+    is_standard_tokenizer_model_name,
     requires_code_free_tokenizer_loading,
 )
 
@@ -3130,12 +3133,19 @@ class FiretitanTrainingClient(TrainingClient):
             from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
 
             return load_native_tokenizer(self._tokenizer_model)
-        if is_code_free_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or requires_code_free_tokenizer_loading(self._tokenizer_model):
-            # Reviewed DeepSeek V4/V4.1 data ships no remote code; an
-            # explicit False resolves the identical tokenizer class and keeps
-            # any checkpoint-staged Python inert.
+        base_model = getattr(self, "_tokenizer_base_model", None)
+        if is_minimax_m2_model_name(base_model) or is_minimax_m2_tokenizer_source(self._tokenizer_model):
+            # lazy: share the literal reader without sharing the sampling client's cache.
+            from fireworks.training.sdk._core.lib.public_interfaces.sampling_client import _load_minimax_tokenizer_json
+
+            return _load_minimax_tokenizer_json(self._tokenizer_model)
+        if (
+            is_code_free_model_name(base_model)
+            or is_standard_tokenizer_model_name(base_model)
+            or is_standard_tokenizer_model_name(self._tokenizer_model)
+            or requires_code_free_tokenizer_loading(self._tokenizer_model)
+        ):
+            # Independently selected code-free context keeps checkpoint Python inert.
             return AutoTokenizer.from_pretrained(self._tokenizer_model, trust_remote_code=False)
         return AutoTokenizer.from_pretrained(self._tokenizer_model)
 

@@ -3078,7 +3078,7 @@ class TestGetTokenizer:
         with patch("transformers.AutoTokenizer.from_pretrained", return_value="tok") as load:
             result = client.get_tokenizer()
         assert result == "tok"
-        load.assert_called_once_with("Qwen/Qwen3-1.7B")
+        load.assert_called_once_with("Qwen/Qwen3-1.7B", trust_remote_code=False)
 
     def test_raises_when_no_tokenizer_model(self):
         client = _bare_training_client()
