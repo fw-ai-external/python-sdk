@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.34 (2026-11-14)
+
+Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk/compare/v1.2.33...v1.2.34)
+
+### Bug Fixes
+* **training-sdk:** load tokenizer metadata containing `fix_mistral_regex` on Transformers 5.0–5.3 without duplicate-keyword errors, preserving the declared flag on save.
+* **training-sdk:** keep GLM-5, GLM-5.3 and GLM-5.3-Flash tokenizer loading in installed code, including opaque overrides and saved fast-tokenizer bundles.
+* **training-sdk:** retain up to 5,000 failed TITO traces by default, with 256 MiB of history per trajectory and an aggregate byte budget that accommodates the retention count; preserve explicit smaller limits and the free-space floor.
+
+### Documentation
+* **training-sdk:** clarify that `load_adapter` takes a promoted PEFT Model resource name.
+* **supervised fine-tuning jobs, DPO jobs:** managed supervised fine-tuning, DPO and ORPO no longer accept new jobs, and existing jobs can't be resumed: `create(...)` and `resume(...)` on `client.supervised_fine_tuning_jobs` and `client.dpo_jobs` now raise `BadRequestError`. Train new models with the Training API instead; see the [migration guide](https://docs.fireworks.ai/fine-tuning/training-api/migrate-from-managed). Jobs that are already running keep running, and `get`, `list`, `cancel` and `delete` keep working. The SDK itself is unchanged: the server enforces this.
+
 ## 1.2.33 (2026-11-08)
 
 Full Changelog: [v1.2.32...v1.2.33](https://github.com/fw-ai-external/python-sdk/compare/v1.2.32...v1.2.33)

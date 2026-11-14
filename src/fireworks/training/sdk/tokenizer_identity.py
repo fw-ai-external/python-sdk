@@ -9,11 +9,15 @@ Currently covered families:
 
 * DeepSeek V4 (``deepseek_v4``), recognized by ``tokenizer.json`` digests;
 * DeepSeek V4.1, restricted separately without selecting a V4 renderer;
+* GLM-5 / GLM-5.3 / GLM-5.3-Flash, restricted by exact selected context,
+  model configuration or their shared fast-tokenizer data, not chat identity;
 * Kimi K3 / K3.1 (``kimi_k3`` / ``kimi_k31``), recognized by the shared
   tiktoken vocabulary digest plus a pinned ``tokenizer_config.json`` digest.
   The two models ship byte-identical ``tiktoken.model`` vocabularies and
   equivalent tokenization; their ``encoding_k3.py`` chat encoders are
   distinct reviewed contracts and are never aliased.
+* Qwen, MiniMax, Gemma and Nemotron selected context restricts checkpoint code
+  without certifying artifact identity or model compatibility.
 """
 
 from __future__ import annotations
@@ -35,8 +39,46 @@ DEEPSEEK_V4_REPOSITORIES = frozenset({"deepseek-ai/DeepSeek-V4-Flash-0731", "dee
 # intermediate SDK carrying the module with an older policy revision falls
 # back to the pinned snapshot instead of inheriting the older behavior.
 # Capability history: "deepseek-v4-tokenizer-identity/separate-family-and-code-policy"
-# covered DeepSeek V4 only; the current value also covers V4.1 and saved Kimi profiles.
-TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31-tokenizer-identity/saved-native-profiles-v3"
+# covered DeepSeek V4 only; later revisions added V4.1, saved Kimi profiles,
+# GLM and exact restrictive standard-family/renderer context.
+TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31+glm5-tokenizer-identity/exact-standard-context-v8"
+
+GLM5_MODEL_TYPES = frozenset({"glm_moe_dsa", "glm5_next", "glm5_next_text"})
+GLM5_REPOSITORIES = frozenset(
+    {
+        "zai-org/GLM-5",
+        "zai-org/GLM-5-FP8",
+        "zai-org/GLM-5.3",
+        "zai-org/GLM-5.3-BF16",
+        "zai-org/GLM-5.3-Flash",
+        "zai-org/GLM-5.3-Flash-BF16",
+    }
+)
+GLM5_MODEL_NAMES = frozenset(
+    {
+        "zai-org/glm-5",
+        "zai-org/glm-5-fp8",
+        "zai-org/glm-5.3",
+        "zai-org/glm-5.3-bf16",
+        "zai-org/glm-5.3-flash",
+        "zai-org/glm-5.3-flash-bf16",
+        "accounts/fireworks/models/glm-5",
+        "accounts/fireworks/models/glm-5p3",
+        "accounts/fireworks/models/glm-5p3-flash",
+        "glm5",
+        "glm53",
+        "glm53_flash",
+        "glmmoedsaforcausallm",
+        "glm5nextforconditionalgeneration",
+    }
+)
+GLM5_RENDERER_NAMES = frozenset(
+    name + suffix for name in ("glm5", "glm53", "glm53_flash") for suffix in ("", "_interleaved", "_preserve_thinking")
+) | {"glm5_release"}
+# The original and fast-tokenizer save_pretrained forms are byte-identical.
+GLM5_TOKENIZER_JSON_SHA256 = frozenset({"19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d"})
+_GLM5_TOKENIZER_JSON_SIZES = frozenset({20_217_442})
+_GLM5_TOKENIZER_JSON_GIT_BLOB_SHA1 = frozenset({"32d3bec9f21d17cd2cc753762094ff38fa45a006"})
 
 # Official DeepSeek V4 ``tokenizer.json`` content digests:
 # 1. The hub snapshot form (identical for DeepSeek-V4-Flash-0731 and
@@ -210,7 +252,7 @@ def is_kimi_k3_k31_model_name(model_name: str | None) -> bool:
 
 def is_code_free_model_name(model_name: str | None) -> bool:
     """Restrictive selected context, never semantic renderer identity."""
-    if is_deepseek_v4_model_name(model_name):
+    if is_deepseek_v4_model_name(model_name) or is_glm5_model_name(model_name):
         return True
     if not model_name:
         return False
@@ -221,6 +263,145 @@ def is_code_free_model_name(model_name: str | None) -> bool:
         "accounts/fireworks/models/deepseek-v4.1-flash",
         "accounts/fireworks/models/deepseek-v4p1-flash",
     }
+
+
+def is_glm5_model_name(model_name: str | None) -> bool:
+    """Restrict exact GLM context without assigning a shared chat profile."""
+    if not model_name:
+        return False
+    normalized = model_name.strip().rstrip("/").lower()
+    return normalized in GLM5_MODEL_TYPES | GLM5_MODEL_NAMES | GLM5_RENDERER_NAMES
+
+
+# Literal reviewed identifiers, paired with their catalog aliases where present.
+# Whitespace separates entries only; names, namespaces and sizes are never inferred.
+_STANDARD_TOKENIZER_MODEL_NAMES = frozenset("""
+    minimaxai/minimax-m2 accounts/fireworks/models/minimax-m2
+    minimaxai/minimax-m2.1 accounts/fireworks/models/minimax-m2p1
+    minimaxai/minimax-m2.5 accounts/fireworks/models/minimax-m2p5
+    minimaxai/minimax-m2.7 accounts/fireworks/models/minimax-m2p7
+    minimaxai/minimax-m3 accounts/fireworks/models/minimax-m3
+    qwen/qwen2.5-32b-instruct accounts/fireworks/models/qwen2p5-32b-instruct
+    qwen/qwen3-0.6b accounts/fireworks/models/qwen3-0p6b
+    qwen/qwen3-1.7b accounts/fireworks/models/qwen3-1p7b
+    qwen/qwen3-4b accounts/fireworks/models/qwen3-4b
+    qwen/qwen3-8b accounts/fireworks/models/qwen3-8b
+    qwen/qwen3-14b accounts/fireworks/models/qwen3-14b
+    qwen/qwen3-32b accounts/fireworks/models/qwen3-32b
+    qwen/qwen3-30b-a3b accounts/fireworks/models/qwen3-30b-a3b
+    qwen/qwen3-8b-base qwen/qwen3-30b-a3b-base
+    qwen/qwen3-4b-instruct-2507 accounts/fireworks/models/qwen3-4b-instruct-2507
+    qwen/qwen3-30b-a3b-instruct-2507
+    qwen/qwen3-235b-a22b-instruct-2507 accounts/fireworks/models/qwen3-235b-a22b-instruct-2507
+    qwen/qwen3-235b-a22b-instruct-2507-fp8
+    qwen/qwen3-vl-8b-instruct accounts/fireworks/models/qwen3-vl-8b-instruct
+    qwen/qwen3-vl-32b-instruct accounts/fireworks/models/qwen3-vl-32b-instruct
+    qwen/qwen3-vl-30b-a3b-instruct accounts/fireworks/models/qwen3-vl-30b-a3b-instruct
+    qwen/qwen3-vl-30b-a3b-thinking accounts/fireworks/models/qwen3-vl-30b-a3b-thinking
+    qwen/qwen3-vl-235b-a22b-instruct accounts/fireworks/models/qwen3-vl-235b-a22b-instruct
+    qwen/qwen3-vl-235b-a22b-thinking accounts/fireworks/models/qwen3-vl-235b-a22b-thinking
+    qwen/qwen3.5-0.8b accounts/fireworks/models/qwen3p5-0p8b
+    qwen/qwen3.5-4b accounts/fireworks/models/qwen3p5-4b
+    qwen/qwen3.5-9b accounts/fireworks/models/qwen3p5-9b
+    qwen/qwen3.5-27b accounts/fireworks/models/qwen3p5-27b
+    qwen/qwen3.5-35b-a3b accounts/fireworks/models/qwen3p5-35b-a3b
+    qwen/qwen3.5-122b-a10b accounts/fireworks/models/qwen3p5-122b-a10b
+    qwen/qwen3.5-397b-a17b accounts/fireworks/models/qwen3p5-397b-a17b
+    qwen/qwen3.5-9b-base qwen/qwen3.5-35b-a3b-base
+    qwen/qwen3.6-27b accounts/fireworks/models/qwen3p6-27b
+    qwen/qwen3.6-35b-a3b accounts/fireworks/models/qwen3p6-35b-a3b
+    qwen/qwen3.8-27b accounts/fireworks/models/qwen3p8-27b
+    google/gemma-4-26b-a4b-it accounts/fireworks/models/gemma-4-26b-a4b-it
+    google/gemma-4-26b-a4b-it-assistant accounts/fireworks/models/gemma-4-26b-a4b-it-assistant
+    google/gemma-4-31b-it accounts/fireworks/models/gemma-4-31b-it
+    google/gemma-4-31b-it-assistant accounts/fireworks/models/gemma-4-31b-it-assistant
+    google/gemma-4-e4b accounts/fireworks/models/gemma-4-e4b
+    google/gemma-4-e4b-it accounts/fireworks/models/gemma-4-e4b-it
+    nvidia/gemma-4-31b-it-nvfp4 accounts/fireworks/models/gemma-4-31b-it-nvfp4
+    nvidia/llama-3.1-nemotron-70b-instruct accounts/fireworks/models/llama-v3p1-nemotron-70b-instruct
+    nvidia/nvidia-nemotron-3-nano-30b-a3b-bf16 accounts/fireworks/models/nemotron-nano-3-30b-a3b
+    nvidia/nvidia-nemotron-3-super-120b-a12b-bf16 accounts/fireworks/models/nemotron-3-super-120b-a12b-bf16
+    nvidia/nvidia-nemotron-3-super-120b-a12b-fp8 accounts/fireworks/models/nvidia-nemotron-3-super-120b-a12b-fp8
+    nvidia/nvidia-nemotron-3-super-120b-a12b-nvfp4 accounts/fireworks/models/nvidia-nemotron-3-super-120b-a12b-nvfp4
+    nvidia/nvidia-nemotron-3-ultra-550b-a55b-bf16 accounts/fireworks/models/nemotron-3-ultra-bf16
+    nvidia/nvidia-nemotron-3-ultra-550b-a55b-nvfp4 accounts/fireworks/models/nemotron-3-ultra-nvfp4
+    nvidia/nvidia-nemotron-3.5-lightning-30b-a3b-bf16 accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b
+    nvidia/nvidia-nemotron-3.5-super-vl-120b-a12b-bf16
+    accounts/fireworks/models/nvidia-nemotron-3p5-super-vl-120b-a12b-bf16
+    nvidia/nvidia-nemotron-3.5-super-vl-120b-a12b-nvfp4
+    accounts/fireworks/models/nvidia-nemotron-3p5-super-vl-120b-a12b-nvfp4
+    nvidia/nvidia-nemotron-nano-9b-v2 accounts/fireworks/models/nvidia-nemotron-nano-9b-v2
+    nvidia/nvidia-nemotron-nano-12b-v2 accounts/fireworks/models/nvidia-nemotron-nano-12b-v2
+    nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-bf16
+    accounts/fireworks/models/nvidia-nemotron-3-nano-omni-30b-a3b
+    nvidia/nemotron-nano-v2-12b-vl accounts/fireworks/models/nemotron-nano-v2-12b-vl
+    """.split())
+_STANDARD_TOKENIZER_MODEL_TYPES = frozenset("""
+    qwen2 qwen2_moe qwen3 qwen3_moe qwen3_vl qwen3_vl_moe qwen3_5 qwen3_5_moe
+    gemma4 gemma4_assistant minimax_m2 minimax_m3_vl nemotron_h nemotron_h_omni
+    qwen2forcausallm qwen3forcausallm qwen3moeforcausallm
+    qwen3vlforconditionalgeneration qwen3vlmoeforconditionalgeneration
+    qwen3_5forconditionalgeneration qwen3_5moeforconditionalgeneration
+    gemma4forconditionalgeneration gemma4assistantforcausallm
+    minimaxm2forcausallm minimaxm3sparseforconditionalgeneration
+    nemotronhforcausallm nemotronh_omni_reasoning_v3 nemotronh_nano_omni_reasoning_v3
+    """.split())
+_STANDARD_TOKENIZER_RENDERER_NAMES = frozenset("""
+    qwen2_5 qwen3 qwen3_vl qwen3_vl_instruct qwen3_disable_thinking qwen3_instruct
+    qwen3_5 qwen3_5_disable_thinking qwen3_5_interleaved qwen3_5_disable_thinking_interleaved
+    qwen3_6 qwen3_6_disable_thinking qwen3_6_preserve_thinking qwen3_6_interleaved
+    qwen3_6_disable_thinking_interleaved qwen3_6_preserved
+    qwen3_8 qwen3_8_interleaved qwen3_8_disable_thinking_interleaved qwen3_8_preserved
+    gemma4 gemma4_thinking minimax_m2 minimax_m3 nemotron3 nemotron3_low_thinking
+    nemotron3_disable_thinking nemotron3_ultra nemotron3_ultra_disable_thinking
+    nemotron3_ultra_medium_thinking nemotron35_vl nemotron35_vl_disable_thinking
+    """.split())
+
+
+def is_standard_tokenizer_renderer_name(renderer_name: str | None) -> bool:
+    """Restrict explicit registered renderer context, independent of the filesystem."""
+    return isinstance(renderer_name, str) and renderer_name.strip().casefold() in _STANDARD_TOKENIZER_RENDERER_NAMES
+
+
+def is_standard_tokenizer_model_name(model_name: str | None) -> bool:
+    """Restrict exact reviewed context or local declared type, never path names."""
+    if not isinstance(model_name, str) or not model_name:
+        return False
+    root = Path(model_name)
+    if root.is_dir():
+        model_type = (_read_json(root / "config.json") or {}).get("model_type")
+        return isinstance(model_type, str) and model_type.casefold() in _STANDARD_TOKENIZER_MODEL_TYPES
+    context = model_name.strip().split(":", 1)[0].rstrip("/").casefold()
+    return context in _STANDARD_TOKENIZER_MODEL_NAMES or context in _STANDARD_TOKENIZER_MODEL_TYPES
+
+
+def is_minimax_m2_model_name(model_name: str | None) -> bool:
+    """Use local declarations before exact reviewed literal-JSON contexts."""
+    if not isinstance(model_name, str):
+        return False
+    root = Path(model_name)
+    if root.is_dir():
+        return (_read_json(root / "config.json") or {}).get("model_type") == "minimax_m2"
+    return model_name.strip().split(":", 1)[0].rstrip("/").casefold() in {
+        "minimax_m2",
+        "minimaxm2forcausallm",
+        "minimaxai/minimax-m2",
+        "minimaxai/minimax-m2.1",
+        "minimaxai/minimax-m2.5",
+        "minimaxai/minimax-m2.7",
+        "accounts/fireworks/models/minimax-m2",
+        "accounts/fireworks/models/minimax-m2p1",
+        "accounts/fireworks/models/minimax-m2.1",
+        "accounts/fireworks/models/minimax-m2p5",
+        "accounts/fireworks/models/minimax-m2.5",
+        "accounts/fireworks/models/minimax-m2p7",
+        "accounts/fireworks/models/minimax-m2.7",
+    }
+
+
+def is_minimax_m2_tokenizer_source(tokenizer_model: str | None) -> bool:
+    """Exact context or local model_type; no Hub lookup or basename inference."""
+    return is_minimax_m2_model_name(tokenizer_model)
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -303,7 +484,7 @@ def _head_tokenizer_json_metadata(model: str, revision: str | None) -> Any:
         return None
 
 
-def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False) -> bool | None:
+def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False, include_glm: bool = False) -> bool | None:
     """Prefilter decision from HEAD metadata: True/False, or None for bytes.
 
     ``False`` is returned only when byte inequality is proven by a supported
@@ -329,6 +510,10 @@ def _metadata_decision(size: Any, etag: Any, *, include_v41: bool = False) -> bo
         sizes = sizes | _DEEPSEEK_V41_TOKENIZER_JSON_SIZES
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
         blobs = blobs | _DEEPSEEK_V41_TOKENIZER_JSON_GIT_BLOB_SHA1
+    if include_glm:
+        sizes |= _GLM5_TOKENIZER_JSON_SIZES
+        digests |= GLM5_TOKENIZER_JSON_SHA256
+        blobs |= _GLM5_TOKENIZER_JSON_GIT_BLOB_SHA1
     size_matches = (size in sizes) if size is not None else None
     if len(etag) == 64 and _HEX_RE.match(etag):
         if etag in digests:
@@ -369,7 +554,7 @@ def _hub_offline() -> bool:
 
 
 def _download_tokenizer_json_matches(
-    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False
+    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False, include_glm: bool = False
 ) -> bool:
     path = _hub_download(model, "tokenizer.json", revision=revision, local_files_only=local_files_only)
     if path is None:
@@ -377,11 +562,13 @@ def _download_tokenizer_json_matches(
     digests = DEEPSEEK_V4_TOKENIZER_JSON_SHA256
     if include_v41:
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
+    if include_glm:
+        digests |= GLM5_TOKENIZER_JSON_SHA256
     return _sha256(path) in digests
 
 
 def _hub_tokenizer_json_matches(
-    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False
+    model: str, *, revision: str | None, local_files_only: bool, include_v41: bool = False, include_glm: bool = False
 ) -> bool:
     """Whether the Hub ``tokenizer.json`` is a pinned official form.
 
@@ -395,7 +582,11 @@ def _hub_tokenizer_json_matches(
     """
     if local_files_only or _hub_offline() or not _official_hub_endpoint():
         return _download_tokenizer_json_matches(
-            model, revision=revision, local_files_only=local_files_only, include_v41=include_v41
+            model,
+            revision=revision,
+            local_files_only=local_files_only,
+            include_v41=include_v41,
+            include_glm=include_glm,
         )
     metadata = _head_tokenizer_json_metadata(model, revision)
     if metadata is _HEAD_ABSENT:
@@ -405,7 +596,10 @@ def _hub_tokenizer_json_matches(
         pinned = _pinned_commit(metadata)
         if pinned is not None:
             decision = _metadata_decision(
-                getattr(metadata, "size", None), getattr(metadata, "etag", None), include_v41=include_v41
+                getattr(metadata, "size", None),
+                getattr(metadata, "etag", None),
+                include_v41=include_v41,
+                include_glm=include_glm,
             )
             if decision is not None:
                 return decision
@@ -413,7 +607,7 @@ def _hub_tokenizer_json_matches(
         # Without a valid commit pin the metadata answer is unusable: no
         # metadata negative, full byte reads at the caller's revision.
     return _download_tokenizer_json_matches(
-        model, revision=revision_for_download, local_files_only=False, include_v41=include_v41
+        model, revision=revision_for_download, local_files_only=False, include_v41=include_v41, include_glm=include_glm
     )
 
 
@@ -500,7 +694,7 @@ def requires_code_free_tokenizer_loading(
 ) -> bool:
     """Restrict recognized reviewed data to installed tokenizer/processor code.
 
-    Covers DeepSeek V4/V4.1 and Kimi K3/K3.1. A shared reviewed tokenizer digest
+    Covers DeepSeek V4/V4.1, Kimi K3/K3.1 and GLM-5 releases. A shared reviewed tokenizer digest
     is restrictive even when mutable
     ``model_type`` names another family. Unlike semantic family recognition,
     this must not select a renderer or encoder: it only keeps checkpoint
@@ -606,6 +800,9 @@ def _tokenizer_source_matches(
         model_types.update(DEEPSEEK_V41_MODEL_TYPES)
         digests = digests | DEEPSEEK_V41_TOKENIZER_JSON_SHA256
         repositories = repositories | DEEPSEEK_V41_REPOSITORIES
+        model_types.update(GLM5_MODEL_TYPES)
+        digests |= GLM5_TOKENIZER_JSON_SHA256
+        repositories |= GLM5_REPOSITORIES
     local_dir = Path(model)
     if local_dir.is_dir():
         config = _read_json(local_dir / "config.json")
@@ -636,5 +833,9 @@ def _tokenizer_source_matches(
             if explicit_family_wins:
                 return False
     return _hub_tokenizer_json_matches(
-        model, revision=revision, local_files_only=local_files_only, include_v41=not explicit_family_wins
+        model,
+        revision=revision,
+        local_files_only=local_files_only,
+        include_v41=not explicit_family_wins,
+        include_glm=not explicit_family_wins,
     )

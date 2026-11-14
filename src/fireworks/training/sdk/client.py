@@ -43,8 +43,11 @@ from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
+    is_minimax_m2_model_name,
     is_kimi_k3_k31_model_name,
+    is_minimax_m2_tokenizer_source,
     is_kimi_k3_k31_tokenizer_source,
+    is_standard_tokenizer_model_name,
     requires_code_free_tokenizer_loading,
 )
 
@@ -2809,6 +2812,11 @@ class FiretitanTrainingClient(TrainingClient):
         because legacy sampler saves do not report it. RDMA negotiation, API, and
         publication errors are surfaced without a FILE retry.
 
+        An RDMA deployment remains bound to its first trainer session. Reuse
+        that session for subsequent updates; a new trainer session requires a
+        new deployment. Resetting a dedicated trainer session after RDMA sync
+        has started is rejected before unloading its models.
+
         Save resumable checkpoints separately with ``save_state()``.
         """
         from fireworks.training.sdk._rdma import _RdmaSamplerBackend
@@ -3116,9 +3124,13 @@ class FiretitanTrainingClient(TrainingClient):
         # lazy: tokenizer downloads are optional; transport needs no transformers.
         from transformers import AutoTokenizer
 
-        if is_kimi_k3_k31_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or is_kimi_k3_k31_tokenizer_source(self._tokenizer_model):
+        from fireworks.training.sdk.tokenizer_compat import patch_duplicate_mistral_regex_kwarg
+
+        patch_duplicate_mistral_regex_kwarg()
+
+        if is_kimi_k3_k31_model_name(getattr(self, "_tokenizer_base_model", None)) or is_kimi_k3_k31_tokenizer_source(
+            self._tokenizer_model
+        ):
             # Recognized reviewed Kimi K3/K3.1 data: build the id-identical
             # fast tokenizer from reviewed installed code. Checkpoint Python
             # (the auto_map TikTokenTokenizer) is never imported, and an
@@ -3126,12 +3138,19 @@ class FiretitanTrainingClient(TrainingClient):
             from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
 
             return load_native_tokenizer(self._tokenizer_model)
-        if is_code_free_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or requires_code_free_tokenizer_loading(self._tokenizer_model):
-            # Reviewed DeepSeek V4/V4.1 data ships no remote code; an
-            # explicit False resolves the identical tokenizer class and keeps
-            # any checkpoint-staged Python inert.
+        base_model = getattr(self, "_tokenizer_base_model", None)
+        if is_minimax_m2_model_name(base_model) or is_minimax_m2_tokenizer_source(self._tokenizer_model):
+            # lazy: share the literal reader without sharing the sampling client's cache.
+            from fireworks.training.sdk._core.lib.public_interfaces.sampling_client import _load_minimax_tokenizer_json
+
+            return _load_minimax_tokenizer_json(self._tokenizer_model)
+        if (
+            is_code_free_model_name(base_model)
+            or is_standard_tokenizer_model_name(base_model)
+            or is_standard_tokenizer_model_name(self._tokenizer_model)
+            or requires_code_free_tokenizer_loading(self._tokenizer_model)
+        ):
+            # Independently selected code-free context keeps checkpoint Python inert.
             return AutoTokenizer.from_pretrained(self._tokenizer_model, trust_remote_code=False)
         return AutoTokenizer.from_pretrained(self._tokenizer_model)
 
@@ -3240,9 +3259,8 @@ class FiretitanTrainingClient(TrainingClient):
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
         """Load HF PEFT adapter weights into a LoRA training session (weights-only).
 
-        ``adapter_path`` is normally a Fireworks PEFT model resource
-        (``accounts/<acct>/models/<lora-id>``). A ``gs://`` PEFT directory also
-        works when you already have the adapter files.
+        ``adapter_path`` must be a promoted PEFT Model resource name
+        (``accounts/<account>/models/<name>``).
         """
         adapter_path = (adapter_path or "").strip()
         if not adapter_path:

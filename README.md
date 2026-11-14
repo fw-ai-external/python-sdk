@@ -466,12 +466,14 @@ while True:
 
 ### Dataset file format
 
-Dataset files should be in JSONL format (JSON Lines), where each line is a valid JSON object. For chat-based fine-tuning, use the following format:
+Dataset files should be in JSONL format (JSON Lines), where each line is a valid JSON object. For chat data, use the following format:
 
 ```json
 {"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"}, {"role": "assistant", "content": "Hi there! How can I help you today?"}]}
 {"messages": [{"role": "user", "content": "What is 2+2?"}, {"role": "assistant", "content": "2+2 equals 4."}]}
 ```
+
+> **Note:** Managed fine-tuning no longer accepts new jobs, and existing jobs can't be resumed. To fine-tune a model, use the [Training API](https://docs.fireworks.ai/fine-tuning/training-api/migrate-from-managed), whose recipes read your own JSONL files.
 
 ### Managing datasets
 
