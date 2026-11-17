@@ -3161,6 +3161,28 @@ class TestTrainingClientSamplingHelpers:
             export_precision="nvfp4",
         )
 
+    def test_save_weights_for_sampler_passes_export_rounding(self):
+        client = self._make_client()
+        with patch.object(
+            client,
+            "save_weights_for_sampler_ext",
+            return_value=SaveSamplerResult(path="raw/path", snapshot_name="merged-test1234"),
+        ) as save_ext:
+            client.save_weights_for_sampler("merged", checkpoint_type="merged_base", export_rounding="nearest")
+
+        save_ext.assert_called_once_with(
+            "merged",
+            checkpoint_type="merged_base",
+            ttl_seconds=None,
+            export_rounding="nearest",
+        )
+
+    def test_save_weights_for_sampler_rejects_rounding_without_merged_base(self):
+        client = self._make_client()
+
+        with pytest.raises(ValueError, match="export_rounding requires checkpoint_type='merged_base'"):
+            client.save_weights_for_sampler_ext("step-1", checkpoint_type="base", export_rounding="nearest")
+
     def test_public_sdk_exposes_source_default(self):
         from fireworks.training.sdk import DEFAULT_MERGED_BASE_EXPORT_PRECISION
 

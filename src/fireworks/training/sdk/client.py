@@ -71,8 +71,10 @@ from fireworks.training.sdk._rest_client import _RestClient
 from fireworks.training.sdk._core._client import resolve_training_base_url
 from fireworks.training.sdk._core.lib.comms import CommsV2APIFuture
 from fireworks.training.sdk._snapshot_chain import (
+    ExportRounding,
     ExportPrecision,
     SamplerCheckpointType,
+    resolve_export_rounding,
     resolve_export_precision,
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
@@ -2884,6 +2886,7 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> SaveSamplerResult:
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
@@ -2912,6 +2915,12 @@ class FiretitanTrainingClient(TrainingClient):
         match the model architecture or downstream serving precision; validate
         serving load and inference before promotion.
 
+        ``export_rounding`` (``merged_base`` only) chooses how merged weights
+        are re-encoded onto the source quantization grid: ``"stochastic"``
+        keeps sub-step LoRA deltas in expectation, ``"nearest"`` is plain
+        round-to-nearest. Omit it to let the trainer use stochastic rounding,
+        or nearest when it trains with QAT.
+
         ``metadata.decision_calibration`` carries held-out decision temperatures into the
         checkpoint's ``decision.json``.
 
@@ -2926,6 +2935,10 @@ class FiretitanTrainingClient(TrainingClient):
             checkpoint_type=resolved_checkpoint_type,
             precision=export_precision,
         )
+        resolved_export_rounding = resolve_export_rounding(
+            checkpoint_type=resolved_checkpoint_type,
+            rounding=export_rounding,
+        )
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
@@ -2935,6 +2948,7 @@ class FiretitanTrainingClient(TrainingClient):
                 actual_name,
                 resolved_checkpoint_type=resolved_checkpoint_type,
                 resolved_export_precision=resolved_export_precision,
+                resolved_export_rounding=resolved_export_rounding,
                 ttl_seconds=ttl_seconds,
                 request_id=request_id,
                 metadata=metadata,
@@ -2947,6 +2961,7 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         resolved_checkpoint_type: SamplerCheckpointType,
         resolved_export_precision: ExportPrecision | None = None,
+        resolved_export_rounding: ExportRounding | None = None,
         ttl_seconds: int | None = None,
         request_id: int,
         take_turn: bool = True,
@@ -2956,6 +2971,8 @@ class FiretitanTrainingClient(TrainingClient):
         extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
         if resolved_export_precision is not None:
             extra_body["export_precision"] = resolved_export_precision
+        if resolved_export_rounding is not None:
+            extra_body["export_rounding"] = resolved_export_rounding
         if metadata is not None:
             extra_body["metadata"] = metadata.model_dump(mode="json")
         request = types.SaveWeightsForSamplerRequest(
@@ -3027,6 +3044,7 @@ class FiretitanTrainingClient(TrainingClient):
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         """Save sampler weights and return a FireTitan snapshot identity.
 
@@ -3041,7 +3059,8 @@ class FiretitanTrainingClient(TrainingClient):
         optional final-output override. Omit it to preserve the source storage
         format automatically. Prefer that default whenever possible. Explicit
         conversion may mismatch the model's downstream serving contract and
-        should be validated before promotion.
+        should be validated before promotion. ``export_rounding`` is described
+        on :meth:`save_weights_for_sampler_ext`.
         """
         save_kwargs: dict[str, Any] = {
             "checkpoint_type": checkpoint_type,
@@ -3049,6 +3068,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if export_rounding is not None:
+            save_kwargs["export_rounding"] = export_rounding
         if metadata is not None:
             save_kwargs["metadata"] = metadata
         result = self.save_weights_for_sampler_ext(name, **save_kwargs)
@@ -3062,6 +3083,7 @@ class FiretitanTrainingClient(TrainingClient):
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         save_kwargs: dict[str, Any] = {
             "ttl_seconds": ttl_seconds,
@@ -3069,6 +3091,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if export_rounding is not None:
+            save_kwargs["export_rounding"] = export_rounding
         if metadata is not None:
             save_kwargs["metadata"] = metadata
         return await asyncio.to_thread(self.save_weights_for_sampler, name, **save_kwargs)

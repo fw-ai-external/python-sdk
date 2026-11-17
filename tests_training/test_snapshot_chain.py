@@ -6,6 +6,7 @@ import pytest
 
 from fireworks.training.sdk._snapshot_chain import (
     DEFAULT_MERGED_BASE_EXPORT_PRECISION,
+    resolve_export_rounding,
     resolve_export_precision,
     normalize_checkpoint_type,
     build_incremental_metadata,
@@ -63,6 +64,21 @@ class TestNormalizeMergedBasePrecision:
         assert resolve_export_precision(checkpoint_type="base", precision=None) is None
         with pytest.raises(ValueError, match="requires checkpoint_type='merged_base'"):
             resolve_export_precision(checkpoint_type="delta", precision="bf16")
+
+
+class TestResolveExportRounding:
+    def test_unset_lets_trainer_choose(self):
+        assert resolve_export_rounding(checkpoint_type="merged_base", rounding=None) is None
+        assert resolve_export_rounding(checkpoint_type="base", rounding=None) is None
+
+    def test_explicit_rounding_is_normalized(self):
+        assert resolve_export_rounding(checkpoint_type="merged_base", rounding="Nearest") == "nearest"
+
+    def test_rejects_unknown_rounding_and_non_merged_save(self):
+        with pytest.raises(ValueError, match="export_rounding must be one of"):
+            resolve_export_rounding(checkpoint_type="merged_base", rounding="floor")
+        with pytest.raises(ValueError, match="requires checkpoint_type='merged_base'"):
+            resolve_export_rounding(checkpoint_type="delta", rounding="stochastic")
 
 
 class TestResolveNextCheckpointType:

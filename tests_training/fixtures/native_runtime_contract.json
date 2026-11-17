@@ -1316,6 +1316,11 @@
             "metadata",
             "KEYWORD_ONLY",
             "None"
+          ],
+          [
+            "export_rounding",
+            "KEYWORD_ONLY",
+            "None"
           ]
         ]
       },
@@ -1351,6 +1356,11 @@
             "metadata",
             "KEYWORD_ONLY",
             "None"
+          ],
+          [
+            "export_rounding",
+            "KEYWORD_ONLY",
+            "None"
           ]
         ]
       },
@@ -1384,6 +1394,11 @@
           ],
           [
             "metadata",
+            "POSITIONAL_OR_KEYWORD",
+            "None"
+          ],
+          [
+            "export_rounding",
             "POSITIONAL_OR_KEYWORD",
             "None"
           ]
