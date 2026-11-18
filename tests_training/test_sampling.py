@@ -20,6 +20,7 @@ from fireworks.training.sdk.sampling import (
     SamplingRequestError,
     DeploymentSamplerTimeoutError,
 )
+from fireworks.training.sdk.concurrency import AdaptiveConcurrencyController
 
 # NOTE: conftest.py's autouse fixture disables errors.py layer-1 backoff
 # (_backoff_delay -> None) for every module except test_errors. The sampler's
@@ -34,6 +35,64 @@ def _make_sampler(**kwargs):
     defaults = dict(inference_url="https://api.example.com", model="m", api_key="secret-key", tokenizer=None)
     defaults.update(kwargs)
     return DeploymentSampler(**defaults)
+
+
+def test_backend_managed_concurrency_survives_binding_copy():
+    sampler = _make_sampler(backend_managed_concurrency=True)
+    bound = sampler._copy_for_r3_binding()
+    try:
+        assert sampler.concurrency_controller is None
+        assert bound.concurrency_controller is None
+    finally:
+        bound.close()
+        sampler.close()
+
+
+@pytest.mark.parametrize("limit", [{"max_concurrency": 4}, {"concurrency_controller": object()}])
+def test_backend_managed_concurrency_rejects_client_limit(limit):
+    with pytest.raises(ValueError, match="cannot be combined"):
+        _make_sampler(backend_managed_concurrency=True, **limit)
+
+
+def test_default_sampler_keeps_adaptive_concurrency():
+    sampler = _make_sampler()
+    try:
+        assert isinstance(sampler.concurrency_controller, AdaptiveConcurrencyController)
+    finally:
+        sampler.close()
+
+
+def test_backend_managed_requests_reach_transport_concurrently():
+    sampler = _make_sampler(backend_managed_concurrency=True)
+    both_started = asyncio.Event()
+    release = asyncio.Event()
+    started = 0
+
+    async def stream(*_args, **_kwargs):
+        nonlocal started
+        started += 1
+        if started == 2:
+            both_started.set()
+        await release.wait()
+        return _SUCCESS
+
+    sampler.async_completions_stream = stream
+
+    async def run():
+        tasks = [asyncio.create_task(sampler.sample_with_prompt_tokens([1, 2, 3])) for _ in range(2)]
+        try:
+            await asyncio.wait_for(both_started.wait(), timeout=2)
+            release.set()
+            await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    try:
+        asyncio.run(run())
+    finally:
+        sampler.close()
 
 
 def _http_error(
@@ -61,6 +120,18 @@ _SUCCESS = (
     },
     ServerMetrics(),
 )
+
+
+def test_backend_managed_overload_retry_succeeds(no_sleep):
+    sampler = _make_sampler(backend_managed_concurrency=True)
+    calls = _install_stream(sampler, [_http_error(429), _SUCCESS])
+    try:
+        result = asyncio.run(sampler.sample_with_prompt_tokens_result([1, 2, 3]))
+        assert result.attempts == 2
+        assert len(calls) == 2
+        assert sampler.concurrency_controller is None
+    finally:
+        sampler.close()
 
 
 def _install_stream(sampler, effects):

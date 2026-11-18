@@ -59,6 +59,16 @@ def test_native_public_method_signatures_match_frozen_baseline(cls: type) -> Non
                 ["record", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
             ],
         }
+        backend_mode = ["backend_managed_concurrency", "KEYWORD_ONLY", "False"]
+        for method in (
+            "create_sampling_client",
+            "create_deployment_sampler_for_model",
+            "create_inference_deployment_sampler",
+            "create_deployment_sampler",
+        ):
+            params = current[method]["params"]
+            assert backend_mode in params
+            params.remove(backend_mode)
     if cls is sdk_client.FiretitanSamplingClient:
         # Credential-free sampler handles (Tinker get_sampler_handle / from_sampler_handle).
         assert current.pop("get_sampler_handle") == {

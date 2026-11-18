@@ -278,6 +278,7 @@ class _SamplingClientPickleState:
     r3_binding_required: bool
     fixed_concurrency: int | None
     api_key: str | None = None
+    backend_managed_concurrency: bool = False
 
 
 def _unpickle_firetitan_sampling_client(
@@ -299,6 +300,7 @@ def _unpickle_firetitan_sampling_client(
         concurrency_controller=(
             FixedConcurrencyController(state.fixed_concurrency) if state.fixed_concurrency is not None else None
         ),
+        backend_managed_concurrency=getattr(state, "backend_managed_concurrency", False),
     )
     client.deployment_sampler._r3_binding_required = state.r3_binding_required
     if state.r3_store_id is not None:
@@ -343,6 +345,7 @@ class FiretitanSamplingClient(SamplingClient):
         concurrency_controller: SamplingConcurrencyController | None = None,
         max_concurrency: int | None = None,
         additional_headers: dict[str, str] | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> "FiretitanSamplingClient":
         """Build a Tinker-compatible client and the underlying sampler."""
         sampler = DeploymentSampler(
@@ -353,6 +356,7 @@ class FiretitanSamplingClient(SamplingClient):
             concurrency_controller=concurrency_controller,
             max_concurrency=max_concurrency,
             additional_headers=additional_headers,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
         return cls(sampler)
 
@@ -374,6 +378,7 @@ class FiretitanSamplingClient(SamplingClient):
             r3_store_id=sampler.r3_store_id,
             r3_binding_required=bool(getattr(sampler, "_r3_binding_required", False)),
             fixed_concurrency=fixed_concurrency,
+            backend_managed_concurrency=controller is None,
             api_key=sampler.api_key,
         )
 
@@ -402,7 +407,10 @@ class FiretitanSamplingClient(SamplingClient):
         state = self._pickle_state()
         headers = {key: value for key, value in state.additional_headers.items() if not _is_credential_header(key)}
         state = replace(state, additional_headers=headers, api_key=None)
-        payload = json.dumps(asdict(state), separators=(",", ":"))
+        fields_ = asdict(state)
+        if not state.backend_managed_concurrency:
+            fields_.pop("backend_managed_concurrency")
+        payload = json.dumps(fields_, separators=(",", ":"))
         return base64.urlsafe_b64encode(payload.encode()).decode()
 
     @staticmethod
@@ -4739,10 +4747,22 @@ class FiretitanServiceClient(ServiceClient):
         self._created_base_model = True
         return training_client
 
-    def create_sampling_client(self, *args, training_client: FiretitanTrainingClient | None = None, **kwargs):
+    def create_sampling_client(
+        self,
+        *args,
+        training_client: FiretitanTrainingClient | None = None,
+        backend_managed_concurrency: bool = False,
+        **kwargs,
+    ):
+        if type(backend_managed_concurrency) is not bool:
+            raise TypeError("backend_managed_concurrency must be a bool")
+        if backend_managed_concurrency and kwargs.get("concurrency_controller") is not None:
+            raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         sampler = self._create_sampling_client(*args, **kwargs)
         # A reused deployment backend must not change an earlier handle's protocol.
-        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding()
+        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding(
+            backend_managed_concurrency=backend_managed_concurrency,
+        )
         sampler.deployment_sampler._r3_binding_required = False
         if training_client is None and self._samples_remote_target(sampler.deployment_sampler.model):
             # Another session's or a standalone sampler's rollouts are not this
@@ -4963,6 +4983,7 @@ class FiretitanServiceClient(ServiceClient):
         tokenizer: Any | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
         inference_url: str | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Create a FireTitan-native sampler for an existing inference model."""
         sampler = DeploymentSampler(
@@ -4975,9 +4996,9 @@ class FiretitanServiceClient(ServiceClient):
             model=model,
             api_key=self._require_fireworks_api_key("deployment sampling"),
             tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
-        if concurrency_controller is not None:
-            sampler.concurrency_controller = concurrency_controller
         return sampler
 
     def create_inference_deployment_sampler(
@@ -4988,6 +5009,7 @@ class FiretitanServiceClient(ServiceClient):
         cleanup_on_close: DeploymentCleanupOnClose | None = None,
         tokenizer: Any | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Create or reuse an inference deployment and return a sampler for it.
 
@@ -4996,6 +5018,10 @@ class FiretitanServiceClient(ServiceClient):
         also reuses the resolved managed deployment shape unless the caller
         passes an explicit deployment shape.
         """
+        if type(backend_managed_concurrency) is not bool:
+            raise TypeError("backend_managed_concurrency must be a bool")
+        if backend_managed_concurrency and concurrency_controller is not None:
+            raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         if config.max_replica_count <= 0:
             raise ValueError("DeploymentConfig.max_replica_count must be positive for inference sampling.")
         deploy_mgr = self._managed_deployment_manager()
@@ -5022,12 +5048,15 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        model = (
+            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        )
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
             inference_url=deploy_mgr.inference_url,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
 
     async def create_sampling_client_async(
@@ -5055,6 +5084,7 @@ class FiretitanServiceClient(ServiceClient):
         tokenizer: Any | None = None,
         training_client: FiretitanTrainingClient | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Return the FireTitan ``DeploymentSampler`` directly (not the Tinker wrapper).
 
@@ -5070,6 +5100,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client=training_client,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
         # Transfer ownership from the unused wrapper to the caller. Its
         # destructor must not close the returned deployment sampler.
