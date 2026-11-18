@@ -3417,6 +3417,60 @@ class FiretitanServiceClient(ServiceClient):
     ) -> dict[str, str] | None:
         return user_metadata if user_metadata is not None else self._default_user_metadata
 
+    @classmethod
+    def from_reserved_training_session(
+        cls,
+        name: str,
+        *,
+        expected_display_name: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        additional_headers: dict[str, str] | None = None,
+    ) -> FiretitanServiceClient:
+        """Open a freshly reserved, exclusively owned serverless session.
+
+        Reserve the session with ``FireworksClient.reserve_training_session``
+        after persisting its ID and ownership marker. Hold an exclusive lease
+        from reservation through the first model creation. This factory checks
+        the account, marker and unbound state before starting client counters at
+        zero. It must never be used to reattach a bound session or reset its
+        sequence numbers; recover training into a new session from a checkpoint.
+
+        Closing the returned service stops local clients and heartbeats. Session
+        deletion and checkpoint retention remain the caller's responsibility.
+        """
+        if not isinstance(expected_display_name, str) or not expected_display_name.strip():
+            raise ValueError("expected_display_name must be a nonempty ownership marker")
+        key = _fireworks_api_key(api_key)
+        if not key:
+            raise ValueError("A Fireworks API key is required to open a reserved training session")
+        root = _fireworks_api_root_url(base_url)
+        # lazy: keep platform-client construction out of SDK module import.
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        with FireworksClient(api_key=key, base_url=root, additional_headers=additional_headers) as client:
+            session = client.get_training_session(name)
+            account = client.account_id
+        if session is None:
+            raise ValueError("Reserved training session does not exist")
+        if session.get("displayName") != expected_display_name:
+            raise ValueError("Reserved training session ownership marker does not match")
+        if session.get("baseModel") or session.get("state") not in (
+            None,
+            "TRAINING_SESSION_STATE_UNSPECIFIED",
+        ):
+            raise ValueError("Only a fresh unbound training session can start new client counters")
+        service = cls(
+            api_key=key,
+            base_url=root + "/training/v1/serverless",
+            default_headers=additional_headers or {},
+            managed_additional_headers=additional_headers,
+            session_id=name.rsplit("/", 1)[-1],
+            _reserved_session=True,
+        )
+        service._cp_account_id = account
+        return service
+
     def get_telemetry(self):
         if not hasattr(self, "holder"):
             return None

@@ -1,8 +1,11 @@
 # Changelog
 
-## 1.2.34 (2026-11-17)
+## 1.2.34 (2026-11-18)
 
 Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk/compare/v1.2.33...v1.2.34)
+
+### Features
+* **training-sdk:** reserve a caller-selected training-session ID and open a verified, unbound reserved session, allowing external runners to persist creation intent before provisioning.
 
 ### Bug Fixes
 * **training-sdk:** load tokenizer metadata containing `fix_mistral_regex` on Transformers 5.0–5.3 without duplicate-keyword errors, preserving the declared flag on save.

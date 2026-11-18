@@ -210,8 +210,11 @@ class InternalClientHolder(AsyncTrainingClientProvider, TelemetryProvider):
         _client_config: dict[str, str | int | bool] | None = None,
         _jwt_auth_seed: str | None = None,
         _skip_session: bool = False,
+        _reserved_session: bool = False,
         **kwargs: Any,
     ) -> None:
+        if _reserved_session and (session_id is None or _skip_session):
+            raise ValueError("A reserved session requires an explicit session_id and cannot skip session setup")
         # Resolve from env now so shadow_kwargs carries the actual credential
         # across pickle boundaries (workers may not have the env var set).
         self._api_key = resolve_api_key(api_key)
@@ -281,10 +284,11 @@ class InternalClientHolder(AsyncTrainingClientProvider, TelemetryProvider):
             self._training_client_counter: int | None = None
             self._sampling_client_counter: int | None = None
         elif session_id is not None:
-            # Shadow mode: reuse existing session, can't create new clients
+            # Only the validated reservation factory may start fresh counters.
+            # Ordinary shadow holders cannot create new clients.
             self._session_id = session_id
-            self._training_client_counter = None
-            self._sampling_client_counter = None
+            self._training_client_counter = 0 if _reserved_session else None
+            self._sampling_client_counter = 0 if _reserved_session else None
         else:
             # Normal mode: create new session.
             self._assert_not_on_event_loop("create a new session")
