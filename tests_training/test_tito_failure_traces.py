@@ -310,6 +310,34 @@ async def test_unwritable_trace_storage_never_replaces_the_parse_failure(tmp_pat
         await sidecar.close()
 
 
+def test_default_retention_keeps_five_thousand_failed_traces(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    assert config.max_failed_traces == 5_000
+    assert config.max_local_bytes >= (config.max_failed_traces + config.max_active_traces) * config.max_trajectory_bytes
+    recorder = _FailureTraceRecorder(config)
+    paths = []
+    for index in range(config.max_failed_traces + 1):
+        key = str(index)
+        recorder.record("call_terminal", key, {"error": "parse failed"})
+        paths.append(Path(recorder.evidence(key)["trace_path"]))
+        recorder.close_trajectory(key, "failed")
+    assert not paths[0].exists()
+    assert all(path.is_file() for path in paths[1:])
+    assert len(list(tmp_path.glob("writer-*/failed/*.jsonl"))) == 5_000
+
+
+def test_default_retention_preserves_history_beyond_old_byte_limit(tmp_path: Path) -> None:
+    recorder = _FailureTraceRecorder(_config(tmp_path))
+    # Two complete events cross the old 32 MiB trajectory limit.
+    recorder.record("prepare", "long", {"content": "x" * (17 * 1024 * 1024)})
+    recorder.record("call_terminal", "long", {"content": "y" * (17 * 1024 * 1024), "error": "parse failed"})
+    evidence = recorder.evidence("long")
+    assert evidence["trace_storage_error"] is None
+    assert evidence["trace_history_truncated"] is False
+    with Path(evidence["trace_path"]).open() as stream:
+        assert [json.loads(line)["event"] for line in stream] == ["prepare", "call_terminal"]
+
+
 def test_trace_retention_is_bounded_and_explicit_about_missing_history(tmp_path):
     recorder = _FailureTraceRecorder(
         _config(tmp_path, max_local_bytes=6000, max_trajectory_bytes=2000, max_failed_traces=1)

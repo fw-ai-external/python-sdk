@@ -2730,6 +2730,54 @@ class TestFiretitanServiceClientManagedCompat:
         finally:
             restored.close()
 
+    def test_backend_managed_sampling_survives_process_transfer(self):
+        sampler = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com",
+            model="test-model",
+            api_key="test-key",
+            backend_managed_concurrency=True,
+        )
+        pickled = pickle.loads(pickle.dumps(sampler))
+        handled = FiretitanSamplingClient.from_sampler_handle(sampler.get_sampler_handle(), api_key="test-key")
+        try:
+            assert sampler.deployment_sampler.concurrency_controller is None
+            assert pickled.deployment_sampler.concurrency_controller is None
+            assert handled.deployment_sampler.concurrency_controller is None
+        finally:
+            sampler.close()
+            pickled.close()
+            handled.close()
+
+    def test_service_sampler_applies_backend_mode_before_binding(self):
+        service = self._standalone_sampler_service()
+        original = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com",
+            model="test-model",
+            api_key="test-key",
+        )
+        bound = service.create_sampling_client(
+            deployment_sampler=original.deployment_sampler,
+            backend_managed_concurrency=True,
+        )
+        try:
+            assert bound.deployment_sampler.concurrency_controller is None
+            assert original.deployment_sampler.concurrency_controller is not None
+        finally:
+            bound.close()
+            original.close()
+
+    def test_default_handle_omits_backend_mode_for_older_receivers(self):
+        client = FiretitanSamplingClient.create(
+            inference_url="https://api.example.com",
+            model="test-model",
+            api_key="test-key",
+        )
+        try:
+            fields = json.loads(base64.urlsafe_b64decode(client.get_sampler_handle()))
+            assert "backend_managed_concurrency" not in fields
+        finally:
+            client.close()
+
     def test_firetitan_sampling_client_pickle_roundtrip(self, monkeypatch):
         # Tinker parity: the pickle carries the connection state, credentials
         # included, so a worker needs no environment of its own.
@@ -3078,7 +3126,7 @@ class TestGetTokenizer:
         with patch("transformers.AutoTokenizer.from_pretrained", return_value="tok") as load:
             result = client.get_tokenizer()
         assert result == "tok"
-        load.assert_called_once_with("Qwen/Qwen3-1.7B")
+        load.assert_called_once_with("Qwen/Qwen3-1.7B", trust_remote_code=False)
 
     def test_raises_when_no_tokenizer_model(self):
         client = _bare_training_client()
@@ -3160,6 +3208,28 @@ class TestTrainingClientSamplingHelpers:
             ttl_seconds=None,
             export_precision="nvfp4",
         )
+
+    def test_save_weights_for_sampler_passes_export_rounding(self):
+        client = self._make_client()
+        with patch.object(
+            client,
+            "save_weights_for_sampler_ext",
+            return_value=SaveSamplerResult(path="raw/path", snapshot_name="merged-test1234"),
+        ) as save_ext:
+            client.save_weights_for_sampler("merged", checkpoint_type="merged_base", export_rounding="nearest")
+
+        save_ext.assert_called_once_with(
+            "merged",
+            checkpoint_type="merged_base",
+            ttl_seconds=None,
+            export_rounding="nearest",
+        )
+
+    def test_save_weights_for_sampler_rejects_rounding_without_merged_base(self):
+        client = self._make_client()
+
+        with pytest.raises(ValueError, match="export_rounding requires checkpoint_type='merged_base'"):
+            client.save_weights_for_sampler_ext("step-1", checkpoint_type="base", export_rounding="nearest")
 
     def test_public_sdk_exposes_source_default(self):
         from fireworks.training.sdk import DEFAULT_MERGED_BASE_EXPORT_PRECISION

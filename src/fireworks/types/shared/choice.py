@@ -10,7 +10,17 @@ from .new_log_probs import NewLogProbs
 
 __all__ = ["Choice", "Logprobs"]
 
-Logprobs: TypeAlias = Union[LogProbs, NewLogProbs, None]
+class TokenIdLogProbs(BaseModel):
+    """Numeric prompt-scoring columns for return_token_ids_only=true."""
+
+    format: Literal["token_ids"]
+    token_ids: List[int]
+    token_logprobs: List[Optional[float]]
+    top_token_ids: List[List[int]]
+    top_logprobs: List[List[float]]
+
+
+Logprobs: TypeAlias = Union[TokenIdLogProbs, LogProbs, NewLogProbs, None]
 
 
 class Choice(BaseModel):

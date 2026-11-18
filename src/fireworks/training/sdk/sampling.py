@@ -296,6 +296,11 @@ class DeploymentSampler(_RestClient):
     Handles URL construction, auth headers, SSL verification, and basic
     retries -- so training scripts never do raw HTTP for sampling.
 
+    Set ``backend_managed_concurrency=True`` to send requests without a
+    client-side concurrency controller. The serving backend still applies its
+    own capacity limits; callers retain responsibility for bounding task creation.
+    The default remains adaptive client-side concurrency control.
+
     Example::
 
         from transformers import AutoTokenizer
@@ -324,7 +329,12 @@ class DeploymentSampler(_RestClient):
         additional_headers: dict[str, str] | None = None,
         *,
         request_context: dict[str, Any] | None = None,
+        backend_managed_concurrency: bool = False,
     ):
+        if type(backend_managed_concurrency) is not bool:
+            raise TypeError("backend_managed_concurrency must be a bool")
+        if backend_managed_concurrency and (concurrency_controller is not None or max_concurrency is not None):
+            raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         super().__init__(api_key=api_key, base_url=inference_url, additional_headers=additional_headers)
         self.model = model
         self.tokenizer = tokenizer
@@ -352,12 +362,12 @@ class DeploymentSampler(_RestClient):
             )
             if concurrency_controller is None:
                 concurrency_controller = FixedConcurrencyController(max_concurrency)
-        elif concurrency_controller is None:
+        elif concurrency_controller is None and not backend_managed_concurrency:
             concurrency_controller = AdaptiveConcurrencyController()
 
         self._concurrency_controller = concurrency_controller
 
-    def _copy_for_r3_binding(self) -> DeploymentSampler:
+    def _copy_for_r3_binding(self, *, backend_managed_concurrency: bool = False) -> DeploymentSampler:
         # Each binding owns its HTTP clients: closing or collecting another
         # handle must not close this one's transports or change its protocol.
         return DeploymentSampler(
@@ -365,9 +375,10 @@ class DeploymentSampler(_RestClient):
             model=self.model,
             api_key=self.api_key,
             tokenizer=self.tokenizer,
-            concurrency_controller=self.concurrency_controller,
+            concurrency_controller=None if backend_managed_concurrency else self.concurrency_controller,
             additional_headers=self.additional_headers,
             request_context=self._request_context,
+            backend_managed_concurrency=backend_managed_concurrency or self.concurrency_controller is None,
         )
 
     def negotiate_routing_matrix_format(self, trainer_format: RoutingMatrixFormat, store_id: str | None) -> None:

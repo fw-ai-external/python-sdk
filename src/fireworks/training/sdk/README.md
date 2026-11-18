@@ -14,6 +14,42 @@ It provides trainer/deployment lifecycle APIs, hotload orchestration, and thin T
 | `FiretitanProvisioningConfig` | SDK-owned managed infra config consumed by `FiretitanServiceClient.from_firetitan_config(...)`. |
 | `WeightSyncer` | Save sampler checkpoints and sync them to inference deployments via delta chain management. |
 
+## Sampling concurrency
+
+For dedicated RL rollout deployments, we recommend
+`backend_managed_concurrency=True` on `DeploymentSampler` or
+`FiretitanSamplingClient.create(...)`, letting serving admission control
+inference work. Independent client controllers cannot enforce a deployment-wide
+budget across processes, hosts or sandboxes. Their separate adaptive windows
+also make it harder to keep the engine saturated as trajectories wait on tools
+or finish at different times.
+
+Keep enough bounded rollout work available to fill serving capacity, and use the
+SDK's existing bounded retries with jittered backoff for retryable overload
+responses. Avoid adding another retry loop around every sampling call. Retain
+runner limits for environments, groups and version staleness, and account for
+failed attempts and retry costs.
+
+The option disables the local controller, including after binding or process
+transfer. It cannot be combined with `concurrency_controller` or
+`max_concurrency`. The default remains adaptive for backward compatibility;
+callers must explicitly select the recommended mode. This is a local choice,
+not a new mode or concurrency value sent to the inference backend.
+
+Serving applies active-batch, KV-capacity and queued-work/overload limits to
+requests reaching each serving instance. A strict deployment-wide budget across
+replicas requires shared backend admission; this option does not create one.
+Queue deadlines are a separate serving setting and are not changed by this
+option.
+
+The service's `create_sampling_client`, `create_deployment_sampler`, and
+inference sampler factories accept the same option. The public
+`concurrency_controller` setter can deliberately override it later; assigning
+`None` also keeps local control disabled through binding and process transfer.
+On the service factory, explicitly selecting backend-managed mode overrides the
+controller of a supplied sampler in the new bound copy, leaving the source
+sampler unchanged. Handles carrying this mode require a supporting receiver SDK.
+
 ## Tinker compatibility and extensions
 
 Inherited behavior remains the same (`forward`, `forward_backward_custom`, `optim_step`, `save_state`, `load_state_with_optimizer`).
@@ -21,7 +57,8 @@ Inherited behavior remains the same (`forward`, `forward_backward_custom`, `opti
 Fireworks-specific additions:
 
 - `save_weights_for_sampler_ext(name, checkpoint_type=...)` — session-scoped sampler checkpoints with base/delta support, plus `merged_base` (LoRA-only) to fold the loaded adapter into the base and export a full `HF_BASE_MODEL`. Merged-base output defaults to the source storage format; use `export_precision="bf16"`, `"nvfp4"`, `"mxfp8"`, or `"fp8_block128"` only for an explicit output override.
-- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save. Prefer a Fireworks PEFT model resource (`accounts/<acct>/models/<lora-id>`); a `gs://` PEFT directory also works.
+  With RDMA enabled, delta exports are unsupported. Use `checkpoint_type="base"` for file exports.
+- `load_adapter(adapter_path)` — load HF PEFT adapter weights into a LoRA session (weights-only warm-start); required before a `merged_base` save. Pass a promoted PEFT Model resource name (`accounts/<account>/models/<name>`).
 - `list_checkpoints()`
 - cross-job checkpoint references for resume (`resolve_checkpoint_path(...)`)
 

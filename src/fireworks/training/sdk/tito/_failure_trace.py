@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_MAX_FAILED_TRACES = 5_000
+_DEFAULT_MAX_ACTIVE_TRACES = 128
+_DEFAULT_MAX_TRAJECTORY_BYTES = 256 * 1024 * 1024
+
 
 @contextmanager
 def _open_collected_trace(source: Path, trusted_root: Path | None) -> Iterator[BinaryIO]:
@@ -64,14 +68,17 @@ class TITOFailureTraceConfig:
     """Local-only temporary traces, removed after successful terminalization.
 
     Failed traces survive shutdown within these per-writer retention bounds.
+    Defaults allow 5,000 failed traces plus active trajectories at their full
+    per-trajectory limit. The byte budget is a ceiling, not preallocated disk;
+    the free-space floor still applies. Callers can set smaller local bounds.
     They contain raw requests and tokens; do not upload them automatically.
     """
 
     root_dir: Path = field(default_factory=lambda: Path(tempfile.gettempdir()) / "fireworks-tito-traces")
-    max_local_bytes: int = 256 * 1024 * 1024
-    max_trajectory_bytes: int = 32 * 1024 * 1024
-    max_failed_traces: int = 32
-    max_active_traces: int = 128
+    max_local_bytes: int = (_DEFAULT_MAX_FAILED_TRACES + _DEFAULT_MAX_ACTIVE_TRACES) * _DEFAULT_MAX_TRAJECTORY_BYTES
+    max_trajectory_bytes: int = _DEFAULT_MAX_TRAJECTORY_BYTES
+    max_failed_traces: int = _DEFAULT_MAX_FAILED_TRACES
+    max_active_traces: int = _DEFAULT_MAX_ACTIVE_TRACES
     min_free_bytes: int = 64 * 1024 * 1024
     enabled: bool = True
     stale_writer_age_seconds: float = 7 * 24 * 60 * 60

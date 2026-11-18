@@ -383,6 +383,15 @@ class CompletionCreateParamsBase(TypedDict, total=False):
     value might not be a valid JSON.
     """
 
+    return_token_ids_only: bool
+    """Return numeric prompt logprobs without decoding tokens.
+
+    Requires max_tokens=0, echo=true, logprobs=true, stream=false and n=1.
+    Logprobs uses parallel token_ids, token_logprobs, top_token_ids and top_logprobs
+    arrays with format="token_ids". Choice text is empty. Outer choice token_ids
+    and prompt_token_ids are included only when return_token_ids=true.
+    """
+
     return_token_ids: Optional[bool]
     """Return token IDs alongside text to avoid retokenization drift."""
 

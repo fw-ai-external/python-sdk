@@ -43,8 +43,11 @@ from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
+    is_minimax_m2_model_name,
     is_kimi_k3_k31_model_name,
+    is_minimax_m2_tokenizer_source,
     is_kimi_k3_k31_tokenizer_source,
+    is_standard_tokenizer_model_name,
     requires_code_free_tokenizer_loading,
 )
 
@@ -68,8 +71,10 @@ from fireworks.training.sdk._rest_client import _RestClient
 from fireworks.training.sdk._core._client import resolve_training_base_url
 from fireworks.training.sdk._core.lib.comms import CommsV2APIFuture
 from fireworks.training.sdk._snapshot_chain import (
+    ExportRounding,
     ExportPrecision,
     SamplerCheckpointType,
+    resolve_export_rounding,
     resolve_export_precision,
     normalize_checkpoint_type,
     resolve_next_checkpoint_type,
@@ -273,6 +278,7 @@ class _SamplingClientPickleState:
     r3_binding_required: bool
     fixed_concurrency: int | None
     api_key: str | None = None
+    backend_managed_concurrency: bool = False
 
 
 def _unpickle_firetitan_sampling_client(
@@ -294,6 +300,7 @@ def _unpickle_firetitan_sampling_client(
         concurrency_controller=(
             FixedConcurrencyController(state.fixed_concurrency) if state.fixed_concurrency is not None else None
         ),
+        backend_managed_concurrency=getattr(state, "backend_managed_concurrency", False),
     )
     client.deployment_sampler._r3_binding_required = state.r3_binding_required
     if state.r3_store_id is not None:
@@ -338,6 +345,7 @@ class FiretitanSamplingClient(SamplingClient):
         concurrency_controller: SamplingConcurrencyController | None = None,
         max_concurrency: int | None = None,
         additional_headers: dict[str, str] | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> "FiretitanSamplingClient":
         """Build a Tinker-compatible client and the underlying sampler."""
         sampler = DeploymentSampler(
@@ -348,6 +356,7 @@ class FiretitanSamplingClient(SamplingClient):
             concurrency_controller=concurrency_controller,
             max_concurrency=max_concurrency,
             additional_headers=additional_headers,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
         return cls(sampler)
 
@@ -369,6 +378,7 @@ class FiretitanSamplingClient(SamplingClient):
             r3_store_id=sampler.r3_store_id,
             r3_binding_required=bool(getattr(sampler, "_r3_binding_required", False)),
             fixed_concurrency=fixed_concurrency,
+            backend_managed_concurrency=controller is None,
             api_key=sampler.api_key,
         )
 
@@ -397,7 +407,10 @@ class FiretitanSamplingClient(SamplingClient):
         state = self._pickle_state()
         headers = {key: value for key, value in state.additional_headers.items() if not _is_credential_header(key)}
         state = replace(state, additional_headers=headers, api_key=None)
-        payload = json.dumps(asdict(state), separators=(",", ":"))
+        fields_ = asdict(state)
+        if not state.backend_managed_concurrency:
+            fields_.pop("backend_managed_concurrency")
+        payload = json.dumps(fields_, separators=(",", ":"))
         return base64.urlsafe_b64encode(payload.encode()).decode()
 
     @staticmethod
@@ -2809,6 +2822,11 @@ class FiretitanTrainingClient(TrainingClient):
         because legacy sampler saves do not report it. RDMA negotiation, API, and
         publication errors are surfaced without a FILE retry.
 
+        An RDMA deployment remains bound to its first trainer session. Reuse
+        that session for subsequent updates; a new trainer session requires a
+        new deployment. Resetting a dedicated trainer session after RDMA sync
+        has started is rejected before unloading its models.
+
         Save resumable checkpoints separately with ``save_state()``.
         """
         from fireworks.training.sdk._rdma import _RdmaSamplerBackend
@@ -2876,6 +2894,7 @@ class FiretitanTrainingClient(TrainingClient):
         ttl_seconds: int | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> SaveSamplerResult:
         """save_weights_for_sampler with checkpoint_type and session_id suffixing.
 
@@ -2904,6 +2923,12 @@ class FiretitanTrainingClient(TrainingClient):
         match the model architecture or downstream serving precision; validate
         serving load and inference before promotion.
 
+        ``export_rounding`` (``merged_base`` only) chooses how merged weights
+        are re-encoded onto the source quantization grid: ``"stochastic"``
+        keeps sub-step LoRA deltas in expectation, ``"nearest"`` is plain
+        round-to-nearest. Omit it to let the trainer use stochastic rounding,
+        or nearest when it trains with QAT.
+
         ``metadata.decision_calibration`` carries held-out decision temperatures into the
         checkpoint's ``decision.json``.
 
@@ -2918,6 +2943,10 @@ class FiretitanTrainingClient(TrainingClient):
             checkpoint_type=resolved_checkpoint_type,
             precision=export_precision,
         )
+        resolved_export_rounding = resolve_export_rounding(
+            checkpoint_type=resolved_checkpoint_type,
+            rounding=export_rounding,
+        )
         actual_name = qualify_snapshot_name(self.session_id, name)
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
@@ -2927,6 +2956,7 @@ class FiretitanTrainingClient(TrainingClient):
                 actual_name,
                 resolved_checkpoint_type=resolved_checkpoint_type,
                 resolved_export_precision=resolved_export_precision,
+                resolved_export_rounding=resolved_export_rounding,
                 ttl_seconds=ttl_seconds,
                 request_id=request_id,
                 metadata=metadata,
@@ -2939,6 +2969,7 @@ class FiretitanTrainingClient(TrainingClient):
         *,
         resolved_checkpoint_type: SamplerCheckpointType,
         resolved_export_precision: ExportPrecision | None = None,
+        resolved_export_rounding: ExportRounding | None = None,
         ttl_seconds: int | None = None,
         request_id: int,
         take_turn: bool = True,
@@ -2948,6 +2979,8 @@ class FiretitanTrainingClient(TrainingClient):
         extra_body: dict[str, Any] = {"checkpoint_type": resolved_checkpoint_type}
         if resolved_export_precision is not None:
             extra_body["export_precision"] = resolved_export_precision
+        if resolved_export_rounding is not None:
+            extra_body["export_rounding"] = resolved_export_rounding
         if metadata is not None:
             extra_body["metadata"] = metadata.model_dump(mode="json")
         request = types.SaveWeightsForSamplerRequest(
@@ -3019,6 +3052,7 @@ class FiretitanTrainingClient(TrainingClient):
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         """Save sampler weights and return a FireTitan snapshot identity.
 
@@ -3033,7 +3067,8 @@ class FiretitanTrainingClient(TrainingClient):
         optional final-output override. Omit it to preserve the source storage
         format automatically. Prefer that default whenever possible. Explicit
         conversion may mismatch the model's downstream serving contract and
-        should be validated before promotion.
+        should be validated before promotion. ``export_rounding`` is described
+        on :meth:`save_weights_for_sampler_ext`.
         """
         save_kwargs: dict[str, Any] = {
             "checkpoint_type": checkpoint_type,
@@ -3041,6 +3076,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if export_rounding is not None:
+            save_kwargs["export_rounding"] = export_rounding
         if metadata is not None:
             save_kwargs["metadata"] = metadata
         result = self.save_weights_for_sampler_ext(name, **save_kwargs)
@@ -3054,6 +3091,7 @@ class FiretitanTrainingClient(TrainingClient):
         checkpoint_type: str | None = None,
         export_precision: ExportPrecision | None = None,
         metadata: SamplerCheckpointMetadata | None = None,
+        export_rounding: ExportRounding | None = None,
     ) -> APIFuture[types.SaveWeightsForSamplerResponse]:
         save_kwargs: dict[str, Any] = {
             "ttl_seconds": ttl_seconds,
@@ -3061,6 +3099,8 @@ class FiretitanTrainingClient(TrainingClient):
         }
         if export_precision is not None:
             save_kwargs["export_precision"] = export_precision
+        if export_rounding is not None:
+            save_kwargs["export_rounding"] = export_rounding
         if metadata is not None:
             save_kwargs["metadata"] = metadata
         return await asyncio.to_thread(self.save_weights_for_sampler, name, **save_kwargs)
@@ -3116,9 +3156,13 @@ class FiretitanTrainingClient(TrainingClient):
         # lazy: tokenizer downloads are optional; transport needs no transformers.
         from transformers import AutoTokenizer
 
-        if is_kimi_k3_k31_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or is_kimi_k3_k31_tokenizer_source(self._tokenizer_model):
+        from fireworks.training.sdk.tokenizer_compat import patch_duplicate_mistral_regex_kwarg
+
+        patch_duplicate_mistral_regex_kwarg()
+
+        if is_kimi_k3_k31_model_name(getattr(self, "_tokenizer_base_model", None)) or is_kimi_k3_k31_tokenizer_source(
+            self._tokenizer_model
+        ):
             # Recognized reviewed Kimi K3/K3.1 data: build the id-identical
             # fast tokenizer from reviewed installed code. Checkpoint Python
             # (the auto_map TikTokenTokenizer) is never imported, and an
@@ -3126,12 +3170,19 @@ class FiretitanTrainingClient(TrainingClient):
             from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
 
             return load_native_tokenizer(self._tokenizer_model)
-        if is_code_free_model_name(
-            getattr(self, "_tokenizer_base_model", None)
-        ) or requires_code_free_tokenizer_loading(self._tokenizer_model):
-            # Reviewed DeepSeek V4/V4.1 data ships no remote code; an
-            # explicit False resolves the identical tokenizer class and keeps
-            # any checkpoint-staged Python inert.
+        base_model = getattr(self, "_tokenizer_base_model", None)
+        if is_minimax_m2_model_name(base_model) or is_minimax_m2_tokenizer_source(self._tokenizer_model):
+            # lazy: share the literal reader without sharing the sampling client's cache.
+            from fireworks.training.sdk._core.lib.public_interfaces.sampling_client import _load_minimax_tokenizer_json
+
+            return _load_minimax_tokenizer_json(self._tokenizer_model)
+        if (
+            is_code_free_model_name(base_model)
+            or is_standard_tokenizer_model_name(base_model)
+            or is_standard_tokenizer_model_name(self._tokenizer_model)
+            or requires_code_free_tokenizer_loading(self._tokenizer_model)
+        ):
+            # Independently selected code-free context keeps checkpoint Python inert.
             return AutoTokenizer.from_pretrained(self._tokenizer_model, trust_remote_code=False)
         return AutoTokenizer.from_pretrained(self._tokenizer_model)
 
@@ -3240,9 +3291,8 @@ class FiretitanTrainingClient(TrainingClient):
     def load_adapter(self, adapter_path: str) -> APIFuture[LoadAdapterResponse]:
         """Load HF PEFT adapter weights into a LoRA training session (weights-only).
 
-        ``adapter_path`` is normally a Fireworks PEFT model resource
-        (``accounts/<acct>/models/<lora-id>``). A ``gs://`` PEFT directory also
-        works when you already have the adapter files.
+        ``adapter_path`` must be a promoted PEFT Model resource name
+        (``accounts/<account>/models/<name>``).
         """
         adapter_path = (adapter_path or "").strip()
         if not adapter_path:
@@ -3374,6 +3424,60 @@ class FiretitanServiceClient(ServiceClient):
         user_metadata: dict[str, str] | None,
     ) -> dict[str, str] | None:
         return user_metadata if user_metadata is not None else self._default_user_metadata
+
+    @classmethod
+    def from_reserved_training_session(
+        cls,
+        name: str,
+        *,
+        expected_display_name: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        additional_headers: dict[str, str] | None = None,
+    ) -> FiretitanServiceClient:
+        """Open a freshly reserved, exclusively owned serverless session.
+
+        Reserve the session with ``FireworksClient.reserve_training_session``
+        after persisting its ID and ownership marker. Hold an exclusive lease
+        from reservation through the first model creation. This factory checks
+        the account, marker and unbound state before starting client counters at
+        zero. It must never be used to reattach a bound session or reset its
+        sequence numbers; recover training into a new session from a checkpoint.
+
+        Closing the returned service stops local clients and heartbeats. Session
+        deletion and checkpoint retention remain the caller's responsibility.
+        """
+        if not isinstance(expected_display_name, str) or not expected_display_name.strip():
+            raise ValueError("expected_display_name must be a nonempty ownership marker")
+        key = _fireworks_api_key(api_key)
+        if not key:
+            raise ValueError("A Fireworks API key is required to open a reserved training session")
+        root = _fireworks_api_root_url(base_url)
+        # lazy: keep platform-client construction out of SDK module import.
+        from fireworks.training.sdk.fireworks_client import FireworksClient
+
+        with FireworksClient(api_key=key, base_url=root, additional_headers=additional_headers) as client:
+            session = client.get_training_session(name)
+            account = client.account_id
+        if session is None:
+            raise ValueError("Reserved training session does not exist")
+        if session.get("displayName") != expected_display_name:
+            raise ValueError("Reserved training session ownership marker does not match")
+        if session.get("baseModel") or session.get("state") not in (
+            None,
+            "TRAINING_SESSION_STATE_UNSPECIFIED",
+        ):
+            raise ValueError("Only a fresh unbound training session can start new client counters")
+        service = cls(
+            api_key=key,
+            base_url=root + "/training/v1/serverless",
+            default_headers=additional_headers or {},
+            managed_additional_headers=additional_headers,
+            session_id=name.rsplit("/", 1)[-1],
+            _reserved_session=True,
+        )
+        service._cp_account_id = account
+        return service
 
     def get_telemetry(self):
         if not hasattr(self, "holder"):
@@ -4643,10 +4747,22 @@ class FiretitanServiceClient(ServiceClient):
         self._created_base_model = True
         return training_client
 
-    def create_sampling_client(self, *args, training_client: FiretitanTrainingClient | None = None, **kwargs):
+    def create_sampling_client(
+        self,
+        *args,
+        training_client: FiretitanTrainingClient | None = None,
+        backend_managed_concurrency: bool = False,
+        **kwargs,
+    ):
+        if type(backend_managed_concurrency) is not bool:
+            raise TypeError("backend_managed_concurrency must be a bool")
+        if backend_managed_concurrency and kwargs.get("concurrency_controller") is not None:
+            raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         sampler = self._create_sampling_client(*args, **kwargs)
         # A reused deployment backend must not change an earlier handle's protocol.
-        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding()
+        sampler.deployment_sampler = sampler.deployment_sampler._copy_for_r3_binding(
+            backend_managed_concurrency=backend_managed_concurrency,
+        )
         sampler.deployment_sampler._r3_binding_required = False
         if training_client is None and self._samples_remote_target(sampler.deployment_sampler.model):
             # Another session's or a standalone sampler's rollouts are not this
@@ -4867,6 +4983,7 @@ class FiretitanServiceClient(ServiceClient):
         tokenizer: Any | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
         inference_url: str | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Create a FireTitan-native sampler for an existing inference model."""
         sampler = DeploymentSampler(
@@ -4879,9 +4996,9 @@ class FiretitanServiceClient(ServiceClient):
             model=model,
             api_key=self._require_fireworks_api_key("deployment sampling"),
             tokenizer=tokenizer,
+            concurrency_controller=concurrency_controller,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
-        if concurrency_controller is not None:
-            sampler.concurrency_controller = concurrency_controller
         return sampler
 
     def create_inference_deployment_sampler(
@@ -4892,6 +5009,7 @@ class FiretitanServiceClient(ServiceClient):
         cleanup_on_close: DeploymentCleanupOnClose | None = None,
         tokenizer: Any | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Create or reuse an inference deployment and return a sampler for it.
 
@@ -4900,6 +5018,10 @@ class FiretitanServiceClient(ServiceClient):
         also reuses the resolved managed deployment shape unless the caller
         passes an explicit deployment shape.
         """
+        if type(backend_managed_concurrency) is not bool:
+            raise TypeError("backend_managed_concurrency must be a bool")
+        if backend_managed_concurrency and concurrency_controller is not None:
+            raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         if config.max_replica_count <= 0:
             raise ValueError("DeploymentConfig.max_replica_count must be positive for inference sampling.")
         deploy_mgr = self._managed_deployment_manager()
@@ -4926,12 +5048,15 @@ class FiretitanServiceClient(ServiceClient):
             )
 
         ready = deploy_mgr.wait_for_ready(resolved_config.deployment_id, timeout_s=timeout_s)
-        model = ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        model = (
+            ready.inference_model or f"accounts/{deploy_mgr.account_id}/deployments/{resolved_config.deployment_id}"
+        )
         return self.create_deployment_sampler_for_model(
             model,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
             inference_url=deploy_mgr.inference_url,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
 
     async def create_sampling_client_async(
@@ -4959,6 +5084,7 @@ class FiretitanServiceClient(ServiceClient):
         tokenizer: Any | None = None,
         training_client: FiretitanTrainingClient | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
+        backend_managed_concurrency: bool = False,
     ) -> DeploymentSampler:
         """Return the FireTitan ``DeploymentSampler`` directly (not the Tinker wrapper).
 
@@ -4974,6 +5100,7 @@ class FiretitanServiceClient(ServiceClient):
             training_client=training_client,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
+            backend_managed_concurrency=backend_managed_concurrency,
         )
         # Transfer ownership from the unused wrapper to the caller. Its
         # destructor must not close the returned deployment sampler.

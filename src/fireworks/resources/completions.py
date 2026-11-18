@@ -78,6 +78,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -400,6 +401,9 @@ class CompletionsResource(SyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -524,6 +528,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -851,6 +856,9 @@ class CompletionsResource(SyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -969,6 +977,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1296,6 +1305,9 @@ class CompletionsResource(SyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -1413,6 +1425,7 @@ class CompletionsResource(SyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1466,6 +1479,7 @@ class CompletionsResource(SyncAPIResource):
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
+                    "return_token_ids_only": return_token_ids_only,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,
@@ -1544,6 +1558,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -1866,6 +1881,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -1990,6 +2008,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2317,6 +2336,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -2435,6 +2457,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2762,6 +2785,9 @@ class AsyncCompletionsResource(AsyncAPIResource):
               or the conversation exceeded the max context length. In this case the return
               value might not be a valid JSON.
 
+          return_token_ids_only: Return numeric prompt logprobs without decoding. Requires max_tokens=0,
+              echo=true, logprobs=true, stream=false and n=1.
+
           return_token_ids: Return token IDs alongside text to avoid retokenization drift.
 
           seed: Random seed for deterministic sampling.
@@ -2879,6 +2905,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
         repetition_penalty: Optional[float] | Omit = omit,
         response_format: Optional[completion_create_params.ResponseFormat] | Omit = omit,
         return_token_ids: Optional[bool] | Omit = omit,
+        return_token_ids_only: bool | Omit = omit,
         seed: Optional[int] | Omit = omit,
         service_tier: Literal["auto", "default", "flex", "priority"] | Omit = omit,
         speculation: Union[str, Iterable[int], None] | Omit = omit,
@@ -2932,6 +2959,7 @@ class AsyncCompletionsResource(AsyncAPIResource):
                     "repetition_penalty": repetition_penalty,
                     "response_format": response_format,
                     "return_token_ids": return_token_ids,
+                    "return_token_ids_only": return_token_ids_only,
                     "seed": seed,
                     "service_tier": service_tier,
                     "speculation": speculation,

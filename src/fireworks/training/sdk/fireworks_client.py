@@ -56,6 +56,9 @@ class _TransientOperationPollError(Exception):
 
 
 _RESOURCE_ID_RE = re.compile(r"^[a-z0-9-]+$")
+_TRAINING_SESSION_NAME_RE = re.compile(
+    r"accounts/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)/trainingSessions/(ts-[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)"
+)
 
 # 4-segment checkpoint resource name preferred by promote_checkpoint:
 # accounts/<a>/rlorTrainerJobs/<j>/checkpoints/<c>.
@@ -816,6 +819,72 @@ class FireworksClient(_RestClient):
             if not page_token:
                 break
         return rows
+
+    def reserve_training_session(self, session_id: str, *, display_name: str) -> dict:
+        """Reserve an unbound session using a caller-persisted idempotent ID.
+
+        Persist the ID and a unique ownership marker before calling this method.
+        Repeating the same request can recover a lost create response. The
+        caller must hold exclusive ownership until the session is bound.
+        """
+        if not isinstance(session_id, str) or not _TRAINING_SESSION_NAME_RE.fullmatch(
+            f"accounts/a/trainingSessions/{session_id}"
+        ):
+            raise ValueError("session_id must be a valid ts- prefixed resource ID")
+        if not isinstance(display_name, str) or not display_name.strip():
+            raise ValueError("display_name must be a nonempty ownership marker")
+        name = f"accounts/{self.account_id}/trainingSessions/{session_id}"
+        self._validate_training_session_name(name)
+        query = urlencode({"training_session_id": session_id})
+        resp = self._post(
+            f"/v1/accounts/{self.account_id}/trainingSessions?{query}",
+            json={"displayName": display_name, "baseModel": ""},
+            timeout=HTTP_LONG_WRITE_TIMEOUT_S,
+        )
+        if not resp.is_success:
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to reserve training session '{name}' (HTTP {resp.status_code})",
+                    parse_api_error(resp),
+                    "Retry with the same session ID and ownership marker.",
+                    docs_url=DOCS_SDK,
+                )
+            )
+        result = resp.json()
+        if not isinstance(result, dict) or result.get("name") != name or result.get("displayName") != display_name:
+            raise RuntimeError("Reserved training session does not match the requested ownership marker")
+        return result
+
+    def _validate_training_session_name(self, name: str) -> None:
+        match = _TRAINING_SESSION_NAME_RE.fullmatch(name) if isinstance(name, str) else None
+        if match is None:
+            raise ValueError("Expected accounts/<account>/trainingSessions/<ts-session> resource name")
+        if match.group(1) != self.account_id:
+            raise ValueError("Training session belongs to a different account than this client")
+
+    def get_training_session(self, name: str) -> dict | None:
+        """Read an owned session; only HTTP 404 means it is absent.
+
+        Authentication, authorization and transport errors propagate rather
+        than being mistaken for absence during lifecycle reconciliation.
+        """
+        self._validate_training_session_name(name)
+        resp = self._get(f"/v1/{name}", timeout=HTTP_READ_TIMEOUT_S)
+        if resp.status_code == 404:
+            return None
+        if not resp.is_success:
+            raise RuntimeError(
+                format_sdk_error(
+                    f"Failed to read training session '{name}' (HTTP {resp.status_code})",
+                    parse_api_error(resp),
+                    "Verify the session name and account permissions before retrying.",
+                    docs_url=DOCS_SDK,
+                )
+            )
+        result = resp.json()
+        if not isinstance(result, dict) or result.get("name") != name:
+            raise RuntimeError("Training session response does not match the requested resource")
+        return result
 
     def delete_training_session(self, name: str) -> None:
         """Close (delete) a serverless training session, releasing its

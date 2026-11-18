@@ -36,3 +36,21 @@ def _fail_fast_http_retries(request, monkeypatch):
         return None
 
     monkeypatch.setattr(errors, "_backoff_delay", _no_backoff_delay)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_mlflow_env(request, monkeypatch, tmp_path):
+    if "e2e" in request.keywords:
+        return
+    from fireworks.training.sdk import _mlflow
+
+    for var in (
+        _mlflow.TRACKING_URI_ENV,
+        _mlflow.TOKEN_ENV,
+        _mlflow.EXPERIMENT_ENV,
+        _mlflow.RUN_NAME_ENV,
+        _mlflow.REQUIRE_MLFLOW_ENV,
+        _mlflow.SKIP_REASON_ENV,
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv(_mlflow.CONFIG_DIR_ENV, str(tmp_path / "empty-mlflow-config"))

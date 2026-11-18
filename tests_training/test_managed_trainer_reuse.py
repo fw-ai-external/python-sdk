@@ -303,9 +303,8 @@ def test_no_rpc_managed_client_carries_base_model_for_tokenizer_gate(monkeypatch
     load.assert_called_once_with("acme/renamed-tokenizer", trust_remote_code=False)
 
 
-def test_no_rpc_managed_client_non_v4_keeps_default_tokenizer_call(monkeypatch):
-    """Non-V4 managed base_model: get_tokenizer keeps the plain default call
-    (no forced flag) -- existing behavior preserved."""
+def test_no_rpc_managed_client_standard_family_forces_code_free_tokenizer_call(monkeypatch):
+    """Independently selected standard-family context forces code-free loading."""
     from unittest.mock import patch
 
     client = _drive_no_rpc_managed_client(
@@ -315,4 +314,4 @@ def test_no_rpc_managed_client_non_v4_keeps_default_tokenizer_call(monkeypatch):
     )
     with patch("transformers.AutoTokenizer.from_pretrained", return_value="tok") as load:
         assert client.get_tokenizer() == "tok"
-    load.assert_called_once_with("Qwen/Qwen3-8B")
+    load.assert_called_once_with("Qwen/Qwen3-8B", trust_remote_code=False)

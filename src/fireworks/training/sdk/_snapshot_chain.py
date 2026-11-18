@@ -21,6 +21,7 @@ from fireworks.training.sdk.deployment import DEFAULT_CHECKSUM_FORMAT
 
 SamplerCheckpointType = Literal["base", "delta", "merged_base"]
 ExportPrecision = Literal["source", "bf16", "nvfp4", "mxfp8", "fp8_block128"]
+ExportRounding = Literal["stochastic", "nearest"]
 
 # ``merged_base`` is a LoRA-only export: the trainer folds the active LoRA
 # adapter into the base weights and saves a full base checkpoint (no adapter
@@ -30,6 +31,7 @@ ExportPrecision = Literal["source", "bf16", "nvfp4", "mxfp8", "fp8_block128"]
 _VALID_CHECKPOINT_TYPES = ("base", "delta", "merged_base")
 _VALID_EXPORT_PRECISIONS = ("source", "bf16", "nvfp4", "mxfp8", "fp8_block128")
 DEFAULT_MERGED_BASE_EXPORT_PRECISION: ExportPrecision = "source"
+_VALID_EXPORT_ROUNDINGS = ("stochastic", "nearest")
 
 
 def normalize_checkpoint_type(checkpoint_type: str | None) -> SamplerCheckpointType | None:
@@ -75,6 +77,26 @@ def resolve_export_precision(
     if normalized is not None:
         raise ValueError("export_precision requires checkpoint_type='merged_base'")
     return None
+
+
+def resolve_export_rounding(
+    *,
+    checkpoint_type: SamplerCheckpointType,
+    rounding: str | None,
+) -> ExportRounding | None:
+    """Validate the merged-base source-grid rounding; ``None`` lets the trainer choose.
+
+    The trainer defaults to ``stochastic`` unless it trains with QAT, in which
+    case it uses ``nearest``.
+    """
+    if rounding is None:
+        return None
+    normalized = rounding.lower()
+    if normalized not in _VALID_EXPORT_ROUNDINGS:
+        raise ValueError(f"export_rounding must be one of {_VALID_EXPORT_ROUNDINGS}")
+    if checkpoint_type != "merged_base":
+        raise ValueError("export_rounding requires checkpoint_type='merged_base'")
+    return normalized  # type: ignore[return-value]
 
 
 def resolve_next_checkpoint_type(
