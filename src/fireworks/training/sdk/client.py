@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
 import numpy as np
-from pydantic import Field, BaseModel, field_validator
+from pydantic import Field, BaseModel, field_validator, model_validator
 
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
@@ -146,6 +146,8 @@ class _CreateModelResponse(types.CreateModelResponse):
     supports_target_logprob_support: bool | None = None
     supports_reinforce: bool | None = None
     supports_score_centering: bool | None = None
+    supports_mc_score_centering: bool | None = None
+    supports_topk_score_centering: bool | None = None
     supports_policy_importance_sampling: bool | None = None
     supports_policy_diagnostics: bool | None = None
     supports_rdma_weight_sync: bool = False
@@ -169,6 +171,8 @@ class _CreateModelResponse(types.CreateModelResponse):
         "rdma_weight_sync_enabled",
         "supports_reinforce",
         "supports_score_centering",
+        "supports_mc_score_centering",
+        "supports_topk_score_centering",
         "supports_policy_importance_sampling",
         "supports_policy_diagnostics",
         mode="before",
@@ -199,10 +203,18 @@ class FiretitanSamplingParams(types.SamplingParams):
     include_routing_matrix: bool = False
     top_sampling_logprobs: int | None = Field(default=None, gt=0, strict=True)
     """Capture a probability head of at most this width as completion-aligned Parquet references."""
+    sample_extra_tokens: int | None = Field(default=None, ge=1, le=64, strict=True)
+    """Capture independent draws with replacement as completion-aligned Parquet references."""
     sampling_mask: Literal["parquet_v1"] | None = None
     """Capture complete replay-mask IDs; top_sampling_logprobs is optional and used only for SC."""
     # Parquet R3 retention from file creation. None uses the serving default (6h).
     r3_ttl_seconds: int | None = Field(default=None, gt=0, strict=True)
+
+    @model_validator(mode="after")
+    def validate_score_centering_capture(self):
+        if self.top_sampling_logprobs is not None and self.sample_extra_tokens is not None:
+            raise ValueError("Top sampling and extra sampling SC candidates are mutually exclusive")
+        return self
 
 
 @dataclass(frozen=True)
@@ -213,6 +225,7 @@ class FiretitanSampledSequence(types.SampledSequence):
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
     """Sampling-support rows for generated tokens only, independent of prompt echo."""
+    sample_extra_references: RoutingReferences | None = None
 
 
 @dataclass(frozen=True)
@@ -516,8 +529,12 @@ class FiretitanSamplingClient(SamplingClient):
             if sampling_params.top_sampling_logprobs is not None:
                 kwargs["top_sampling_logprobs"] = sampling_params.top_sampling_logprobs
                 kwargs["top_sampling_format"] = "parquet_v1"
+            if sampling_params.sample_extra_tokens is not None:
+                kwargs["sample_extra_tokens"] = sampling_params.sample_extra_tokens
+                kwargs["sample_extra_format"] = "parquet_v1"
             if (
                 sampling_params.include_routing_matrix
+                or sampling_params.sample_extra_tokens is not None
                 or sampling_params.top_sampling_logprobs is not None
                 or sampling_params.sampling_mask is not None
             ) and sampling_params.r3_ttl_seconds is not None:
@@ -646,6 +663,7 @@ class FiretitanSamplingClient(SamplingClient):
                         _logprobs_list=sampled_logprobs,
                         routing_matrices=routing_matrices,
                         top_sampling_references=completion.top_sampling_references,
+                        sample_extra_references=completion.sample_extra_references,
                         sampling_mask_references=completion.sampling_mask_references,
                     )
                 )
@@ -1131,6 +1149,8 @@ def _create_base_only_training_client(
         supports_target_logprob_support=getattr(response, "supports_target_logprob_support", None),
         supports_reinforce=getattr(response, "supports_reinforce", None),
         supports_score_centering=getattr(response, "supports_score_centering", None),
+        supports_mc_score_centering=getattr(response, "supports_mc_score_centering", None),
+        supports_topk_score_centering=getattr(response, "supports_topk_score_centering", None),
         supports_policy_importance_sampling=getattr(response, "supports_policy_importance_sampling", None),
         supports_policy_diagnostics=getattr(response, "supports_policy_diagnostics", None),
     )
@@ -1505,7 +1525,7 @@ def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
 def _sampling_references_wire_bytes(model_input: types.ModelInput) -> int:
     return sum(
         len(json.dumps({field: references}, separators=(",", ":")).encode())
-        for field in ("top_sampling_references", "sampling_mask_references")
+        for field in ("top_sampling_references", "sampling_mask_references", "sample_extra_references")
         if (references := getattr(model_input, field, None)) is not None
     )
 
@@ -1524,6 +1544,63 @@ def _target_logprob_support(loss_fn_config: dict[str, float | str | bool] | None
             "loss_fn_config.target_logprob_support must be 'full_vocabulary', 'sampling_support' or 'candidates'"
         )
     return support
+
+
+def _normalize_score_centering_config(
+    config: dict[str, float | str | bool] | None,
+) -> dict[str, float | str | bool] | None:
+    if config is None or config.get("score_centering_estimator") != "mc":
+        return config
+    warnings.warn(
+        "score_centering_estimator='mc' is deprecated; use 'extra_sampling' instead",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return {**config, "score_centering_estimator": "extra_sampling"}
+
+
+def _score_centering_estimator(config: dict[str, float | str | bool]) -> str | None:
+    enabled = config.get("score_centering", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("score_centering must be a boolean")
+    if not enabled:
+        if "score_centering_estimator" in config:
+            raise ValueError("score_centering_estimator requires score_centering=True")
+        if config.get("sampler_kl_coeff", 0):
+            raise ValueError("sampler_kl_coeff requires score_centering=True")
+        return None
+    estimator = config.get("score_centering_estimator", "extra_sampling")
+    if estimator == "extra_sampling":
+        if "tail_mass_epsilon" in config:
+            raise ValueError("tail_mass_epsilon applies only to the top_sampling estimator")
+        return "extra_sampling"
+    if estimator == "top_sampling":
+        return "top_sampling"
+    raise ValueError("score_centering_estimator must be 'top_sampling' or 'extra_sampling'")
+
+
+def _validate_score_centering_references(data: list[types.Datum], estimator: str | None) -> None:
+    for index, datum in enumerate(data):
+        top = datum.model_input.top_sampling_references is not None
+        extra = datum.model_input.sample_extra_references is not None
+        if top and extra:
+            raise ValueError(f"Datum {index}: top sampling and extra sampling SC candidates are mutually exclusive")
+        if top and estimator != "top_sampling":
+            raise ValueError(f"Datum {index}: top_sampling_references require score_centering_estimator='top_sampling'")
+        if extra and estimator != "extra_sampling":
+            raise ValueError(f"Datum {index}: sample_extra_references require extra sampling score centering")
+        if estimator == "extra_sampling" and not extra:
+            raise ValueError(
+                f"Datum {index}: extra sampling SC requires sample_extra_references; "
+                "set sample_extra_tokens=16 on FiretitanSamplingParams, or set it with "
+                "sample_extra_format='parquet_v1' in raw sampler kwargs"
+            )
+        if estimator == "top_sampling" and not top:
+            raise ValueError(
+                f"Datum {index}: top sampling SC requires top_sampling_references; "
+                "set top_sampling_logprobs on FiretitanSamplingParams, or set it with "
+                "top_sampling_format='parquet_v1' in raw sampler kwargs"
+            )
 
 
 class FiretitanTrainingClient(TrainingClient):
@@ -1574,6 +1651,8 @@ class FiretitanTrainingClient(TrainingClient):
         supports_target_logprob_support: bool | None = None,
         supports_reinforce: bool | None = None,
         supports_score_centering: bool | None = None,
+        supports_mc_score_centering: bool | None = None,
+        supports_topk_score_centering: bool | None = None,
         supports_policy_importance_sampling: bool | None = None,
         supports_policy_diagnostics: bool | None = None,
         supports_rdma_weight_sync: bool = False,
@@ -1594,6 +1673,8 @@ class FiretitanTrainingClient(TrainingClient):
         self.supports_target_logprob_support = supports_target_logprob_support is True
         self.supports_reinforce = supports_reinforce is True
         self.supports_score_centering = supports_score_centering is True
+        self.supports_mc_score_centering = supports_mc_score_centering is True
+        self.supports_topk_score_centering = supports_topk_score_centering is True
         self.supports_policy_importance_sampling = supports_policy_importance_sampling is True
         self.supports_policy_diagnostics = supports_policy_diagnostics is True
         self._trainer_supports_rdma_weight_sync = supports_rdma_weight_sync is True
@@ -1964,22 +2045,52 @@ class FiretitanTrainingClient(TrainingClient):
                 await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
+    def validate_loss_capabilities(
+        self,
+        loss_fn: types.LossFnType,
+        loss_fn_config: dict[str, float | str | bool] | None = None,
+    ) -> None:
+        """Raise ``ValueError`` if this trainer cannot run ``loss_fn`` with ``loss_fn_config``.
+
+        ``forward_backward`` runs the same check; call this at startup to fail before collecting rollouts.
+        """
+        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
+        self._validate_loss_capabilities(loss_fn, loss_fn_config)
+
     def _validate_loss_capabilities(
         self,
         loss_fn: types.LossFnType,
         loss_fn_config: dict[str, float | str | bool] | None,
-    ) -> None:
+    ) -> str | None:
         config = loss_fn_config or {}
+        support = _target_logprob_support(loss_fn_config)
+        if support == "sampling_support" and not getattr(self, "supports_target_logprob_support", False):
+            raise ValueError(
+                "Trainer does not advertise target_logprob_support='sampling_support'; "
+                "upgrade the trainer or select target_logprob_support='full_vocabulary'"
+            )
         if config.get("report_policy_diagnostics") is True and not getattr(self, "supports_policy_diagnostics", False):
             raise ValueError("Trainer does not advertise replay policy diagnostics; upgrade the trainer")
+        if loss_fn != "reinforce" and ("score_centering" in config or "score_centering_estimator" in config):
+            raise ValueError(
+                f"loss_fn_config.score_centering requires loss_fn='reinforce', got {loss_fn!r}; score centering "
+                "replaces the importance ratio, so other policy losses cannot use it"
+            )
+        if loss_fn != "reinforce" and "sampler_kl_coeff" in config:
+            raise ValueError("sampler_kl_coeff requires loss_fn='reinforce'")
         if loss_fn == "reinforce":
             if not getattr(self, "supports_reinforce", False):
                 raise ValueError("Trainer does not advertise built-in REINFORCE; upgrade the trainer")
-            if config.get("score_centering") is True and not getattr(self, "supports_score_centering", False):
-                raise ValueError("Trainer does not advertise REINFORCE score centering; upgrade the trainer")
-        elif config.get("weighting") in ("tis", "mis") or config.get("anchor_logprob_source") == "current_detached":
+            estimator = _score_centering_estimator(config)
+            if estimator == "extra_sampling" and not getattr(self, "supports_mc_score_centering", False):
+                raise ValueError("Trainer does not advertise extra sampling score centering; upgrade the trainer")
+            if estimator == "top_sampling" and not getattr(self, "supports_topk_score_centering", False):
+                raise ValueError("Trainer does not advertise top sampling score centering; upgrade the trainer")
+            return estimator
+        if config.get("weighting") in ("tis", "mis") or config.get("anchor_logprob_source") == "current_detached":
             if not getattr(self, "supports_policy_importance_sampling", False):
                 raise ValueError("Trainer does not advertise server policy TIS/MIS; upgrade the trainer")
+        return None
 
     async def _send_single_forward_request(
         self,
@@ -2009,10 +2120,12 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         """Compute a forward pass, using Fireworks' JSON path with parallel chunks."""
-        self._validate_loss_capabilities(loss_fn, loss_fn_config)
+        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
         support = _target_logprob_support(loss_fn_config)
         if support != "full_vocabulary":
             raise ValueError(f"target_logprob_support='{support}' requires forward_backward, not forward")
+        estimator = self._validate_loss_capabilities(loss_fn, loss_fn_config)
+        _validate_score_centering_references(data, estimator)
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         if getattr(client_config, "fwd_via_fwdbwd", False) and getattr(
@@ -2155,13 +2268,9 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: types.LossFnType,
         loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        support = _target_logprob_support(loss_fn_config)
-        self._validate_loss_capabilities(loss_fn, loss_fn_config)
-        if support == "sampling_support" and not getattr(self, "supports_target_logprob_support", False):
-            raise ValueError(
-                "Trainer does not advertise target_logprob_support='sampling_support'; "
-                "upgrade the trainer or select target_logprob_support='full_vocabulary'"
-            )
+        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
+        estimator = self._validate_loss_capabilities(loss_fn, loss_fn_config)
+        _validate_score_centering_references(data, estimator)
         holder = getattr(self, "holder", None)
         client_config = getattr(holder, "_client_config", None)
         proto_write = getattr(client_config, "proto_write_fwdbwd", False)
@@ -2588,7 +2697,7 @@ class FiretitanTrainingClient(TrainingClient):
         """Reject invalid shared-storage references; log one client-side error for other R3 issues."""
         for datum in data:
             model_input = datum.model_input
-            for field in ("top_sampling_references", "sampling_mask_references"):
+            for field in ("top_sampling_references", "sampling_mask_references", "sample_extra_references"):
                 top_sampling = getattr(model_input, field, None)
                 if isinstance(top_sampling, dict):
                     if not self.r3_store_id:
@@ -4399,6 +4508,8 @@ class FiretitanServiceClient(ServiceClient):
             supports_target_logprob_support=getattr(response, "supports_target_logprob_support", None),
             supports_reinforce=getattr(response, "supports_reinforce", None),
             supports_score_centering=getattr(response, "supports_score_centering", None),
+            supports_mc_score_centering=getattr(response, "supports_mc_score_centering", None),
+            supports_topk_score_centering=getattr(response, "supports_topk_score_centering", None),
             supports_policy_importance_sampling=getattr(response, "supports_policy_importance_sampling", None),
             supports_policy_diagnostics=getattr(response, "supports_policy_diagnostics", None),
             supports_rdma_weight_sync=response.supports_rdma_weight_sync,

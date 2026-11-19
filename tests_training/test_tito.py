@@ -253,6 +253,11 @@ class FakeSampler:
                 if kwargs.get("top_logprobs")
                 else None
             ),
+            sample_extra_references=(
+                _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
+                if kwargs.get("sample_extra_format") == "parquet_v1"
+                else None
+            ),
             top_sampling_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
                 if kwargs.get("top_sampling_format") == "parquet_v1"
@@ -544,6 +549,10 @@ async def test_policy_turn_retains_sampler_topk_distribution() -> None:
     "sampling_defaults",
     [
         {"top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
+        {"top_sampling_logprobs": 128},
+        {"sample_extra_tokens": 3},
+        {"sample_extra_tokens": 3, "sample_extra_format": "parquet_v1"},
+        {"sampling_mask": "parquet_v1", "sample_extra_tokens": 3, "sample_extra_format": "parquet_v1"},
         {"sampling_mask": "parquet_v1"},
         {"sampling_mask": "parquet_v1", "top_sampling_logprobs": 128, "top_sampling_format": "parquet_v1"},
     ],
@@ -563,7 +572,8 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     assert all(all(call[key] == value for key, value in sampling_defaults.items()) for call in sampler.calls)
     turns = [turn for segment in artifact.segments for turn in segment.turns]
     for channel, enabled in (
-        ("top_sampling", "top_sampling_format" in sampling_defaults),
+        ("top_sampling", sampling_defaults.get("top_sampling_format") == "parquet_v1"),
+        ("sample_extra", sampling_defaults.get("sample_extra_format") == "parquet_v1"),
         ("sampling_mask", "sampling_mask" in sampling_defaults),
     ):
         assert [getattr(turn, channel + "_references") for turn in turns] == (
@@ -582,12 +592,19 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     )
     await auxiliary.complete(auxiliary.create_trajectory(), _first_request())
     assert not {"top_sampling_format", "top_sampling_logprobs", "sampling_mask"} & auxiliary_sampler.calls[0].keys()
+    if sampling_defaults.get("sample_extra_format") == "parquet_v1":
+        assert not {"sample_extra_tokens", "sample_extra_format"} & auxiliary_sampler.calls[0].keys()
+    elif "sample_extra_tokens" in sampling_defaults:
+        assert auxiliary_sampler.calls[0]["sample_extra_tokens"] == sampling_defaults["sample_extra_tokens"]
 
     misaligned = FakeSampler(outputs=([197, 3],))
     misaligned.top_sampling_rows_delta = -1
     engine = _engine(misaligned, sampling_defaults=sampling_defaults)
     trajectory_id = engine.create_trajectory()
-    with pytest.raises(TITOError, match="sampling references"):
+    if any(sampling_defaults.get(key) == "parquet_v1" for key in ("top_sampling_format", "sample_extra_format", "sampling_mask")):
+        with pytest.raises(TITOError, match="references"):
+            await engine.complete(trajectory_id, _first_request())
+    else:
         await engine.complete(trajectory_id, _first_request())
 
 
@@ -3053,3 +3070,36 @@ async def test_classifier_failure_is_fail_closed_and_self_diagnosing(tmp_path) -
     }
     assert result.metrics.counters["admission/classifier_failed"] == 1
     assert result.calls[0].kind == "policy"
+
+
+async def test_mc_extras_survive_two_policy_turns_and_artifact_round_trip():
+    sampler = FakeSampler(outputs=([197, 3], [198, 199, 3]))
+    engine = _engine(sampler, sampling_defaults={"sample_extra_tokens": 3, "sample_extra_format": "parquet_v1"})
+    trajectory = engine.create_trajectory()
+    await engine.complete(trajectory, _first_request())
+    await engine.complete(trajectory, _second_request())
+    artifact = engine.finish(trajectory)
+    restored = type(artifact).unpack(artifact.pack())
+    turns = [turn for segment in restored.segments for turn in segment.turns]
+    assert len(turns) == 2
+    for turn in turns:
+        assert len(turn.sample_extra_references) == len(turn.exact_completion_ids)
+    assert all(call["sample_extra_tokens"] == 3 for call in sampler.calls)
+
+
+@pytest.mark.parametrize("call_kind", ["policy", "auxiliary"])
+async def test_mixed_sc_capture_fails_before_custom_sampler(call_kind):
+    sampler = FakeSampler(outputs=([197, 3],))
+    engine = _engine(
+        sampler,
+        sampling_defaults={
+            "top_sampling_logprobs": 128,
+            "top_sampling_format": "parquet_v1",
+            "sample_extra_tokens": 4,
+            "sample_extra_format": "parquet_v1",
+        },
+        call_classifier=lambda _request: (call_kind, "test"),
+    )
+    with pytest.raises(TITOError, match="mutually exclusive"):
+        await engine.complete(engine.create_trajectory(), _first_request())
+    assert not sampler.calls

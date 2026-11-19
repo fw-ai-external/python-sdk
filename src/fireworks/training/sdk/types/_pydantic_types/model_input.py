@@ -8,6 +8,7 @@ from fireworks.training.sdk.routing import (
     RoutingReferences,
     RoutingMatrixFormat,
     routing_model_input_kwargs,
+    sample_extra_model_input_kwargs,
     top_sampling_model_input_kwargs,
     sampling_mask_model_input_kwargs,
 )
@@ -24,6 +25,7 @@ class ModelInput(StrictBase):
     routing_matrix_format: RoutingMatrixFormat | None = None
     top_sampling_references: dict | None = None
     sampling_mask_references: dict | None = None
+    sample_extra_references: dict | None = None
 
     @classmethod
     def from_ints(
@@ -32,6 +34,7 @@ class ModelInput(StrictBase):
         routing_matrices: List[str] | RoutingReferences | None = None,
         top_sampling_references: RoutingReferences | dict | None = None,
         sampling_mask_references: RoutingReferences | dict | None = None,
+        sample_extra_references: RoutingReferences | dict | None = None,
     ) -> "ModelInput":
         kwargs = {"chunks": [EncodedTextChunk(tokens=tokens)]}
         kwargs.update(routing_model_input_kwargs(routing_matrices))
@@ -39,6 +42,8 @@ class ModelInput(StrictBase):
             kwargs.update(top_sampling_model_input_kwargs(top_sampling_references, len(tokens)))
         if sampling_mask_references is not None:
             kwargs.update(sampling_mask_model_input_kwargs(sampling_mask_references, len(tokens)))
+        if sample_extra_references is not None:
+            kwargs.update(sample_extra_model_input_kwargs(sample_extra_references, len(tokens)))
         return cls(**kwargs)
 
     def to_ints(self) -> List[int]:

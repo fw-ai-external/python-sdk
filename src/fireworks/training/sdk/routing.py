@@ -164,6 +164,16 @@ def sampling_mask_model_input_kwargs(value, length: int) -> dict:
     return {"sampling_mask_references": references.to_dict()}
 
 
+def sample_extra_model_input_kwargs(value, length: int) -> dict:
+    """ModelInput fields for Parquet extra-draw references over ``length`` input positions."""
+    if value is None:
+        return {"sample_extra_references": None}
+    references = value if isinstance(value, RoutingReferences) else RoutingReferences.from_dict(value)
+    if len(references) != length:
+        raise ValueError("Extra-draw references must cover every model input position")
+    return {"sample_extra_references": references.to_dict()}
+
+
 def routing_has_gaps(value):
     return (
         any(s.get("file_index") is None for s in value.spans)

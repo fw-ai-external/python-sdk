@@ -10,7 +10,11 @@ from concurrent.futures import Future
 import pytest
 
 from fireworks.training.sdk._core import TrainingClient
-from fireworks.training.sdk.client import FiretitanTrainingClient, _CreateModelResponse
+from fireworks.training.sdk.client import (
+    FiretitanTrainingClient,
+    _CreateModelResponse,
+    _validate_score_centering_references,
+)
 from fireworks.training.sdk._core.lib._pydantic_conv import to_pydantic_input
 from fireworks.training.sdk.types.forward_backward_input import ForwardBackwardInput
 from fireworks.training.sdk._core.lib.public_interfaces.api_future import AwaitableConcurrentFuture
@@ -33,6 +37,7 @@ def test_support_choice_mode_survives_wire_conversion(support_choice):
         "supports_target_logprob_support",
         "supports_reinforce",
         "supports_score_centering",
+        "supports_mc_score_centering",
         "supports_policy_importance_sampling",
         "supports_policy_diagnostics",
     ],
@@ -67,6 +72,7 @@ def test_reinforce_configuration_reaches_submission_unchanged(config) -> None:
     TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
     client.supports_reinforce = True
     client.supports_score_centering = (config or {}).get("score_centering", False)
+    client.supports_mc_score_centering = True
     with (
         patch.object(client, "_log_r3_request_error"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
@@ -214,3 +220,164 @@ def test_policy_diagnostics_requires_capability(method, capability):
     client.supports_policy_diagnostics = capability
     with pytest.raises(ValueError, match="does not advertise replay policy diagnostics"):
         getattr(client, method)([], "ppo", {"report_policy_diagnostics": True})
+
+
+@pytest.mark.parametrize(
+    "estimator,capability",
+    [
+        ("extra_sampling", "supports_mc_score_centering"),
+        ("top_sampling", "supports_topk_score_centering"),
+    ],
+)
+def test_sampler_kl_uses_the_selected_score_centering_capability(estimator, capability):
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.supports_reinforce = True
+    config = {"score_centering": True, "score_centering_estimator": estimator, "sampler_kl_coeff": 0.01}
+    with pytest.raises(ValueError, match="does not advertise"):
+        client.validate_loss_capabilities("reinforce", config)
+    setattr(client, capability, True)
+    client.validate_loss_capabilities("reinforce", config)
+
+
+@pytest.mark.parametrize(
+    ("loss_fn", "message"),
+    [("reinforce", "requires score_centering=True"), ("ppo", "requires loss_fn='reinforce'")],
+)
+def test_sampler_kl_requires_score_centered_reinforce_before_submission(loss_fn, message):
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.supports_reinforce = True
+    with pytest.raises(ValueError, match=message):
+        client.validate_loss_capabilities(loss_fn, {"sampler_kl_coeff": 0.01})
+
+
+@pytest.mark.parametrize("loss_fn", ["importance_sampling", "ppo", "dppo", "gspo", "cross_entropy"])
+@pytest.mark.parametrize("config", [{"score_centering": True}, {"score_centering_estimator": "mc"}])
+def test_score_centering_requires_reinforce_before_submission(loss_fn, config):
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.supports_policy_importance_sampling = True
+    with pytest.raises(ValueError, match=f"requires loss_fn='reinforce', got '{loss_fn}'"):
+        client._validate_loss_capabilities(loss_fn, config)
+
+
+@pytest.mark.parametrize("estimator", [None, "extra_sampling"])
+def test_implicit_and_explicit_extra_sampling_require_capability(estimator: str | None) -> None:
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.supports_reinforce = client.supports_score_centering = True
+    config = {"score_centering": True}
+    if estimator is not None:
+        config["score_centering_estimator"] = estimator
+    with pytest.raises(ValueError, match="extra sampling score centering"):
+        client.validate_loss_capabilities("reinforce", config)
+    client.supports_mc_score_centering = True
+    client.validate_loss_capabilities("reinforce", config)
+
+
+def test_explicit_top_sampling_requires_its_own_capability() -> None:
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.supports_reinforce = client.supports_score_centering = True
+    config = {"score_centering": True, "score_centering_estimator": "top_sampling"}
+    with pytest.raises(ValueError, match="does not advertise top sampling"):
+        client.validate_loss_capabilities("reinforce", config)
+    client.supports_topk_score_centering = True
+    client.validate_loss_capabilities("reinforce", config)
+    with pytest.raises(ValueError, match="must be 'top_sampling' or 'extra_sampling'"):
+        client.validate_loss_capabilities("reinforce", {**config, "score_centering_estimator": "topk"})
+
+
+@pytest.mark.parametrize("method", ["forward", "forward_backward"])
+@pytest.mark.parametrize("estimator", [None, "extra_sampling", "top_sampling"])
+def test_mixed_sc_candidate_references_fail_before_submission(method: str, estimator: str | None) -> None:
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
+    client.supports_topk_score_centering = True
+    client.supports_reinforce = client.supports_score_centering = client.supports_mc_score_centering = True
+    config = {"score_centering": True}
+    if estimator is not None:
+        config["score_centering_estimator"] = estimator
+    datum = SimpleNamespace(model_input=SimpleNamespace(top_sampling_references={}, sample_extra_references={}))
+    with pytest.raises(ValueError, match="top sampling and extra sampling SC candidates are mutually exclusive"):
+        getattr(client, method)([datum], "reinforce", config)
+
+
+@pytest.mark.parametrize(
+    "estimator,top,extra,message",
+    [
+        ("extra_sampling", True, False, "require score_centering_estimator='top_sampling'"),
+        ("extra_sampling", False, False, "sample_extra_tokens=16"),
+        ("top_sampling", False, True, "require extra sampling"),
+        ("top_sampling", False, False, "requires top_sampling_references"),
+    ],
+)
+def test_sc_reference_mismatch_has_capture_guidance(estimator: str, top: bool, extra: bool, message: str) -> None:
+    datum = SimpleNamespace(
+        model_input=SimpleNamespace(
+            top_sampling_references={} if top else None,
+            sample_extra_references={} if extra else None,
+        )
+    )
+    with pytest.raises(ValueError, match=message):
+        _validate_score_centering_references([datum], estimator)
+
+
+def test_deprecated_mc_name_warns_and_submits_canonical_config() -> None:
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
+    client.supports_reinforce = client.supports_score_centering = client.supports_mc_score_centering = True
+    config = {"score_centering": True, "score_centering_estimator": "mc"}
+    with (
+        pytest.warns(DeprecationWarning, match="'mc' is deprecated; use 'extra_sampling'") as warnings,
+        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
+        patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
+    ):
+        assert client.forward_backward([], "reinforce", config) == "submitted"
+    assert len(warnings) == 1
+    submit.assert_called_once_with([], "reinforce", {**config, "score_centering_estimator": "extra_sampling"})
+    assert config["score_centering_estimator"] == "mc"
+    with pytest.warns(DeprecationWarning, match="'mc' is deprecated; use 'extra_sampling'") as warnings:
+        client.validate_loss_capabilities("reinforce", config)
+    assert len(warnings) == 1
+
+
+@pytest.mark.parametrize("capability", [None, False, True])
+@pytest.mark.parametrize("method", ["validate_loss_capabilities", "forward_backward"])
+def test_mc_replay_checks_capability_at_startup_and_runtime(capability, method):
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
+    client.supports_reinforce = client.supports_score_centering = client.supports_mc_score_centering = True
+    if capability is not None:
+        client.supports_target_logprob_support = capability
+    config = {"score_centering": True, "target_logprob_support": "sampling_support"}
+    with (
+        patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
+        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
+    ):
+
+        def invoke():
+            if method == "validate_loss_capabilities":
+                return client.validate_loss_capabilities("reinforce", config)
+            return client.forward_backward([], "reinforce", config)
+
+        if capability is True:
+            invoke()
+        else:
+            with pytest.raises(ValueError, match="does not advertise target_logprob_support"):
+                invoke()
+            submit.assert_not_called()
+        client.validate_loss_capabilities("reinforce", {"score_centering": True})
+
+
+def test_tinker_sc_sampling_is_exclusive_and_preserves_generation_filter():
+    from fireworks.training.sdk.client import FiretitanSamplingClient, FiretitanSamplingParams
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        FiretitanSamplingParams(max_tokens=1, sample_extra_tokens=4, top_sampling_logprobs=2)
+    params = FiretitanSamplingParams(max_tokens=1, top_k=8, sample_extra_tokens=4, r3_ttl_seconds=60)
+    kwargs = FiretitanSamplingClient._sampling_kwargs(params)
+    assert (
+        kwargs["top_k"],
+        kwargs["sample_extra_tokens"],
+        kwargs["sample_extra_format"],
+        kwargs["r3_ttl_seconds"],
+    ) == (8, 4, "parquet_v1", 60)

@@ -1014,11 +1014,11 @@ def test_mask_only_request_uses_bound_shared_storage():
 
     sampler = DeploymentSampler("http://unused", "test", "test")
     payload = {"sampling_mask": "parquet_v1"}
-    assert sampler._top_sampling_parquet_requested(payload)
+    assert sampler._parquet_capture_requested(payload)
     with pytest.raises(ValueError, match="shared storage"):
-        sampler._validate_top_sampling_request(payload)
+        sampler._validate_parquet_capture_request(payload)
     sampler.r3_store_id = "test"
-    sampler._validate_top_sampling_request(payload)
+    sampler._validate_parquet_capture_request(payload)
 
 
 def test_mask_only_sse_preserves_references_and_storage_headers():
