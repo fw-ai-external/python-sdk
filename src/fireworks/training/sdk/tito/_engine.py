@@ -1057,6 +1057,7 @@ class _LinearTrajectoryCore:
         include_routing_matrix: bool,
         include_top_sampling: bool,
         include_sampling_mask: bool = False,
+        include_sample_extra: bool = False,
     ) -> SampledCompletion:
         if len(result.completions) != 1:
             raise self._completion_error(
@@ -1143,6 +1144,13 @@ class _LinearTrajectoryCore:
             raise self._completion_error(
                 "tito_completion_alignment_error",
                 "mask sampling references are not aligned with completion IDs",
+            )
+        if include_sample_extra and (
+            completion.sample_extra_references is None or len(completion.sample_extra_references) != len(output)
+        ):
+            raise self._completion_error(
+                "tito_completion_alignment_error",
+                "extra-draw references are not aligned with completion IDs",
             )
         return completion
 
@@ -1494,6 +1502,10 @@ class _LinearTrajectoryCore:
                     sampled_arrays[f"{prefix}_sampling_mask_references"] = json.dumps(
                         routing_to_wire(completion.sampling_mask_references)
                     )
+                if completion.sample_extra_references is not None:
+                    sampled_arrays[f"{prefix}_sample_extra_references"] = json.dumps(
+                        routing_to_wire(completion.sample_extra_references)
+                    )
         try:
             await self._record_async(
                 state,
@@ -1647,6 +1659,12 @@ class _LinearTrajectoryCore:
             )
         values.pop("temperature", None)
         values.update(self.sampling_defaults)
+        if values.get("top_sampling_format") == values.get("sample_extra_format") == "parquet_v1":
+            raise TITOError(
+                "tito_invalid_sampling_field",
+                400,
+                "Top sampling and extra sampling SC candidates are mutually exclusive",
+            )
         values["logprobs"] = True
         return values
 
@@ -2078,6 +2096,7 @@ class _LinearTrajectoryCore:
                 include_routing,
                 include_top_sampling,
                 sampling_kwargs.get("sampling_mask") == "parquet_v1",
+                sampling_kwargs.get("sample_extra_format") == "parquet_v1",
             )
             phase = "parser"
             parsed = self._parse(request, completion)
@@ -2132,6 +2151,7 @@ class _LinearTrajectoryCore:
                 ),
                 top_sampling_references=completion.top_sampling_references,
                 sampling_mask_references=completion.sampling_mask_references,
+                sample_extra_references=completion.sample_extra_references,
                 response_id=str(response["id"]),
                 finish_reason=completion.finish_reason,
                 prompt_disposition=plan.prompt_disposition,
@@ -2210,6 +2230,11 @@ class _LinearTrajectoryCore:
                 **(
                     {"sampling_mask_references": routing_to_wire(completion.sampling_mask_references)}
                     if completion.sampling_mask_references is not None
+                    else {}
+                ),
+                **(
+                    {"sample_extra_references": routing_to_wire(completion.sample_extra_references)}
+                    if completion.sample_extra_references is not None
                     else {}
                 ),
                 **(
@@ -2466,11 +2491,11 @@ class _LinearTrajectoryCore:
             )
             phase = "sampling_admission"
             # Auxiliary outputs are never trained, so they skip probability-head and replay-mask publication.
-            sampling_kwargs = {
-                key: value
-                for key, value in self._sampling_kwargs(state, request).items()
-                if key not in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask")
-            }
+            sampling_kwargs = self._sampling_kwargs(state, request)
+            excluded = {"top_sampling_logprobs", "top_sampling_format", "sampling_mask"}
+            if sampling_kwargs.get("sample_extra_format") == "parquet_v1":
+                excluded.update(("sample_extra_tokens", "sample_extra_format"))
+            sampling_kwargs = {key: value for key, value in sampling_kwargs.items() if key not in excluded}
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")
             state.sampler_calls += 1

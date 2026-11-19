@@ -43,6 +43,14 @@ def test_native_json_operations_match_frozen_baseline(route: str, comms: str) ->
 def test_native_public_method_signatures_match_frozen_baseline(cls: type) -> None:
     current = shape(cls)
     if cls is sdk_client.FiretitanTrainingClient:
+        assert current.pop("validate_loss_capabilities") == {
+            "async": False,
+            "params": [
+                ["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
+                ["loss_fn", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
+                ["loss_fn_config", "POSITIONAL_OR_KEYWORD", "None"],
+            ],
+        }
         assert current.pop("unload_model") == {
             "async": False,
             "params": [["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"]],

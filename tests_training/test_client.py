@@ -314,7 +314,7 @@ class TestForwardBackward:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
-        datum.model_input.routing_references = None
+        datum.model_input = types.ModelInput.from_ints([1])
         datum.loss_fn_inputs = {
             "weights": weights,
             "target_tokens": types.TensorData(data=[10, 11, 12, 13], dtype="int64", shape=[4]),
@@ -336,7 +336,7 @@ class TestForwardBackward:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
-        datum.model_input.routing_references = None
+        datum.model_input = types.ModelInput.from_ints([1])
         datum.loss_fn_inputs = {
             "target_tokens": types.TensorData(data=[10, 11, 12], dtype="int64", shape=[3]),
         }
@@ -351,7 +351,8 @@ class TestForwardBackward:
         client.holder._client_config.proto_write_fwdbwd = True
 
         with pytest.raises(NotImplementedError, match="proto forward_backward"):
-            client.forward_backward([MagicMock()], "cross_entropy")
+            datum = types.Datum(model_input=types.ModelInput.from_ints([1]), loss_fn_inputs={})
+            client.forward_backward([datum], "cross_entropy")
 
         mock_forward_backward.assert_not_called()
 
@@ -3478,7 +3479,7 @@ class TestTrainingClientSamplingHelpers:
         )
         mock_forward_backward.return_value = future
         datum = MagicMock()
-        datum.model_input.routing_references = None
+        datum.model_input = types.ModelInput.from_ints([1])
         datum.loss_fn_inputs = {}
 
         result = client.forward_backward([datum], "cross_entropy").result()

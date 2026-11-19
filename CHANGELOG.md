@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.35 (2026-11-19)
+
+Full Changelog: [v1.2.34...v1.2.35](https://github.com/fw-ai-external/python-sdk/compare/v1.2.34...v1.2.35)
+
+### Features
+* **training-sdk:** carry captured extra draws through TITO and training for Monte Carlo score centering and validate trainer support before rollout.
+
 ## 1.2.34 (2026-11-18)
 
 Full Changelog: [v1.2.33...v1.2.34](https://github.com/fw-ai-external/python-sdk/compare/v1.2.33...v1.2.34)

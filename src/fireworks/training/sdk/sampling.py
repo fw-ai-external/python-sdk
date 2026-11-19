@@ -92,6 +92,16 @@ _STORAGE_REFERENCE_FIELDS = (
     "top_sampling_format",
     "sampling_mask_format",
     "sampling_mask_references",
+    "sample_extra_format",
+    "sample_extra_references",
+)
+_PARQUET_CAPTURE_FIELDS = ("top_sampling_format", "sampling_mask", "sample_extra_format")
+# Mirrors inference GeneratorParams.needs_sampling: any of these makes decoding deterministic.
+_GREEDY_SETTINGS = (
+    ("temperature", lambda value: value <= 0),
+    ("top_p", lambda value: value <= 0),
+    ("min_p", lambda value: value >= 1),
+    ("top_k", lambda value: value == 1),
 )
 
 # Per-attempt ServerMetrics retained between drains. A training step drains
@@ -249,11 +259,9 @@ class SampledCompletion:
     """Raw-model top-k logprobs aligned with ``inference_topk_token_ids``."""
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
-    """Completion-only Parquet references to the sampling mask and/or probability head.
-
-    Set when ``top_sampling_format="parquet_v1"`` or ``sampling_mask="parquet_v1"`` was requested; row ``j`` is
-    the post-temperature/filter distribution that produced completion token ``j``.
-    """
+    """Completion-only references to the complete support when ``sampling_mask="parquet_v1"`` was requested."""
+    sample_extra_references: RoutingReferences | None = None
+    """Completion-only shared-storage references, set when ``sample_extra_format="parquet_v1"``."""
 
 
 @dataclass(frozen=True)
@@ -389,20 +397,45 @@ class DeploymentSampler(_RestClient):
         self._r3_probe = None
 
     @staticmethod
-    def _top_sampling_parquet_requested(kwargs: Mapping[str, Any]) -> bool:
-        return kwargs.get("top_sampling_format") == "parquet_v1" or kwargs.get("sampling_mask") == "parquet_v1"
+    def _parquet_capture_requested(kwargs: Mapping[str, Any]) -> bool:
+        return any(kwargs.get(key) == "parquet_v1" for key in _PARQUET_CAPTURE_FIELDS)
 
     def _set_shared_storage_headers(self, headers: dict[str, str], r3_ttl_seconds: int | None) -> None:
         headers[R3_STORE_HEADER] = self.r3_store_id
         if r3_ttl_seconds is not None:
             headers[R3_TTL_HEADER] = str(r3_ttl_seconds)
 
-    def _validate_top_sampling_request(self, payload: Mapping[str, Any]) -> None:
-        k = payload.get("top_sampling_logprobs")
-        if payload.get("top_sampling_format") == "parquet_v1" and (type(k) is not int or k < 1):
-            raise ValueError("top_sampling_format='parquet_v1' requires a positive integer top_sampling_logprobs")
+    def _validate_parquet_capture_request(self, payload: Mapping[str, Any]) -> None:
+        if payload.get("top_sampling_format") == payload.get("sample_extra_format") == "parquet_v1":
+            raise ValueError("Top sampling and extra sampling SC candidates are mutually exclusive")
+        for count_key, format_key in (
+            ("top_sampling_logprobs", "top_sampling_format"),
+            ("sample_extra_tokens", "sample_extra_format"),
+        ):
+            k = payload.get(count_key) or 0
+            if payload.get(format_key) == "parquet_v1" and (type(k) is not int or k < 1):
+                raise ValueError(f"{format_key} requires a positive integer {count_key}")
+            if type(k) is not int or k < 0:
+                raise ValueError(f"{count_key} must be a nonnegative integer")
+        if payload.get("sample_extra_tokens"):
+            if payload.get("logprobs") is not True:
+                raise ValueError(
+                    f"sample_extra_tokens requires logprobs=True; got logprobs={payload.get('logprobs')!r}"
+                )
+            for name, greedy in _GREEDY_SETTINGS:
+                value = payload.get(name)
+                if value is not None and greedy(value):
+                    raise ValueError(
+                        f"sample_extra_tokens requires stochastic sampling, but {name}={value} makes decoding greedy, "
+                        "so every draw would repeat the sampled token; use temperature>0, top_p>0, min_p<1 and top_k!=1"
+                    )
         if not self.r3_store_id:
-            raise ValueError("Parquet top-K sampling requires a sampler bound to a trainer with shared storage")
+            requested = [key for key in _PARQUET_CAPTURE_FIELDS if payload.get(key) == "parquet_v1"]
+            raise ValueError(
+                f"{requested[0] if requested else 'Parquet capture'}='parquet_v1' writes to trainer shared storage; "
+                "create the sampler with create_deployment_sampler(..., training_client=<trainer>) on a trainer "
+                "that has shared storage"
+            )
 
     @staticmethod
     def _unsupported_routing_format(response: httpx.Response) -> bool:
@@ -426,7 +459,7 @@ class DeploymentSampler(_RestClient):
         )
 
     @staticmethod
-    def _unsupported_top_sampling_format(response: httpx.Response) -> bool:
+    def _unsupported_parquet_capture(response: httpx.Response) -> bool:
         if response.status_code != 400:
             return False
         try:
@@ -439,7 +472,7 @@ class DeploymentSampler(_RestClient):
         message = error.get("message")
         return isinstance(message, str) and any(
             f"Extra inputs are not permitted, field: '{field}'" in message
-            for field in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask")
+            for field in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask", "sample_extra_format")
         )
 
     async def _post_completion(self, payload: dict, headers: Mapping[str, str], timeout: float) -> httpx.Response:
@@ -555,10 +588,10 @@ class DeploymentSampler(_RestClient):
         ``r3_ttl_seconds`` sets Parquet R3 retention from file creation;
         omission uses six hours. JSON routing has no server-side file to expire.
 
-        ``top_sampling_logprobs=K`` with ``top_sampling_format="parquet_v1"``
-        publishes the sampler's top-K distribution to the trainer-bound shared
-        store (the same store and retention headers as Parquet R3), with or
-        without router replay.
+        Explicit ``top_sampling_format="parquet_v1"`` or
+        ``sample_extra_format="parquet_v1"`` publishes the requested probability
+        head or independent extra draws to the trainer-bound shared store, with
+        or without router replay. Omitted formats preserve inference defaults.
         """
         if r3_ttl_seconds is not None and (type(r3_ttl_seconds) is not int or r3_ttl_seconds <= 0):
             raise ValueError("r3_ttl_seconds must be a positive integer")
@@ -591,8 +624,8 @@ class DeploymentSampler(_RestClient):
         payload.setdefault("top_p", 1.0)
         payload.setdefault("top_k", 0)
         headers = self._inference_headers(additional_headers_snapshot)
-        top_sampling_parquet = self._top_sampling_parquet_requested(payload)
-        if (payload.get("include_routing_matrix") or top_sampling_parquet) and getattr(
+        parquet_capture = self._parquet_capture_requested(payload)
+        if (payload.get("include_routing_matrix") or parquet_capture) and getattr(
             self, "_r3_binding_required", False
         ):
             raise ValueError(
@@ -600,8 +633,8 @@ class DeploymentSampler(_RestClient):
             )
         # These headers are owned by the trainer-bound negotiation, not caller overrides.
         headers = {key: value for key, value in headers.items() if key.lower() not in (R3_STORE_HEADER, R3_TTL_HEADER)}
-        if top_sampling_parquet:
-            self._validate_top_sampling_request(payload)
+        if parquet_capture:
+            self._validate_parquet_capture_request(payload)
             self._set_shared_storage_headers(headers, r3_ttl_seconds)
         if logical_request_id:
             # Send the SDK's stable correlation id; the gateway/fw-proxy echoes
@@ -624,7 +657,7 @@ class DeploymentSampler(_RestClient):
                 resp = await self._post_completion(payload, headers, http_timeout)
                 if (
                     payload.get("routing_matrix_format") == "parquet_v1"
-                    and not top_sampling_parquet
+                    and not parquet_capture
                     and self._unsupported_routing_format(resp)
                 ):
                     # A different replica may still run the old image. Retry only this pre-generation rejection.
@@ -650,7 +683,7 @@ class DeploymentSampler(_RestClient):
                 await asyncio.sleep(hotload_retry_interval)
                 continue
 
-            if top_sampling_parquet and self._unsupported_top_sampling_format(resp):
+            if parquet_capture and self._unsupported_parquet_capture(resp):
                 raise httpx.HTTPStatusError(
                     "Deployment does not support Parquet sampling references; "
                     "use a serving image that supports the requested Parquet sampling channels",
@@ -1600,6 +1633,7 @@ class DeploymentSampler(_RestClient):
                         echo_last=kwargs.get("echo_last"),
                         top_sampling_requested=kwargs.get("top_sampling_format") == "parquet_v1",
                         sampling_mask_requested=kwargs.get("sampling_mask") == "parquet_v1",
+                        sample_extra_requested=kwargs.get("sample_extra_format") == "parquet_v1",
                     )
                 except Exception as e:
                     # Keep the successful raw response available to the local
@@ -1759,6 +1793,7 @@ class DeploymentSampler(_RestClient):
         echo_last: int | None = None,
         top_sampling_requested: bool = False,
         sampling_mask_requested: bool = False,
+        sample_extra_requested: bool = False,
     ) -> List[SampledCompletion]:
         """Parse a completions API response into SampledCompletion objects."""
         completions: List[SampledCompletion] = []
@@ -1816,6 +1851,7 @@ class DeploymentSampler(_RestClient):
             for requested, column in (
                 (top_sampling_requested, "top_sampling"),
                 (sampling_mask_requested, "sampling_mask"),
+                (sample_extra_requested, "sample_extra"),
             ):
                 if not requested:
                     continue
@@ -1884,6 +1920,8 @@ class DeploymentSampler(_RestClient):
             for column, references in sampling_references.items():
                 if len(references) != len(completion_ids):
                     raise RuntimeError(f"{column} references do not align with completion token IDs")
+                if any(span.get("file_index") is None for span in references.spans):
+                    raise ValueError(f"Deployment returned {column} references without stored rows for generated tokens")
 
             full_tokens = prompt_for_full + list(completion_ids)
             if max_seq_len is not None and len(full_tokens) > max_seq_len:
@@ -1910,6 +1948,7 @@ class DeploymentSampler(_RestClient):
                     inference_topk_logprobs=topk_logprobs,
                     top_sampling_references=sampling_references.get("top_sampling"),
                     sampling_mask_references=sampling_references.get("sampling_mask"),
+                    sample_extra_references=sampling_references.get("sample_extra"),
                 )
             )
 

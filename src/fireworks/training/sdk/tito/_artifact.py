@@ -113,6 +113,11 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
             if value.sampling_mask_references is not None
             else {}
         ),
+        **(
+            {"sample_extra_references": routing_to_wire(value.sample_extra_references)}
+            if value.sample_extra_references is not None
+            else {}
+        ),
         "routing_matrices": routing_to_wire(value.routing_matrices),
         "prompt_routing_start": value.prompt_routing_start,
         "prompt_routing_matrices": routing_to_wire(value.prompt_routing_matrices),
@@ -274,6 +279,8 @@ def _request(raw: Mapping[str, Any]) -> TITOChatRequest:
 
 
 def _turn(raw: Mapping[str, Any]) -> TITOTurn:
+    if any(raw.get(key) is not None for key in ("sample_extra_token_ids", "sample_extra_sampling_logprobs")):
+        raise ValueError("Inline MC artifacts are unsupported; collect rollouts with sample_extra_references")
     assistant = raw["assistant"]
     parsed = TITOParsedAssistant(
         message=assistant["message"],
@@ -309,6 +316,7 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
         ),
         top_sampling_references=routing_from_wire(raw.get("top_sampling_references")),
         sampling_mask_references=routing_from_wire(raw.get("sampling_mask_references")),
+        sample_extra_references=routing_from_wire(raw.get("sample_extra_references")),
         routing_matrices=routing_from_wire(raw.get("routing_matrices")),
         prompt_routing_start=raw.get("prompt_routing_start"),
         prompt_routing_matrices=routing_from_wire(raw.get("prompt_routing_matrices")),
