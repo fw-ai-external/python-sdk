@@ -48,10 +48,9 @@ def test_backend_managed_concurrency_survives_binding_copy():
         sampler.close()
 
 
-@pytest.mark.parametrize("limit", [{"max_concurrency": 4}, {"concurrency_controller": object()}])
-def test_backend_managed_concurrency_rejects_client_limit(limit):
+def test_backend_managed_concurrency_rejects_client_limit():
     with pytest.raises(ValueError, match="cannot be combined"):
-        _make_sampler(backend_managed_concurrency=True, **limit)
+        _make_sampler(backend_managed_concurrency=True, concurrency_controller=object())
 
 
 def test_default_sampler_keeps_adaptive_concurrency():
@@ -174,7 +173,7 @@ def test_successful_http_response_survives_local_decode_failure():
         sampler.close()
 
 
-def test_completion_parser_retains_top_logprob_token_ids() -> None:
+def test_completion_parser_keeps_selected_token_logprobs() -> None:
     sampler = _make_sampler()
     result = {
         "choices": [
@@ -215,9 +214,9 @@ def test_completion_parser_retains_top_logprob_token_ids() -> None:
         echo_mode=False,
         raw_logprobs_match_sampling=True,
     )[0]
-
-    assert completion.inference_topk_token_ids == [[40, 41], [50, 51]]
-    assert completion.inference_topk_logprobs == [[-0.1, -1.2], [-0.2, -1.3]]
+    assert completion.inference_logprobs == [-0.1, -0.2]
+    assert completion.sampling_logprobs == [-0.1, -0.2]
+    sampler.close()
 
 
 class _CountingController:

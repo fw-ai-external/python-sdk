@@ -20,7 +20,6 @@ from fireworks.training.sdk.types.encoded_text_chunk import EncodedTextChunk
 class ModelInput(StrictBase):
     chunks: List[Annotated[ModelInputChunk, Discriminator("type")]]
     """Sequence of input chunks (formerly TokenSequence)."""
-    routing_matrices: list[str] | None = None
     routing_references: dict | None = None
     routing_matrix_format: RoutingMatrixFormat | None = None
     top_sampling_references: dict | None = None
@@ -31,7 +30,7 @@ class ModelInput(StrictBase):
     def from_ints(
         cls,
         tokens: List[int],
-        routing_matrices: List[str] | RoutingReferences | None = None,
+        routing_matrices: RoutingReferences | None = None,
         top_sampling_references: RoutingReferences | dict | None = None,
         sampling_mask_references: RoutingReferences | dict | None = None,
         sample_extra_references: RoutingReferences | dict | None = None,

@@ -121,23 +121,24 @@ from fireworks.training.sdk import (
 trainer_mgr = TrainerJobManager(api_key="...", base_url="https://api.fireworks.ai")
 deploy_mgr = DeploymentManager(api_key="...", base_url="https://api.fireworks.ai")
 
-deploy = deploy_mgr.create_or_get(
-    DeploymentConfig(
-        deployment_id="my-run",
-        base_model="accounts/fireworks/models/qwen3-8b",
-        region="US_VIRGINIA_1",
-    )
-)
-deploy_mgr.wait_for_ready(deploy.deployment_id)
-
+profile = trainer_mgr.resolve_training_profile("your-training-shape")
 endpoint = trainer_mgr.create_and_wait(
     TrainerJobConfig(
         base_model="accounts/fireworks/models/qwen3-8b",
         display_name="my-trainer",
-        hot_load_deployment_id=deploy.deployment_id,
-        region="US_VIRGINIA_1",
+        training_shape_ref=profile.training_shape,
     )
 )
+deploy = deploy_mgr.create_or_get(
+    DeploymentConfig(
+        deployment_id="my-run",
+        base_model="accounts/fireworks/models/qwen3-8b",
+        deployment_shape=profile.deployment_shape,
+        hot_load_trainer_job=endpoint.job_name,
+        for_training=True,
+    )
+)
+deploy_mgr.wait_for_ready(deploy.deployment_id)
 
 service = FiretitanServiceClient(base_url=endpoint.base_url, api_key="tml-local")
 policy = service.create_training_client(base_model="accounts/fireworks/models/qwen3-8b")
@@ -171,11 +172,7 @@ service = FiretitanServiceClient.from_firetitan_config(
 | `all` | Every session uses the new snapshot's namespace, preventing reuse of the old prefix cache. |
 | `none` | Existing and new sessions keep using the unchanged cache namespace. |
 
-Legacy `True` and `False` remain accepted as `all` and `none`, with a
-`DeprecationWarning` naming the equivalent string. Migrate boolean inputs to
-the named policies; boolean support is retained for compatibility and has no
-scheduled removal version. To retain the old
-SDK default, set `reset_prompt_cache="all"` explicitly. Existing sessions need a
+To reset every prefix-cache namespace, use `reset_prompt_cache="all"`. Existing sessions need a
 stable `prompt_cache_key` (or `user`); reuse also depends on prefix matching,
 routing and cache availability. Reused KV may have been computed under earlier
 weights. This policy does not reset active KV in a request that survives async
@@ -192,9 +189,7 @@ to `new_session`, so requests from older SDKs adopt this default after that
 runtime update. To request a full reset, explicitly select `all` through a
 supporting SDK. RDMA requests require a trainer runtime that accepts
 `reset_prompt_cache`; older strict runtimes reject the new field rather than
-silently applying a different policy. FILE hotloads on serving backends that
-reject the field can use the legacy omission fallback only for `all`;
-`new_session` and `none` errors are propagated.
+silently applying a different policy.
 
 Trainer provisioning has separate wait budgets. `pending_timeout_s` controls
 how long `TrainerJobManager` waits for GPU capacity while the job is
@@ -204,6 +199,22 @@ and controls how long the trainer may take to become healthy and ready.
 Training APIs require a training-scoped Fireworks API key. The SDK resolves the
 account automatically from that key, so you should not pass `account_id` to
 `TrainerJobManager`, `DeploymentManager`, or `FireworksClient`.
+
+## Migrating older training clients
+
+- Bind replay sampling to the trainer. Capture R3 with `include_routing_matrix`,
+  the sampling support with `sampling_mask=True`, the probability head with
+  `top_sampling_logprobs`, or extra draws with `sample_extra_tokens`. Captures
+  return shared-storage references. Recapture older artifacts that contain
+  inline replay data. Standard decoding still uses `top_k` and `top_p`.
+- Use a validated training shape for managed SDK provisioning. Create the rollout
+  with the trainer's full name in `hot_load_trainer_job`. Restore durable state
+  into a trainer-first run when migrating a deployment-owned run.
+- Promote by checkpoint `name` from the checkpoint list. For older checkpoints
+  with missing trainer storage metadata, contact Fireworks support.
+- Use `FixedConcurrencyController` when a fixed sampler limit is needed.
+  Use a named string for the hotload cache policy and `extra_sampling` for the
+  extra-draw score-centering estimator.
 
 ## Using training shapes
 

@@ -121,7 +121,7 @@ class TestUseSharedBaseReference:
     """Only LoRA without an explicit reference shape reuses the policy session."""
 
     def test_explicit_reference_shape_for_lora_policy_is_deprecated(self):
-        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+        with pytest.raises(ValueError, match="reference_training_shape_id for a LoRA policy"):
             _policy_config(
                 lora_rank=16,
                 reference_required=True,
@@ -129,7 +129,7 @@ class TestUseSharedBaseReference:
             )
 
     def test_explicit_reference_shape_for_multi_model_lora_policy_is_deprecated(self):
-        with pytest.warns(DeprecationWarning, match="reference_training_shape_id for a LoRA policy"):
+        with pytest.raises(ValueError, match="reference_training_shape_id for a LoRA policy"):
             _policy_config(
                 max_lora_rank=16,
                 reference_required=True,
@@ -153,10 +153,6 @@ class TestUseSharedBaseReference:
         config = _policy_config(reference_training_shape_id=None)
         assert _use_shared_base_reference(config, policy_lora_rank=0) is False
 
-    def test_explicit_reference_shape_disables_sharing_even_for_lora(self):
-        config = _policy_config(reference_training_shape_id="ts-ref")
-        assert _use_shared_base_reference(config, policy_lora_rank=16) is False
-
     def test_explicit_reference_job_disables_sharing_even_for_lora(self):
         config = _policy_config(reference_trainer_job_id="ref-job")
         assert _use_shared_base_reference(config, policy_lora_rank=16) is False
@@ -167,7 +163,7 @@ class TestReferenceManagedConfig:
 
     def test_full_param_without_reference_shape_uses_backend_auto_selection(self):
         config = _policy_config(reference_training_shape_id=None)
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.training_shape_id is None
         assert reference.trainer_job_id is None
         assert reference.forward_only is True
@@ -177,13 +173,13 @@ class TestReferenceManagedConfig:
     def test_fresh_trainer_and_no_deployment_reattach(self):
         # A fresh reference must never reattach the policy trainer or deployment.
         config = _policy_config(reference_training_shape_id="ts-ref")
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.trainer_job_id is None
         assert reference.deployment_id is None
 
     def test_explicit_reference_job_carries_cleanup_policy_to_handle(self):
         config = _policy_config(reference_trainer_job_id="ref-job")
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.training_shape_id is None
         assert reference.trainer_job_id == "ref-job"
         assert reference.deployment_id is None
@@ -194,19 +190,13 @@ class TestReferenceManagedConfig:
             reference_training_shape_id="ts-ref",
             cleanup_reference_trainer_on_close=False,
         )
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.trainer_job_id is None
         assert reference.cleanup_trainer_on_close is False
 
-    def test_explicit_reference_shape_with_lora_loads_adapter(self):
-        config = _policy_config(reference_training_shape_id="ts-ref")
-        reference = _reference_managed_config(config, policy_lora_rank=16)
-        assert reference.training_shape_id == "ts-ref"
-        assert reference.lora_rank == 16
-
     def test_reference_inherits_policy_region(self):
         config = _policy_config(reference_training_shape_id="ts-ref")
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.region == "US_OHIO_1"
 
     def test_reference_inherits_use_reservation(self):
@@ -214,7 +204,7 @@ class TestReferenceManagedConfig:
             reference_training_shape_id="ts-ref",
             use_reservation=True,
         )
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.use_reservation is True
 
     def test_reference_drops_policy_hsdp_replicas(self):
@@ -225,12 +215,12 @@ class TestReferenceManagedConfig:
             reference_training_shape_id="ts-ref",
             trainer_replica_count=2,
         )
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.trainer_replica_count is None
 
     def test_reference_preserves_opaque_trainer_args(self):
         config = _policy_config(reference_training_shape_id="ts-ref", extra_args=["--test-flag"])
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.extra_args == ["--test-flag"]
 
 
@@ -735,7 +725,6 @@ class TestManagedProvisioning:
     def test_full_param_reference_without_shape_auto_selects_at_trainer_create(self):
         reference = _reference_managed_config(
             _policy_config(reference_training_shape_id=None),
-            policy_lora_rank=0,
         )
 
         trainer_config = managed_module._build_trainer_job_config(
@@ -752,25 +741,9 @@ class TestManagedProvisioning:
         assert trainer_config.accelerator_type is None
         assert trainer_config.accelerator_count is None
 
-    def test_legacy_node_count_default_does_not_disable_auto_shape_selection(self):
-        with pytest.warns(DeprecationWarning, match="node_count"):
-            config = _ManagedTinkerConfig(
-                base_model=BASE_MODEL,
-                node_count=1,
-            )
-
-        trainer_config = managed_module._build_trainer_job_config(
-            config,
-            max_context_length=32768,
-            profile_training_shape=None,
-        )
-
-        assert config.node_count is None
-        assert trainer_config.training_shape_ref is None
-        assert trainer_config.auto_select_training_shape is True
-        assert trainer_config.node_count is None
-        assert trainer_config.accelerator_type is None
-        assert trainer_config.accelerator_count is None
+    def test_legacy_node_count_is_rejected(self):
+        with pytest.raises(TypeError, match="node_count"):
+            _ManagedTinkerConfig(base_model=BASE_MODEL, node_count=1)
 
     def test_stale_node_count_on_config_does_not_disable_auto_shape_selection(self):
         config = _ManagedTinkerConfig(base_model=BASE_MODEL)
@@ -852,7 +825,7 @@ class TestManagedProvisioning:
 
     def test_full_param_reference_accepts_lora_trainer_shape(self):
         config = _policy_config(reference_training_shape_id="ts-ref-lora")
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        reference = _reference_managed_config(config)
         assert reference.lora_rank == 0
         assert reference.forward_only is True
 
@@ -871,8 +844,8 @@ class TestManagedProvisioning:
         _validate_reference_training_shape(FakeTrainerManager(), reference)
 
     def test_full_param_reference_accepts_forward_only_trainer_shape(self):
-        config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
-        reference = _reference_managed_config(config, policy_lora_rank=0)
+        config = _policy_config( reference_training_shape_id="ts-ref-forward-only")
+        reference = _reference_managed_config(config)
         assert reference.lora_rank == 0
         assert reference.forward_only is True
 
@@ -890,26 +863,9 @@ class TestManagedProvisioning:
 
         _validate_reference_training_shape(FakeTrainerManager(), reference)
 
-    def test_lora_reference_rejects_forward_only_trainer_shape(self):
-        config = _policy_config(reference_training_shape_id="ts-ref-forward-only")
-        reference = _reference_managed_config(config, policy_lora_rank=16)
-        assert reference.lora_rank == 16
-        assert reference.forward_only is True
-
-        class FakeTrainerManager:
-            account_id = "acct"
-
-            def resolve_training_profile(self, training_shape_id):
-                assert training_shape_id == "ts-ref-forward-only"
-                return SimpleNamespace(
-                    training_shape_version="ts-ref-forward-only/versions/v1",
-                    deployment_shape="deployment-shape/versions/v1",
-                    max_supported_context_length=32768,
-                    trainer_mode="FORWARD_ONLY",
-                )
-
-        with pytest.raises(ValueError, match=r"trainer_mode in \{LORA_TRAINER\}"):
-            _validate_reference_training_shape(FakeTrainerManager(), reference)
+    def test_lora_reference_rejects_an_explicit_shape(self):
+        with pytest.raises(ValueError, match="Omit reference_training_shape_id"):
+            _policy_config(lora_rank=16, reference_training_shape_id="ts-ref-forward-only")
 
     def test_reference_shape_mode_mismatch_fails_before_creating(self, monkeypatch):
         events: list[str] = []

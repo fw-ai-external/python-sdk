@@ -70,7 +70,7 @@ async def test_token_deltas_preserve_echo_and_server_prompt(echo_last: int | Non
 
 
 @pytest.mark.parametrize("width", [2, 128])
-async def test_raw_off_stream_preserves_top_logprobs_and_sampling_controls(width: int) -> None:
+async def test_raw_off_stream_preserves_selected_logprobs_and_sampling_controls(width: int) -> None:
     deltas = [_delta([20]), _delta([21])]
     deltas[0]["prompt_token_ids"] = [1]
     heads = [[{"token_id": token + i, "logprob": -0.5 - i} for i in range(width)] for token in (20, 21)]
@@ -98,8 +98,6 @@ async def test_raw_off_stream_preserves_top_logprobs_and_sampling_controls(width
             assert completion.full_tokens == [1, 20, 21]
             assert completion.inference_logprobs == [-0.5, -0.5]
             assert completion.sampling_logprobs == [-0.2, -0.2]
-            assert completion.inference_topk_token_ids == [[row["token_id"] for row in head] for head in heads]
-            assert completion.inference_topk_logprobs == [[row["logprob"] for row in head] for head in heads]
         finally:
             sampler.close()
 

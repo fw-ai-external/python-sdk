@@ -538,7 +538,7 @@ class TITOTurn:
     exact_completion_ids: tuple[int, ...]
     inference_logprobs: tuple[float, ...] | None
     sampling_logprobs: tuple[float | None, ...] | None
-    routing_matrices: tuple[str, ...] | RoutingReferences | None
+    routing_matrices: RoutingReferences | None
     response_id: str
     finish_reason: str
     prompt_disposition: TITOPromptDisposition
@@ -554,7 +554,7 @@ class TITOTurn:
     upstream_response_id: str | None
     upstream_attempts: int
     prompt_routing_start: int | None = None
-    prompt_routing_matrices: tuple[str, ...] | RoutingReferences | None = None
+    prompt_routing_matrices: RoutingReferences | None = None
     prompt_mode: TITOPromptMode = "full_history"
     incremental_contract_id: str | None = None
     incremental_junction_kind: str | None = None
@@ -562,8 +562,6 @@ class TITOTurn:
     incremental_fallback_reason: str | None = None
     server_attempts: tuple[SampledServerAttempt, ...] = ()
     parser_fallback: bool = False
-    inference_topk_token_ids: tuple[tuple[int, ...], ...] | None = None
-    inference_topk_logprobs: tuple[tuple[float, ...], ...] | None = None
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
     sample_extra_references: RoutingReferences | None = None

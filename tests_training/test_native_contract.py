@@ -33,7 +33,13 @@ def test_reserved_training_session_factory_signature() -> None:
 @pytest.mark.parametrize("route", ["dedicated", "serverless"])
 @pytest.mark.parametrize("comms", ["v1", "v2"])
 def test_native_json_operations_match_frozen_baseline(route: str, comms: str) -> None:
-    assert wire_probe(route, comms) == _BASELINE["wire"][route + "-" + comms]
+    expected = json.loads(json.dumps(_BASELINE["wire"][route + "-" + comms]))
+    for operation in expected:
+        for key in ("forward_input", "forward_backward_input"):
+            if key in operation.get("body", {}):
+                for datum in operation["body"][key]["data"]:
+                    datum["model_input"].pop("routing_matrices", None)
+    assert wire_probe(route, comms) == expected
 
 
 @pytest.mark.parametrize(
@@ -92,6 +98,16 @@ def test_native_public_method_signatures_match_frozen_baseline(cls: type) -> Non
             ],
         }
     expected = dict(_BASELINE["api"][cls.__name__])
+    if cls is sdk_client.FiretitanServiceClient:
+        expected["promote_checkpoint"] = {
+            "async": False,
+            "params": [
+                ["self", "POSITIONAL_OR_KEYWORD", "<class 'inspect._empty'>"],
+                ["name", "KEYWORD_ONLY", "<class 'inspect._empty'>"],
+                ["output_model_id", "KEYWORD_ONLY", "<class 'inspect._empty'>"],
+                ["base_model", "KEYWORD_ONLY", "<class 'inspect._empty'>"],
+            ],
+        }
     if cls is sdk_client.FiretitanTrainingClient:
         for name in (
             "save_weights_and_get_sampling_client",

@@ -305,19 +305,6 @@ class TrainerJobConfig:
     On the manual path it is sent as-is.
     """
     learning_rate: float = 1e-5
-    gradient_accumulation_steps: int | None = None
-    """**Deprecated.** Ignored when set to ``1``; rejected above ``1``.
-
-    The Tinker/RLOR training path does not honor a server-side
-    ``gradient_accumulation_steps`` knob: each ``forward_backward`` call
-    backprops a raw token-sum loss, and cross-microbatch normalization happens
-    at ``optim_step`` via ``OptimStepRequest.grad_accumulation_normalization``.
-    Express gradient accumulation as client-side control flow: issue N
-    ``forward_backward`` calls before one ``optim_step``.
-
-    Background: a backward-time ``/G`` divide is the naive Unsloth-style
-    bug (https://unsloth.ai/blog/gradient).
-    """
     node_count: int | None = None
     """Number of trainer nodes.
 
@@ -334,13 +321,6 @@ class TrainerJobConfig:
     ``trainerReplicaCount`` field on both the shape and manual paths.
     """
     display_name: str | None = None
-    hot_load_deployment_id: str | None = None
-    """**Deprecated.** Use ``DeploymentConfig.hot_load_trainer_job`` instead.
-
-    Previously linked the trainer to a pre-existing deployment for weight
-    sync.  The recommended pattern is to create the trainer first and pass
-    ``hot_load_trainer_job=endpoint.job_name`` when creating the deployment.
-    """
     region: str | None = None
     custom_image_tag: str | None = None
     """Trainer container image tag.
@@ -441,18 +421,6 @@ class TrainerJobConfig:
             errors.append("projection_head_dim must be a non-negative integer when set")
         elif self.projection_head_dim is not None and self.projection_head_dim < 0:
             errors.append("projection_head_dim must be a non-negative integer when set")
-        if self.gradient_accumulation_steps is not None and self.gradient_accumulation_steps != 1:
-            errors.append(
-                "gradient_accumulation_steps must be 1. Server-side gradient "
-                "accumulation is deprecated on the Tinker/RLOR path."
-            )
-        if self.gradient_accumulation_steps == 1:
-            logger.warning(
-                "TrainerJobConfig.gradient_accumulation_steps=1 is deprecated and "
-                "ignored. Express gradient accumulation as client-side control flow "
-                "(multiple forward_backward calls per optim_step) and pass "
-                "grad_accumulation_normalization on the optim_step request."
-            )
         if self.display_name is not None and len(self.display_name) >= _DISPLAY_NAME_LENGTH_LIMIT:
             errors.append("display_name must be fewer than 64 characters")
         if self.inactivity_timeout is not None:
@@ -565,16 +533,6 @@ class TrainerJobManager(FireworksClient):
         requested_job_id = _ensure_requested_job_id(config)
         path = f"/v1/accounts/{self.account_id}/rlorTrainerJobs"
         query_params: list[tuple[str, str]] = []
-        if config.hot_load_deployment_id:
-            logger.warning(
-                "hot_load_deployment_id is deprecated and will be removed in a "
-                "future release. Create the trainer first, then pass "
-                "hot_load_trainer_job=endpoint.job_name to DeploymentConfig "
-                "when creating the deployment. See %s",
-                "https://docs.fireworks.ai/fine-tuning/training-sdk/reference/deployment-manager",
-            )
-            query_params.append(("deploymentId", config.hot_load_deployment_id))
-
         is_shape_path = bool(config.training_shape_ref)
         is_auto_shape_path = bool(config.auto_select_training_shape)
 
@@ -658,8 +616,6 @@ class TrainerJobManager(FireworksClient):
 
         if config.display_name:
             payload["displayName"] = config.display_name
-        if config.hot_load_deployment_id:
-            payload["hotLoadDeploymentId"] = config.hot_load_deployment_id
         if config.region:
             training_config["region"] = config.region
         if config.extra_args:
@@ -695,7 +651,7 @@ class TrainerJobManager(FireworksClient):
             extra = (
                 "\n  Verify the request parameters match either the training_shape_ref path or the manual infra path."
                 "\n  For hotload, use one documented scope: PER_TRAINER via deployment hot_load_trainer_job, "
-                "or PER_DEPLOYMENT via trainer hot_load_deployment_id."
+                "with the trainer job resource name."
             )
         return error_msg, f"{hint}{extra}"
 

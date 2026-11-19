@@ -8,7 +8,6 @@ import uuid
 import random
 import asyncio
 import logging
-import warnings
 from math import ceil
 from typing import TYPE_CHECKING, Any, List, Literal, Mapping, Iterator
 from contextlib import contextmanager
@@ -34,9 +33,9 @@ from fireworks.training.sdk.routing import (
     R3_STORE_HEADER,
     RoutingReferences,
     RoutingMatrixFormat,
+    routing_has_gaps,
 )
 from fireworks.training.sdk.concurrency import (
-    FixedConcurrencyController,
     AdaptiveConcurrencyController,
     SamplingConcurrencyController,
 )
@@ -251,12 +250,8 @@ class SampledCompletion:
     logprobs_echoed: bool = False
     """True when echo=True was used: logprob lists have P+C-1 entries
     (training-aligned).  False: completion-only."""
-    routing_matrices: List[str] | RoutingReferences | None = None
+    routing_matrices: RoutingReferences | None = None
     echoed_prompt_logprob_count: int = 0
-    inference_topk_token_ids: List[List[int]] | None = None
-    """Raw-model top-k token ids at each returned logprob position."""
-    inference_topk_logprobs: List[List[float]] | None = None
-    """Raw-model top-k logprobs aligned with ``inference_topk_token_ids``."""
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
     """Completion-only references to the complete support when ``sampling_mask="parquet_v1"`` was requested."""
@@ -333,15 +328,14 @@ class DeploymentSampler(_RestClient):
         api_key: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
-        max_concurrency: int | None = None,  # TODO: remove after deprecation period
-        additional_headers: dict[str, str] | None = None,
         *,
+        additional_headers: dict[str, str] | None = None,
         request_context: dict[str, Any] | None = None,
         backend_managed_concurrency: bool = False,
     ):
         if type(backend_managed_concurrency) is not bool:
             raise TypeError("backend_managed_concurrency must be a bool")
-        if backend_managed_concurrency and (concurrency_controller is not None or max_concurrency is not None):
+        if backend_managed_concurrency and concurrency_controller is not None:
             raise ValueError("backend_managed_concurrency cannot be combined with a client concurrency limit")
         super().__init__(api_key=api_key, base_url=inference_url, additional_headers=additional_headers)
         self.model = model
@@ -355,22 +349,9 @@ class DeploymentSampler(_RestClient):
         # to the structured error so a failure is attributable. A plain dict;
         # only recognized keys survive. Unset simply means no extra context.
         self._request_context = request_context
-        self.routing_matrix_format: RoutingMatrixFormat = "base64_inline"
         self.r3_store_id: str | None = None
-        self._r3_negotiated = False
-        self._r3_probe: asyncio.Task[None] | None = None
 
-        if max_concurrency is not None:
-            warnings.warn(
-                "max_concurrency is deprecated and will be removed in a future release. "
-                "Use concurrency_controller=FixedConcurrencyController(max_concurrency) "
-                "or AdaptiveConcurrencyController() instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if concurrency_controller is None:
-                concurrency_controller = FixedConcurrencyController(max_concurrency)
-        elif concurrency_controller is None and not backend_managed_concurrency:
+        if concurrency_controller is None and not backend_managed_concurrency:
             concurrency_controller = AdaptiveConcurrencyController()
 
         self._concurrency_controller = concurrency_controller
@@ -389,16 +370,43 @@ class DeploymentSampler(_RestClient):
             backend_managed_concurrency=backend_managed_concurrency or self.concurrency_controller is None,
         )
 
-    def negotiate_routing_matrix_format(self, trainer_format: RoutingMatrixFormat, store_id: str | None) -> None:
-        """Bind trainer support; the first R3 request checks inference lazily."""
-        self.routing_matrix_format = "base64_inline"
+    def negotiate_routing_matrix_format(self, trainer_format: RoutingMatrixFormat | None, store_id: str | None) -> None:
+        """Bind the trainer's shared store when it supports Parquet replay."""
         self.r3_store_id = store_id if trainer_format == "parquet_v1" else None
-        self._r3_negotiated = not bool(self.r3_store_id)
-        self._r3_probe = None
+
+    @property
+    def routing_matrix_format(self) -> RoutingMatrixFormat | None:
+        return "parquet_v1" if self.r3_store_id else None
 
     @staticmethod
     def _parquet_capture_requested(kwargs: Mapping[str, Any]) -> bool:
-        return any(kwargs.get(key) == "parquet_v1" for key in _PARQUET_CAPTURE_FIELDS)
+        return bool(
+            kwargs.get("top_sampling_logprobs")
+            or kwargs.get("sample_extra_tokens")
+            or kwargs.get("sampling_mask")
+        )
+
+    @staticmethod
+    def _set_capture_formats(payload: dict[str, Any]) -> None:
+        for count_key, format_key in (
+            ("top_sampling_logprobs", "top_sampling_format"),
+            ("sample_extra_tokens", "sample_extra_format"),
+        ):
+            count = payload.get(count_key)
+            wire_format = payload.get(format_key)
+            if count is not None and (type(count) is not int or count < 0):
+                raise ValueError(f"{count_key} must be a nonnegative integer")
+            if wire_format not in (None, "parquet_v1"):
+                raise ValueError(f"{format_key} only accepts shared-storage capture")
+            if count:
+                payload[format_key] = "parquet_v1"
+            elif wire_format is not None:
+                raise ValueError(f"{format_key} requires a positive integer {count_key}")
+        mask = payload.pop("sampling_mask", None)
+        if mask is True or mask == "parquet_v1":
+            payload["sampling_mask"] = "parquet_v1"
+        elif mask is not False and mask is not None:
+            raise ValueError("sampling_mask must request shared-storage capture")
 
     def _set_shared_storage_headers(self, headers: dict[str, str], r3_ttl_seconds: int | None) -> None:
         headers[R3_STORE_HEADER] = self.r3_store_id
@@ -438,27 +446,6 @@ class DeploymentSampler(_RestClient):
             )
 
     @staticmethod
-    def _unsupported_routing_format(response: httpx.Response) -> bool:
-        # Native servers reject this field before starting generation; older
-        # validation messages also include the rejected value.
-        if response.status_code != 400:
-            return False
-        try:
-            body = response.json()
-        except ValueError:
-            return False
-        error = body.get("error") if isinstance(body, dict) else None
-        return (
-            isinstance(error, dict)
-            and error.get("code") in ("invalid_request_error", "INVALID_ARGUMENT")
-            and error.get("message")
-            in (
-                "Extra inputs are not permitted, field: 'routing_matrix_format'",
-                "Extra inputs are not permitted, field: 'routing_matrix_format', value: 'parquet_v1'",
-            )
-        )
-
-    @staticmethod
     def _unsupported_parquet_capture(response: httpx.Response) -> bool:
         if response.status_code != 400:
             return False
@@ -470,7 +457,14 @@ class DeploymentSampler(_RestClient):
         if not isinstance(error, dict) or error.get("code") not in ("invalid_request_error", "INVALID_ARGUMENT"):
             return False
         message = error.get("message")
-        return isinstance(message, str) and any(
+        if not isinstance(message, str):
+            return False
+        # Older serving schemas can know the field but reject its shared-storage enum value.
+        if "Input should be " in message and any(
+            f"field: '{field}', value: 'parquet_v1'" in message for field in _PARQUET_CAPTURE_FIELDS
+        ):
+            return True
+        return any(
             f"Extra inputs are not permitted, field: '{field}'" in message
             for field in ("top_sampling_logprobs", "top_sampling_format", "sampling_mask", "sample_extra_format")
         )
@@ -493,40 +487,6 @@ class DeploymentSampler(_RestClient):
         else:
             await response.aclose()
         return response
-
-    async def _probe_routing_matrix_format(self, headers: Mapping[str, str], timeout: float) -> None:
-        response = await self._post_completion(
-            {
-                "model": self.model,
-                "prompt": "R3 compatibility check.",
-                "max_tokens": 0,
-                "n": 1,
-                "echo": True,
-                "stream": False,
-                "logprobs": True,
-                "routing_matrix_format": "parquet_v1",
-            },
-            {**headers, REQUEST_ID_HEADER: uuid.uuid4().hex, R3_STORE_HEADER: self.r3_store_id, R3_TTL_HEADER: "60"},
-            timeout,
-        )
-        if not self._unsupported_routing_format(response):
-            response.raise_for_status()
-            choice = response.json()["choices"][0]
-            if choice.get("routing_matrix_format") != "parquet_v1" or choice.get("r3_store_id") != self.r3_store_id:
-                raise ValueError("Inference did not acknowledge Parquet R3 in the trainer's shared storage domain")
-            references = RoutingReferences.from_dict(choice["routing_references"])
-            if not references.files or any(file["store_id"] != self.r3_store_id for file in references.files):
-                raise ValueError("Inference probe did not publish Parquet R3 in the trainer's shared storage domain")
-            self.routing_matrix_format = "parquet_v1"
-        self._r3_negotiated = True
-        logger.info("Negotiated routing_matrix_format=%s for %s", self.routing_matrix_format, self.model)
-
-    async def _ensure_routing_matrix_format(self, headers: Mapping[str, str], timeout: float) -> None:
-        if self.r3_store_id and not self._r3_negotiated:
-            if self._r3_probe is None or self._r3_probe.done():
-                self._r3_probe = asyncio.create_task(self._probe_routing_matrix_format(headers, timeout))
-            # Cancellation of one caller must not cancel the shared probe.
-            await asyncio.shield(self._r3_probe)
 
     @property
     def concurrency_controller(
@@ -586,12 +546,10 @@ class DeploymentSampler(_RestClient):
         so the server includes complete metrics in the last chunk.
 
         ``r3_ttl_seconds`` sets Parquet R3 retention from file creation;
-        omission uses six hours. JSON routing has no server-side file to expire.
+        omission uses six hours.
 
-        Explicit ``top_sampling_format="parquet_v1"`` or
-        ``sample_extra_format="parquet_v1"`` publishes the requested probability
-        head or independent extra draws to the trainer-bound shared store, with
-        or without router replay. Omitted formats preserve inference defaults.
+        Positive probability-head and extra-draw widths capture training data
+        in the trainer's shared store. Enable the support mask with sampling_mask.
         """
         if r3_ttl_seconds is not None and (type(r3_ttl_seconds) is not int or r3_ttl_seconds <= 0):
             raise ValueError("r3_ttl_seconds must be a positive integer")
@@ -624,6 +582,9 @@ class DeploymentSampler(_RestClient):
         payload.setdefault("top_p", 1.0)
         payload.setdefault("top_k", 0)
         headers = self._inference_headers(additional_headers_snapshot)
+        if "routing_matrix_format" in payload:
+            raise ValueError("Request shared-storage routing with include_routing_matrix=True")
+        self._set_capture_formats(payload)
         parquet_capture = self._parquet_capture_requested(payload)
         if (payload.get("include_routing_matrix") or parquet_capture) and getattr(
             self, "_r3_binding_required", False
@@ -636,6 +597,11 @@ class DeploymentSampler(_RestClient):
         if parquet_capture:
             self._validate_parquet_capture_request(payload)
             self._set_shared_storage_headers(headers, r3_ttl_seconds)
+        if payload.pop("include_routing_matrix", False):
+            if not self.r3_store_id:
+                raise ValueError("Router replay requires a trainer-bound sampler with shared storage")
+            payload["routing_matrix_format"] = "parquet_v1"
+            self._set_shared_storage_headers(headers, r3_ttl_seconds)
         if logical_request_id:
             # Send the SDK's stable correlation id; the gateway/fw-proxy echoes
             # it back on the response so a failure is searchable in server logs.
@@ -643,32 +609,9 @@ class DeploymentSampler(_RestClient):
         prompt_len = len(prompt)
 
         for hotload_attempt in range(hotload_max_retries + 1):
-            # Timed from the completion request itself; the shared R3 format
-            # probe and a pre-generation fallback are not part of it.
             t0 = time.monotonic()
             try:
-                if kwargs.get("include_routing_matrix"):
-                    await self._ensure_routing_matrix_format(headers, http_timeout)
-                    if self.routing_matrix_format == "parquet_v1":
-                        payload.pop("include_routing_matrix", None)
-                        payload["routing_matrix_format"] = "parquet_v1"
-                        self._set_shared_storage_headers(headers, r3_ttl_seconds)
-                t0 = time.monotonic()
                 resp = await self._post_completion(payload, headers, http_timeout)
-                if (
-                    payload.get("routing_matrix_format") == "parquet_v1"
-                    and not parquet_capture
-                    and self._unsupported_routing_format(resp)
-                ):
-                    # A different replica may still run the old image. Retry only this pre-generation rejection.
-                    self.routing_matrix_format = "base64_inline"
-                    payload.pop("routing_matrix_format")
-                    payload["include_routing_matrix"] = True
-                    headers = {
-                        key: value for key, value in headers.items() if key not in (R3_STORE_HEADER, R3_TTL_HEADER)
-                    }
-                    t0 = time.monotonic()
-                    resp = await self._post_completion(payload, headers, http_timeout)
             except httpx.HTTPStatusError as exc:
                 resp = exc.response
 
@@ -906,61 +849,6 @@ class DeploymentSampler(_RestClient):
             return values
         return None
 
-    @staticmethod
-    def _extract_top_logprobs(
-        choice: dict[str, Any],
-    ) -> tuple[List[List[int]], List[List[float]]] | None:
-        """Extract per-position top-logprob token ids and values."""
-        lp_data = choice.get("logprobs")
-        if not isinstance(lp_data, dict):
-            return None
-        content = lp_data.get("content")
-        if not isinstance(content, list) or not content:
-            return None
-
-        token_ids: List[List[int]] = []
-        logprobs: List[List[float]] = []
-        for token in content:
-            if not isinstance(token, dict):
-                return None
-            candidates = token.get("top_logprobs")
-            if not isinstance(candidates, list) or not candidates:
-                return None
-            position_ids: List[int] = []
-            position_logprobs: List[float] = []
-            for candidate in candidates:
-                if not isinstance(candidate, dict):
-                    return None
-                token_id = candidate.get("token_id")
-                logprob = candidate.get("logprob")
-                if not isinstance(token_id, int) or isinstance(token_id, bool) or logprob is None:
-                    return None
-                position_ids.append(token_id)
-                position_logprobs.append(float(logprob))
-            token_ids.append(position_ids)
-            logprobs.append(position_logprobs)
-        return token_ids, logprobs
-
-    @staticmethod
-    def _extract_routing_matrices(choice: dict[str, Any]) -> List[str] | None:
-        """Extract per-token routing matrices from logprobs content.
-
-        When ``include_routing_matrix=True`` is passed to the API, each token
-        in ``choice.logprobs.content`` may contain a ``routing_matrix`` field
-        with a base64-encoded expert-index array for Router Replay (R3).
-
-        Returns:
-            List of base64-encoded routing matrix strings (one per completion
-            token), or ``None`` if no routing matrices are present.
-        """
-        lp_data = choice.get("logprobs")
-        if lp_data and isinstance(lp_data, dict):
-            content = lp_data.get("content", [])
-            if content:
-                matrices = [tok.get("routing_matrix", "") for tok in content]
-                if any(m for m in matrices):
-                    return matrices
-        return None
 
     async def sample_with_tokens(
         self,
@@ -1631,9 +1519,9 @@ class DeploymentSampler(_RestClient):
                         echo_mode,
                         raw_logprobs_match_sampling,
                         echo_last=kwargs.get("echo_last"),
-                        top_sampling_requested=kwargs.get("top_sampling_format") == "parquet_v1",
-                        sampling_mask_requested=kwargs.get("sampling_mask") == "parquet_v1",
-                        sample_extra_requested=kwargs.get("sample_extra_format") == "parquet_v1",
+                        top_sampling_requested=bool(kwargs.get("top_sampling_logprobs")),
+                        sampling_mask_requested=bool(kwargs.get("sampling_mask")),
+                        sample_extra_requested=bool(kwargs.get("sample_extra_tokens")),
                     )
                 except Exception as e:
                     # Keep the successful raw response available to the local
@@ -1820,8 +1708,6 @@ class DeploymentSampler(_RestClient):
                 if user_requested_logprobs
                 else None
             )
-            top_logprobs = self._extract_top_logprobs(choice) if user_requested_logprobs else None
-            topk_token_ids, topk_logprobs = top_logprobs if top_logprobs is not None else (None, None)
             if (
                 sampling_logprobs is not None
                 and all(value is None for value in sampling_logprobs)
@@ -1834,19 +1720,18 @@ class DeploymentSampler(_RestClient):
                 # are the same behavior-policy values.
                 self._warn_missing_sampling_logprob_fallback()
                 sampling_logprobs = list(raw_logprobs)
-            routing_matrices = self._extract_routing_matrices(choice) if routing_requested else None
+            routing_matrices = None
             if routing_requested:
-                routing_matrix_format = choice.get("routing_matrix_format", "base64_inline")
-                if routing_matrix_format == "parquet_v1":
-                    if not self.r3_store_id:
-                        raise ValueError("Deployment returned Parquet R3 without a compatible trainer binding")
-                    if choice.get("r3_store_id") != self.r3_store_id or "routing_references" not in choice:
-                        raise ValueError(
-                            "Deployment did not acknowledge Parquet R3 in the trainer's shared storage domain"
-                        )
-                    routing_matrices = RoutingReferences.from_dict(choice["routing_references"])
-                elif routing_matrix_format != "base64_inline" or choice.get("routing_references") is not None:
-                    raise ValueError("Deployment returned an unsupported R3 format")
+                if (
+                    not self.r3_store_id
+                    or choice.get("routing_matrix_format") != "parquet_v1"
+                    or choice.get("r3_store_id") != self.r3_store_id
+                    or "routing_references" not in choice
+                ):
+                    raise ValueError("Deployment did not return R3 references in the trainer's shared storage domain")
+                routing_matrices = RoutingReferences.from_dict(choice["routing_references"])
+                if any(file.get("store_id") != self.r3_store_id for file in routing_matrices.files):
+                    raise ValueError("R3 references belong to a different shared storage domain")
             sampling_references = {}
             for requested, column in (
                 (top_sampling_requested, "top_sampling"),
@@ -1862,7 +1747,7 @@ class DeploymentSampler(_RestClient):
                         "Deployment did not acknowledge Parquet sampling in the trainer's shared storage domain"
                     )
                 references = RoutingReferences.from_dict(choice[f"{column}_references"])
-                if any(file["store_id"] != self.r3_store_id for file in references.files):
+                if any(file.get("store_id") != self.r3_store_id for file in references.files):
                     raise ValueError("Sampling references belong to a different shared storage domain")
                 sampling_references[column] = references
 
@@ -1894,8 +1779,6 @@ class DeploymentSampler(_RestClient):
                     raw_logprobs,
                     sampling_logprobs,
                     routing_matrices,
-                    topk_token_ids,
-                    topk_logprobs,
                 ):
                     if values is not None and len(values) != response_count:
                         raise RuntimeError("Echo response arrays do not align with returned token IDs")
@@ -1910,13 +1793,16 @@ class DeploymentSampler(_RestClient):
                     sampling_logprobs = sampling_logprobs[drop:]
                 if routing_matrices is not None:
                     routing_matrices = routing_matrices[drop:]
-                if topk_token_ids is not None and topk_logprobs is not None:
-                    topk_token_ids = topk_token_ids[drop:]
-                    topk_logprobs = topk_logprobs[drop:]
                 # Echoed prompt rows carry no sampling payload; keep completion rows only.
                 for column, references in sampling_references.items():
                     if len(references) == response_count:
                         sampling_references[column] = references[echo_count:]
+            if routing_matrices is not None:
+                completion_count = len(completion_ids)
+                if len(routing_matrices) != echoed_count + completion_count:
+                    raise RuntimeError("R3 references do not align with returned token IDs")
+                if completion_count and routing_has_gaps(routing_matrices[echoed_count:]):
+                    raise ValueError("Deployment returned R3 references without stored rows for generated tokens")
             for column, references in sampling_references.items():
                 if len(references) != len(completion_ids):
                     raise RuntimeError(f"{column} references do not align with completion token IDs")
@@ -1944,8 +1830,6 @@ class DeploymentSampler(_RestClient):
                     logprobs_echoed=lp_is_echo,
                     echoed_prompt_logprob_count=echoed_count,
                     routing_matrices=routing_matrices,
-                    inference_topk_token_ids=topk_token_ids,
-                    inference_topk_logprobs=topk_logprobs,
                     top_sampling_references=sampling_references.get("top_sampling"),
                     sampling_mask_references=sampling_references.get("sampling_mask"),
                     sample_extra_references=sampling_references.get("sample_extra"),

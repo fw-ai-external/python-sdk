@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-from fireworks.training.sdk.routing import RoutingReferences, freeze_routing, routing_to_wire
+from fireworks.training.sdk.routing import freeze_routing, routing_to_wire
 from fireworks.training.sdk.sampling import (
     ServerMetrics,
     SampledCompletion,
@@ -1100,30 +1100,12 @@ class _LinearTrajectoryCore:
         for name, values in (
             ("inference_logprobs", completion.inference_logprobs),
             ("sampling_logprobs", completion.sampling_logprobs),
-            ("inference_topk_token_ids", completion.inference_topk_token_ids),
-            ("inference_topk_logprobs", completion.inference_topk_logprobs),
         ):
             if values is not None and len(values) != len(output):
                 raise self._completion_error(
                     "tito_completion_alignment_error",
                     f"{name} is not aligned with completion token IDs",
                 )
-        if (completion.inference_topk_token_ids is None) != (completion.inference_topk_logprobs is None):
-            raise self._completion_error(
-                "tito_completion_alignment_error",
-                "top-k token ids and logprobs must be present together",
-            )
-        if completion.inference_topk_token_ids is not None:
-            for token_ids, logprobs in zip(
-                completion.inference_topk_token_ids,
-                completion.inference_topk_logprobs or (),
-                strict=True,
-            ):
-                if not token_ids or len(token_ids) != len(logprobs):
-                    raise self._completion_error(
-                        "tito_completion_alignment_error",
-                        "top-k token ids and logprobs are not aligned",
-                    )
         if include_routing_matrix and (
             completion.routing_matrices is None or len(completion.routing_matrices) != len(output)
         ):
@@ -1489,11 +1471,7 @@ class _LinearTrajectoryCore:
                 if completion.sampling_logprobs is not None:
                     sampled_arrays[f"{prefix}_sampling_logprobs"] = completion.sampling_logprobs
                 if completion.routing_matrices is not None:
-                    sampled_arrays[f"{prefix}_routing_matrices"] = (
-                        json.dumps(routing_to_wire(completion.routing_matrices))
-                        if isinstance(completion.routing_matrices, RoutingReferences)
-                        else completion.routing_matrices
-                    )
+                    sampled_arrays[f"{prefix}_routing_matrices"] = json.dumps(routing_to_wire(completion.routing_matrices))
                 if completion.top_sampling_references is not None:
                     sampled_arrays[f"{prefix}_top_sampling_references"] = json.dumps(
                         routing_to_wire(completion.top_sampling_references)
@@ -1659,7 +1637,7 @@ class _LinearTrajectoryCore:
             )
         values.pop("temperature", None)
         values.update(self.sampling_defaults)
-        if values.get("top_sampling_format") == values.get("sample_extra_format") == "parquet_v1":
+        if values.get("top_sampling_logprobs") and values.get("sample_extra_tokens"):
             raise TITOError(
                 "tito_invalid_sampling_field",
                 400,
@@ -1990,7 +1968,7 @@ class _LinearTrajectoryCore:
             phase = "sampling_admission"
             sampling_kwargs = self._sampling_kwargs(state, request)
             include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
-            include_top_sampling = sampling_kwargs.get("top_sampling_format") == "parquet_v1"
+            include_top_sampling = bool(sampling_kwargs.get("top_sampling_logprobs"))
             if include_routing and self.incremental_prompt_routing:
                 retained = 0
                 if plan.segment is not None:
@@ -2079,12 +2057,6 @@ class _LinearTrajectoryCore:
                     sampling_logprobs=(
                         None if original.sampling_logprobs is None else original.sampling_logprobs[count:]
                     ),
-                    inference_topk_token_ids=(
-                        None if original.inference_topk_token_ids is None else original.inference_topk_token_ids[count:]
-                    ),
-                    inference_topk_logprobs=(
-                        None if original.inference_topk_logprobs is None else original.inference_topk_logprobs[count:]
-                    ),
                     routing_matrices=original.routing_matrices[count:],
                     logprobs_echoed=False,
                     echoed_prompt_logprob_count=0,
@@ -2095,8 +2067,8 @@ class _LinearTrajectoryCore:
                 sampled,
                 include_routing,
                 include_top_sampling,
-                sampling_kwargs.get("sampling_mask") == "parquet_v1",
-                sampling_kwargs.get("sample_extra_format") == "parquet_v1",
+                bool(sampling_kwargs.get("sampling_mask")),
+                bool(sampling_kwargs.get("sample_extra_tokens")),
             )
             phase = "parser"
             parsed = self._parse(request, completion)
@@ -2136,16 +2108,6 @@ class _LinearTrajectoryCore:
                 ),
                 prompt_routing_start=prompt_route_start,
                 prompt_routing_matrices=prompt_routes,
-                inference_topk_token_ids=(
-                    tuple(tuple(row) for row in completion.inference_topk_token_ids)
-                    if completion.inference_topk_token_ids is not None
-                    else None
-                ),
-                inference_topk_logprobs=(
-                    tuple(tuple(row) for row in completion.inference_topk_logprobs)
-                    if completion.inference_topk_logprobs is not None
-                    else None
-                ),
                 routing_matrices=(
                     freeze_routing(completion.routing_matrices) if completion.routing_matrices is not None else None
                 ),
@@ -2235,14 +2197,6 @@ class _LinearTrajectoryCore:
                 **(
                     {"sample_extra_references": routing_to_wire(completion.sample_extra_references)}
                     if completion.sample_extra_references is not None
-                    else {}
-                ),
-                **(
-                    {
-                        "inference_topk_token_ids": completion.inference_topk_token_ids,
-                        "inference_topk_logprobs": completion.inference_topk_logprobs,
-                    }
-                    if completion.inference_topk_token_ids is not None
                     else {}
                 ),
             }
@@ -2492,9 +2446,7 @@ class _LinearTrajectoryCore:
             phase = "sampling_admission"
             # Auxiliary outputs are never trained, so they skip probability-head and replay-mask publication.
             sampling_kwargs = self._sampling_kwargs(state, request)
-            excluded = {"top_sampling_logprobs", "top_sampling_format", "sampling_mask"}
-            if sampling_kwargs.get("sample_extra_format") == "parquet_v1":
-                excluded.update(("sample_extra_tokens", "sample_extra_format"))
+            excluded = {"top_sampling_logprobs", "top_sampling_format", "sampling_mask", "sample_extra_tokens", "sample_extra_format"}
             sampling_kwargs = {key: value for key, value in sampling_kwargs.items() if key not in excluded}
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")

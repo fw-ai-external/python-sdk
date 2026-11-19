@@ -96,14 +96,6 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
         "inference_logprobs": value.inference_logprobs,
         "sampling_logprobs": value.sampling_logprobs,
         **(
-            {
-                "inference_topk_token_ids": value.inference_topk_token_ids,
-                "inference_topk_logprobs": value.inference_topk_logprobs,
-            }
-            if value.inference_topk_token_ids is not None
-            else {}
-        ),
-        **(
             {"top_sampling_references": routing_to_wire(value.top_sampling_references)}
             if value.top_sampling_references is not None
             else {}
@@ -281,6 +273,8 @@ def _request(raw: Mapping[str, Any]) -> TITOChatRequest:
 def _turn(raw: Mapping[str, Any]) -> TITOTurn:
     if any(raw.get(key) is not None for key in ("sample_extra_token_ids", "sample_extra_sampling_logprobs")):
         raise ValueError("Inline MC artifacts are unsupported; collect rollouts with sample_extra_references")
+    if any(raw.get(key) is not None for key in ("inference_topk_token_ids", "inference_topk_logprobs")):
+        raise ValueError("Inline top-k artifacts are unsupported; collect rollouts with top_sampling_references")
     assistant = raw["assistant"]
     parsed = TITOParsedAssistant(
         message=assistant["message"],
@@ -304,16 +298,6 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
         exact_completion_ids=tuple(raw["exact_completion_ids"]),
         inference_logprobs=(None if raw.get("inference_logprobs") is None else tuple(raw["inference_logprobs"])),
         sampling_logprobs=(None if raw.get("sampling_logprobs") is None else tuple(raw["sampling_logprobs"])),
-        inference_topk_token_ids=(
-            None
-            if raw.get("inference_topk_token_ids") is None
-            else tuple(tuple(row) for row in raw["inference_topk_token_ids"])
-        ),
-        inference_topk_logprobs=(
-            None
-            if raw.get("inference_topk_logprobs") is None
-            else tuple(tuple(row) for row in raw["inference_topk_logprobs"])
-        ),
         top_sampling_references=routing_from_wire(raw.get("top_sampling_references")),
         sampling_mask_references=routing_from_wire(raw.get("sampling_mask_references")),
         sample_extra_references=routing_from_wire(raw.get("sample_extra_references")),

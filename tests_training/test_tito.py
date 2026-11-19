@@ -231,9 +231,7 @@ class FakeSampler:
             await self.release.wait()
         output = self.outputs.popleft() if len(self.outputs) > 1 else self.outputs[0]
         finish = self.finishes.popleft() if len(self.finishes) > 1 else self.finishes[0]
-        routes = (
-            tuple(f"route-{index}" for index in range(len(output))) if kwargs.get("include_routing_matrix") else None
-        )
+        routes = _top_sampling_refs(len(output)) if kwargs.get("include_routing_matrix") else None
         completion = SampledCompletion(
             text="fake",
             full_tokens=[*prompt_token_ids, *output],
@@ -242,30 +240,20 @@ class FakeSampler:
             completion_len=len(output),
             inference_logprobs=[-0.1] * len(output),
             sampling_logprobs=[-0.2] * len(output),
-            routing_matrices=list(routes) if routes is not None else None,
-            inference_topk_token_ids=(
-                [[int(token_id) + offset for offset in range(int(kwargs["top_logprobs"]))] for token_id in output]
-                if kwargs.get("top_logprobs")
-                else None
-            ),
-            inference_topk_logprobs=(
-                [[-0.1 - offset for offset in range(int(kwargs["top_logprobs"]))] for _ in output]
-                if kwargs.get("top_logprobs")
-                else None
-            ),
+            routing_matrices=routes,
             sample_extra_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("sample_extra_format") == "parquet_v1"
+                if kwargs.get("sample_extra_tokens")
                 else None
             ),
             top_sampling_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("top_sampling_format") == "parquet_v1"
+                if kwargs.get("top_sampling_logprobs")
                 else None
             ),
             sampling_mask_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("sampling_mask") == "parquet_v1"
+                if kwargs.get("sampling_mask")
                 else None
             ),
         )
@@ -526,25 +514,6 @@ async def test_exact_append_preserves_sampled_checkpoint() -> None:
     assert attempt_metrics is not None and attempt_metrics.backend_host == "pod-2"
 
 
-async def test_policy_turn_retains_sampler_topk_distribution() -> None:
-    sampler = FakeSampler(outputs=([197, 3],))
-    engine = _engine(sampler, sampling_defaults={"top_logprobs": 2})
-    trajectory_id = engine.create_trajectory()
-
-    await engine.complete(trajectory_id, _first_request())
-    artifact = engine.finish(trajectory_id)
-    turn = artifact.segments[0].turns[0]
-
-    assert sampler.calls[0]["top_logprobs"] == 2
-    assert turn.inference_topk_token_ids == ((197, 198), (3, 4))
-    assert turn.inference_topk_logprobs == ((-0.1, -1.1), (-0.1, -1.1))
-    restored = type(artifact).unpack(artifact.pack())
-    assert restored.segments[0].turns[0].inference_topk_token_ids == (
-        (197, 198),
-        (3, 4),
-    )
-
-
 @pytest.mark.parametrize(
     "sampling_defaults",
     [
@@ -572,8 +541,8 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     assert all(all(call[key] == value for key, value in sampling_defaults.items()) for call in sampler.calls)
     turns = [turn for segment in artifact.segments for turn in segment.turns]
     for channel, enabled in (
-        ("top_sampling", sampling_defaults.get("top_sampling_format") == "parquet_v1"),
-        ("sample_extra", sampling_defaults.get("sample_extra_format") == "parquet_v1"),
+        ("top_sampling", bool(sampling_defaults.get("top_sampling_logprobs"))),
+        ("sample_extra", bool(sampling_defaults.get("sample_extra_tokens"))),
         ("sampling_mask", "sampling_mask" in sampling_defaults),
     ):
         assert [getattr(turn, channel + "_references") for turn in turns] == (
@@ -592,19 +561,15 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     )
     await auxiliary.complete(auxiliary.create_trajectory(), _first_request())
     assert not {"top_sampling_format", "top_sampling_logprobs", "sampling_mask"} & auxiliary_sampler.calls[0].keys()
-    if sampling_defaults.get("sample_extra_format") == "parquet_v1":
+    if bool(sampling_defaults.get("sample_extra_tokens")):
         assert not {"sample_extra_tokens", "sample_extra_format"} & auxiliary_sampler.calls[0].keys()
-    elif "sample_extra_tokens" in sampling_defaults:
-        assert auxiliary_sampler.calls[0]["sample_extra_tokens"] == sampling_defaults["sample_extra_tokens"]
+
 
     misaligned = FakeSampler(outputs=([197, 3],))
     misaligned.top_sampling_rows_delta = -1
     engine = _engine(misaligned, sampling_defaults=sampling_defaults)
     trajectory_id = engine.create_trajectory()
-    if any(sampling_defaults.get(key) == "parquet_v1" for key in ("top_sampling_format", "sample_extra_format", "sampling_mask")):
-        with pytest.raises(TITOError, match="references"):
-            await engine.complete(trajectory_id, _first_request())
-    else:
+    with pytest.raises(TITOError, match="references"):
         await engine.complete(trajectory_id, _first_request())
 
 
@@ -1712,7 +1677,7 @@ async def test_completion_only_r3_is_carried_without_lineage_logic() -> None:
     )
     result = engine.finish(trajectory_id)
     turn = result.segments[0].turns[0]
-    assert turn.routing_matrices == ("route-0", "route-1")
+    assert turn.routing_matrices == _top_sampling_refs(2)
     assert len(turn.routing_matrices) == len(turn.exact_completion_ids)
 
 

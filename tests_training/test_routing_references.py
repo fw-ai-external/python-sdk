@@ -72,7 +72,6 @@ def test_fully_masked_routing_preserves_parquet_representation():
 @pytest.mark.parametrize("echo_last", [None, 0, 2, 5, 10])
 def test_parquet_full_and_partial_echo_alignment(echo_last):
     sampler = DeploymentSampler("http://unused", "test", "test")
-    sampler.routing_matrix_format = "parquet_v1"
     sampler.r3_store_id = "test"
     prompt = [11, 12, 13, 14, 15]
     echo_count = 5 if echo_last is None else min(echo_last, 5)
@@ -94,8 +93,34 @@ def test_parquet_full_and_partial_echo_alignment(echo_last):
     assert result.echoed_prompt_logprob_count == echo_count - drop
     assert expand(result.routing_matrices) == list(range(100 + drop, 100 + len(ids)))
     choice["r3_store_id"] = "other"
-    with pytest.raises(ValueError, match="acknowledge"):
+    with pytest.raises(ValueError, match="trainer's shared storage domain"):
         sampler._parse_completions_result({"choices": [choice]}, prompt, None, True, True, True, True)
+
+
+@pytest.mark.parametrize("fault", ["all_gaps", "partial_gap", "wrong_length"])
+def test_parquet_routing_requires_stored_rows_for_every_generated_token(fault):
+    sampler = DeploymentSampler("http://unused", "test", "test")
+    sampler.negotiate_routing_matrix_format("parquet_v1", "test")
+    payload = refs(2 if fault != "wrong_length" else 1).to_dict()
+    if fault == "all_gaps":
+        payload["spans"] = [{"input_token_start": 0, "count": 2}]
+    elif fault == "partial_gap":
+        payload["spans"][0]["count"] = 1
+        payload["spans"].append({"input_token_start": 1, "count": 1})
+    error = RuntimeError if fault == "wrong_length" else ValueError
+    try:
+        with pytest.raises(error, match="R3 references"):
+            sampler._parse_completions_result(
+                {"choices": [{
+                    "token_ids": [2, 3],
+                    "routing_matrix_format": "parquet_v1",
+                    "routing_references": payload,
+                    "r3_store_id": "test",
+                }]},
+                [1], None, False, True, False, True,
+            )
+    finally:
+        sampler.close()
 
 
 @pytest.mark.parametrize("echo_last", [None, 0, 2, 5])
@@ -136,7 +161,7 @@ def test_parquet_top_sampling_references_are_completion_only(echo_last, echoed_r
     other = "sampling_mask" if column == "top_sampling" else "top_sampling"
     assert getattr(result, other + "_references") is None
     assert parse(choice, requested=False).top_sampling_references is None
-    with pytest.raises(ValueError, match="acknowledge"):
+    with pytest.raises(ValueError, match="trainer's shared storage domain"):
         parse({**choice, "r3_store_id": "other"})
     with pytest.raises(ValueError, match="did not return"):
         parse({key: value for key, value in choice.items() if key != f"{column}_references"})
@@ -185,20 +210,16 @@ def test_top_sampling_references_survive_model_input_wire_serialization():
     assert "top_sampling_references" not in tinker.ModelInput.from_ints([1]).model_dump(exclude_unset=True)
 
 
-def test_model_input_copy_clears_the_previous_routing_representation():
-    # The training client installs these extensions; do not depend on test order.
-    from fireworks.training.sdk import types
+def test_model_input_accepts_only_reference_routing() -> None:
+    from fireworks.training.sdk import ModelInput
     from fireworks.training.sdk.routing import routing_model_input_kwargs
 
-    original = types.ModelInput.from_ints([1, 2], routing_matrices=["a", "b"])
-    updated = original.model_copy(update=routing_model_input_kwargs(refs(2)))
-    assert updated.routing_matrix_format == "parquet_v1"
-    assert updated.routing_matrices is None
-    assert updated.routing_references == refs(2).to_dict()
-    restored = updated.model_copy(update=routing_model_input_kwargs(["a", "b"]))
-    assert restored.routing_matrix_format is None
-    assert restored.routing_references is None
-    assert restored.routing_matrices == ["a", "b"]
+    data = ModelInput.from_ints([1, 2], routing_matrices=refs(2))
+    assert data.routing_matrix_format == "parquet_v1"
+    assert data.routing_references == refs(2).to_dict()
+    assert data.model_copy(update=routing_model_input_kwargs(None)).routing_references is None
+    with pytest.raises(ValueError, match="Inline routing"):
+        ModelInput.from_ints([1, 2], routing_matrices=["a", "b"])
 
 
 def test_independent_mask_head_files_survive_sdk_wire():
@@ -237,3 +258,32 @@ def test_sampling_parser_accepts_independent_mask_head_files():
     )[0]
     assert expand(result.top_sampling_references) == [100, 101]
     assert expand(result.sampling_mask_references) == [200, 201]
+
+
+@pytest.mark.parametrize(
+    "field", ["routing_references", "top_sampling_references", "sampling_mask_references", "sample_extra_references"]
+)
+def test_trainer_validates_shared_replay_references(field):
+    from types import SimpleNamespace
+
+    from fireworks.training.sdk import ModelInput
+    from fireworks.training.sdk.client import FiretitanTrainingClient
+
+    model = ModelInput.from_ints([1, 2])
+    references = refs(2).to_dict()
+    datum = SimpleNamespace(
+        model_input=model.model_copy(update={field: references, "routing_matrix_format": "parquet_v1"})
+    )
+    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
+    client.r3_store_id = "test"
+    client._validate_replay_references([datum])
+    client.r3_store_id = "another"
+    with pytest.raises(ValueError, match="different shared storage"):
+        client._validate_replay_references([datum])
+    client.r3_store_id = None
+    with pytest.raises(ValueError, match="require trainer shared storage"):
+        client._validate_replay_references([datum])
+    client.r3_store_id = "test"
+    datum.model_input = datum.model_input.model_copy(update={"chunks": model.append_int(3).chunks})
+    with pytest.raises(ValueError, match="must match the model input token length"):
+        client._validate_replay_references([datum])
