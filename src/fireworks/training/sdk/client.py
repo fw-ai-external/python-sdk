@@ -347,6 +347,14 @@ class FiretitanSamplingClient(SamplingClient):
         self._pending_lock = threading.Lock()
         self._drain_thread: threading.Thread | None = None
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+        if name == "concurrency_controller":
+            logger.warning(
+                "Assigning concurrency_controller after sampling client creation has no effect. "
+                "Client-side concurrency control will be retired."
+            )
+
     @classmethod
     def create(
         cls,
@@ -2914,6 +2922,13 @@ class FiretitanTrainingClient(TrainingClient):
             rounding=export_rounding,
         )
         actual_name = qualify_snapshot_name(self.session_id, name)
+        if not _CHECKPOINT_DNS_LABEL_RE.fullmatch(actual_name):
+            max_length = 63 - len(self.session_id) - 1
+            raise ValueError(
+                "Sampler snapshot name must use lowercase letters, digits, or hyphens, "
+                f"start with a letter or digit, and be at most {max_length} characters "
+                "to leave room for the session suffix."
+            )
         self._warn_if_name_reused(actual_name, self._saved_sampler_names, "Sampler")
 
         request_id = self._get_request_id()
@@ -3193,6 +3208,11 @@ class FiretitanTrainingClient(TrainingClient):
             raise NotImplementedError(
                 "FiretitanTrainingClient.save_state(overwrite=True) is not supported. "
                 "Use a new checkpoint name instead."
+            )
+        if name and not _CHECKPOINT_DNS_LABEL_RE.fullmatch(name):
+            raise ValueError(
+                "Checkpoint name must be 1-63 lowercase letters, digits, or hyphens "
+                "and start and end with a letter or digit."
             )
         self._warn_if_name_reused(name, self._saved_state_names, "DCP")
         self._saved_state_names.add(name)

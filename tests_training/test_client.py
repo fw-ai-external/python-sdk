@@ -222,6 +222,23 @@ class TestSaveState:
 
         mock_save_state.assert_not_called()
 
+    @pytest.mark.parametrize("name", ["Step-1", "a" * 64, "step-"])
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_invalid_name_rejected_before_submission(self, mock_save_state, name):
+        client = self._make_client()
+
+        with pytest.raises(ValueError, match="Checkpoint name must be"):
+            asyncio.run(client.save_state_async(name))
+
+        assert not client._saved_state_names
+        mock_save_state.assert_not_called()
+
+    @pytest.mark.parametrize("name", ["", "a" * 63])
+    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.save_state")
+    def test_generated_and_max_length_names_are_accepted(self, mock_save_state, name):
+        self._make_client().save_state(name)
+        mock_save_state.assert_called_once_with(name, ttl_seconds=None, overwrite=False)
+
 
 class TestLoadStateCompatibility:
     def _make_client(self):
@@ -2155,7 +2172,7 @@ class TestFiretitanServiceClientManagedCompat:
         assert result is sampler_backend.get_sampling_client.return_value
         sampler_backend.hotload_saved_snapshot.assert_called_once_with("snapshot-1")
 
-    def test_create_sampling_client_uses_serverless_completions_route(self):
+    def test_create_sampling_client_uses_serverless_completions_route(self, caplog):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
         svc._sampler_backend = None
         svc._managed_config = None
@@ -2170,13 +2187,22 @@ class TestFiretitanServiceClientManagedCompat:
             SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
 
-        sampler = svc.create_sampling_client(model_path="test-account/run-1/step-1")
+        controller = FixedConcurrencyController(4)
+        sampler = svc.create_sampling_client(model_path="test-account/run-1/step-1", concurrency_controller=controller)
 
         expected_model = "accounts/test-account/trainingSessions/ts-abc123/checkpoints/test-account/run-1/step-1"
         assert sampler.deployment_sampler.base_url == "https://api.example.com/training/v1/serverless"
         assert sampler.deployment_sampler.model == expected_model
         assert sampler.deployment_sampler.api_key == "fw_test"
         assert sampler.deployment_sampler.additional_headers == {"X-Test-Header": "1"}
+        assert not hasattr(sampler, "concurrency_controller")
+        ignored_controller = FixedConcurrencyController(2)
+        with caplog.at_level(logging.WARNING):
+            sampler.concurrency_controller = ignored_controller
+        assert "Assigning concurrency_controller after sampling client creation has no effect." in caplog.text
+        assert "Client-side concurrency control will be retired." in caplog.text
+        assert sampler.concurrency_controller is ignored_controller
+        assert sampler.deployment_sampler.concurrency_controller is controller
         sampler.close()
 
     @pytest.mark.parametrize(
@@ -2843,6 +2869,31 @@ class TestTrainingClientSamplingHelpers:
         client._sampler_checkpoint_saved = False
         client._first_sampler_checkpoint_type = "base"
         return client
+
+    @pytest.mark.parametrize("name", ["Step-1", "a" * 55, "dir/step-1"])
+    def test_invalid_snapshot_name_rejected_before_submission(self, name):
+        client = self._make_client()
+        client.session_id = "test1234"
+
+        with patch.object(client, "_get_request_id") as request_id:
+            with pytest.raises(ValueError, match="Sampler snapshot name must use lowercase"):
+                asyncio.run(client.save_weights_for_sampler_async(name))
+            request_id.assert_not_called()
+
+    def test_max_length_snapshot_name_accepted(self):
+        client = self._make_client()
+        client.session_id = "test1234"
+        client._saved_sampler_names = set()
+        name = "a" * 53 + "-"
+        actual_name = f"{name}-test1234"
+        result = SaveSamplerResult(path=actual_name, snapshot_name=actual_name)
+
+        with (
+            patch.object(client, "_save_sampler_snapshot", new=MagicMock(return_value=result)) as save,
+            patch.object(client, "_submit_operation", return_value=SimpleNamespace(result=lambda: result)),
+        ):
+            assert client.save_weights_for_sampler(name).result().path == actual_name
+        assert save.call_args.args == (actual_name,)
 
     def test_sampler_checkpoint_type_defaults_base_then_delta_for_full_param(self):
         client = self._make_client()
