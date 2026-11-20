@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from dataclasses import dataclass
 
-RoutingMatrixFormat = Literal["base64_inline", "parquet_v1"]
+RoutingMatrixFormat = Literal["parquet_v1"]
 R3_STORE_HEADER = "x-fireworks-r3-store-id"
 R3_TTL_HEADER = "x-fireworks-r3-ttl-seconds"
 
@@ -100,25 +100,31 @@ class RoutingReferences:
         raise TypeError("R3 references must remain compact; use routing helpers")
 
 
-def copy_routing(value):
-    return value if value is None or isinstance(value, RoutingReferences) else list(value)
+def copy_routing(value: RoutingReferences | None) -> RoutingReferences | None:
+    if value is not None and not isinstance(value, RoutingReferences):
+        raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
+    return value
 
 
-def freeze_routing(value):
-    return value if value is None or isinstance(value, RoutingReferences) else tuple(value)
+def freeze_routing(value: RoutingReferences | None) -> RoutingReferences | None:
+    if value is not None and not isinstance(value, RoutingReferences):
+        raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
+    return value
 
 
-def routing_to_wire(value):
-    return value.to_dict() if isinstance(value, RoutingReferences) else value
+def routing_to_wire(value: RoutingReferences | None) -> dict | None:
+    return value.to_dict() if value is not None else None
 
 
-def routing_from_wire(value):
-    return RoutingReferences.from_dict(value) if isinstance(value, dict) else freeze_routing(value)
+def routing_from_wire(value: dict | None) -> RoutingReferences | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
+    return RoutingReferences.from_dict(value)
 
 
 def concat_routing(*values):
-    if not any(isinstance(value, RoutingReferences) for value in values):
-        return [row for value in values for row in value]
     files, spans, length = [], [], 0
     for value in values:
         if isinstance(value, RoutingReferences):
@@ -131,17 +137,19 @@ def concat_routing(*values):
                 spans.append(part)
         else:
             if any(value):
-                raise ValueError("Cannot mix inline and Parquet routes in one trajectory; preserve a segment boundary")
+                raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
             if value:
                 spans.append({"input_token_start": length, "count": len(value)})
         length += len(value)
     return RoutingReferences(length, tuple(files), tuple(spans))
 
 
-def routing_model_input_kwargs(value) -> dict:
-    if isinstance(value, RoutingReferences):
-        return {"routing_matrix_format": "parquet_v1", "routing_references": value.to_dict(), "routing_matrices": None}
-    return {"routing_matrix_format": None, "routing_matrices": value, "routing_references": None}
+def routing_model_input_kwargs(value: RoutingReferences | None) -> dict:
+    if value is None:
+        return {"routing_matrix_format": None, "routing_references": None}
+    if not isinstance(value, RoutingReferences):
+        raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
+    return {"routing_matrix_format": "parquet_v1", "routing_references": value.to_dict()}
 
 
 def top_sampling_model_input_kwargs(value, length: int) -> dict:
@@ -174,12 +182,8 @@ def sample_extra_model_input_kwargs(value, length: int) -> dict:
     return {"sample_extra_references": references.to_dict()}
 
 
-def routing_has_gaps(value):
-    return (
-        any(s.get("file_index") is None for s in value.spans)
-        if isinstance(value, RoutingReferences)
-        else any(not row for row in value)
-    )
+def routing_has_gaps(value: RoutingReferences) -> bool:
+    return any(span.get("file_index") is None for span in value.spans)
 
 
 def mask_routing(value, mask):
@@ -187,8 +191,6 @@ def mask_routing(value, mask):
         return None
     if len(value) != len(mask):
         raise ValueError("Routing mask length mismatch")
-    if not isinstance(value, RoutingReferences):
-        return [row if keep else "" for row, keep in zip(value, mask, strict=True)]
     pieces, start = [], 0
     while start < len(mask):
         end = start + 1

@@ -98,7 +98,7 @@ def wire_probe(route: str, comms: str) -> list[dict[str, Any]]:
         client = service.create_training_client(base_model="test/model", lora_rank=8, seed=42)
         client.session_id = "deadbeef"
         datum = types.Datum(
-            model_input=types.ModelInput.from_ints([1, 2], routing_matrices=["", "matrix"]),
+            model_input=types.ModelInput.from_ints([1, 2]),
             loss_fn_inputs={
                 "target_tokens": np.array([2, 3], dtype=np.int64),
                 "weights": np.array([0.25, -0.0], dtype=np.float32),

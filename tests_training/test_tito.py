@@ -10,7 +10,7 @@ import hashlib
 import threading
 import subprocess
 from types import MappingProxyType
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 from pathlib import Path
 from collections import deque
 
@@ -25,6 +25,8 @@ from fireworks.training.sdk.tito import (
     TITOParsedAssistant,
     TITOIncrementalPrompt,
     TrajectoryDriftPolicy,
+    _artifact,
+    _native_runtime,
 )
 from fireworks.training.sdk.routing import RoutingReferences
 from fireworks.training.sdk.sampling import (
@@ -231,9 +233,7 @@ class FakeSampler:
             await self.release.wait()
         output = self.outputs.popleft() if len(self.outputs) > 1 else self.outputs[0]
         finish = self.finishes.popleft() if len(self.finishes) > 1 else self.finishes[0]
-        routes = (
-            tuple(f"route-{index}" for index in range(len(output))) if kwargs.get("include_routing_matrix") else None
-        )
+        routes = _top_sampling_refs(len(output)) if kwargs.get("include_routing_matrix") else None
         completion = SampledCompletion(
             text="fake",
             full_tokens=[*prompt_token_ids, *output],
@@ -242,30 +242,20 @@ class FakeSampler:
             completion_len=len(output),
             inference_logprobs=[-0.1] * len(output),
             sampling_logprobs=[-0.2] * len(output),
-            routing_matrices=list(routes) if routes is not None else None,
-            inference_topk_token_ids=(
-                [[int(token_id) + offset for offset in range(int(kwargs["top_logprobs"]))] for token_id in output]
-                if kwargs.get("top_logprobs")
-                else None
-            ),
-            inference_topk_logprobs=(
-                [[-0.1 - offset for offset in range(int(kwargs["top_logprobs"]))] for _ in output]
-                if kwargs.get("top_logprobs")
-                else None
-            ),
+            routing_matrices=routes,
             sample_extra_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("sample_extra_format") == "parquet_v1"
+                if kwargs.get("sample_extra_tokens")
                 else None
             ),
             top_sampling_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("top_sampling_format") == "parquet_v1"
+                if kwargs.get("top_sampling_logprobs")
                 else None
             ),
             sampling_mask_references=(
                 _top_sampling_refs(len(output) + self.top_sampling_rows_delta, row_start=10 * len(self.calls))
-                if kwargs.get("sampling_mask") == "parquet_v1"
+                if kwargs.get("sampling_mask")
                 else None
             ),
         )
@@ -526,25 +516,6 @@ async def test_exact_append_preserves_sampled_checkpoint() -> None:
     assert attempt_metrics is not None and attempt_metrics.backend_host == "pod-2"
 
 
-async def test_policy_turn_retains_sampler_topk_distribution() -> None:
-    sampler = FakeSampler(outputs=([197, 3],))
-    engine = _engine(sampler, sampling_defaults={"top_logprobs": 2})
-    trajectory_id = engine.create_trajectory()
-
-    await engine.complete(trajectory_id, _first_request())
-    artifact = engine.finish(trajectory_id)
-    turn = artifact.segments[0].turns[0]
-
-    assert sampler.calls[0]["top_logprobs"] == 2
-    assert turn.inference_topk_token_ids == ((197, 198), (3, 4))
-    assert turn.inference_topk_logprobs == ((-0.1, -1.1), (-0.1, -1.1))
-    restored = type(artifact).unpack(artifact.pack())
-    assert restored.segments[0].turns[0].inference_topk_token_ids == (
-        (197, 198),
-        (3, 4),
-    )
-
-
 @pytest.mark.parametrize(
     "sampling_defaults",
     [
@@ -572,8 +543,8 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     assert all(all(call[key] == value for key, value in sampling_defaults.items()) for call in sampler.calls)
     turns = [turn for segment in artifact.segments for turn in segment.turns]
     for channel, enabled in (
-        ("top_sampling", sampling_defaults.get("top_sampling_format") == "parquet_v1"),
-        ("sample_extra", sampling_defaults.get("sample_extra_format") == "parquet_v1"),
+        ("top_sampling", bool(sampling_defaults.get("top_sampling_logprobs"))),
+        ("sample_extra", bool(sampling_defaults.get("sample_extra_tokens"))),
         ("sampling_mask", "sampling_mask" in sampling_defaults),
     ):
         assert [getattr(turn, channel + "_references") for turn in turns] == (
@@ -592,19 +563,15 @@ async def test_policy_turns_record_completion_only_top_sampling_references(sampl
     )
     await auxiliary.complete(auxiliary.create_trajectory(), _first_request())
     assert not {"top_sampling_format", "top_sampling_logprobs", "sampling_mask"} & auxiliary_sampler.calls[0].keys()
-    if sampling_defaults.get("sample_extra_format") == "parquet_v1":
+    if bool(sampling_defaults.get("sample_extra_tokens")):
         assert not {"sample_extra_tokens", "sample_extra_format"} & auxiliary_sampler.calls[0].keys()
-    elif "sample_extra_tokens" in sampling_defaults:
-        assert auxiliary_sampler.calls[0]["sample_extra_tokens"] == sampling_defaults["sample_extra_tokens"]
+
 
     misaligned = FakeSampler(outputs=([197, 3],))
     misaligned.top_sampling_rows_delta = -1
     engine = _engine(misaligned, sampling_defaults=sampling_defaults)
     trajectory_id = engine.create_trajectory()
-    if any(sampling_defaults.get(key) == "parquet_v1" for key in ("top_sampling_format", "sample_extra_format", "sampling_mask")):
-        with pytest.raises(TITOError, match="references"):
-            await engine.complete(trajectory_id, _first_request())
-    else:
+    with pytest.raises(TITOError, match="references"):
         await engine.complete(trajectory_id, _first_request())
 
 
@@ -1111,6 +1078,45 @@ def test_json_copy_preserves_integer_digit_limit(copy):
         copy(10 ** (sys.get_int_max_str_digits() + 10))
 
 
+@pytest.mark.parametrize("lineage_mode", ["linear", "tree"])
+async def test_native_artifact_matches_canonical_json(lineage_mode: Literal["linear", "tree"]) -> None:
+    engine = _engine(FakeSampler(outputs=([197, 3],)))
+    trajectory = engine.create_trajectory(
+        metadata={"unicode": "雪 🔥", "scores": [-0.0, 1e-15, 2**80, None, True]},
+        drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode),
+    )
+    await engine.complete(trajectory, _first_request())
+    result = engine.finish(trajectory)
+    native = result.pack()
+    canonical = json.dumps(
+        _artifact._artifact_value(result), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+
+    magic = b"TITOART\x01"
+    assert native.startswith(magic)
+    assert zlib.decompress(native[len(magic) :]) == canonical
+    if lineage_mode == "linear":
+        assert native == magic + zlib.compress(canonical, level=6)
+    assert type(result).unpack(native) == result
+
+
+async def test_missing_native_extension_still_allows_artifact_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _engine(FakeSampler())
+    trajectory = engine.create_trajectory()
+    await engine.complete(trajectory, _first_request())
+    artifact = engine.finish(trajectory)
+    payload = artifact.pack()
+
+    monkeypatch.setattr(_native_runtime, "_native", None)
+    assert type(artifact).unpack(payload) == artifact
+    with pytest.raises(RuntimeError, match="require the native Training SDK extension"):
+        artifact.pack()
+    with pytest.raises(RuntimeError, match="require the native Training SDK extension"):
+        _engine(FakeSampler())
+    with pytest.raises(RuntimeError, match="require the native Training SDK extension"):
+        TITOSidecar.runtime_files()
+
+
 async def test_compact_trajectory_artifact_round_trip_is_versioned_and_exact() -> None:
     engine = _engine(FakeSampler(outputs=([197, 3],)))
     # Exercise multiple UTF-8/compression buffers; small artifacts are covered by other sidecar tests.
@@ -1149,7 +1155,10 @@ async def test_compact_trajectory_artifact_round_trip_is_versioned_and_exact() -
     # Preserve the legacy v1 representation, including compression bytes, while
     # allowing the encoder to avoid materializing the entire JSON document.
     body = zlib.decompress(packed[len(b"TITOART\x01") :])
-    canonical = json.dumps(json.loads(body), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    encoded = json.loads(body)
+    assert artifact.lineage_mode == "linear"
+    assert encoded["schema_version"] == 1
+    canonical = json.dumps(encoded, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     assert packed == b"TITOART\x01" + zlib.compress(canonical, level=6)
     assert restored == artifact
     restored_parameters = restored.segments[0].turns[0].request.wire_value()["tools"][0]["function"]["parameters"]
@@ -1159,6 +1168,45 @@ async def test_compact_trajectory_artifact_round_trip_is_versioned_and_exact() -
     with pytest.raises(TITOError) as exc_info:
         type(artifact).unpack(packed[:-1] + bytes([packed[-1] ^ 1]))
     assert exc_info.value.code == "tito_artifact_invalid"
+
+
+@pytest.mark.parametrize("prompt_mode", ["full_history", "incremental"])
+@pytest.mark.parametrize("lineage_mode", ["tree", "linear"])
+async def test_artifact_round_trip_preserves_fork_boundaries(
+    prompt_mode: Literal["full_history", "incremental"], lineage_mode: Literal["tree", "linear"]
+) -> None:
+    sampler = FakeSampler(outputs=([197, 3], [198, 3], [199, 3], [200, 3]))
+    engine = _LinearTrajectoryCore(
+        sampler, FakeIncrementalRenderer(), max_context_tokens=4096, max_output_tokens=128, prompt_mode=prompt_mode
+    )
+    policy = TrajectoryDriftPolicy() if lineage_mode == "linear" else TrajectoryDriftPolicy(lineage_mode="tree")
+    trajectory_id = engine.create_trajectory(drift_policy=policy)
+    root_request = _request(({"role": "user", "content": "long tool context " * 50},))
+    root = await engine.complete(trajectory_id, root_request)
+
+    def follow(request, result, tool_output):
+        return _request(
+            (*request.messages, result.response["choices"][0]["message"], {"role": "tool", "content": tool_output})
+        )
+
+    left_request = follow(root_request, root, "left")
+    left = await engine.complete(trajectory_id, left_request)
+    await engine.complete(trajectory_id, follow(root_request, root, "right"))
+    await engine.complete(trajectory_id, follow(left_request, left, "back to left"))
+    artifact = engine.finish(trajectory_id)
+    assert artifact.lineage_mode == lineage_mode
+    assert [len(segment.turns) for segment in artifact.segments] == ([3, 1] if lineage_mode == "tree" else [2, 1, 1])
+    packed = artifact.pack()
+    restored = type(artifact).unpack(packed)
+    assert restored == artifact
+    assert restored.pack() == packed
+    header = b"TITOART\x01"
+    decoded = json.loads(zlib.decompress(packed[len(header) :]))
+    assert decoded["schema_version"] == (2 if lineage_mode == "tree" else 1)
+    assert decoded.get("lineage_mode", "linear") == lineage_mode
+    decoded["segments"][0]["turns"][0]["prompt_prefix"] = 0
+    with pytest.raises(TITOError, match="unsupported TITO turn prompt prefix"):
+        type(artifact).unpack(header + zlib.compress(json.dumps(decoded).encode("utf-8")))
 
 
 async def test_strict_mismatch_rejects_without_mutation() -> None:
@@ -1215,9 +1263,10 @@ async def test_full_history_renders_before_strict_contract_rejection() -> None:
     assert renderer.render_calls == 1
 
 
-async def test_history_rewrite_records_one_boundary_reason() -> None:
+@pytest.mark.parametrize("prompt_mode", ["full_history", "incremental"])
+async def test_history_rewrite_records_one_boundary_reason(prompt_mode: Literal["full_history", "incremental"]) -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 3]))
-    engine = _engine(sampler)
+    engine = _engine(sampler, FakeIncrementalRenderer(), prompt_mode=prompt_mode)
     trajectory_id = engine.create_trajectory()
     await engine.complete(trajectory_id, _first_request())
     await engine.complete(
@@ -1233,6 +1282,9 @@ async def test_history_rewrite_records_one_boundary_reason() -> None:
     assert result.metrics.counters["lineage/boundary_reason_history_rewrite"] == 1
     assert result.metrics.counters["lineage/history_rewrite_prior_context"] == 1
     assert "lineage/history_rewrite" not in result.metrics.counters
+    incremental = prompt_mode == "incremental"
+    assert result.segments[-1].turns[0].incremental_fallback_reason == ("history_rewrite" if incremental else None)
+    assert result.metrics.counters.get("prompt_construction/incremental_fallback", 0) == int(incremental)
 
 
 @pytest.mark.parametrize(
@@ -1336,7 +1388,13 @@ async def test_debug_commit_failure_does_not_advance_policy_cursor() -> None:
     assert state.calls[-1].outcome == "failed"
 
 
-async def test_debug_commit_barrier_returns_committed_turn_after_raced_cancellation() -> None:
+@pytest.mark.parametrize(
+    "lineage_mode",
+    ["linear", "tree"],
+)
+async def test_debug_commit_barrier_returns_committed_turn_after_raced_cancellation(
+    lineage_mode: Literal["linear", "tree"],
+) -> None:
     class BlockingCommitObserver:
         def __init__(self) -> None:
             self.commit_started = threading.Event()
@@ -1353,7 +1411,7 @@ async def test_debug_commit_barrier_returns_committed_turn_after_raced_cancellat
 
     observer = BlockingCommitObserver()
     engine = _engine(FakeSampler(), observer=observer)
-    trajectory_id = engine.create_trajectory()
+    trajectory_id = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode))
     call = asyncio.create_task(engine.complete(trajectory_id, _first_request()))
     assert await asyncio.to_thread(observer.commit_started.wait, 2)
 
@@ -1638,7 +1696,13 @@ async def test_idempotency_rejects_semantically_equal_request_with_different_pro
     assert renderer.render_calls == 2
 
 
-async def test_policy_overlap_waits_in_fifo_while_auxiliary_bypasses_guard() -> None:
+@pytest.mark.parametrize(
+    "lineage_mode",
+    ["linear", "tree"],
+)
+async def test_policy_overlap_waits_in_fifo_while_auxiliary_bypasses_guard(
+    lineage_mode: Literal["linear", "tree"],
+) -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 3], [199, 3]))
     sampler.block = True
 
@@ -1646,7 +1710,7 @@ async def test_policy_overlap_waits_in_fifo_while_auxiliary_bypasses_guard() -> 
         return "auxiliary" if request.model == "aux" else "policy"
 
     engine = _engine(sampler, call_classifier=classifier)
-    trajectory_id = engine.create_trajectory()
+    trajectory_id = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode))
     first_policy = asyncio.create_task(engine.complete(trajectory_id, _first_request()))
     await sampler.started.wait()
     second_policy = asyncio.create_task(engine.complete(trajectory_id, _first_request()))
@@ -1673,11 +1737,17 @@ async def test_policy_overlap_waits_in_fifo_while_auxiliary_bypasses_guard() -> 
     assert result.metrics.counters["cache/affinity_reused"] == 2
 
 
-async def test_cancelled_policy_fifo_waiter_never_samples_or_mutates_call_state() -> None:
+@pytest.mark.parametrize(
+    "lineage_mode",
+    ["linear", "tree"],
+)
+async def test_cancelled_policy_fifo_waiter_never_samples_or_mutates_call_state(
+    lineage_mode: Literal["linear", "tree"],
+) -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 3]))
     sampler.block = True
     engine = _engine(sampler)
-    trajectory_id = engine.create_trajectory()
+    trajectory_id = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode))
     first_policy = asyncio.create_task(engine.complete(trajectory_id, _first_request()))
     await sampler.started.wait()
 
@@ -1712,7 +1782,7 @@ async def test_completion_only_r3_is_carried_without_lineage_logic() -> None:
     )
     result = engine.finish(trajectory_id)
     turn = result.segments[0].turns[0]
-    assert turn.routing_matrices == ("route-0", "route-1")
+    assert turn.routing_matrices == _top_sampling_refs(2)
     assert len(turn.routing_matrices) == len(turn.exact_completion_ids)
 
 
@@ -2670,11 +2740,13 @@ async def test_sidecar_abandon_waits_for_post_commit_http_disconnect(
 
 
 async def test_stream_handler_cancellation_before_preparation_cancels_sampler_task() -> None:
+    outcomes: list[str | None] = []
     sidecar = TITOSidecar.from_deployment_sampler(
         FakeSampler(outputs=([197, 3],)),  # type: ignore[arg-type]
         renderer=FakeRenderer(),
         max_context_tokens=256,
         max_output_tokens=32,
+        on_chat_outcome=outcomes.append,
     )
     await sidecar.start()
     trajectory = sidecar.create_trajectory()
@@ -2711,6 +2783,7 @@ async def test_stream_handler_cancellation_before_preparation_cancels_sampler_ta
     with pytest.raises(asyncio.CancelledError):
         await handler
     await asyncio.wait_for(completion_cancelled.wait(), timeout=1)
+    assert outcomes == []
     assert not engine._core._state.calls  # noqa: SLF001
     await sidecar.close()
 
@@ -2859,6 +2932,60 @@ async def test_http_sidecar_buffers_content_and_sends_keepalive() -> None:
     assert result.metrics.counters["transport/keepalives_sent"] >= 1
     assert result.metrics.counters["transport/response_emission_completed"] == 1
     await sidecar.close()
+
+
+@pytest.mark.parametrize("stream", [False, True])
+async def test_chat_outcome_reports_pre_header_overflow_and_success(stream: bool) -> None:
+    outcomes: list[str | None] = []
+    renderer = FakeRenderer()
+
+    class LegacySidecar(TITOSidecar):
+        # Older Cookbook bundles still override and call this private route.
+        async def _handle_openai_chat(self, request: Any) -> Any:
+            response = await super()._handle_openai_chat(request)
+            assert outcomes[-1] == response.headers.get("x-fireworks-error-code")
+            return response
+
+    sidecar = LegacySidecar.from_deployment_sampler(
+        FakeSampler(outputs=([197, 3], [198, 3])),  # type: ignore[arg-type]
+        renderer=renderer,
+        max_context_tokens=32,
+        max_output_tokens=8,
+        on_chat_outcome=outcomes.append,
+    )
+    await sidecar.start()
+    try:
+        trajectory = sidecar.create_trajectory()
+        assert trajectory.openai_base_url and trajectory.api_key
+        headers = {"authorization": f"Bearer {trajectory.api_key}"}
+        async with httpx.AsyncClient(timeout=2) as client:
+            overflow = await client.post(
+                f"{trajectory.openai_base_url}/chat/completions",
+                headers=headers,
+                json={"model": "policy", "messages": [{"role": "user", "content": "q" * 60}], "stream": stream},
+            )
+            assert overflow.headers["x-fireworks-error-code"] == "tito_context_overflow"
+            success = await client.post(
+                f"{trajectory.openai_base_url}/chat/completions",
+                headers=headers,
+                json={"model": "policy", "messages": [{"role": "user", "content": "q"}], "stream": stream},
+            )
+            assert success.status_code == 200
+            models = await client.get(f"{trajectory.openai_base_url}/models", headers=headers)
+            assert models.status_code == 200
+            assert outcomes == ["tito_context_overflow", None]
+            if stream:
+                renderer.fail_parse = True
+                malformed = await client.post(
+                    f"{trajectory.openai_base_url}/chat/completions",
+                    headers=headers,
+                    json={"model": "policy", "messages": [{"role": "user", "content": "p"}], "stream": True},
+                )
+                assert malformed.status_code == 200
+                assert "tito_sdk_parse_error" in malformed.text
+                assert outcomes == ["tito_context_overflow", None, None]
+    finally:
+        await sidecar.close()
 
 
 async def test_http_sidecar_scopes_models_and_chat_routes_to_one_trajectory() -> None:
@@ -3072,10 +3199,13 @@ async def test_classifier_failure_is_fail_closed_and_self_diagnosing(tmp_path) -
     assert result.calls[0].kind == "policy"
 
 
-async def test_mc_extras_survive_two_policy_turns_and_artifact_round_trip():
+@pytest.mark.parametrize("lineage_mode", ["linear", "tree"])
+async def test_mc_extras_survive_two_policy_turns_and_artifact_round_trip(
+    lineage_mode: Literal["linear", "tree"],
+) -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 199, 3]))
-    engine = _engine(sampler, sampling_defaults={"sample_extra_tokens": 3, "sample_extra_format": "parquet_v1"})
-    trajectory = engine.create_trajectory()
+    engine = _engine(sampler, sampling_defaults={"sample_extra_tokens": 3})
+    trajectory = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode))
     await engine.complete(trajectory, _first_request())
     await engine.complete(trajectory, _second_request())
     artifact = engine.finish(trajectory)
@@ -3103,3 +3233,204 @@ async def test_mixed_sc_capture_fails_before_custom_sampler(call_kind):
     with pytest.raises(TITOError, match="mutually exclusive"):
         await engine.complete(engine.create_trajectory(), _first_request())
     assert not sampler.calls
+
+
+@pytest.mark.parametrize("mode", ["full_history", "incremental"])
+@pytest.mark.parametrize("lineage_mode", ["linear", "tree"])
+async def test_lineage_and_prompt_modes_for_interleaved_policy_calls(
+    mode: Literal["full_history", "incremental"], lineage_mode: Literal["linear", "tree"],
+) -> None:
+    renderer = FakeIncrementalRenderer()
+    sampler = FakeSampler(outputs=([197, 3], [198, 3], [199, 3], [200, 3], [201, 3]))
+    engine = _engine(sampler, renderer, prompt_mode=mode)
+    trajectory = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode=lineage_mode))
+
+    def follow(request, response, tool_result):
+        return _request(
+            (*request.messages, response.response["choices"][0]["message"], {"role": "tool", "content": tool_result})
+        )
+
+    root_request = _first_request()
+    root = await engine.complete(trajectory, root_request)
+    left_request = follow(root_request, root, "left")
+    left = await engine.complete(trajectory, left_request)
+    right_request = follow(root_request, root, "right")
+    right = await engine.complete(trajectory, right_request, idempotency_key="fork")
+    replay = await engine.complete(trajectory, right_request, idempotency_key="fork")
+    assert replay.replayed and replay.turn_id == right.turn_id
+    left_leaf = await engine.complete(trajectory, follow(left_request, left, "left again"))
+    right_leaf = await engine.complete(trajectory, follow(right_request, right, "right again"))
+    result = engine.finish(trajectory)
+    assert type(result).unpack(result.pack()) == result
+    assert result.lineage_mode == lineage_mode
+    assert len(sampler.calls) == 5
+    assert (renderer.incremental_calls > 0) == (mode == "incremental")
+    if lineage_mode == "linear":
+        assert [[turn.turn_id for turn in segment.turns] for segment in result.segments] == [
+            [root.turn_id, left.turn_id], [right.turn_id], [left_leaf.turn_id], [right_leaf.turn_id],
+        ]
+        assert all(turn.parent_turn_id is None for segment in result.segments for turn in segment.turns)
+        assert result.continued_turn_ids() == {root.turn_id}
+        return
+    assert result.continued_turn_ids() == {root.turn_id, left.turn_id, right.turn_id}
+    assert [(s.start_reason, s.closed_reason) for s in result.segments] == [
+        ("initial", "trajectory_completed"),
+        ("fork", "trajectory_completed"),
+    ]
+    assert [[(t.turn_id, t.parent_turn_id) for t in s.turns] for s in result.segments] == [
+        [(root.turn_id, None), (left.turn_id, root.turn_id), (left_leaf.turn_id, left.turn_id)],
+        [(right.turn_id, root.turn_id), (right_leaf.turn_id, right.turn_id)],
+    ]
+    assert renderer.render_calls == (6 if mode == "full_history" else 1)
+    assert renderer.incremental_calls == (0 if mode == "full_history" else 5)
+    for segment in result.segments:
+        for turn in segment.turns:
+            if mode == "full_history":
+                assert turn.exact_prompt_ids == tuple(FakeRenderer().render_conversation_tokens(turn.request))
+            elif turn.parent_turn_id:
+                parent = next(t for s in result.segments for t in s.turns if t.turn_id == turn.parent_turn_id)
+                assert turn.exact_prompt_ids == (*parent.exact_checkpoint_ids, 77, 2)
+
+
+@pytest.mark.parametrize("boundary", ["ambiguous_parent", "length_truncation", "contract_change"])
+async def test_tree_does_not_reuse_unsafe_checkpoint(boundary: str) -> None:
+    renderer = FakeIncrementalRenderer()
+    sampler = FakeSampler(finishes=["length" if boundary == "length_truncation" else "stop", "stop"])
+    engine = _engine(sampler, renderer, prompt_mode="incremental")
+    trajectory = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode="tree"))
+    root = await engine.complete(trajectory, _first_request())
+    if boundary == "ambiguous_parent":
+        await engine.complete(trajectory, _first_request())
+    if boundary == "contract_change":
+        renderer.contract_suffix = "different"
+    await engine.complete(trajectory, _second_request())
+    result = engine.finish(trajectory)
+    assert result.segments[-1].start_reason == boundary
+    assert result.segments[-1].turns[0].parent_turn_id == (None if boundary == "ambiguous_parent" else root.turn_id)
+    assert renderer.incremental_calls == 0
+    assert result.segments[-1].turns[0].incremental_fallback_reason == (
+        None if boundary == "length_truncation" else boundary
+    )
+
+
+async def test_tree_strict_policy_rejects_unrelated_history_after_length() -> None:
+    engine = _engine(FakeSampler(finishes=["length", "stop"]))
+    policy = TrajectoryDriftPolicy(lineage_mode="tree", on_other_mismatch="reject")
+    trajectory = engine.create_trajectory(drift_policy=policy)
+    root = await engine.complete(trajectory, _first_request())
+    with pytest.raises(TITOError) as rejected:
+        await engine.complete(trajectory, _request([{"role": "user", "content": "unrelated root"}]))
+    assert rejected.value.code == "tito_lineage_divergence"
+    await engine.complete(trajectory, _second_request())
+    segment = engine.finish(trajectory).segments[-1]
+    assert segment.start_reason == "length_truncation"
+    assert segment.turns[0].parent_turn_id == root.turn_id
+
+
+async def test_tree_checks_ambiguity_across_render_contracts_before_reusing_tokens() -> None:
+    sampler = FakeSampler(outputs=([197, 3], [197, 4], [198, 3]))
+    renderer = FakeIncrementalRenderer()
+    engine = _engine(sampler, renderer, prompt_mode="incremental")
+    trajectory = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode="tree"))
+    tools = ({"type": "function", "function": {"name": "lookup"}},)
+    first = await engine.complete(trajectory, _first_request())
+    second = await engine.complete(trajectory, _first_request(tools=tools))
+    assert first.response["choices"][0]["message"] == second.response["choices"][0]["message"]
+    await engine.complete(trajectory, _second_request())
+    artifact = engine.finish(trajectory)
+    assert artifact.segments[-1].start_reason == "ambiguous_parent"
+    assert artifact.segments[-1].turns[0].parent_turn_id is None
+    assert renderer.incremental_calls == 0
+
+
+@pytest.mark.parametrize("mode", ["full_history", "incremental"])
+async def test_tree_resumes_with_a_masked_prompt_when_a_join_would_overwrite_prior_loss(mode: str) -> None:
+    renderer = FakeIncrementalRenderer(canonical_stop=4, checkpoint_trim_tokens=1, replacement_token=9)
+    engine = _engine(FakeSampler(), renderer, prompt_mode=mode)
+    trajectory = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode="tree"))
+    root = await engine.complete(trajectory, _first_request())
+    await engine.complete(trajectory, _request([{"role": "user", "content": "unrelated root"}]))
+    await engine.complete(trajectory, _second_request())
+    result = engine.finish(trajectory)
+    assert [len(segment.turns) for segment in result.segments] == [1, 1, 1]
+    resumed = result.segments[-1]
+    assert resumed.start_reason == "branch_token_drift"
+    assert resumed.turns[0].parent_turn_id == root.turn_id
+    assert resumed.turns[0].prompt_disposition == "new_segment"
+
+
+@pytest.mark.parametrize(
+    "resume_sampling",
+    [
+        {},
+        {"include_routing_matrix": True},
+        {"top_sampling_logprobs": 4},
+        {"sampling_mask": True},
+        {"sample_extra_tokens": 3},
+    ],
+    ids=["same", "r3-enabled", "top-k-enabled", "mask-enabled", "extra-sampling-enabled"],
+)
+async def test_tree_queues_sibling_forks_and_uses_the_correct_routing_prefix(resume_sampling) -> None:
+    class EchoRoutingSampler(FakeSampler):
+        async def sample_with_prompt_tokens_result(self, prompt_token_ids, **kwargs):
+            sampled = await super().sample_with_prompt_tokens_result(prompt_token_ids, **kwargs)
+            if not kwargs.get("include_routing_matrix"):
+                return sampled
+            completion = sampled.completions[0]
+            count = min(kwargs["echo_last"], len(prompt_token_ids) - 1)
+            start = len(prompt_token_ids) - 1 - count
+            completion.routing_matrices = _top_sampling_refs(
+                count + len(completion.routing_matrices), row_start=start
+            )
+            completion.logprobs_echoed = True
+            completion.echoed_prompt_logprob_count = count
+            completion.inference_logprobs = [-0.9] * count + completion.inference_logprobs
+            completion.sampling_logprobs = [-0.9] * count + completion.sampling_logprobs
+            return sampled
+
+    sampler = EchoRoutingSampler()
+    engine = _engine(sampler, sampling_defaults={"incremental_prompt_routing": True})
+    initial_routing = "include_routing_matrix" not in resume_sampling
+    initial_sampling = {"include_routing_matrix": initial_routing}
+    trajectory_id = engine.create_trajectory(drift_policy=TrajectoryDriftPolicy(lineage_mode="tree"))
+    root_request = _first_request(sampling_fields=initial_sampling)
+    root = await engine.complete(trajectory_id, root_request)
+    shared_prefix = (*root_request.messages, root.response["choices"][0]["message"])
+    left_request = _request((*shared_prefix, {"role": "tool", "content": "left"}), sampling_fields=initial_sampling)
+    right_request = _request((*shared_prefix, {"role": "tool", "content": "right"}), sampling_fields=initial_sampling)
+    sampler.started.clear()
+    sampler.block = True
+    left_task = asyncio.create_task(engine.complete(trajectory_id, left_request))
+    await asyncio.wait_for(sampler.started.wait(), timeout=2)
+    right_task = asyncio.create_task(engine.complete(trajectory_id, right_request))
+    await asyncio.sleep(0)
+    assert len(sampler.calls) == 2
+    sampler.release.set()
+    left, right = await asyncio.gather(left_task, right_task)
+    resume = _request(
+        (*left_request.messages, left.response["choices"][0]["message"], {"role": "tool", "content": "left again"}),
+        sampling_fields={**initial_sampling, **resume_sampling},
+    )
+    await engine.complete(trajectory_id, resume)
+    artifact = engine.finish(trajectory_id)
+    assert artifact.metrics.counters["queue/policy_waited"] == 1
+    assert [len(s.turns) for s in artifact.segments] == ([2, 1, 1] if resume_sampling else [3, 1])
+    root_turn, left_turn = artifact.segments[0].turns[:2]
+    resumed = artifact.segments[-1].turns[0] if resume_sampling else artifact.segments[0].turns[-1]
+    (right_turn,) = artifact.segments[1].turns
+    assert (left_turn.turn_id, right_turn.turn_id) == (left.turn_id, right.turn_id)
+    assert left_turn.parent_turn_id == right_turn.parent_turn_id == root_turn.turn_id
+    assert resumed.parent_turn_id == left_turn.turn_id
+    assert [t.prompt_routing_start for t in (root_turn, left_turn, right_turn, resumed)] == [
+        0 if initial_routing else None,
+        len(root_turn.exact_checkpoint_ids) - 1 if initial_routing else None,
+        0 if initial_routing else None,
+        0 if resume_sampling else len(left_turn.exact_checkpoint_ids) - 1,
+    ]
+    if resume_sampling:
+        assert artifact.segments[-1].start_reason == "sampling_evidence_change"
+        assert sampler.calls[-1]["echo_last"] == len(resumed.exact_prompt_ids)
+    for turn in (root_turn, left_turn, right_turn, resumed):
+        if turn.prompt_routing_matrices is not None:
+            assert turn.prompt_routing_start + len(turn.prompt_routing_matrices) == len(turn.exact_prompt_ids) - 1
+        assert turn.sampling_logprobs == (-0.2, -0.2)

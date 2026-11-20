@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.36 (2026-11-20)
+
+Full Changelog: [v1.2.35...v1.2.36](https://github.com/fw-ai-external/python-sdk/compare/v1.2.35...v1.2.36)
+
+### Features
+* **training-sdk:** add opt-in tree lineage to TITO rollouts so interleaved branches can resume their own checkpoints and reduce repeated training context. Linear stays the compatibility default during migration and is planned for deprecation. New lineage development targets tree.
+* **training-sdk:** run TITO lineage selection and compact artifact writing in Rust on supported platform wheels. Linear v1 output retains byte compatibility and tree v2 preserves the same JSON payload.
+
+### Documentation
+* **training-sdk:** See the [migration guide](https://github.com/fw-ai-external/python-sdk/blob/main/src/fireworks/training/sdk/README.md#migrating-older-training-clients) for replay, trainer-first provisioning, and legacy checkpoint recovery.
+
+### Refactors
+* **training-sdk (breaking):** R3 routing, top-k/top-p support masks, probability heads, and independent extra draws now use trainer-bound shared storage. Bind the deployment sampler to the trainer with `training_client=trainer`. Request captures with `include_routing_matrix=True`, `sampling_mask=True`, `top_sampling_logprobs`, or `sample_extra_tokens`. Recapture trajectories stored with inline replay data. Ordinary generation still accepts `top_k` and `top_p`.
+* **training-sdk (breaking):** Start the trainer before creating a training rollout and set the deployment's `hot_load_trainer_job` to the full trainer name. Migrate deployment-first runs by restoring durable state into a trainer-first run. Select managed trainer hardware through a validated training shape.
+* **training-sdk (breaking):** Configure the base model and fixed LoRA rank on the managed service. For a managed LoRA policy, omit `reference_training_shape_id` to share its frozen base as the reference. Drop `TrainerJobConfig.gradient_accumulation_steps` and accumulate with calls to `forward_backward` before `optim_step`.
+* **training-sdk (breaking):** Promote checkpoints with `promote_checkpoint(name=..., output_model_id=..., base_model=...)`, using the full checkpoint name returned by `list_checkpoints`. The positional form and `hot_load_deployment_id` argument have been removed.
+* **training-sdk (breaking):** Use `FixedConcurrencyController` via `concurrency_controller` in place of the sampler's `max_concurrency`. Replace boolean `reset_prompt_cache` values with `"all"` for `True` or `"none"` for `False`, and replace the score-centering estimator `"mc"` with `"extra_sampling"`.
+
 ## 1.2.35 (2026-11-19)
 
 Full Changelog: [v1.2.34...v1.2.35](https://github.com/fw-ai-external/python-sdk/compare/v1.2.34...v1.2.35)

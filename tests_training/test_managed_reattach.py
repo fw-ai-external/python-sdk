@@ -7,7 +7,6 @@ The reconciliation fails fast *before* mutating the deployment.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from unittest.mock import MagicMock
 
 import pytest
@@ -31,18 +30,12 @@ SHAPE_V2 = f"{SHAPE}/versions/2"
 
 @pytest.mark.parametrize(
     "policy,expected",
-    [("all", "all"), ("new_session", "new_session"), ("none", "none"), (True, "all"), (False, "none")],
+    [("all", "all"), ("new_session", "new_session"), ("none", "none")],
 )
 def test_managed_service_forwards_cache_policy_to_file_and_rdma(policy, expected) -> None:
-    warning = (
-        pytest.warns(DeprecationWarning, match=f"reset_prompt_cache='{expected}'")
-        if isinstance(policy, bool)
-        else nullcontext()
+    service = FiretitanServiceClient.from_firetitan_config(
+        api_key="test-key", base_model="accounts/acct/models/base", deployment_id="dep-1", reset_prompt_cache=policy
     )
-    with warning:
-        service = FiretitanServiceClient.from_firetitan_config(
-            api_key="test-key", base_model="accounts/acct/models/base", deployment_id="dep-1", reset_prompt_cache=policy
-        )
     config = service._managed_config
     assert config.reset_prompt_cache == expected
     deploy_mgr = MagicMock(spec=DeploymentManager)
@@ -64,7 +57,7 @@ def test_managed_cache_policy_defaults_and_validation() -> None:
     manager = MagicMock(account_id="acct", hotload_api_url="https://inference.invalid")
     backend = _TinkerSamplerBackend(manager, "dep-1", "test/model")
     assert _RdmaSamplerBackend(backend).publication_request()["reset_prompt_cache"] == "new_session"
-    for policy in ("invalid", None, 1):
+    for policy in ("invalid", None, 1, True, False):
         with pytest.raises(ValueError, match="reset_prompt_cache must be"):
             _ManagedTinkerConfig(base_model="test/model", reset_prompt_cache=policy)
 

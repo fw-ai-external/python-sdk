@@ -36,10 +36,29 @@ from fireworks.training.sdk.tito._failure_trace import (
     _dump_failure_trace,
     _FailureTraceRecorder,
 )
+from fireworks.training.sdk.tito._native_runtime import require_native
 
 _FORBIDDEN_AFFINITY_HEADERS = frozenset({"x-multi-turn-session-id", "x-session-affinity"})
 _REQUEST_LOCAL_HEADERS = frozenset({"authorization", "x-api-key", "x-fireworks-session-id"})
 _TERMINAL_ENGINE_LIMIT = 4096
+_RUNTIME_MODULES = (
+    "__init__.py",
+    "_rest_client.py",
+    "_sse.py",
+    "concurrency.py",
+    "errors.py",
+    "routing.py",
+    "sampling.py",
+    "sampling_observability.py",
+    "tito_debug.py",
+    "tito/__init__.py",
+    "tito/_artifact.py",
+    "tito/_engine.py",
+    "tito/_failure_trace.py",
+    "tito/_native_runtime.py",
+    "tito/_sidecar.py",
+    "tito/_types.py",
+)
 
 
 class TITOSidecar:
@@ -49,6 +68,10 @@ class TITOSidecar:
     A Docker bridge gateway permits isolated containers to reach a host-side
     runtime without host networking. Network isolation/firewall rules remain
     the caller's responsibility; trajectory credentials are still required.
+
+    ``on_chat_outcome`` receives the response's SDK error code, or ``None`` if
+    no code was sent in the HTTP headers. It runs synchronously once when
+    the chat handler returns. Cancelled handlers do not call it.
     """
 
     _MAX_HTTP_REQUEST_BYTES = 64 * 1024 * 1024
@@ -69,6 +92,7 @@ class TITOSidecar:
         prompt_mode: TITOPromptMode = "full_history",
         keepalive_seconds: float = 5.0,
         bind_address: str = "127.0.0.1",
+        on_chat_outcome: Callable[[str | None], None] | None = None,
     ) -> None:
         try:
             address = ipaddress.ip_address(bind_address)
@@ -88,6 +112,7 @@ class TITOSidecar:
         self._failure_recorder = _FailureTraceRecorder(failure_trace_config or TITOFailureTraceConfig())
         self._default_drift_policy = default_drift_policy
         self._prompt_mode = prompt_mode
+        self._on_chat_outcome = on_chat_outcome
         self._engines: dict[str, TITOTrajectoryEngine] = {}
         self._terminal_engines: OrderedDict[str, TITOTrajectoryEngine] = OrderedDict()
         self._trajectory_credentials: dict[str, str] = {}
@@ -101,6 +126,31 @@ class TITOSidecar:
     @property
     def port(self) -> int:
         return self._port
+
+    @staticmethod
+    def runtime_files() -> dict[str, bytes]:
+        """Return archive paths and file bytes for an isolated SDK runtime.
+
+        The target must support the native extension from this installation.
+        Install the sidecar's third-party dependencies in the target separately.
+        """
+        native = require_native()
+        tito_root = Path(__file__).resolve().parent
+        sdk_root = tito_root.parent
+        native_source = Path(native.__file__)
+        if native_source.parent != tito_root:
+            raise ValueError("TITO runtime requires the native extension inside the installed TITO package")
+        package_root = b'"""Package root for the isolated TITO runtime."""\n'
+        files = {
+            "fireworks/__init__.py": package_root,
+            "fireworks/training/__init__.py": package_root,
+        }
+        for source in (*(sdk_root / name for name in _RUNTIME_MODULES), native_source):
+            relative = source.relative_to(sdk_root).as_posix()
+            if source.is_symlink() or not source.is_file():
+                raise ValueError(f"TITO runtime requires a regular file: {relative}")
+            files[f"fireworks/training/sdk/{relative}"] = source.read_bytes()
+        return files
 
     @classmethod
     def from_deployment_sampler(
@@ -118,6 +168,7 @@ class TITOSidecar:
         default_drift_policy: TrajectoryDriftPolicy | None = None,
         prompt_mode: TITOPromptMode = "full_history",
         bind_address: str = "127.0.0.1",
+        on_chat_outcome: Callable[[str | None], None] | None = None,
     ) -> "TITOSidecar":
         source = dict(sampler.additional_headers or {})
         normalized = {name.lower(): value for name, value in source.items()}
@@ -143,6 +194,7 @@ class TITOSidecar:
             default_drift_policy=default_drift_policy,
             prompt_mode=prompt_mode,
             bind_address=bind_address,
+            **({"on_chat_outcome": on_chat_outcome} if on_chat_outcome is not None else {}),
         )
 
     def create_trajectory(
@@ -401,6 +453,12 @@ class TITOSidecar:
         )
 
     async def _handle_openai_chat(self, request: Any) -> Any:
+        response = await self._serve_openai_chat(request)
+        if self._on_chat_outcome is not None:
+            self._on_chat_outcome(response.headers.get("x-fireworks-error-code"))
+        return response
+
+    async def _serve_openai_chat(self, request: Any) -> Any:
         from aiohttp import web
 
         started_at = time.time()

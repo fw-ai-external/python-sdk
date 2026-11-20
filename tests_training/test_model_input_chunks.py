@@ -118,25 +118,11 @@ class TestModelInputChunks:
         has_discriminator = any(isinstance(a, Discriminator) for a in annotated_args)
         assert has_discriminator, f"No Discriminator found in: {annotated_args}"
 
-    def test_r3_fields_are_native(self):
-        """The R3 routing_matrices field should still be present."""
-        from fireworks.training.sdk.types.model_input import ModelInput
-
-        assert "routing_matrices" in ModelInput.model_fields
-
-        mi = ModelInput.from_ints([1, 2, 3], routing_matrices=["rm1"])
-        assert mi.routing_matrices == ["rm1"]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            result = mi.model_dump(mode="json")
-
-        assert result["routing_matrices"] == ["rm1"]
-
     def test_r3_fields_preserve_routing_matrices_in_wire_requests(self):
         """R3 matrices must survive Tinker's dataclass-to-wire conversion."""
         import fireworks.training.sdk._core as tinker
         from fireworks.training.sdk._core._compat import model_dump
+        from tests_training.test_routing_references import refs
         from fireworks.training.sdk.types.model_input import ModelInput
         from fireworks.training.sdk.types.forward_request import ForwardRequest
         from fireworks.training.sdk._core.lib._pydantic_conv import to_pydantic_request
@@ -146,7 +132,7 @@ class TestModelInputChunks:
         datum = tinker.Datum(
             model_input=ModelInput.from_ints(
                 [1, 2, 3],
-                routing_matrices=["", "rm1", "rm2"],
+                routing_matrices=refs(3),
             ),
             loss_fn_inputs={
                 "target_tokens": tinker.TensorData(
@@ -170,7 +156,7 @@ class TestModelInputChunks:
             exclude_none=True,
             mode="json",
         )
-        assert forward_body["forward_input"]["data"][0]["model_input"]["routing_matrices"] == ["", "rm1", "rm2"]
+        assert forward_body["forward_input"]["data"][0]["model_input"]["routing_references"] == refs(3).to_dict()
 
         forward_backward_body = model_dump(
             to_pydantic_request(
@@ -184,8 +170,4 @@ class TestModelInputChunks:
             exclude_none=True,
             mode="json",
         )
-        assert forward_backward_body["forward_backward_input"]["data"][0]["model_input"]["routing_matrices"] == [
-            "",
-            "rm1",
-            "rm2",
-        ]
+        assert forward_backward_body["forward_backward_input"]["data"][0]["model_input"]["routing_references"] == refs(3).to_dict()

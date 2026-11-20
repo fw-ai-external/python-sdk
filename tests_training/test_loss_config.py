@@ -74,7 +74,7 @@ def test_reinforce_configuration_reaches_submission_unchanged(config) -> None:
     client.supports_score_centering = (config or {}).get("score_centering", False)
     client.supports_mc_score_centering = True
     with (
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
         patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
     ):
@@ -99,7 +99,7 @@ def test_support_choice_selection_reaches_submission_unchanged(config):
     TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
     client.supports_target_logprob_support = (config or {}).get("target_logprob_support") == "sampling_support"
     with (
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
         patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
     ):
@@ -112,7 +112,7 @@ def test_candidates_support_reaches_submission_unchanged():
     TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
     config = {"target_logprob_support": "candidates"}
     with (
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
         patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
     ):
@@ -175,7 +175,7 @@ def test_full_vocabulary_forward_reaches_submission_unchanged(config):
         return future
 
     with (
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_chunked_requests", return_value=[]),
         patch.object(client, "_run_chunked_requests", side_effect=submit),
         patch.object(client, "_send_single_forward_request", new_callable=AsyncMock, return_value="submitted") as send,
@@ -204,7 +204,7 @@ def test_supported_policy_correction_is_submitted_unchanged(diagnostics) -> None
     if diagnostics:
         config["report_policy_diagnostics"] = True
     with (
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
         patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
     ):
@@ -303,7 +303,7 @@ def test_mixed_sc_candidate_references_fail_before_submission(method: str, estim
     "estimator,top,extra,message",
     [
         ("extra_sampling", True, False, "require score_centering_estimator='top_sampling'"),
-        ("extra_sampling", False, False, "sample_extra_tokens=16"),
+        ("extra_sampling", False, False, "sample_extra_tokens"),
         ("top_sampling", False, True, "require extra sampling"),
         ("top_sampling", False, False, "requires top_sampling_references"),
     ],
@@ -319,26 +319,6 @@ def test_sc_reference_mismatch_has_capture_guidance(estimator: str, top: bool, e
         _validate_score_centering_references([datum], estimator)
 
 
-def test_deprecated_mc_name_warns_and_submits_canonical_config() -> None:
-    client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
-    TrainingClient.__init__(client, SimpleNamespace(), 0, "model-test")
-    client.supports_reinforce = client.supports_score_centering = client.supports_mc_score_centering = True
-    config = {"score_centering": True, "score_centering_estimator": "mc"}
-    with (
-        pytest.warns(DeprecationWarning, match="'mc' is deprecated; use 'extra_sampling'") as warnings,
-        patch.object(client, "_log_r3_request_error"),
-        patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
-        patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
-    ):
-        assert client.forward_backward([], "reinforce", config) == "submitted"
-    assert len(warnings) == 1
-    submit.assert_called_once_with([], "reinforce", {**config, "score_centering_estimator": "extra_sampling"})
-    assert config["score_centering_estimator"] == "mc"
-    with pytest.warns(DeprecationWarning, match="'mc' is deprecated; use 'extra_sampling'") as warnings:
-        client.validate_loss_capabilities("reinforce", config)
-    assert len(warnings) == 1
-
-
 @pytest.mark.parametrize("capability", [None, False, True])
 @pytest.mark.parametrize("method", ["validate_loss_capabilities", "forward_backward"])
 def test_mc_replay_checks_capability_at_startup_and_runtime(capability, method):
@@ -350,7 +330,7 @@ def test_mc_replay_checks_capability_at_startup_and_runtime(capability, method):
     config = {"score_centering": True, "target_logprob_support": "sampling_support"}
     with (
         patch.object(TrainingClient, "forward_backward", return_value="submitted") as submit,
-        patch.object(client, "_log_r3_request_error"),
+        patch.object(client, "_validate_replay_references"),
         patch.object(client, "_can_run_firetitan_chunked_requests", return_value=False),
     ):
 

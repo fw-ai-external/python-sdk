@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence, AsyncGenerator
 from concurrent.futures import Future as ConcurrentFuture, wait as wait_concurrent_futures
 
 import numpy as np
-from pydantic import Field, BaseModel, field_validator, model_validator
+from pydantic import Field, BaseModel, StrictBool, field_validator, model_validator
 
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
@@ -136,7 +136,7 @@ class _CreateModelResponse(types.CreateModelResponse):
     """Retain the selected trainer's optional communication capability."""
 
     comms: Comms = "v1"
-    routing_matrix_format: RoutingMatrixFormat = "base64_inline"
+    routing_matrix_format: RoutingMatrixFormat | None = None
     r3_store_id: str | None = None
     # Trainer-authoritative Router Replay capability for the loaded base model.
     # None when the trainer predates the field (or its topology is unknown);
@@ -162,8 +162,8 @@ class _CreateModelResponse(types.CreateModelResponse):
 
     @field_validator("routing_matrix_format", mode="before")
     @classmethod
-    def _known_routing_matrix_format(cls, value):
-        return "parquet_v1" if value == "parquet_v1" else "base64_inline"
+    def _known_routing_matrix_format(cls, value: object) -> RoutingMatrixFormat | None:
+        return "parquet_v1" if value == "parquet_v1" else None
 
     @field_validator(
         "supports_router_replay",
@@ -205,7 +205,7 @@ class FiretitanSamplingParams(types.SamplingParams):
     """Capture a probability head of at most this width as completion-aligned Parquet references."""
     sample_extra_tokens: int | None = Field(default=None, ge=1, le=64, strict=True)
     """Capture independent draws with replacement as completion-aligned Parquet references."""
-    sampling_mask: Literal["parquet_v1"] | None = None
+    sampling_mask: StrictBool | Literal["parquet_v1"] | None = None
     """Capture complete replay-mask IDs; top_sampling_logprobs is optional and used only for SC."""
     # Parquet R3 retention from file creation. None uses the serving default (6h).
     r3_ttl_seconds: int | None = Field(default=None, gt=0, strict=True)
@@ -221,7 +221,7 @@ class FiretitanSamplingParams(types.SamplingParams):
 class FiretitanSampledSequence(types.SampledSequence):
     """A Tinker sampled sequence with FireTitan-specific token metadata."""
 
-    routing_matrices: list[str] | RoutingReferences | None = None
+    routing_matrices: RoutingReferences | None = None
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
     """Sampling-support rows for generated tokens only, independent of prompt echo."""
@@ -356,7 +356,6 @@ class FiretitanSamplingClient(SamplingClient):
         api_key: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
         concurrency_controller: SamplingConcurrencyController | None = None,
-        max_concurrency: int | None = None,
         additional_headers: dict[str, str] | None = None,
         backend_managed_concurrency: bool = False,
     ) -> "FiretitanSamplingClient":
@@ -367,7 +366,6 @@ class FiretitanSamplingClient(SamplingClient):
             api_key=api_key,
             tokenizer=tokenizer,
             concurrency_controller=concurrency_controller,
-            max_concurrency=max_concurrency,
             additional_headers=additional_headers,
             backend_managed_concurrency=backend_managed_concurrency,
         )
@@ -387,7 +385,7 @@ class FiretitanSamplingClient(SamplingClient):
             # only those are worth carrying (a credential would never be used).
             request_context=clean_context(sampler._request_context) or None,
             # The durable R3 state is the negotiated shared-storage binding; the
-            # matrix format starts base64_inline and upgrades lazily on first use.
+            # Shared-storage capture uses the bound trainer store.
             r3_store_id=sampler.r3_store_id,
             r3_binding_required=bool(getattr(sampler, "_r3_binding_required", False)),
             fixed_concurrency=fixed_concurrency,
@@ -522,7 +520,7 @@ class FiretitanSamplingClient(SamplingClient):
             kwargs["seed"] = seed
 
         if isinstance(sampling_params, FiretitanSamplingParams):
-            if sampling_params.sampling_mask is not None:
+            if sampling_params.sampling_mask:
                 kwargs["sampling_mask"] = sampling_params.sampling_mask
             if sampling_params.include_routing_matrix:
                 kwargs["include_routing_matrix"] = True
@@ -1002,12 +1000,7 @@ def _pop_alias(
 
 
 def _managed_config_from_kwargs(kwargs: dict[str, Any]):
-    """Build a ``FiretitanProvisioningConfig`` from recipe kwargs.
-
-    Resolves alias names, then drops the deprecated trainer accelerator fields
-    with a ``DeprecationWarning`` (the training shape owns accelerator
-    selection; use ``trainer_replica_count`` for data-parallel trainer scaling).
-    """
+    """Normalize recipe argument names before validating the provisioning config."""
     from fireworks.training.sdk.managed import FiretitanProvisioningConfig
 
     _pop_alias(kwargs, "base_model", "model_name")
@@ -1017,37 +1010,12 @@ def _managed_config_from_kwargs(kwargs: dict[str, Any]):
     for optional_ref_field in ("reference_training_shape_id", "reference_trainer_job_id"):
         if kwargs.get(optional_ref_field) == "":
             kwargs[optional_ref_field] = None
-    for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
-        if kwargs.pop(infra_field, None) is not None:
-            warnings.warn(
-                f"{infra_field!r} is deprecated and ignored: trainer infrastructure "
-                "is configured by the training shape. Use "
-                "'trainer_replica_count' for data-parallel scaling.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
     return FiretitanProvisioningConfig(**kwargs)
 
 
-def _warn_deprecated_override(method: str, field: str, passed: Any, configured: Any) -> None:
-    """Warn that a managed-service-configured value was overridden at create time.
-
-    ``base_model``/``lora_rank`` are owned by the managed service config; passing
-    a different value to ``create_training_client`` / ``create_reference_client``
-    is deprecated and ignored (the service config is authoritative). All such
-    override deprecation warnings route through this one helper. (The deprecated
-    trainer accelerator fields are a different shape — they are dropped at config
-    build time in ``_managed_config_from_kwargs``.)
-    """
-    if configured is not None and passed is not None and passed != configured:
-        warnings.warn(
-            f"{field}={passed!r} passed to {method} differs from the service-configured "
-            f"{field}={configured!r}; this override is deprecated and ignored — the service "
-            "config is authoritative. Create a separate FiretitanServiceClient for a "
-            "different training configuration.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
+def _validate_provisioning_value(field: str, passed: Any, configured: Any) -> None:
+    if passed != configured:
+        raise ValueError(f"{field} is fixed by the service config; expected {configured!r}, got {passed!r}")
 
 
 def _is_serverless_session_id(session_id: Any) -> bool:
@@ -1348,54 +1316,6 @@ def _text_token_count(datum: types.Datum) -> int:
     )
 
 
-def _model_input_position_count(datum: types.Datum) -> int | None:
-    """Return expanded trainer positions, or ``None`` when they are unknown."""
-    model_input = getattr(datum, "model_input", None)
-    try:
-        length = getattr(model_input, "length", None)
-    except (AttributeError, TypeError, ValueError):
-        length = None
-    if isinstance(length, int) and not isinstance(length, bool):
-        return length
-
-    # Serialized inputs may not expose ``length``. Image chunks occupy ``expected_tokens``
-    # positions even though multimodal target_tokens intentionally omit them.
-    raw_datum = _dump_tinker_model(datum)
-    chunks = raw_datum.get("model_input", {}).get("chunks", [])
-    position_count = 0
-    for chunk in chunks:
-        if "tokens" in chunk:
-            position_count += len(chunk["tokens"])
-            continue
-        expected_tokens = chunk.get("expected_tokens")
-        if not isinstance(expected_tokens, int) or isinstance(expected_tokens, bool) or expected_tokens < 0:
-            return None
-        position_count += expected_tokens
-    return position_count
-
-
-def _r3_request_issues(data: list[types.Datum]) -> list[str]:
-    """Return missing/misaligned R3 data immediately before trainer send."""
-    issues: list[str] = []
-    for datum_index, datum in enumerate(data):
-        routing_matrices = getattr(datum.model_input, "routing_matrices", None)
-        if routing_matrices is None:
-            # No routing_matrices field means this is not an R3 datum.
-            continue
-
-        position_count = _model_input_position_count(datum)
-        if position_count is None:
-            # This diagnostic must never block an otherwise valid trainer
-            # request when an older image chunk omits its expanded length.
-            continue
-        matrix_count = len(routing_matrices)
-        if matrix_count == 0:
-            issues.append(f"datum[{datum_index}] routing_matrices is empty; expected {position_count}")
-        elif matrix_count != position_count:
-            issues.append(f"datum[{datum_index}] routing_matrix_count={matrix_count}; expected {position_count}")
-    return issues
-
-
 def _parallel_chunk_send_concurrency() -> int:
     raw_value = os.environ.get(PARALLEL_CHUNK_SEND_CONCURRENCY_ENV)
     if raw_value is None or raw_value.strip() == "":
@@ -1489,37 +1409,11 @@ class SaveSamplerResult:
 
 
 def _routing_matrices_wire_bytes(model_input: types.ModelInput) -> int:
-    """Return the compact-JSON bytes added by ``routing_matrices``.
-
-    Count routing fields separately from ``ModelInput.chunks`` without
-    materializing a potentially large JSON array.
-
-    ``ModelInput`` serializes ``chunks`` before the routing fields, hence
-    the leading comma in the wire fragment.
-    """
+    """Count the compact JSON wire representation of shared-storage R3 references."""
     references = getattr(model_input, "routing_references", None)
-    if references is not None:
-        return len(
-            json.dumps(
-                {"routing_matrix_format": "parquet_v1", "routing_references": references}, separators=(",", ":")
-            ).encode()
-        )
-    routing_matrices = getattr(model_input, "routing_matrices", None)
-    if routing_matrices is None:
+    if references is None:
         return 0
-
-    byte_count = len(b',"routing_matrices":[') + 1  # closing ``]``
-    for index, matrix in enumerate(routing_matrices):
-        if index:
-            byte_count += 1  # item separator
-        byte_count += len(
-            json.dumps(
-                matrix,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        )
-    return byte_count
+    return len(json.dumps({"routing_matrix_format": "parquet_v1", "routing_references": references}, separators=(",", ":")).encode())
 
 
 def _sampling_references_wire_bytes(model_input: types.ModelInput) -> int:
@@ -1546,19 +1440,6 @@ def _target_logprob_support(loss_fn_config: dict[str, float | str | bool] | None
     return support
 
 
-def _normalize_score_centering_config(
-    config: dict[str, float | str | bool] | None,
-) -> dict[str, float | str | bool] | None:
-    if config is None or config.get("score_centering_estimator") != "mc":
-        return config
-    warnings.warn(
-        "score_centering_estimator='mc' is deprecated; use 'extra_sampling' instead",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return {**config, "score_centering_estimator": "extra_sampling"}
-
-
 def _score_centering_estimator(config: dict[str, float | str | bool]) -> str | None:
     enabled = config.get("score_centering", False)
     if not isinstance(enabled, bool):
@@ -1581,8 +1462,8 @@ def _score_centering_estimator(config: dict[str, float | str | bool]) -> str | N
 
 def _validate_score_centering_references(data: list[types.Datum], estimator: str | None) -> None:
     for index, datum in enumerate(data):
-        top = datum.model_input.top_sampling_references is not None
-        extra = datum.model_input.sample_extra_references is not None
+        top = getattr(datum.model_input, "top_sampling_references", None) is not None
+        extra = getattr(datum.model_input, "sample_extra_references", None) is not None
         if top and extra:
             raise ValueError(f"Datum {index}: top sampling and extra sampling SC candidates are mutually exclusive")
         if top and estimator != "top_sampling":
@@ -1592,14 +1473,12 @@ def _validate_score_centering_references(data: list[types.Datum], estimator: str
         if estimator == "extra_sampling" and not extra:
             raise ValueError(
                 f"Datum {index}: extra sampling SC requires sample_extra_references; "
-                "set sample_extra_tokens=16 on FiretitanSamplingParams, or set it with "
-                "sample_extra_format='parquet_v1' in raw sampler kwargs"
+                "request sample_extra_tokens on a trainer-bound sampler"
             )
         if estimator == "top_sampling" and not top:
             raise ValueError(
                 f"Datum {index}: top sampling SC requires top_sampling_references; "
-                "set top_sampling_logprobs on FiretitanSamplingParams, or set it with "
-                "top_sampling_format='parquet_v1' in raw sampler kwargs"
+                "request top_sampling_logprobs on a trainer-bound sampler"
             )
 
 
@@ -1646,7 +1525,7 @@ class FiretitanTrainingClient(TrainingClient):
         run_name: str | None = None,
         comms: Comms = "v1",
         r3_store_id: str | None = None,
-        routing_matrix_format: RoutingMatrixFormat = "base64_inline",
+        routing_matrix_format: RoutingMatrixFormat | None = None,
         supports_router_replay: bool | None = None,
         supports_target_logprob_support: bool | None = None,
         supports_reinforce: bool | None = None,
@@ -1661,7 +1540,7 @@ class FiretitanTrainingClient(TrainingClient):
         if comms not in ("v1", "v2"):
             raise ValueError("comms must be 'v1' or 'v2'")
         self._comms = comms
-        self.routing_matrix_format = "parquet_v1" if routing_matrix_format == "parquet_v1" else "base64_inline"
+        self.routing_matrix_format = "parquet_v1" if routing_matrix_format == "parquet_v1" else None
         self.r3_store_id = r3_store_id if self.routing_matrix_format == "parquet_v1" else None
         # Trainer-authoritative: True/False when the trainer advertised whether
         # its loaded base model has MoE layers Router Replay can replay; None
@@ -2054,7 +1933,6 @@ class FiretitanTrainingClient(TrainingClient):
 
         ``forward_backward`` runs the same check; call this at startup to fail before collecting rollouts.
         """
-        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
         self._validate_loss_capabilities(loss_fn, loss_fn_config)
 
     def _validate_loss_capabilities(
@@ -2120,7 +1998,6 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
         """Compute a forward pass, using Fireworks' JSON path with parallel chunks."""
-        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
         support = _target_logprob_support(loss_fn_config)
         if support != "full_vocabulary":
             raise ValueError(f"target_logprob_support='{support}' requires forward_backward, not forward")
@@ -2137,7 +2014,7 @@ class FiretitanTrainingClient(TrainingClient):
                 "This training client does not support Tinker's proto forward transport. Use the JSON forward path."
             )
 
-        self._log_r3_request_error(data, operation="forward")
+        self._validate_replay_references(data)
 
         requests = self._chunked_requests(data)
 
@@ -2268,7 +2145,6 @@ class FiretitanTrainingClient(TrainingClient):
         loss_fn: types.LossFnType,
         loss_fn_config: dict[str, float | str | bool] | None = None,
     ) -> APIFuture[types.ForwardBackwardOutput]:
-        loss_fn_config = _normalize_score_centering_config(loss_fn_config)
         estimator = self._validate_loss_capabilities(loss_fn, loss_fn_config)
         _validate_score_centering_references(data, estimator)
         holder = getattr(self, "holder", None)
@@ -2280,7 +2156,7 @@ class FiretitanTrainingClient(TrainingClient):
                 "FiretitanTrainingClient does not support Tinker's proto forward_backward transport. "
                 "Use the JSON forward_backward path."
             )
-        self._log_r3_request_error(data, operation="forward_backward")
+        self._validate_replay_references(data)
         if self._can_run_firetitan_chunked_requests():
             requests = self._chunked_requests(data)
 
@@ -2688,51 +2564,24 @@ class FiretitanTrainingClient(TrainingClient):
             )
         ).result()
 
-    def _log_r3_request_error(
-        self,
-        data: list[types.Datum],
-        *,
-        operation: str,
-    ) -> None:
-        """Reject invalid shared-storage references; log one client-side error for other R3 issues."""
+    def _validate_replay_references(self, data: list[types.Datum]) -> None:
         for datum in data:
             model_input = datum.model_input
-            for field in ("top_sampling_references", "sampling_mask_references", "sample_extra_references"):
-                top_sampling = getattr(model_input, field, None)
-                if isinstance(top_sampling, dict):
-                    if not self.r3_store_id:
-                        raise ValueError("Parquet sampling references require trainer shared storage")
-                    references = RoutingReferences.from_dict(top_sampling)
-                    if references.length != model_input.length:
-                        raise ValueError("Sampling references must match the model input token length")
-                    if any(file["store_id"] != self.r3_store_id for file in references.files):
-                        raise ValueError("Sampling reference belongs to a different shared storage domain")
-            raw = getattr(model_input, "routing_references", None)
-            if raw is None:
-                continue
-            if self.routing_matrix_format != "parquet_v1" or not self.r3_store_id:
-                raise ValueError("Parquet R3 requires trainer parquet_v1 support and shared storage")
-            if getattr(model_input, "routing_matrix_format", "base64_inline") != "parquet_v1":
-                raise ValueError("Parquet R3 references require routing_matrix_format=parquet_v1")
-            references = RoutingReferences.from_dict(raw)
             if getattr(model_input, "routing_matrices", None) is not None:
-                raise ValueError("Supply either inline routing matrices or references, not both")
-            if references.length != model_input.length:
-                raise ValueError("R3 references must match the model input token length")
-            if any(file["store_id"] != self.r3_store_id for file in references.files):
-                raise ValueError("R3 reference belongs to a different shared storage domain")
-        if getattr(self, "_r3_request_error_logged", False):
-            return
-        issues = _r3_request_issues(data)
-        if not issues:
-            return
-
-        self._r3_request_error_logged = True
-        logger.error(
-            "R3 is enabled, but routing data is missing or misaligned before trainer request: operation=%s; %s",
-            operation,
-            "; ".join(issues),
-        )
+                raise ValueError("Inline routing matrices are unsupported; use shared-storage references")
+            for field in ("routing_references", "top_sampling_references", "sampling_mask_references", "sample_extra_references"):
+                raw = getattr(model_input, field, None)
+                if raw is None:
+                    continue
+                if field == "routing_references" and getattr(model_input, "routing_matrix_format", None) != "parquet_v1":
+                    raise ValueError("R3 references require the shared-storage format")
+                if not self.r3_store_id:
+                    raise ValueError(f"{field} require trainer shared storage")
+                references = RoutingReferences.from_dict(raw)
+                if references.length != model_input.length:
+                    raise ValueError(f"{field} must match the model input token length")
+                if any(file.get("store_id") != self.r3_store_id for file in references.files):
+                    raise ValueError(f"{field} belong to a different shared storage domain")
 
     async def forward_backward_contrastive_async(
         self,
@@ -3969,8 +3818,7 @@ class FiretitanServiceClient(ServiceClient):
 
         Pass ``reset_prompt_cache="all"``, ``"new_session"`` (default), or
         ``"none"`` as a managed config keyword to control future-request prefix
-        reuse across sampler hotloads. Deprecated True/False inputs mean
-        all/none and emit a migration warning.
+        reuse across sampler hotloads.
         """
         api_key = _fireworks_api_key(api_key)
         base_url = _fireworks_base_url(base_url)
@@ -4014,8 +3862,7 @@ class FiretitanServiceClient(ServiceClient):
         Returns ``None`` for a non-managed service. A managed service provisions
         exactly one trainer/deployment from its immutable ``_managed_config``, so
         the handle is cached on first use and reused thereafter — independent of
-        any call-site arguments. Deprecated divergent ``base_model``/``lora_rank``
-        passed to ``create_*_client`` are warned at that boundary and ignored;
+        any call-site arguments. A conflicting model or fixed rank raises an error;
         because caching keys off nothing but the single managed config, an ignored
         override can never make a later canonical call look like a different
         training configuration.
@@ -4113,15 +3960,11 @@ class FiretitanServiceClient(ServiceClient):
 
     @property
     def managed_accelerator_type(self) -> str | None:
-        if self._managed_config is not None and self._managed_config.accelerator_type is not None:
-            return self._managed_config.accelerator_type
         profile = self.managed_training_profile
         return getattr(profile, "accelerator_type", None)
 
     @property
     def managed_accelerator_count(self) -> int | None:
-        if self._managed_config is not None and self._managed_config.accelerator_count is not None:
-            return self._managed_config.accelerator_count
         profile = self.managed_training_profile
         return getattr(profile, "accelerator_count", None)
 
@@ -4209,13 +4052,11 @@ class FiretitanServiceClient(ServiceClient):
         """
         return self._control_plane_client().list_checkpoints(job_id, page_size=page_size)
 
-    def promote_checkpoint(self, *args: Any, **kwargs: Any) -> dict:
-        """Promote a trainer checkpoint to a Fireworks model.
-
-        Delegates to the managed TrainerJobManager; accepts the same calling
-        forms (``name=`` or ``job_id``/``checkpoint_id`` positional).
-        """
-        return self._control_plane_client().promote_checkpoint(*args, **kwargs)
+    def promote_checkpoint(self, *, name: str, output_model_id: str, base_model: str) -> dict:
+        """Promote a trainer checkpoint using its name from list_checkpoints."""
+        return self._control_plane_client().promote_checkpoint(
+            name=name, output_model_id=output_model_id, base_model=base_model
+        )
 
     def close(self) -> None:
         with self._ensure_managed_lifecycle_state():
@@ -4411,8 +4252,9 @@ class FiretitanServiceClient(ServiceClient):
 
         if managed_config is not None:
             if base_model is not None:
-                _warn_deprecated_override("create_training_client", "base_model", base_model, managed_config.base_model)
-            _warn_deprecated_override("create_training_client", "lora_rank", lora_rank, managed_config.lora_rank)
+                _validate_provisioning_value("base_model", base_model, managed_config.base_model)
+            if lora_rank != 0 and managed_config.max_lora_rank is None:
+                _validate_provisioning_value("lora_rank", lora_rank, managed_config.lora_rank)
             if projection_head_dim is not None and projection_head_dim != managed_config.projection_head_dim:
                 raise ValueError(
                     "projection_head_dim is fixed when a managed service is configured; "
@@ -5233,8 +5075,7 @@ class FiretitanServiceClient(ServiceClient):
 
         * LoRA policy without a ``reference_training_shape_id`` → the reference
           reuses the policy trainer session with the adapter disabled (base
-          weights). No second trainer is provisioned. Supplying an explicit
-          reference shape for a LoRA policy is deprecated.
+          weights). The shared reference uses the policy trainer.
         * Full-parameter policies use a separate frozen reference trainer that
           the SDK owns and tears down on :meth:`close` (or early via
           :meth:`release_references`). If ``reference_training_shape_id`` is not
@@ -5274,9 +5115,7 @@ class FiretitanServiceClient(ServiceClient):
             if self._service_closed:
                 raise RuntimeError("FiretitanServiceClient is closed")
             if base_model is not None:
-                _warn_deprecated_override(
-                    "create_reference_client", "base_model", base_model, managed_config.base_model
-                )
+                _validate_provisioning_value("base_model", base_model, managed_config.base_model)
             max_lora_rank = getattr(managed_config, "max_lora_rank", None)
             if max_lora_rank is not None:
                 if policy_client is None:
@@ -5307,7 +5146,6 @@ class FiretitanServiceClient(ServiceClient):
                 reference_handle = self._reference_handles_by_rank.get(policy_lora_rank)
                 if reference_handle is None:
                     reference_handle = self._provision_reference_handle(
-                        policy_lora_rank=policy_lora_rank,
                         user_metadata=self._user_metadata(user_metadata),
                     )
                     self._reference_handles_by_rank[policy_lora_rank] = reference_handle
@@ -5317,7 +5155,6 @@ class FiretitanServiceClient(ServiceClient):
                 self._reference_handle = handle.reference_handle
                 return handle.reference_handle.training_client
             reference_handle = self._provision_reference_handle(
-                policy_lora_rank=policy_lora_rank,
                 user_metadata=self._user_metadata(user_metadata),
             )
             return reference_handle.training_client
@@ -5325,7 +5162,6 @@ class FiretitanServiceClient(ServiceClient):
     def _provision_reference_handle(
         self,
         *,
-        policy_lora_rank: int,
         user_metadata: dict[str, str] | None,
     ) -> Any:
         """Provision a separate frozen reference trainer this service owns."""
@@ -5339,11 +5175,7 @@ class FiretitanServiceClient(ServiceClient):
                 "Provisioning a separate reference trainer requires a Fireworks API key. "
                 "Construct FiretitanServiceClient with api_key=fw_... or set FIREWORKS_API_KEY."
             )
-        # The reference config (the one remaining config derivation) carries the
-        # runtime forward-only flag and the policy base_model; it is the single
-        # source for provisioning. base_model here is only used to detect a
-        # deprecated override (warned at the create_reference_client boundary).
-        reference_config = _reference_managed_config(self._managed_config, policy_lora_rank=policy_lora_rank)
+        reference_config = _reference_managed_config(self._managed_config)
         handle = _create_managed_tinker_client(
             api_key=self._fireworks_api_key,
             config=reference_config,

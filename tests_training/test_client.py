@@ -29,7 +29,6 @@ from fireworks.training.sdk.client import (
     FiretitanServiceClient,
     FiretitanSamplingClient,
     FiretitanTrainingClient,
-    _r3_request_issues,
     generate_session_id,
     _CreateModelResponse,
     _run_id_from_model_id,
@@ -38,8 +37,6 @@ from fireworks.training.sdk.client import (
     _is_serverless_session_id,
     _serverless_caller_headers,
     _BaseOnlyCreateModelRequest,
-    _model_input_position_count,
-    _serialize_input_for_extra_body,
     _parallel_chunk_send_concurrency,
     _check_cos_similarity_matrix_single_chunk,
 )
@@ -370,147 +367,6 @@ class TestForwardBackward:
         assert result is future
         assert client.holder._client_config.parallel_fwdbwd_chunks is True
 
-    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_r3_missing_or_misaligned_logs_one_error(self, mock_forward_backward, caplog):
-        client = self._make_client()
-        mock_forward_backward.return_value = MagicMock()
-        matrix = "AQIDBAUGBwg="
-        empty = types.Datum(
-            model_input=types.ModelInput.from_ints(
-                [10, 11, 12],
-                routing_matrices=[],
-            ),
-            loss_fn_inputs={
-                "target_tokens": types.TensorData(data=[11, 12, 13], dtype="int64", shape=[3]),
-            },
-        )
-        mismatched = types.Datum(
-            model_input=types.ModelInput.from_ints(
-                [20, 21, 22],
-                routing_matrices=[matrix],
-            ),
-            loss_fn_inputs={
-                "target_tokens": types.TensorData(data=[21, 22, 23], dtype="int64", shape=[3]),
-            },
-        )
-
-        with caplog.at_level(logging.ERROR):
-            client.forward_backward([empty, mismatched], "supervised")
-            client.forward_backward([empty, mismatched], "supervised")
-
-        messages = [record.message for record in caplog.records if "R3 is enabled" in record.message]
-        assert len(messages) == 1
-        assert "operation=forward_backward" in messages[0]
-        assert "datum[0] routing_matrices is empty; expected 3" in messages[0]
-        assert "datum[1] routing_matrix_count=1; expected 3" in messages[0]
-
-    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_r3_valid_or_disabled_does_not_log_error(self, mock_forward_backward, caplog):
-        client = self._make_client()
-        mock_forward_backward.return_value = MagicMock()
-        matrix = "AQIDBAUGBwg="
-        valid = types.Datum(
-            model_input=types.ModelInput.from_ints(
-                [10, 11, 12],
-                routing_matrices=[matrix, matrix, matrix],
-            ),
-            loss_fn_inputs={},
-        )
-        disabled = types.Datum(
-            model_input=types.ModelInput.from_ints([20, 21, 22]),
-            loss_fn_inputs={},
-        )
-
-        with caplog.at_level(logging.ERROR):
-            client.forward_backward([valid, disabled], "supervised")
-
-        assert "R3 is enabled" not in caplog.text
-
-    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_r3_multimodal_counts_image_positions(self, mock_forward_backward, caplog):
-        client = self._make_client()
-        mock_forward_backward.return_value = MagicMock()
-        matrix = "AQIDBAUGBwg="
-        model_input = types.ModelInput(
-            chunks=[
-                types.EncodedTextChunk(tokens=[10, 11]),
-                types.ImageChunk(
-                    data=b"fake-png",
-                    format="png",
-                    expected_tokens=100,
-                ),
-                types.EncodedTextChunk(tokens=[12]),
-            ],
-            routing_matrices=[matrix] * 103,
-        )
-        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
-
-        with caplog.at_level(logging.ERROR):
-            client.forward_backward([datum], "supervised")
-
-        assert "R3 is enabled" not in caplog.text
-
-    @patch("fireworks.training.sdk._core.lib.public_interfaces.training_client.TrainingClient.forward_backward")
-    def test_r3_multimodal_mismatch_uses_expanded_position_count(self, mock_forward_backward, caplog):
-        client = self._make_client()
-        mock_forward_backward.return_value = MagicMock()
-        matrix = "AQIDBAUGBwg="
-        model_input = types.ModelInput(
-            chunks=[
-                types.EncodedTextChunk(tokens=[10, 11]),
-                types.ImageChunk(
-                    data=b"fake-png",
-                    format="png",
-                    expected_tokens=100,
-                ),
-                types.EncodedTextChunk(tokens=[12]),
-            ],
-            routing_matrices=[matrix] * 102,
-        )
-        datum = types.Datum(model_input=model_input, loss_fn_inputs={})
-
-        with caplog.at_level(logging.ERROR):
-            client.forward_backward([datum], "supervised")
-
-        assert "routing_matrix_count=102; expected 103" in caplog.text
-
-    @patch(
-        "fireworks.training.sdk.client._dump_tinker_model",
-        return_value={
-            "model_input": {
-                "chunks": [
-                    {"tokens": [10, 11]},
-                    {"expected_tokens": 100},
-                    {"tokens": [12]},
-                ]
-            }
-        },
-    )
-    def test_r3_position_count_legacy_fallback_includes_images(self, _mock_dump):
-        datum = SimpleNamespace(model_input=SimpleNamespace(length=None))
-
-        assert _model_input_position_count(datum) == 103
-
-    def test_r3_position_count_unknown_image_length_is_nonblocking(self):
-        datum = types.Datum(
-            model_input=types.ModelInput(
-                chunks=[
-                    types.EncodedTextChunk(tokens=[10, 11]),
-                    types.ImageChunk(
-                        data=b"fake-png",
-                        format="png",
-                        expected_tokens=None,
-                    ),
-                    types.EncodedTextChunk(tokens=[12]),
-                ],
-                routing_matrices=["AQIDBAUGBwg="] * 3,
-            ),
-            loss_fn_inputs={},
-        )
-
-        assert _model_input_position_count(datum) is None
-
-
 class TestRoutingMatrixChunkSizing:
     @staticmethod
     def _make_client() -> FiretitanTrainingClient:
@@ -519,16 +375,6 @@ class TestRoutingMatrixChunkSizing:
             estimate_bytes_count_in_model_input=lambda _model_input: 20,
         )
         return client
-
-    @staticmethod
-    def _datum(routing_matrices: list[str] | None) -> types.Datum:
-        return types.Datum(
-            model_input=types.ModelInput.from_ints(
-                [10, 11],
-                routing_matrices=routing_matrices,
-            ),
-            loss_fn_inputs={},
-        )
 
     def test_dense_sizing_and_diagnostics_do_not_copy_tensor_lists(self):
         client = self._make_client()
@@ -542,69 +388,7 @@ class TestRoutingMatrixChunkSizing:
         with patch.object(types.TensorData, "data", new_callable=PropertyMock) as copied:
             copied.side_effect = AssertionError("Dense values copied to a Python list")
             assert client._estimate_bytes_count(datum) == 80
-            assert _r3_request_issues([datum]) == []
             assert _count_response_tokens([datum]) == 2.0
-
-    def test_estimator_counts_compact_json_wire_bytes(self):
-        client = self._make_client()
-        routing_matrices = ["AQIDBA==", "/+abc=="]
-        datum = self._datum(routing_matrices)
-
-        compact_array = json.dumps(
-            routing_matrices,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        expected_r3_bytes = len(f',"routing_matrices":{compact_array}'.encode())
-        base_datum = self._datum(None)
-        r3_input = types.ForwardBackwardInput(
-            data=[datum],
-            loss_fn="supervised",
-            loss_fn_config=None,
-        )
-        base_input = types.ForwardBackwardInput(
-            data=[base_datum],
-            loss_fn="supervised",
-            loss_fn_config=None,
-        )
-        r3_wire_bytes = len(
-            json.dumps(
-                _serialize_input_for_extra_body(r3_input),
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode()
-        )
-        base_wire_bytes = len(
-            json.dumps(
-                _serialize_input_for_extra_body(base_input),
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode()
-        )
-
-        assert r3_wire_bytes - base_wire_bytes == expected_r3_bytes
-        assert client._estimate_bytes_count(datum) == 20 + expected_r3_bytes
-
-    def test_routing_matrices_force_chunk_split(self, monkeypatch):
-        import fireworks.training.sdk._core.lib.public_interfaces.training_client as tinker_training_client
-
-        client = self._make_client()
-        datum = self._datum(["A" * 160])
-        estimated_bytes = client._estimate_bytes_count(datum)
-        base_estimated_bytes = 20
-        chunk_limit = estimated_bytes + base_estimated_bytes
-        assert base_estimated_bytes * 2 <= chunk_limit
-
-        monkeypatch.setattr(
-            tinker_training_client,
-            "MAX_CHUNK_BYTES_COUNT",
-            chunk_limit,
-        )
-
-        chunks = list(client._chunked_requests_generator([datum, datum]))
-
-        assert [len(chunk) for chunk in chunks] == [1, 1]
-
 
 class TestParallelChunkSubmission:
     class _ClientContext:
@@ -1586,33 +1370,6 @@ class TestFiretitanServiceClientManagedCompat:
         assert kwargs["train_mlp"] is True
         assert kwargs["train_attn"] is True
 
-    def test_from_firetitan_config_deprecates_accelerator_fields(self):
-        with pytest.warns(DeprecationWarning) as record:
-            svc = FiretitanServiceClient.from_firetitan_config(
-                api_key="fw-key",
-                base_url=None,
-                base_model="accounts/acct/models/base",
-                training_shape_id="accounts/acct/trainingShapes/shape",
-                accelerator_type="NVIDIA_H200",
-                accelerator_count=8,
-                node_count=1,
-                replica_count=2,
-                trainer_replica_count=3,
-            )
-
-        messages = " ".join(str(w.message) for w in record)
-        assert "accelerator_type" in messages
-        assert "accelerator_count" in messages
-        assert "node_count" in messages
-        # Accelerator fields are dropped (owned by the training shape). The two
-        # scaling knobs survive and map to different resources: replica_count
-        # scales the deployment, trainer_replica_count scales the trainer.
-        assert svc._managed_config.accelerator_type is None
-        assert svc._managed_config.accelerator_count is None
-        assert svc._managed_config.node_count is None
-        assert svc._managed_config.replica_count == 2
-        assert svc._managed_config.trainer_replica_count == 3
-
     def test_create_lora_training_client_lazy_provisions_managed_infra(self):
         handle = SimpleNamespace(training_client="training", sampler_backend=object())
         svc = FiretitanServiceClient.from_firetitan_config(
@@ -1923,32 +1680,6 @@ class TestFiretitanServiceClientManagedCompat:
             )
         svc._ensure_managed_handle.assert_not_called()
 
-    def test_managed_multi_model_reference_cache_tracks_selected_policy_rank(self):
-        policy_a = SimpleNamespace(_lora_rank=64)
-        policy_b = SimpleNamespace(_lora_rank=128)
-        handle = SimpleNamespace(
-            service_client=MagicMock(),
-            reference_handle=None,
-            training_clients=[policy_a, policy_b],
-        )
-        reference_a = SimpleNamespace(training_client="reference-a")
-        reference_b = SimpleNamespace(training_client="reference-b")
-        svc = FiretitanServiceClient.from_firetitan_config(
-            api_key="fw-key",
-            base_model="accounts/acct/models/base",
-            max_lora_rank=256,
-            reference_training_shape_id="accounts/acct/trainingShapes/reference",
-        )
-        svc._managed_handle = handle
-        svc._provision_reference_handle = MagicMock(side_effect=[reference_a, reference_b])
-
-        assert svc.create_reference_client(policy_client=policy_a) == "reference-a"
-        assert svc.create_reference_client(policy_client=policy_b) == "reference-b"
-        assert svc.create_reference_client(policy_client=policy_a) == "reference-a"
-
-        assert svc._provision_reference_handle.call_count == 2
-        assert svc._reference_handle is reference_a
-
     def test_managed_handle_provisions_once_under_concurrent_create(self):
         handle = SimpleNamespace(
             training_client=None,
@@ -2124,20 +1855,7 @@ class TestFiretitanServiceClientManagedCompat:
         with pytest.raises(RuntimeError, match="max context length"):
             _ = svc.max_context_length
 
-    def test_deprecated_accelerator_kwargs_are_not_reported_without_profile(self):
-        with pytest.warns(DeprecationWarning):
-            svc = FiretitanServiceClient.from_firetitan_config(
-                api_key="fw-key",
-                base_model="accounts/acct/models/base",
-                accelerator_type="NVIDIA_B200",
-                accelerator_count=16,
-            )
-
-        assert svc.managed_training_profile is None
-        assert svc.managed_accelerator_type is None
-        assert svc.managed_accelerator_count is None
-
-    def test_create_training_client_deprecation_warns_on_base_model_override(self):
+    def test_create_training_client_rejects_conflicting_base_model(self):
         # base_model/lora_rank are single-sourced from the service config; a
         # divergent create_training_client value is deprecated + ignored.
         svc = FiretitanServiceClient.from_firetitan_config(
@@ -2148,7 +1866,7 @@ class TestFiretitanServiceClientManagedCompat:
         )
         handle = SimpleNamespace(training_client="tc", sampler_backend=None)
         with patch("fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle):
-            with pytest.warns(DeprecationWarning, match="base_model.*deprecated and ignored"):
+            with pytest.raises(ValueError, match="base_model is fixed"):
                 svc.create_training_client("accounts/acct/models/OTHER", lora_rank=8)
 
     def test_create_training_client_no_deprecation_when_matching(self):
@@ -2164,31 +1882,6 @@ class TestFiretitanServiceClientManagedCompat:
                 warnings.simplefilter("always")
                 svc.create_training_client("accounts/acct/models/base", lora_rank=8)
         assert not any("override is deprecated" in str(w.message) for w in caught)
-
-    def test_deprecated_override_does_not_poison_managed_handle_cache(self):
-        # An ignored deprecated base_model on the first call must not make a
-        # later canonical call look like a different training configuration.
-        # The managed handle is keyed off the immutable service config, so the
-        # first call provisions once and the canonical follow-up reuses it
-        # rather than raising "different training configuration".
-        svc = FiretitanServiceClient.from_firetitan_config(
-            api_key="fw-key",
-            base_url=None,
-            base_model="accounts/acct/models/base",
-            lora_rank=8,
-        )
-        handle = SimpleNamespace(training_client="tc", sampler_backend=None)
-        with patch("fireworks.training.sdk.managed._create_managed_tinker_client", return_value=handle) as create:
-            with pytest.warns(DeprecationWarning, match="base_model.*deprecated and ignored"):
-                first = svc.create_training_client("accounts/acct/models/OTHER", lora_rank=8)
-            # The canonical follow-up reuses the same handle (no raise).
-            second = svc.create_training_client("accounts/acct/models/base", lora_rank=8)
-
-        assert first == "tc"
-        assert second == "tc"
-        create.assert_called_once()
-        # Provisioning used the immutable config, never the divergent override.
-        assert create.call_args.kwargs["config"].base_model == "accounts/acct/models/base"
 
     def test_managed_deployment_id_prefers_provisioned_handle(self):
         svc = FiretitanServiceClient.from_firetitan_config(
@@ -2437,7 +2130,7 @@ class TestFiretitanServiceClientManagedCompat:
         with pytest.raises(RuntimeError, match="require a provisioned trainer"):
             svc.list_checkpoints("job-1")
         with pytest.raises(RuntimeError, match="require a provisioned trainer"):
-            svc.promote_checkpoint(name="x")
+            svc.promote_checkpoint(name="x", output_model_id="out", base_model="base")
 
     def test_create_sampling_client_requires_managed_sampler_state(self):
         svc = FiretitanServiceClient.__new__(FiretitanServiceClient)
@@ -2472,7 +2165,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
         # This service created run-1, so its checkpoints route through its own session.
         svc._training_clients = [
-            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+            SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
 
         sampler = svc.create_sampling_client(model_path="test-account/run-1/step-1")
@@ -2634,7 +2327,7 @@ class TestFiretitanServiceClientManagedCompat:
         # it created a model; it never binds a standalone route.
         svc = self._standalone_sampler_service()
         svc._training_clients = [
-            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+            SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
         patcher, rest_cls, _ = self._patch_sampler_route_post()
         with patcher:
@@ -2863,9 +2556,7 @@ class TestFiretitanServiceClientManagedCompat:
         restored = pickle.loads(pickle.dumps(sampler))
         try:
             assert restored.deployment_sampler.r3_store_id == "store-1"
-            # The matrix-format upgrade stays lazy: a freshly negotiated sampler
-            # starts base64_inline and probes parquet on the first request.
-            assert restored.deployment_sampler.routing_matrix_format == "base64_inline"
+            assert restored.deployment_sampler.routing_matrix_format == "parquet_v1"
         finally:
             sampler.close()
             restored.close()
@@ -3006,7 +2697,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
         svc._training_clients = [
-            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+            SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
 
         sampler = svc.create_sampling_client(base_model="accounts/fireworks/models/qwen3p5-9b")
@@ -3033,7 +2724,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._cp_account_id = "test-account"
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
         svc._training_clients = [
-            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+            SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
 
         with caplog.at_level(logging.WARNING):
@@ -3065,7 +2756,7 @@ class TestFiretitanServiceClientManagedCompat:
         svc._cp_account_id = None  # _resolved_account_id() degrades to None.
         svc.holder = SimpleNamespace(get_session_id=lambda: "ts-abc123")
         svc._training_clients = [
-            SimpleNamespace(run_id="run-1", routing_matrix_format="base64_inline", r3_store_id=None)
+            SimpleNamespace(run_id="run-1", routing_matrix_format=None, r3_store_id=None)
         ]
 
         with pytest.raises(ValueError, match="resolvable Fireworks"):
@@ -3109,7 +2800,7 @@ def _bare_training_client():
     """A FiretitanTrainingClient with __init__ bypassed for unit testing."""
     client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
     CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
-    client.routing_matrix_format, client.r3_store_id = "base64_inline", None
+    client.routing_matrix_format, client.r3_store_id = None, None
     client._http_admissions = {}
     client._http_admission_slots = None
     client._sampler_backend = None
@@ -3140,7 +2831,7 @@ class TestTrainingClientSamplingHelpers:
     def _make_client(self):
         client = FiretitanTrainingClient.__new__(FiretitanTrainingClient)
         CoreTrainingClient.__init__(client, SimpleNamespace(_client_config=None), 0, "model-test")
-        client.routing_matrix_format, client.r3_store_id = "base64_inline", None
+        client.routing_matrix_format, client.r3_store_id = None, None
         client._trainer_supports_rdma_weight_sync = False
         client._trainer_rdma_weight_sync_enabled = None
         client._http_admissions = {}

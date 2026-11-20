@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import logging
-import warnings
 from typing import TYPE_CHECKING, Any, Literal
 from datetime import timedelta
 from dataclasses import field, replace, dataclass
@@ -100,7 +99,7 @@ class FiretitanProvisioningConfig:
     training_shape_id: str | None = None
     # Optional separate reference trainer shape for rank-0 policies. Rank-0
     # references accept LORA_TRAINER (preferred) or FORWARD_ONLY. For LoRA
-    # policies this is deprecated; omit it to share the policy trainer.
+    # policies omit it to share the policy trainer.
     reference_training_shape_id: str | None = None
     # Optional existing reference trainer to reattach to. When set, it disables
     # LoRA shared-reference and is never cleaned up on close.
@@ -119,14 +118,10 @@ class FiretitanProvisioningConfig:
     region: str | None = None  # Leave unset unless the caller explicitly needs placement.
     max_context_length: int | None = None
     learning_rate: float = 1e-5
-    gradient_accumulation_steps: int = 1
     seed: int | None = None
     train_mlp: bool = True
     train_attn: bool = True
     train_unembed: bool = True
-    node_count: int | None = None
-    accelerator_type: str | None = None
-    accelerator_count: int | None = None
     custom_image_tag: str | None = None
     extra_args: list[str] | None = None
     extra_values: dict[str, str] | None = None
@@ -183,12 +178,12 @@ class FiretitanProvisioningConfig:
     base_model_type: str = ""
     """Restrict-only tokenizer context; never changes model dispatch or placement."""
 
-    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
+    reset_prompt_cache: ResetPromptCacheMode = "new_session"
     """Future-request prefix-cache policy: ``all``, ``new_session`` (default), or ``none``.
 
     Existing sessions keep their cache namespace under ``new_session``. Use a
     stable prompt_cache_key (or user) across turns. This does not invalidate
-    active KV during async hotload. Deprecated True/False inputs mean ``all``/``none`` and emit a warning.
+    active KV during async hotload.
     """
 
     def __post_init__(self) -> None:
@@ -230,25 +225,10 @@ class FiretitanProvisioningConfig:
             )
 
         lora_capacity = self.max_lora_rank if self.max_lora_rank is not None else self.lora_rank
-        if self.reference_required and self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
-            warnings.warn(
-                "reference_training_shape_id for a LoRA policy is deprecated and will be rejected "
-                "in a future release. Omit it to reuse the policy trainer with its adapter disabled; "
-                "explicit reference shapes remain supported for rank-0 policies.",
-                DeprecationWarning,
-                stacklevel=3,
+        if self.reference_training_shape_id and lora_capacity > 0 and not self.forward_only:
+            raise ValueError(
+                "Omit reference_training_shape_id for a LoRA policy to reuse its frozen base"
             )
-
-        for infra_field in ("accelerator_type", "accelerator_count", "node_count"):
-            if getattr(self, infra_field) is not None:
-                warnings.warn(
-                    f"{infra_field!r} is deprecated and ignored: trainer infrastructure "
-                    "is configured by the training shape. Use "
-                    "'trainer_replica_count' for data-parallel scaling.",
-                    DeprecationWarning,
-                    stacklevel=3,
-                )
-                object.__setattr__(self, infra_field, None)
 
 
 _ManagedTinkerConfig = FiretitanProvisioningConfig
@@ -356,13 +336,16 @@ class _TinkerSamplerBackend:
     hot_load_bucket_url: str | None = None
     cmek_resource: str | None = None
     hotload_timeout_s: int = HOTLOAD_TIMEOUT_S
-    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
+    reset_prompt_cache: ResetPromptCacheMode = "new_session"
     lora_rank: int = 0
     compression_format: str = DEFAULT_DELTA_COMPRESSION
     allow_rdma: bool = True
     _snapshot_types: dict[str, str] = field(default_factory=dict)
     _snapshot_lora_ranks: dict[str, int] = field(default_factory=dict)
     _base_identity: str | None = None
+
+    def __post_init__(self) -> None:
+        self.reset_prompt_cache = normalize_reset_prompt_cache(self.reset_prompt_cache)
 
     def _deployment_model(self) -> str:
         return f"accounts/{self.deploy_mgr.account_id}/deployments/{self.deployment_id}"
@@ -533,10 +516,9 @@ def _create_managed_tinker_client(
     if max_context_length is None and profile is not None:
         max_context_length = profile.max_supported_context_length
 
-    policy_lora_rank = _trainer_lora_capacity(config)
     reference_config = None
     if _should_provision_reference(config):
-        reference_config = _reference_managed_config(config, policy_lora_rank=policy_lora_rank)
+        reference_config = _reference_managed_config(config)
         _validate_reference_training_shape(trainer_mgr, reference_config)
 
     started_trainer = _start_or_reuse_trainer(
@@ -704,7 +686,7 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
 
     A LoRA policy without an explicit reference shape or reference job gets its
     frozen base for free by disabling the adapter on the policy session — no
-    second trainer. Explicit reference shapes for LoRA policies are deprecated.
+    second trainer.
     Full-parameter references provision a separate trainer; when no reference
     shape is pinned, backend trainer creation auto-selects a LoRA-capable shape
     for that frozen reference runtime. An explicitly pinned rank-0 reference may
@@ -715,18 +697,12 @@ def _use_shared_base_reference(config: _ManagedTinkerConfig, *, policy_lora_rank
     )
 
 
-def _reference_managed_config(
-    config: _ManagedTinkerConfig,
-    *,
-    policy_lora_rank: int,
-) -> _ManagedTinkerConfig:
+def _reference_managed_config(config: _ManagedTinkerConfig) -> _ManagedTinkerConfig:
     """Derive the config for a separate frozen reference trainer.
 
     ``reference_training_shape_id`` selects a fresh reference trainer shape;
     ``reference_trainer_job_id`` reattaches an existing reference and leaves
-    ownership with the caller. The legacy explicit-shape path for a LoRA policy
-    loads an adapter on top of the base, but is deprecated in favor of sharing
-    the policy trainer with its adapter disabled. Otherwise the reference
+    ownership with the caller. The reference
     forwards the frozen base directly. When no explicit reference shape is
     provided, backend trainer creation auto-selects a LoRA-capable shape. An
     explicitly pinned rank-0 reference may use either LORA_TRAINER (preferred)
@@ -734,11 +710,10 @@ def _reference_managed_config(
     the parent config explicitly keeps them for a later reattach phase.
     """
     reference_shape = config.reference_training_shape_id
-    reference_lora_rank = policy_lora_rank if (config.reference_training_shape_id and policy_lora_rank > 0) else 0
     return replace(
         config,
         training_shape_id=reference_shape,
-        lora_rank=reference_lora_rank,
+        lora_rank=0,
         max_lora_rank=None,
         projection_head_dim=None,
         trainer_job_id=config.reference_trainer_job_id,
@@ -812,21 +787,6 @@ def _trainer_create_shape_ref(requested_shape_id: str | None, profile: Any) -> s
     return _parent_training_shape_name(getattr(profile, "training_shape_version", None))
 
 
-def _uses_manual_training_infra(config: _ManagedTinkerConfig) -> bool:
-    # Only explicit accelerator placement overrides force the manual (shape
-    # validation skipping) create path. extra_args are runtime training flags
-    # that are forwarded on the auto-shape payload too, so they must not disable
-    # auto shape selection -- doing so sends skipValidations=true, which the
-    # server rejects with 400 for non-superuser (customer) API keys.
-    return any(
-        value not in (None, "", 0, False)
-        for value in (
-            config.accelerator_type,
-            config.accelerator_count,
-        )
-    )
-
-
 def _rdma_candidate(config: _ManagedTinkerConfig) -> bool:
     """Allow capability negotiation without changing platform-owned resources."""
     return (
@@ -845,23 +805,19 @@ def _build_trainer_job_config(
     profile_training_shape: str | None,
     requested_job_id: str | None = None,
 ) -> TrainerJobConfig:
-    auto_select_training_shape = profile_training_shape is None and not _uses_manual_training_infra(config)
+    auto_select_training_shape = profile_training_shape is None
     return TrainerJobConfig(
         base_model=config.base_model,
         lora_rank=_trainer_lora_capacity(config),
         projection_head_dim=config.projection_head_dim,
         max_context_length=max_context_length,
         learning_rate=config.learning_rate,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
-        node_count=None if auto_select_training_shape else config.node_count,
         trainer_replica_count=config.trainer_replica_count,
         display_name=config.display_name,
         region=config.region,
         custom_image_tag=config.custom_image_tag,
         extra_args=config.extra_args,
         extra_values=config.extra_values,
-        accelerator_type=None if auto_select_training_shape else config.accelerator_type,
-        accelerator_count=None if auto_select_training_shape else config.accelerator_count,
         training_shape_ref=profile_training_shape,
         auto_select_training_shape=auto_select_training_shape,
         skip_validations=config.skip_validations,
@@ -1019,7 +975,7 @@ def _create_or_reattach_deployment_result(
         return _DeploymentAttachResult(deployment=deployment, reattached=reattached, created=False)
 
     replica_count = max(config.replica_count, 0)
-    if not deployment_shape and not config.accelerator_type:
+    if not deployment_shape:
         raise ValueError(
             "Cannot create a managed deployment without a deployment shape: the "
             "deployment accelerator is owned by the deployment shape. Provide a "
@@ -1032,7 +988,6 @@ def _create_or_reattach_deployment_result(
         deployment_shape=deployment_shape,
         min_replica_count=replica_count,
         max_replica_count=replica_count,
-        accelerator_type=config.accelerator_type,
         hot_load_trainer_job=trainer_job_name,
         hot_load_transition_type=config.hot_load_transition_type,
         for_training=True,

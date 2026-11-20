@@ -86,21 +86,7 @@ def test_parquet_mc_returns_references_instead_of_inline_rows(echo):
             sampler._parse_completions_result(payload, [1, 2, 3], None, True, False, echo, False, sample_extra_requested=True)
     finally:
         sampler.close()
-    assert DeploymentSampler._parquet_capture_requested({"sample_extra_format": "parquet_v1"})
-
-
-@pytest.mark.parametrize("count_key", ["top_sampling_logprobs", "sample_extra_tokens"])
-def test_only_explicit_parquet_requires_shared_storage(count_key):
-    sampler = DeploymentSampler(inference_url="https://api.example.com", model="m", api_key="test", tokenizer=None)
-    try:
-        assert not sampler._parquet_capture_requested({count_key: 8})
-        format_key = "top_sampling_format" if count_key == "top_sampling_logprobs" else "sample_extra_format"
-        assert sampler._parquet_capture_requested({count_key: 8, format_key: "parquet_v1"})
-        assert not sampler._parquet_capture_requested({count_key: 0})
-        with pytest.raises(ValueError, match=rf"^{format_key}='parquet_v1' writes to trainer shared storage.*training_client="):
-            sampler._validate_parquet_capture_request({count_key: 8, format_key: "parquet_v1", "logprobs": True})
-    finally:
-        sampler.close()
+    assert DeploymentSampler._parquet_capture_requested({"sample_extra_tokens": 4})
 
 
 _CAPTURE_CHANNELS = (
@@ -173,31 +159,6 @@ async def test_explicit_parquet_requires_binding_before_http(count_key, format_k
         with pytest.raises(ValueError, match="writes to trainer shared storage"):
             await sampler.sample_with_prompt_tokens_result([1, 2, 3], logprobs=True, **kwargs)
         assert not calls
-    finally:
-        sampler.close()
-
-
-@pytest.mark.parametrize("count_key,format_key,column", _CAPTURE_CHANNELS)
-async def test_plain_count_does_not_select_parquet_or_require_binding(count_key, format_key, column):
-    sampler = DeploymentSampler("https://api.example.com", "m", "test")
-    calls = []
-
-    async def post(body, headers, timeout):
-        calls.append((body.copy(), headers.copy()))
-        return httpx.Response(
-            200,
-            content=f"data: {json.dumps(_payload(False))}\n\ndata: [DONE]\n\n".encode(),
-            request=httpx.Request("POST", "https://api.example.com/inference/v1/completions"),
-        )
-
-    sampler._post_completion = post
-    try:
-        result = await sampler.sample_with_prompt_tokens_result([1, 2, 3], logprobs=True, **{count_key: 3})
-        assert getattr(result.completions[0], f"{column}_references") is None
-        body, headers = calls[0]
-        assert body[count_key] == 3
-        assert format_key not in body
-        assert "x-fireworks-r3-store-id" not in headers
     finally:
         sampler.close()
 

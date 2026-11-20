@@ -82,7 +82,6 @@ def basic_config():
         lora_rank=0,
         max_context_length=4096,
         learning_rate=1e-5,
-        hot_load_deployment_id="my-deploy",
     )
 
 
@@ -113,13 +112,13 @@ class TestCreate:
         path = mgr._post.call_args[0][0]
         payload = mgr._post.call_args[1]["json"]
 
-        assert "deploymentId=my-deploy" in path
+        assert "deploymentId" not in path
         assert "skipValidations=true" in path
         assert payload["serviceMode"] is True
         assert payload["nodeCount"] == 2
         assert payload["trainingConfig"]["baseModel"] == "accounts/test/models/qwen3-1p7b"
         assert payload["trainingConfig"]["region"] == "US_OHIO_1"
-        assert payload["hotLoadDeploymentId"] == "my-deploy"
+        assert "hotLoadDeploymentId" not in payload
 
     def test_use_reservation_payload_defaults_true_and_supports_opt_out(self, mgr):
         default = TrainerJobConfig(base_model="accounts/test/models/qwen3-1p7b")
@@ -1554,29 +1553,6 @@ class TestValidate:
         )
         with pytest.raises(ValueError, match="projection_head_dim"):
             config.validate()
-
-    def test_unset_gradient_accumulation_steps_is_silent(self, caplog):
-        config = TrainerJobConfig(base_model="accounts/test/models/m")
-        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
-            config.validate()
-        assert not any("gradient_accumulation_steps" in rec.message for rec in caplog.records)
-
-    def test_rejects_gradient_accumulation_steps_above_one(self):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            gradient_accumulation_steps=4,
-        )
-        with pytest.raises(ValueError):
-            config.validate()
-
-    def test_explicit_one_gradient_accumulation_steps_warns(self, caplog):
-        config = TrainerJobConfig(
-            base_model="accounts/test/models/m",
-            gradient_accumulation_steps=1,
-        )
-        with caplog.at_level(logging.WARNING, logger="fireworks.training.sdk.trainer"):
-            config.validate()
-        assert any("gradient_accumulation_steps=1 is deprecated" in rec.message for rec in caplog.records)
 
     def test_rejects_negative_inactivity_timeout(self):
         config = TrainerJobConfig(

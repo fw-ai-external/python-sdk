@@ -431,12 +431,18 @@ class TrajectoryDriftPolicy:
 
     max_masked_tokens: int = 1024
     on_other_mismatch: Literal["new_segment", "reject"] = "new_segment"
+    # Linear is the compatibility default during migration. Put new lineage
+    # features and optimizations in tree only. Deprecate and retire linear
+    # rollouts after migration and keep the v1 reader for shared replay.
+    lineage_mode: Literal["tree", "linear"] = "linear"
 
     def __post_init__(self) -> None:
         if self.max_masked_tokens < 0:
             raise ValueError("max_masked_tokens must be non-negative")
         if self.on_other_mismatch not in {"new_segment", "reject"}:
             raise ValueError(f"unknown mismatch disposition: {self.on_other_mismatch}")
+        if self.lineage_mode not in {"tree", "linear"}:
+            raise ValueError(f"unknown lineage mode: {self.lineage_mode}")
 
 
 @dataclass(frozen=True)
@@ -538,7 +544,7 @@ class TITOTurn:
     exact_completion_ids: tuple[int, ...]
     inference_logprobs: tuple[float, ...] | None
     sampling_logprobs: tuple[float | None, ...] | None
-    routing_matrices: tuple[str, ...] | RoutingReferences | None
+    routing_matrices: RoutingReferences | None
     response_id: str
     finish_reason: str
     prompt_disposition: TITOPromptDisposition
@@ -554,7 +560,7 @@ class TITOTurn:
     upstream_response_id: str | None
     upstream_attempts: int
     prompt_routing_start: int | None = None
-    prompt_routing_matrices: tuple[str, ...] | RoutingReferences | None = None
+    prompt_routing_matrices: RoutingReferences | None = None
     prompt_mode: TITOPromptMode = "full_history"
     incremental_contract_id: str | None = None
     incremental_junction_kind: str | None = None
@@ -562,12 +568,12 @@ class TITOTurn:
     incremental_fallback_reason: str | None = None
     server_attempts: tuple[SampledServerAttempt, ...] = ()
     parser_fallback: bool = False
-    inference_topk_token_ids: tuple[tuple[int, ...], ...] | None = None
-    inference_topk_logprobs: tuple[tuple[float, ...], ...] | None = None
     top_sampling_references: RoutingReferences | None = None
     sampling_mask_references: RoutingReferences | None = None
     sample_extra_references: RoutingReferences | None = None
     """Completion-only Parquet top-K sampling rows, one per ``exact_completion_ids`` token."""
+
+    parent_turn_id: str | None = None
 
     @property
     def exact_checkpoint_ids(self) -> tuple[int, ...]:
@@ -605,8 +611,40 @@ class TITOTrajectoryArtifact:
     metrics: TITOMetricSummary
     started_at: float
     finished_at: float
+    lineage_mode: Literal["tree", "linear"] = "linear"
+
+    def continued_turn_ids(self) -> frozenset[str]:
+        """Return assistant turns confirmed by a subsequent accepted request.
+
+        Confirmation can cross a segment boundary. Response emission and
+        harness acceptance are separate evidence for the caller to consider.
+        Invalid tree parent links raise ValueError.
+        """
+        turns = tuple(turn for segment in self.segments for turn in segment.turns)
+        if self.lineage_mode == "linear":
+            return frozenset(
+                prior.turn_id for prior, later in zip(turns, turns[1:]) if _request_continues_turn(prior, later)
+            )
+
+        by_id = {turn.turn_id: turn for turn in turns}
+        if len(by_id) != len(turns):
+            raise ValueError("tree trajectory contains duplicate turn IDs")
+        continued = set()
+        for segment in self.segments:
+            prior = None
+            for turn in segment.turns:
+                if prior is not None and turn.parent_turn_id != prior.turn_id:
+                    raise ValueError("tree turn does not continue its exact prior checkpoint")
+                if turn.parent_turn_id is not None:
+                    parent = by_id.get(turn.parent_turn_id)
+                    if parent is None or not _request_continues_turn(parent, turn):
+                        raise ValueError("tree parent does not match the accepted request history")
+                    continued.add(parent.turn_id)
+                prior = turn
+        return frozenset(continued)
 
     def pack(self) -> bytes:
+        """Encode this artifact as versioned compact bytes."""
         from fireworks.training.sdk.tito._artifact import pack_trajectory_artifact
 
         return pack_trajectory_artifact(self)
@@ -616,6 +654,12 @@ class TITOTrajectoryArtifact:
         from fireworks.training.sdk.tito._artifact import unpack_trajectory_artifact
 
         return unpack_trajectory_artifact(payload)
+
+
+def _request_continues_turn(prior: TITOTurn, later: TITOTurn) -> bool:
+    expected = (*prior.request.messages, prior.assistant.message)
+    messages = later.request.messages
+    return len(messages) >= len(expected) and all(actual == previous for actual, previous in zip(messages, expected))
 
 
 @dataclass(frozen=True)

@@ -24,9 +24,9 @@ from fireworks.training.sdk.tito._types import (
     TITOTrajectoryArtifact,
     _freeze_json,
 )
+from fireworks.training.sdk.tito._native_runtime import require_native
 
 _MAGIC = b"TITOART\x01"
-_ENCODE_BUFFER_CHARACTERS = 64 * 1024
 _JSON_THREAD_YIELD_INTERVAL_SECONDS = 0.01
 
 
@@ -80,6 +80,7 @@ def _request_value(value: TITOChatRequest) -> dict[str, Any]:
 def _turn_value(value: TITOTurn) -> dict[str, Any]:
     return {
         "turn_id": value.turn_id,
+        **({"parent_turn_id": value.parent_turn_id} if value.parent_turn_id is not None else {}),
         "request": _request_value(value.request),
         "assistant": {
             "message": dict(value.assistant.message),
@@ -95,14 +96,6 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
         "exact_completion_ids": list(value.exact_completion_ids),
         "inference_logprobs": value.inference_logprobs,
         "sampling_logprobs": value.sampling_logprobs,
-        **(
-            {
-                "inference_topk_token_ids": value.inference_topk_token_ids,
-                "inference_topk_logprobs": value.inference_topk_logprobs,
-            }
-            if value.inference_topk_token_ids is not None
-            else {}
-        ),
         **(
             {"top_sampling_references": routing_to_wire(value.top_sampling_references)}
             if value.top_sampling_references is not None
@@ -146,8 +139,8 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
 
 
 def _artifact_value(value: TITOTrajectoryArtifact) -> dict[str, Any]:
-    return {
-        "schema_version": 1,
+    encoded: dict[str, Any] = {
+        "schema_version": 2 if value.lineage_mode == "tree" else 1,
         "trajectory_id": value.trajectory_id,
         "serving_affinity_key_hash": value.serving_affinity_key_hash,
         "metadata": dict(value.metadata),
@@ -207,29 +200,27 @@ def _artifact_value(value: TITOTrajectoryArtifact) -> dict[str, Any]:
         "finished_at": value.finished_at,
     }
 
+    if value.lineage_mode == "tree":
+        encoded["lineage_mode"] = "tree"
+    return encoded
+
 
 def pack_trajectory_artifact(value: TITOTrajectoryArtifact) -> bytes:
-    """Encode one artifact into the stable v1 wire representation."""
-    encoder = json.JSONEncoder(
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
+    """Encode one artifact, using v1 for linear and v2 for tree lineage."""
+    native = require_native()
+    encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    wire = _artifact_value(value)
+    if value.lineage_mode == "tree":
+        return _MAGIC + native.compress_json(wire, encoder.encode)
+
+    # Use this interpreter's zlib to preserve the v1 compression bytes.
     compressor = zlib.compressobj(level=6)
     compressed = [_MAGIC]
-    pending: list[str] = []
-    characters = 0
-    # Do not retain a complete JSON string and its UTF-8 copy alongside every
-    # captured prompt. A late non-ASCII character can widen that entire string.
-    for fragment in encoder.iterencode(_artifact_value(value)):
-        pending.append(fragment)
-        characters += len(fragment)
-        if characters >= _ENCODE_BUFFER_CHARACTERS:
-            compressed.append(compressor.compress("".join(pending).encode("utf-8")))
-            pending.clear()
-            characters = 0
-    if pending:
-        compressed.append(compressor.compress("".join(pending).encode("utf-8")))
+
+    def compress_chunk(chunk: bytes) -> None:
+        compressed.append(compressor.compress(chunk))
+
+    native.encode_json(wire, encoder.encode, compress_chunk)
     compressed.append(compressor.flush())
     return b"".join(compressed)
 
@@ -281,6 +272,10 @@ def _request(raw: Mapping[str, Any]) -> TITOChatRequest:
 def _turn(raw: Mapping[str, Any]) -> TITOTurn:
     if any(raw.get(key) is not None for key in ("sample_extra_token_ids", "sample_extra_sampling_logprobs")):
         raise ValueError("Inline MC artifacts are unsupported; collect rollouts with sample_extra_references")
+    if any(raw.get(key) is not None for key in ("inference_topk_token_ids", "inference_topk_logprobs")):
+        raise ValueError("Inline top-k artifacts are unsupported; collect rollouts with top_sampling_references")
+    if "prompt_prefix" in raw:
+        raise ValueError("unsupported TITO turn prompt prefix")
     assistant = raw["assistant"]
     parsed = TITOParsedAssistant(
         message=assistant["message"],
@@ -298,22 +293,13 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
         parsed = response
     return TITOTurn(
         turn_id=str(raw["turn_id"]),
+        parent_turn_id=raw.get("parent_turn_id"),
         request=_request(raw["request"]),
         assistant=parsed,
         exact_prompt_ids=tuple(raw["exact_prompt_ids"]),
         exact_completion_ids=tuple(raw["exact_completion_ids"]),
         inference_logprobs=(None if raw.get("inference_logprobs") is None else tuple(raw["inference_logprobs"])),
         sampling_logprobs=(None if raw.get("sampling_logprobs") is None else tuple(raw["sampling_logprobs"])),
-        inference_topk_token_ids=(
-            None
-            if raw.get("inference_topk_token_ids") is None
-            else tuple(tuple(row) for row in raw["inference_topk_token_ids"])
-        ),
-        inference_topk_logprobs=(
-            None
-            if raw.get("inference_topk_logprobs") is None
-            else tuple(tuple(row) for row in raw["inference_topk_logprobs"])
-        ),
         top_sampling_references=routing_from_wire(raw.get("top_sampling_references")),
         sampling_mask_references=routing_from_wire(raw.get("sampling_mask_references")),
         sample_extra_references=routing_from_wire(raw.get("sample_extra_references")),
@@ -350,10 +336,15 @@ def unpack_trajectory_artifact(payload: bytes) -> TITOTrajectoryArtifact:
         if not payload.startswith(_MAGIC):
             raise ValueError("missing TITO artifact magic/version")
         raw = _load_artifact_json(zlib.decompress(payload[len(_MAGIC) :]))
-        if raw.get("schema_version") != 1:
-            raise ValueError(f"unsupported TITO artifact schema: {raw.get('schema_version')!r}")
+        version = raw.get("schema_version")
+        lineage_mode = raw.get("lineage_mode", "linear")
+        if (version, lineage_mode) not in ((1, "linear"), (2, "tree")):
+            raise ValueError(f"unsupported TITO artifact schema or lineage: {version!r}, {lineage_mode!r}")
+        if "prompt_prefixes" in raw:
+            raise ValueError("unsupported TITO prompt prefix table")
         metrics = raw["metrics"]
         return TITOTrajectoryArtifact(
+            lineage_mode=lineage_mode,
             trajectory_id=str(raw["trajectory_id"]),
             serving_affinity_key_hash=str(raw["serving_affinity_key_hash"]),
             metadata=MappingProxyType(_freeze_json(raw.get("metadata") or {})),

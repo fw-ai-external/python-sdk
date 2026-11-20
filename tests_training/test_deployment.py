@@ -108,15 +108,6 @@ class TestDeploymentSamplerConcurrencyDefaults:
 
         assert sampler._concurrency_controller is controller
 
-    def test_deprecated_max_concurrency_uses_fixed_controller(self):
-        with pytest.warns(DeprecationWarning, match="max_concurrency is deprecated"):
-            sampler = _make_sampler(max_concurrency=4)
-
-        controller = sampler._concurrency_controller
-        assert isinstance(controller, FixedConcurrencyController)
-        assert controller.window_size == 4
-
-
 class TestDeploymentSamplerHeaders:
     def test_inference_headers_include_additional_headers(self):
         sampler = _make_sampler(additional_headers={"X-Session-Affinity": "session-checkpoint-1"})
@@ -1042,11 +1033,11 @@ class TestHotload:
     @pytest.mark.parametrize("value,policy", [(True, "all"), (False, "none")])
     def test_legacy_boolean_policy_warns_with_migration(self, mgr, value, policy):
         mgr._sync_request = MagicMock(return_value=self._response(200))
-        with pytest.warns(DeprecationWarning, match=f"use reset_prompt_cache='{policy}' instead"):
+        with pytest.raises(ValueError, match="reset_prompt_cache"):
             mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=value)
-        assert mgr._sync_request.call_args.kwargs["json"]["reset_prompt_cache"] == policy
+        mgr._sync_request.assert_not_called()
 
-    @pytest.mark.parametrize("policy", ["new_session", "none"])
+    @pytest.mark.parametrize("policy", ["all", "new_session", "none"])
     @pytest.mark.parametrize("known_unsupported", [False, True])
     def test_hotload_never_silently_drops_cache_policy(self, mgr, policy, known_unsupported):
         if known_unsupported:
@@ -1097,28 +1088,6 @@ class TestHotload:
 
         assert "Hotloading BASE (non-delta) snapshot 'snap-123' to deployment 'dep-1'" in caplog.text
         assert "FULL snapshot" not in caplog.text
-
-    def test_hotload_retries_without_reset_prompt_cache_when_rejected(self, mgr):
-        unsupported = self._response(
-            400,
-            {"error": {"message": "Extra inputs are not permitted, field: 'reset_prompt_cache', value: True"}},
-            text="Extra inputs are not permitted, field: 'reset_prompt_cache', value: True",
-        )
-        success = self._response(200, {})
-        mgr._sync_request = MagicMock(side_effect=[unsupported, success, success])
-
-        with pytest.warns(DeprecationWarning, match="Boolean reset_prompt_cache is deprecated"):
-            mgr.hotload("dep-1", "accounts/test/models/m", "snap-123", reset_prompt_cache=True)
-        mgr.hotload("dep-1", "accounts/test/models/m", "snap-456", reset_prompt_cache="all")
-
-        first_payload = mgr._sync_request.call_args_list[0].kwargs["json"]
-        retry_payload = mgr._sync_request.call_args_list[1].kwargs["json"]
-        second_call_payload = mgr._sync_request.call_args_list[2].kwargs["json"]
-
-        assert first_payload["reset_prompt_cache"] == "all"
-        assert "reset_prompt_cache" not in retry_payload
-        assert "reset_prompt_cache" not in second_call_payload
-        assert mgr._hotload_reset_prompt_cache_supported is False
 
     def test_hotload_path_sent_as_header_not_body(self, mgr):
         # ``path`` rides the ``x-fireworks-hot-load-source-url`` header so
@@ -1636,32 +1605,6 @@ class TestSampleWithTokens:
         assert results[0].sampling_logprobs == [None]
         sampler.close()
 
-    def test_routing_matrices_extracted(self):
-        sampler = _make_sampler(tokenizer=_make_mock_tokenizer([1, 2]))
-        _mock_async_completions_stream(
-            sampler,
-            {
-                "choices": [
-                    {
-                        "text": "hi",
-                        "finish_reason": "stop",
-                        "token_ids": [99],
-                        "logprobs": {"content": [{"logprob": -0.5, "routing_matrix": "AQID"}]},
-                    }
-                ]
-            },
-        )
-
-        results = asyncio.run(
-            sampler.sample_with_tokens(
-                messages=[{"role": "user", "content": "x"}],
-                include_routing_matrix=True,
-            )
-        )
-        assert results[0].routing_matrices == ["AQID"]
-        sampler.close()
-
-
 # ---------------------------------------------------------------------------
 # Default parameter values
 # ---------------------------------------------------------------------------
@@ -2147,6 +2090,10 @@ class TestFiretitanSamplingClient:
     @pytest.mark.parametrize("ttl", [None, 60, 604800])
     def test_sample_preserves_routing_matrices_in_tinker_compatible_response(self, native_sdk, ttl):
         sampler = _make_sampler()
+        from tests_training.test_routing_references import refs
+
+        sampler.r3_store_id = "test"
+        references = refs(2)
         captured = {}
 
         async def _fake_stream(*args, **kwargs):
@@ -2157,17 +2104,18 @@ class TestFiretitanSamplingClient:
                         "text": "out",
                         "finish_reason": "stop",
                         "token_ids": [40, 50],
+                        "routing_matrix_format": "parquet_v1",
+                        "routing_references": references.to_dict(),
+                        "r3_store_id": "test",
                         "logprobs": {
                             "content": [
                                 {
                                     "logprob": -0.3,
                                     "sampling_logprob": -0.31,
-                                    "routing_matrix": "matrix-1",
                                 },
                                 {
                                     "logprob": -0.4,
                                     "sampling_logprob": -0.41,
-                                    "routing_matrix": "matrix-2",
                                 },
                             ]
                         },
@@ -2196,7 +2144,7 @@ class TestFiretitanSamplingClient:
         assert isinstance(response, tinker_types.SampleResponse)
         assert isinstance(response.sequences[0], FiretitanSampledSequence)
         assert isinstance(response.sequences[0], tinker_types.SampledSequence)
-        assert response.sequences[0].routing_matrices == ["matrix-1", "matrix-2"]
+        assert response.sequences[0].routing_matrices == references
         assert response.sequences[0].top_sampling_references is None
         assert "top_sampling_logprobs" not in captured
         assert "top_sampling_format" not in captured
@@ -2205,6 +2153,10 @@ class TestFiretitanSamplingClient:
         prompt_ids = [10, 20, 30]
         completion_ids = [40, 50]
         sampler = _make_sampler(tokenizer=None)
+        from tests_training.test_routing_references import refs
+
+        sampler.r3_store_id = "test"
+        references = refs(5)
         captured = {}
 
         async def _fake_stream(*args, **kwargs):
@@ -2215,13 +2167,16 @@ class TestFiretitanSamplingClient:
                         "text": "out",
                         "finish_reason": "length",
                         "token_ids": prompt_ids + completion_ids,
+                        "routing_matrix_format": "parquet_v1",
+                        "routing_references": references.to_dict(),
+                        "r3_store_id": "test",
                         "logprobs": {
                             "content": [
-                                {"logprob": 0.0, "sampling_logprob": None, "routing_matrix": "first"},
-                                {"logprob": -0.1, "sampling_logprob": None, "routing_matrix": "prompt-1"},
-                                {"logprob": -0.2, "sampling_logprob": None, "routing_matrix": "prompt-2"},
-                                {"logprob": -0.3, "sampling_logprob": -0.33, "routing_matrix": "completion-1"},
-                                {"logprob": -0.4, "sampling_logprob": -0.44, "routing_matrix": "completion-2"},
+                                {"logprob": 0.0, "sampling_logprob": None},
+                                {"logprob": -0.1, "sampling_logprob": None},
+                                {"logprob": -0.2, "sampling_logprob": None},
+                                {"logprob": -0.3, "sampling_logprob": -0.33},
+                                {"logprob": -0.4, "sampling_logprob": -0.44},
                             ]
                         },
                     }
@@ -2248,7 +2203,7 @@ class TestFiretitanSamplingClient:
         assert response.sequences[0].tokens == completion_ids
         assert response.sequences[0].logprobs == [-0.33, -0.44]
         assert response.sequences[0].stop_reason == "length"
-        assert response.sequences[0].routing_matrices == ["completion-1", "completion-2"]
+        assert response.sequences[0].routing_matrices == references[3:]
 
     @pytest.mark.parametrize("echo,echoed_reference_rows", [(False, False), (True, False), (True, True)])
     @pytest.mark.parametrize("sampling_mask,head_k", [(None, 256), ("parquet_v1", 128), ("parquet_v1", None)])
@@ -3240,54 +3195,6 @@ class TestAttemptRecords:
         assert records[0].error is not None
         # One release, carrying the same record; no extra controller input.
         assert len(released) == 1 and released[0] is records[0]
-
-    def test_client_latency_excludes_the_r3_format_probe(self, monkeypatch):
-        import json as _json
-        import time as _time
-
-        from fireworks.training.sdk import sampling as sampling_module
-
-        clock = {"now": 100.0}
-        fake_time = pytypes.SimpleNamespace(
-            **{name: getattr(_time, name) for name in dir(_time) if not name.startswith("_")}
-        )
-        fake_time.monotonic = lambda: clock["now"]
-        monkeypatch.setattr(sampling_module, "time", fake_time)
-
-        sampler = _make_sampler(tokenizer=None)
-
-        async def _probe(headers, timeout):
-            clock["now"] += 3.0  # shared R3 format negotiation
-            sampler.routing_matrix_format = "base64_inline"
-
-        chunk = {
-            "choices": [{"text": "ok", "finish_reason": "stop", "token_ids": [7], "prompt_token_ids": [1, 2, 3]}],
-            "usage": {"completion_tokens": 1},
-        }
-        raw = f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
-
-        async def _post(payload, headers, timeout):
-            clock["now"] += 0.5  # the completion itself
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.raise_for_status = MagicMock()
-            resp.headers = {}
-
-            async def aiter_bytes():
-                yield raw
-
-            resp.aiter_bytes = aiter_bytes
-            return resp
-
-        sampler._ensure_routing_matrix_format = _probe
-        sampler._post_completion = _post
-        _result, metrics = asyncio.run(
-            sampler.async_completions_stream([1, 2, 3], max_tokens=4, include_routing_matrix=True)
-        )
-        assert metrics.client_latency == pytest.approx(0.5)
-        assert metrics.client_ttft == pytest.approx(0.5)
-        sampler.close()
-
 
 class TestSseTruncationRetry:
     """Contract: only :class:`_SSETruncationError` triggers retry; other

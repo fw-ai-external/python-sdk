@@ -1,6 +1,6 @@
 [project]
 name = "fireworks-ai"
-version = "1.2.35"
+version = "1.2.36"
 description = "The official Python library for the fireworks API"
 dynamic = ["readme"]
 license = "Apache-2.0"
@@ -134,6 +134,9 @@ include = [
   "src/*"
 ]
 
+[tool.hatch.build.hooks.custom]
+path = "src/fireworks/training/sdk/_build_tito_wheel.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/fireworks"]
 
@@ -146,6 +149,11 @@ include = [
   "/*.md",
   "/mypy.ini",
   "/noxfile.py",
+  "/native/tito/Cargo.toml",
+  "/native/tito/Cargo.lock",
+  "/native/tito/src/",
+  "/scripts/build_native_wheel.py",
+  "/scripts/build_tito_extension.sh",
   "bin/*",
   "examples/*",
   "src/*",

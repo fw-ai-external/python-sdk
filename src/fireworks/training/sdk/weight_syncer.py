@@ -52,6 +52,7 @@ from fireworks.training.sdk.deployment import (
     DeploymentManager,
     DeploymentSampler,
     ResetPromptCacheMode,
+    normalize_reset_prompt_cache,
 )
 from fireworks.training.sdk._snapshot_chain import (
     build_incremental_metadata,
@@ -89,11 +90,10 @@ class WeightSyncer:
     """If True, send a warmup request after each successful hotload."""
     warmup_max_retries: int = 10
     """Max retries for post-hotload warmup (default 10 x 10s = ~100s)."""
-    reset_prompt_cache: ResetPromptCacheMode | bool = "new_session"
+    reset_prompt_cache: ResetPromptCacheMode = "new_session"
     """Future-request prefix-cache policy; defaults to preserving existing sessions.
 
-    Accepts ``all``, ``new_session``, ``none``, or deprecated True/False
-    (all/none, with a migration warning).
+    Accepts ``all``, ``new_session``, or ``none``.
     Active KV across async hotload is unaffected.
     """
     lora_rank: int = 0
@@ -111,6 +111,9 @@ class WeightSyncer:
     last_timing: dict = field(default_factory=dict, init=False)
     """Timing breakdown from the most recent operation (seconds).
     Reset at the start of each save/hotload/dcp call."""
+
+    def __post_init__(self) -> None:
+        self.reset_prompt_cache = normalize_reset_prompt_cache(self.reset_prompt_cache)
 
     @property
     def _hotload_enabled(self) -> bool:
@@ -346,7 +349,8 @@ class WeightSyncer:
                     f"Hotload failed for '{snapshot_name}'",
                     "hotload_and_wait returned False without a detailed status error.",
                     "Use the Fireworks training cookbook skill's hotload recovery self-check. "
-                    "Verify the requested snapshot identity against deployment status, then use the documented PER_TRAINER or PER_DEPLOYMENT flow.",
+                    "Verify the requested snapshot identity against deployment status and confirm "
+                    "hot_load_trainer_job points to the trainer that produced it.",
                     docs_url=DOCS_SDK,
                 )
             )
