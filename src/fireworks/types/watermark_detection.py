@@ -13,8 +13,8 @@ class WatermarkDetection(BaseModel):
     detector_version: str
     result: Literal["detected", "not_detected", "uncertain"]
     scored_tokens: int
-    """Token positions that contributed to the decision.
+    """Token positions scored under the tokenizer that decided the result.
 
-    When the text is evaluated more than one way, this is the smallest such count.
-    0 when nothing could be scored.
+    When no tokenizer could score enough of the text, this is the largest count
+    any tokenizer reached, and 0 when none could score it.
     """
