@@ -1195,6 +1195,14 @@ def _validate_checkpoint_ref(checkpoint_ref: str) -> str:
     )
 
 
+def _validate_adapter_model_resource(adapter_path: str) -> str:
+    normalized_path = adapter_path.strip()
+    parts = normalized_path.split("/")
+    if len(parts) != 4 or parts[0] != "accounts" or not parts[1] or parts[2] != "models" or not parts[3]:
+        raise ValueError("adapter_path must be a Fireworks PEFT model resource: accounts/<account>/models/<model>")
+    return normalized_path
+
+
 def make_cross_job_checkpoint_ref(*, source_job_id: str, checkpoint_name: str) -> str:
     """Build an opaque checkpoint reference for cross-job resume."""
     checkpoint_ref = f"{CROSS_JOB_CHECKPOINT_REF_PREFIX}{source_job_id}/{checkpoint_name}"
@@ -3252,9 +3260,7 @@ class FiretitanTrainingClient(TrainingClient):
         ``adapter_path`` must be a promoted PEFT Model resource name
         (``accounts/<account>/models/<name>``).
         """
-        adapter_path = (adapter_path or "").strip()
-        if not adapter_path:
-            raise ValueError("adapter_path must be a non-empty string")
+        adapter_path = _validate_adapter_model_resource(adapter_path or "")
 
         request_id = self._get_request_id()
 
@@ -3358,7 +3364,9 @@ class FiretitanServiceClient(ServiceClient):
             raise ValueError("release_channel is only supported for serverless training")
         if serverless:
             headers = dict(kwargs.get("default_headers") or {})
-            channel_header_names = [name for name in headers if name.lower() == TRAINING_RELEASE_CHANNEL_HEADER.lower()]
+            channel_header_names = [
+                name for name in headers if name.lower() == TRAINING_RELEASE_CHANNEL_HEADER.lower()
+            ]
             if release_channel is None and not channel_header_names:
                 release_channel = os.environ.get(TRAINING_RELEASE_CHANNEL_ENV)
             if release_channel is not None:

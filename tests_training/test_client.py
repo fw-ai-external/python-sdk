@@ -1528,7 +1528,9 @@ class TestFiretitanServiceClientManagedCompat:
             32,
             128,
         ]
-        assert [call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list] == [
+        assert [
+            call.kwargs["projection_head_dim"] for call in inner_service.create_training_client.call_args_list
+        ] == [
             1,
             1,
             1,
@@ -3876,7 +3878,9 @@ class TestCreateTrainingClientInitMethod:
                 return False
 
         svc.holder.aclient.return_value = _ClientContext()
-        svc.holder.run_coroutine_threadsafe.side_effect = lambda coro: SimpleNamespace(result=lambda: asyncio.run(coro))
+        svc.holder.run_coroutine_threadsafe.side_effect = lambda coro: SimpleNamespace(
+            result=lambda: asyncio.run(coro)
+        )
         return svc, requests
 
     @classmethod
@@ -3926,13 +3930,18 @@ class TestLoadAdapter:
 
     def test_empty_path_raises_valueerror(self):
         client = self._make_client()
-        with pytest.raises(ValueError, match="adapter_path must be a non-empty string"):
+        with pytest.raises(ValueError, match="adapter_path must be a Fireworks PEFT model resource"):
             client.load_adapter("")
 
     def test_whitespace_only_path_raises_valueerror(self):
         client = self._make_client()
-        with pytest.raises(ValueError, match="adapter_path must be a non-empty string"):
+        with pytest.raises(ValueError, match="adapter_path must be a Fireworks PEFT model resource"):
             client.load_adapter("   ")
+
+    def test_gcs_path_raises_valueerror(self):
+        client = self._make_client()
+        with pytest.raises(ValueError, match="adapter_path must be a Fireworks PEFT model resource"):
+            client.load_adapter("gs://bucket/adapter-dir")
 
     def test_non_empty_path_schedules_coroutine(self):
         """Valid path should dispatch to holder.run_coroutine_threadsafe with an
@@ -3946,7 +3955,7 @@ class TestLoadAdapter:
             patch.object(client, "_get_request_id", return_value=42),
             patch.object(client, "_submit_operation") as submit,
         ):
-            client.load_adapter("gs://bucket/adapter-dir")
+            client.load_adapter("accounts/test-account/models/adapter")
 
         submit.assert_called_once()
         coro_arg = submit.call_args.args[0]
