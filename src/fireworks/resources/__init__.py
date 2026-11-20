@@ -128,6 +128,14 @@ from .batch_inference_jobs import (
     BatchInferenceJobsResourceWithStreamingResponse,
     AsyncBatchInferenceJobsResourceWithStreamingResponse,
 )
+from .watermark_detections import (
+    WatermarkDetectionsResource,
+    AsyncWatermarkDetectionsResource,
+    WatermarkDetectionsResourceWithRawResponse,
+    AsyncWatermarkDetectionsResourceWithRawResponse,
+    WatermarkDetectionsResourceWithStreamingResponse,
+    AsyncWatermarkDetectionsResourceWithStreamingResponse,
+)
 from .deployment_shape_versions import (
     DeploymentShapeVersionsResource,
     AsyncDeploymentShapeVersionsResource,
@@ -282,4 +290,10 @@ __all__ = [
     "AsyncSecretsResourceWithRawResponse",
     "SecretsResourceWithStreamingResponse",
     "AsyncSecretsResourceWithStreamingResponse",
+    "WatermarkDetectionsResource",
+    "AsyncWatermarkDetectionsResource",
+    "WatermarkDetectionsResourceWithRawResponse",
+    "AsyncWatermarkDetectionsResourceWithRawResponse",
+    "WatermarkDetectionsResourceWithStreamingResponse",
+    "AsyncWatermarkDetectionsResourceWithStreamingResponse",
 ]

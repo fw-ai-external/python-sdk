@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.37 (2026-11-20)
+
+Full Changelog: [v1.2.36...v1.2.37](https://github.com/fw-ai-external/python-sdk/compare/v1.2.36...v1.2.37)
+
+### Features
+* **watermark detections:** add `client.watermark_detections.create(text=...)` (and the async client equivalent) to check whether text carries a Fireworks watermark.
+
 ## 1.2.36 (2026-11-20)
 
 Full Changelog: [v1.2.35...v1.2.36](https://github.com/fw-ai-external/python-sdk/compare/v1.2.35...v1.2.36)
