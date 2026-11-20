@@ -17,3 +17,5 @@ Brewfile.lock.json
 wandb/
 *.jsonl
 uv.lock
+
+/src/fireworks/training/sdk/tito/_native.abi3.so

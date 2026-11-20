@@ -1,4 +1,4 @@
-"""Linear exact-token trajectory state machine."""
+"""Exact-token trajectory state machine."""
 
 from __future__ import annotations
 
@@ -55,6 +55,7 @@ from fireworks.training.sdk.tito._types import (
     _server_attempt_value,
 )
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
+from fireworks.training.sdk.tito._native_runtime import require_native
 from fireworks.training.sdk.sampling_observability import (
     ERROR_KIND_UPSTREAM_STREAM,
     SamplingRequestError,
@@ -80,6 +81,21 @@ class _Segment:
     closed_reason: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _PolicyCheckpoint:
+    segment: _Segment
+    parent: TITOTurn
+    messages: tuple[Mapping[str, Any], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyBoundary:
+    reason: str
+    parent: TITOTurn | None = None
+    close_reason: str | None = None
+    render_fallback: str | None = None
+
+
 @dataclass(frozen=True)
 class _LastCall:
     idempotency_key: str
@@ -87,6 +103,7 @@ class _LastCall:
     prepared_prompt_hash: str
     turn_id: str
     response: Mapping[str, Any]
+    parent: TITOTurn | None
 
 
 @dataclass
@@ -97,6 +114,9 @@ class _TrajectoryState:
     drift_policy: TrajectoryDriftPolicy
     started_at: float
     segments: list[_Segment] = field(default_factory=list)
+    latest_segment: _Segment | None = None
+    # Borrow committed turns without storing another copy of messages or token IDs.
+    checkpoints: dict[int, list[tuple[_Segment, TITOTurn]]] = field(default_factory=dict)
     calls: list[TITOCallRecord] = field(default_factory=list)
     response_attempts: list[TITOResponseAttempt] = field(default_factory=list)
     last_call: _LastCall | None = None
@@ -115,9 +135,9 @@ class _TrajectoryState:
 
     @property
     def active_segment(self) -> _Segment | None:
-        if not self.segments or self.segments[-1].closed_reason is not None:
+        if self.latest_segment is None or self.latest_segment.closed_reason is not None:
             return None
-        return self.segments[-1]
+        return self.latest_segment
 
 
 @dataclass
@@ -174,6 +194,7 @@ class _TurnPlan:
     requested_output_tokens: int
     effective_output_tokens: int
     context_remaining_tokens: int
+    parent: TITOTurn | None = None
 
 
 class TITOEventObserver(Protocol):
@@ -238,6 +259,7 @@ class _LinearTrajectoryCore:
             raise ValueError(f"unknown TITO prompt mode: {prompt_mode!r}")
         if prompt_mode == "incremental" and not isinstance(renderer, TITOIncrementalRenderer):
             raise TypeError("experimental incremental prompt mode requires an incremental renderer")
+        self._native = require_native()
         self.sampler = sampler
         self.renderer = renderer
         self.prompt_mode = prompt_mode
@@ -313,6 +335,7 @@ class _LinearTrajectoryCore:
             "serving_affinity_key_hash": hashlib.sha256(state.serving_affinity_key.encode("utf-8")).hexdigest(),
             "drift_policy": {
                 "max_masked_tokens": state.drift_policy.max_masked_tokens,
+                "lineage_mode": state.drift_policy.lineage_mode,
                 "on_other_mismatch": state.drift_policy.on_other_mismatch,
             },
         }
@@ -706,42 +729,6 @@ class _LinearTrajectoryCore:
             }
         )
 
-    @staticmethod
-    def _history_for_segment(segment: _Segment) -> tuple[Mapping[str, Any], ...]:
-        if not segment.turns:
-            return ()
-        last = segment.turns[-1]
-        return last.request.messages + (last.assistant.message,)
-
-    @staticmethod
-    def _history_extends(
-        stored: Sequence[Mapping[str, Any]],
-        incoming: Sequence[Mapping[str, Any]],
-    ) -> bool:
-        return len(incoming) >= len(stored) and tuple(incoming[: len(stored)]) == tuple(stored)
-
-    @staticmethod
-    def _history_rewrite_kind(
-        stored: Sequence[Mapping[str, Any]],
-        incoming: Sequence[Mapping[str, Any]],
-    ) -> Literal["prior_context", "assistant_roundtrip", "truncated"]:
-        """Classify the first canonical message-level lineage discontinuity."""
-
-        for index, (stored_message, incoming_message) in enumerate(zip(stored, incoming)):
-            if stored_message != incoming_message:
-                if index == len(stored) - 1:
-                    return "assistant_roundtrip"
-                return "prior_context"
-        return "truncated"
-
-    @staticmethod
-    def _common_prefix_tokens(left: Sequence[int], right: Sequence[int]) -> int:
-        matched = 0
-        limit = min(len(left), len(right))
-        while matched < limit and left[matched] == right[matched]:
-            matched += 1
-        return matched
-
     def _turn_plan(
         self,
         state: _TrajectoryState,
@@ -759,6 +746,7 @@ class _LinearTrajectoryCore:
         incremental_junction_kind: str | None = None,
         incremental_checkpoint_trim_tokens: int = 0,
         incremental_fallback_reason: str | None = None,
+        parent: TITOTurn | None = None,
         segment: _Segment | None,
         start_reason: str | None,
         close_reason: str | None,
@@ -780,6 +768,7 @@ class _LinearTrajectoryCore:
             incremental_junction_kind=incremental_junction_kind,
             incremental_checkpoint_trim_tokens=incremental_checkpoint_trim_tokens,
             incremental_fallback_reason=incremental_fallback_reason,
+            parent=parent,
             segment=segment,
             start_reason=start_reason,
             close_reason=close_reason,
@@ -817,11 +806,8 @@ class _LinearTrajectoryCore:
         # complete request before inspecting lineage state. Incremental mode is
         # the only mode allowed to defer that render and construct a suffix.
         full_prompt = await self._render_full(state, request) if self.prompt_mode == "full_history" else None
-        active = state.active_segment
-        if active is None:
-            start_reason = "initial"
-            if state.segments:
-                start_reason = state.segments[-1].closed_reason or "closed_segment"
+        checkpoint = self._resolve_policy_checkpoint(state, request, contract)
+        if isinstance(checkpoint, _PolicyBoundary):
             if full_prompt is None:
                 full_prompt = await self._render_full(state, request)
             return self._turn_plan(
@@ -834,71 +820,109 @@ class _LinearTrajectoryCore:
                 prefix_match_tokens=None,
                 realign_from_token=None,
                 realigned_masked_tokens=0,
+                incremental_fallback_reason=(checkpoint.render_fallback if self.prompt_mode == "incremental" else None),
+                parent=checkpoint.parent,
                 segment=None,
-                start_reason=start_reason,
-                close_reason=None,
+                start_reason=checkpoint.reason,
+                close_reason=checkpoint.close_reason,
             )
 
-        if active.render_contract_id != contract:
+        plan = await self._prepare_continuation(
+            state,
+            request,
+            contract,
+            fingerprint,
+            full_prompt,
+            checkpoint,
+        )
+        return self._place_policy_turn(state, checkpoint, plan)
+
+    def _resolve_policy_checkpoint(
+        self,
+        state: _TrajectoryState,
+        request: TITOChatRequest,
+        contract: str,
+    ) -> _PolicyCheckpoint | _PolicyBoundary:
+        """Find the semantic checkpoint and handle history or contract boundaries."""
+        tree = state.drift_policy.lineage_mode == "tree"
+        active, last, reason = self._native.select_parent(
+            tree, state.latest_segment, state.checkpoints, request.messages, contract
+        )
+        if active is None or last is None:
+            if tree and reason != "initial":
+                state.metrics.increment(f"lineage/boundary_reason_{reason}")
+                if reason == "history_rewrite" and state.latest_segment is not None:
+                    previous = state.latest_segment.turns[-1]
+                    stored = previous.request.messages + (previous.assistant.message,)
+                    rewrite_kind = self._native.history_rewrite(stored, request.messages) or "truncated"
+                    state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
+                if reason != "length_truncation" and state.drift_policy.on_other_mismatch == "reject":
+                    state.metrics.increment("lineage/reject")
+                    raise TITOError("tito_lineage_divergence", 409, f"no unique tree checkpoint: {reason}")
+            render_fallback = reason if tree and reason not in {"initial", "length_truncation"} else None
+            return _PolicyBoundary(reason, parent=last, render_fallback=render_fallback)
+
+        if reason == "contract_change":
             state.metrics.increment("lineage/boundary_reason_contract_change")
             if state.drift_policy.on_other_mismatch == "reject":
                 state.metrics.increment("lineage/reject")
-                raise TITOError(
-                    "tito_lineage_divergence",
-                    409,
-                    "incoming request changes the active render contract",
+                raise TITOError("tito_lineage_divergence", 409, "incoming request changes the active render contract")
+            return _PolicyBoundary(reason, close_reason=reason, render_fallback=reason)
+
+        stored = last.request.messages + (last.assistant.message,)
+        if not tree:
+            rewrite_kind = self._native.history_rewrite(stored, request.messages)
+            if rewrite_kind is not None:
+                state.metrics.increment("lineage/boundary_reason_history_rewrite")
+                state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
+                if state.drift_policy.on_other_mismatch == "reject":
+                    state.metrics.increment("lineage/reject")
+                    raise TITOError(
+                        "tito_lineage_divergence", 409, "incoming history does not extend the active segment"
+                    )
+                return _PolicyBoundary(
+                    "history_rewrite", close_reason="history_rewrite", render_fallback="history_rewrite"
                 )
-            if full_prompt is None:
-                full_prompt = await self._render_full(state, request)
-            return self._turn_plan(
-                state,
-                request,
-                contract,
-                fingerprint,
-                full_prompt,
+        return _PolicyCheckpoint(active, last, stored)
+
+    def _place_policy_turn(self, state: _TrajectoryState, checkpoint: _PolicyCheckpoint, plan: _TurnPlan) -> _TurnPlan:
+        """Place a prepared turn without changing how its prompt was rendered."""
+        active, last = checkpoint.segment, checkpoint.parent
+        if state.drift_policy.lineage_mode == "linear":
+            return replace(plan, parent=last)
+        fork_reason = self._native.fork_reason(
+            last is active.turns[-1],
+            active is state.latest_segment,
+            plan.prefix_match_tokens,
+            len(last.exact_prompt_ids) + len(last.exact_completion_ids),
+        )
+        if plan.segment is not None and fork_reason is not None:
+            # Preserve sampled loss on the original branch. A new sample uses
+            # a fully masked prompt and needs all its prompt routing rows.
+            return replace(
+                plan,
+                parent=last,
+                segment=None,
+                start_reason=fork_reason,
                 prompt_disposition="new_segment",
-                prefix_match_tokens=None,
                 realign_from_token=None,
                 realigned_masked_tokens=0,
-                incremental_fallback_reason=("contract_change" if self.prompt_mode == "incremental" else None),
-                segment=None,
-                start_reason="contract_change",
-                close_reason="contract_change",
             )
+        return replace(plan, parent=last, close_reason=None)
 
-        last = active.turns[-1]
-        stored_history = self._history_for_segment(active)
-        if not self._history_extends(stored_history, request.messages):
-            state.metrics.increment("lineage/boundary_reason_history_rewrite")
-            rewrite_kind = self._history_rewrite_kind(stored_history, request.messages)
-            state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
-            if state.drift_policy.on_other_mismatch == "reject":
-                state.metrics.increment("lineage/reject")
-                raise TITOError(
-                    "tito_lineage_divergence",
-                    409,
-                    "incoming history does not extend the active segment",
-                )
-            if full_prompt is None:
-                full_prompt = await self._render_full(state, request)
-            return self._turn_plan(
-                state,
-                request,
-                contract,
-                fingerprint,
-                full_prompt,
-                prompt_disposition="new_segment",
-                prefix_match_tokens=None,
-                realign_from_token=None,
-                realigned_masked_tokens=0,
-                incremental_fallback_reason=("history_rewrite" if self.prompt_mode == "incremental" else None),
-                segment=None,
-                start_reason="history_rewrite",
-                close_reason="history_rewrite",
-            )
-
+    async def _prepare_continuation(
+        self,
+        state: _TrajectoryState,
+        request: TITOChatRequest,
+        contract: str,
+        fingerprint: str,
+        full_prompt: tuple[int, ...] | None,
+        checkpoint: _PolicyCheckpoint,
+    ) -> _TurnPlan:
+        active, last = checkpoint.segment, checkpoint.parent
         exact_checkpoint = last.exact_checkpoint_ids
         if self.prompt_mode == "incremental":
+            stored_history = checkpoint.messages
             appended_messages = request.messages[len(stored_history) :]
             prepared = await self._render_incremental(
                 state,
@@ -935,8 +959,7 @@ class _LinearTrajectoryCore:
 
             # Miles Session v2 is the mechanism reference for this experimental
             # path: construct a suffix under a synthetic assistant anchor, then
-            # let the model renderer own one bounded junction edit. Fireworks
-            # intentionally retains only linear lineage, not Miles's tree.
+            # let the model renderer own one bounded junction edit.
             prompt = prepared.prompt_ids
             trim_tokens = prepared.checkpoint_trim_tokens
             checkpoint_length = len(exact_checkpoint)
@@ -948,14 +971,14 @@ class _LinearTrajectoryCore:
                     "incremental renderer trimmed beyond the prior completion boundary",
                 )
             retained_length = checkpoint_length - trim_tokens
-            if len(prompt) <= retained_length or prompt[:retained_length] != exact_checkpoint[:retained_length]:
+            prefix_match_tokens = self._native.common_prefix_tokens(exact_checkpoint, prompt)
+            if len(prompt) <= retained_length or prefix_match_tokens < retained_length:
                 state.metrics.increment("renderer/incremental_contract_error")
                 raise TITOError(
                     "tito_renderer_contract_error",
                     500,
                     "incremental renderer exceeded its declared checkpoint junction",
                 )
-            prefix_match_tokens = self._common_prefix_tokens(exact_checkpoint, prompt)
             state.metrics.increment("lineage/prefix_check")
             return self._turn_plan(
                 state,
@@ -979,8 +1002,12 @@ class _LinearTrajectoryCore:
         if full_prompt is None:
             raise RuntimeError("full-history prompt was not prepared")
         state.metrics.increment("lineage/prefix_check")
-        prefix_match_tokens = self._common_prefix_tokens(exact_checkpoint, full_prompt)
-        if prefix_match_tokens == len(exact_checkpoint):
+        prefix_match_tokens = self._native.common_prefix_tokens(exact_checkpoint, full_prompt)
+        response_start = len(last.exact_prompt_ids)
+        disposition, masked_tokens = self._native.full_history_alignment(
+            prefix_match_tokens, len(exact_checkpoint), response_start, len(full_prompt), state.drift_policy.max_masked_tokens
+        )
+        if disposition == "append":
             return self._turn_plan(
                 state,
                 request,
@@ -997,10 +1024,7 @@ class _LinearTrajectoryCore:
             )
 
         state.metrics.increment("lineage/prefix_mismatch")
-        response_start = len(last.exact_prompt_ids)
-        masked_tokens = len(full_prompt) - response_start
-        can_realign = prefix_match_tokens >= response_start and masked_tokens < state.drift_policy.max_masked_tokens
-        if can_realign:
+        if disposition == "realign":
             return self._turn_plan(
                 state,
                 request,
@@ -1845,14 +1869,11 @@ class _LinearTrajectoryCore:
                             retry_prompt = await self._render_full(state, request)
                             prompt_matches = _hash_tokens(retry_prompt) == state.last_call.prepared_prompt_hash
                         else:
-                            segment = state.segments[-1]
-                            if len(segment.turns) < 2 or segment.turns[-1].turn_id != last_turn.turn_id:
+                            prior_turn = state.last_call.parent
+                            if prior_turn is None:
                                 raise TITOError(
-                                    "tito_replay_state_error",
-                                    500,
-                                    "incremental replay has no prior exact checkpoint",
+                                    "tito_replay_state_error", 500, "incremental replay has no prior exact checkpoint"
                                 )
-                            prior_turn = segment.turns[-2]
                             stored_history = prior_turn.request.messages + (prior_turn.assistant.message,)
                             phase = "idempotency_incremental_render"
                             retry_prompt = await self._render_incremental(
@@ -1923,7 +1944,36 @@ class _LinearTrajectoryCore:
             phase = "prepare"
             plan = await self._prepare_policy(state, request, contract, fingerprint)
             prompt_hash = plan.prepared_prompt_hash
-            active_before_commit = state.active_segment
+            tree = state.drift_policy.lineage_mode == "tree"
+            parent_id = plan.parent.turn_id if tree and plan.parent is not None else None
+            prior_checkpoint = plan.parent
+            if not tree and state.active_segment is not None:
+                prior_checkpoint = state.active_segment.turns[-1]
+            phase = "sampling_admission"
+            sampling_kwargs = self._sampling_kwargs(state, request)
+            include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
+            include_top_sampling = bool(sampling_kwargs.get("top_sampling_logprobs"))
+            include_sampling_mask = bool(sampling_kwargs.get("sampling_mask"))
+            include_sample_extra = bool(sampling_kwargs.get("sample_extra_tokens"))
+            if tree and plan.segment is not None:
+                prior = plan.segment.turns[-1]
+                if (
+                    (prior.routing_matrices is not None) != include_routing
+                    or (prior.top_sampling_references is not None) != include_top_sampling
+                    or (prior.sampling_mask_references is not None) != include_sampling_mask
+                    or (prior.sample_extra_references is not None) != include_sample_extra
+                ):
+                    # Replay metadata must cover every sampled turn in a segment.
+                    # A fresh segment requests the complete prompt's routes.
+                    state.metrics.increment("lineage/boundary_reason_sampling_evidence_change")
+                    plan = replace(
+                        plan,
+                        segment=None,
+                        start_reason="sampling_evidence_change",
+                        prompt_disposition="new_segment",
+                        realign_from_token=None,
+                        realigned_masked_tokens=0,
+                    )
             prepare_arrays: Mapping[str, Sequence[Any]] = {
                 "prepared_prompt_ids": plan.prepared_prompt_ids,
             }
@@ -1952,9 +2002,7 @@ class _LinearTrajectoryCore:
                     "start_reason": plan.start_reason,
                     "close_reason": plan.close_reason,
                     "prior_checkpoint_hash": (
-                        _hash_tokens(active_before_commit.turns[-1].exact_checkpoint_ids)
-                        if active_before_commit is not None and active_before_commit.turns
-                        else None
+                        _hash_tokens(prior_checkpoint.exact_checkpoint_ids) if prior_checkpoint is not None else None
                     ),
                     "requested_output_tokens": plan.requested_output_tokens,
                     "effective_output_tokens": plan.effective_output_tokens,
@@ -1966,21 +2014,13 @@ class _LinearTrajectoryCore:
                 prepare_arrays,
             )
             phase = "sampling_admission"
-            sampling_kwargs = self._sampling_kwargs(state, request)
-            include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
-            include_top_sampling = bool(sampling_kwargs.get("top_sampling_logprobs"))
             if include_routing and self.incremental_prompt_routing:
                 retained = 0
                 if plan.segment is not None:
                     if plan.prompt_disposition == "realign":
                         retained = plan.realign_from_token or 0
                     else:
-                        prior_ids = plan.segment.turns[-1].exact_checkpoint_ids
-                        retained = min(len(prior_ids), len(plan.prepared_prompt_ids))
-                        if prior_ids[:retained] != plan.prepared_prompt_ids[:retained]:
-                            retained = next(
-                                i for i, (a, b) in enumerate(zip(prior_ids, plan.prepared_prompt_ids)) if a != b
-                            )
+                        retained = plan.prefix_match_tokens or 0
                 sampling_kwargs["echo_last"] = len(plan.prepared_prompt_ids) - retained
             if state.sampler_calls:
                 state.metrics.increment("cache/affinity_reused")
@@ -2067,8 +2107,8 @@ class _LinearTrajectoryCore:
                 sampled,
                 include_routing,
                 include_top_sampling,
-                bool(sampling_kwargs.get("sampling_mask")),
-                bool(sampling_kwargs.get("sample_extra_tokens")),
+                include_sampling_mask,
+                include_sample_extra,
             )
             phase = "parser"
             parsed = self._parse(request, completion)
@@ -2096,6 +2136,7 @@ class _LinearTrajectoryCore:
             )
             turn = TITOTurn(
                 turn_id=turn_id,
+                parent_turn_id=parent_id,
                 request=request,
                 assistant=parsed,
                 exact_prompt_ids=plan.prepared_prompt_ids,
@@ -2140,6 +2181,7 @@ class _LinearTrajectoryCore:
                 "call_id": call_id,
                 "turn_id": turn_id,
                 "segment_id": segment.segment_id,
+                **({"parent_turn_id": parent_id} if tree else {}),
                 "segment_start_reason": segment.start_reason if is_new_segment else None,
                 "prior_segment_id": prior_segment.segment_id if prior_segment is not None else None,
                 "prior_segment_close_reason": plan.close_reason,
@@ -2207,6 +2249,10 @@ class _LinearTrajectoryCore:
                 if is_new_segment:
                     state.segments.append(segment)
                 segment.turns.append(turn)
+                state.latest_segment = segment
+                if tree:
+                    key = len(request.messages) + 1
+                    state.checkpoints.setdefault(key, []).append((segment, turn))
                 state.metrics.increment(f"lineage/{plan.prompt_disposition}")
                 state.metrics.increment(f"prompt_construction/{plan.prompt_mode}")
                 if plan.incremental_fallback_reason is not None:
@@ -2244,6 +2290,7 @@ class _LinearTrajectoryCore:
                         prepared_prompt_hash=plan.prepared_prompt_hash,
                         turn_id=turn_id,
                         response=_freeze_json(response),
+                        parent=plan.parent,
                     )
                 else:
                     state.last_call = None
@@ -2703,10 +2750,7 @@ class _LinearTrajectoryCore:
 
     @staticmethod
     def _last_policy_turn(state: _TrajectoryState) -> TITOTurn | None:
-        for segment in reversed(state.segments):
-            if segment.turns:
-                return segment.turns[-1]
-        return None
+        return state.latest_segment.turns[-1] if state.latest_segment is not None else None
 
     def record_response_emission(
         self,
@@ -2856,7 +2900,6 @@ class _LinearTrajectoryCore:
         status: TITOTrajectoryStatus,
         reason: str | None,
     ) -> Mapping[str, Any]:
-        active = state.active_segment
         terminal_reason = self._terminal_closed_reason(status)
         return {
             "reason": reason,
@@ -2866,7 +2909,7 @@ class _LinearTrajectoryCore:
                 {
                     "segment_id": segment.segment_id,
                     "start_reason": segment.start_reason,
-                    "closed_reason": terminal_reason if segment is active else segment.closed_reason,
+                    "closed_reason": segment.closed_reason or terminal_reason,
                     "turns": len(segment.turns),
                 }
                 for segment in state.segments
@@ -2879,9 +2922,9 @@ class _LinearTrajectoryCore:
         status: TITOTrajectoryStatus,
         reason: str | None,
     ) -> _Tombstone:
-        active = state.active_segment
-        if active is not None:
-            active.closed_reason = self._terminal_closed_reason(status)
+        for segment in state.segments:
+            if segment.closed_reason is None:
+                segment.closed_reason = self._terminal_closed_reason(status)
         tombstone = _Tombstone(
             status=status,
             reason=reason,
@@ -3102,6 +3145,7 @@ class _LinearTrajectoryCore:
         reason: str | None = None,
     ) -> TITOTrajectoryArtifact:
         return TITOTrajectoryArtifact(
+            lineage_mode=state.drift_policy.lineage_mode,
             trajectory_id=state.trajectory_id,
             serving_affinity_key_hash=hashlib.sha256(state.serving_affinity_key.encode("utf-8")).hexdigest(),
             metadata=state.metadata,

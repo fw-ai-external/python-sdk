@@ -1,8 +1,12 @@
 # Changelog
 
-## 1.2.36 (2026-11-19)
+## 1.2.36 (2026-11-20)
 
 Full Changelog: [v1.2.35...v1.2.36](https://github.com/fw-ai-external/python-sdk/compare/v1.2.35...v1.2.36)
+
+### Features
+* **training-sdk:** add opt-in tree lineage to TITO rollouts so interleaved branches can resume their own checkpoints and reduce repeated training context. Linear stays the compatibility default during migration and is planned for deprecation. New lineage development targets tree.
+* **training-sdk:** run TITO lineage selection and compact artifact writing in Rust on supported platform wheels. Linear v1 output retains byte compatibility and tree v2 preserves the same JSON payload.
 
 ### Documentation
 * **training-sdk:** See the [migration guide](https://github.com/fw-ai-external/python-sdk/blob/main/src/fireworks/training/sdk/README.md#migrating-older-training-clients) for replay, trainer-first provisioning, and legacy checkpoint recovery.
