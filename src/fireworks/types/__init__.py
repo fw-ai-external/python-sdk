@@ -77,6 +77,7 @@ from .dpo_job_list_params import DpoJobListParams as DpoJobListParams
 from .model_create_params import ModelCreateParams as ModelCreateParams
 from .model_update_params import ModelUpdateParams as ModelUpdateParams
 from .response_text_block import ResponseTextBlock as ResponseTextBlock
+from .watermark_detection import WatermarkDetection as WatermarkDetection
 from .evaluator_get_params import EvaluatorGetParams as EvaluatorGetParams
 from .model_prepare_params import ModelPrepareParams as ModelPrepareParams
 from .secret_create_params import SecretCreateParams as SecretCreateParams

@@ -22,6 +22,13 @@ CONTEXTS = [
     "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
     "nvidia/Llama-3.1-Nemotron-70B-Instruct",
     "accounts/fireworks/models/llama-v3p1-nemotron-70b-instruct",
+    "meta-models/Muse-Glimmer-30B",
+    "accounts/fireworks/models/muse-glimmer-30b",
+    "meta-models/Muse-Spark-1.2-816B-A42B-NVFP4-open",
+    "accounts/fireworks/models/muse-spark-open-nvfp4",
+    "reflection/Beam-1.0-501B-A23B",
+    "reflection/Beam-1.0-501B-A23B-NVFP4",
+    "accounts/fireworks/models/beam-1p0-501b-a23b-nvfp4",
 ]
 OVERRIDES = ["acme/override", "moonshotai/Kimi-K2.5", "moonshotai/Kimi-K2.6", "moonshotai/Kimi-K2-Thinking"]
 
@@ -57,14 +64,16 @@ def test_independent_model_context_overrides_k2_opt_in(
     assert len(calls) == 1 and calls[0]["trust_remote_code"] is False
 
 
-def test_independent_architecture_is_restrictive(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "architecture",
+    ["Qwen3ForCausalLM", "MuseGlimmerForConditionalGeneration", "MuseSparkForConditionalGeneration", "BeamForCausalLM"],
+)
+def test_independent_architecture_is_restrictive(monkeypatch: pytest.MonkeyPatch, architecture: str) -> None:
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(sampling_client, "is_kimi_k3_k31_tokenizer_source", lambda *_a, **_k: False)
     monkeypatch.setattr(sampling_client, "requires_code_free_tokenizer_loading", lambda *_a, **_k: False)
     monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda *_a, **k: calls.append(k) or object())
-    sampling_client._load_tokenizer_from_model_info(
-        "acme/deployed", "moonshotai/Kimi-K2.6", model_arch="Qwen3ForCausalLM"
-    )
+    sampling_client._load_tokenizer_from_model_info("acme/deployed", "moonshotai/Kimi-K2.6", model_arch=architecture)
     assert calls[0]["trust_remote_code"] is False
 
 
@@ -114,14 +123,27 @@ def test_standard_context_never_uses_basename_or_substring(context: str) -> None
         assert not identity.is_standard_tokenizer_model_name(unknown), unknown
 
 
-@pytest.mark.parametrize("dirname", ["opaque", "Qwen3-8B", "MiniMax-M2", "gemma-4-31B-it", "Nemotron-3-Super"])
-def test_local_standard_policy_depends_on_data_not_folder(tmp_path: Path, dirname: str) -> None:
+@pytest.mark.parametrize("model_type", ["qwen3", "muse_glimmer", "muse_spark", "beam"])
+@pytest.mark.parametrize(
+    "dirname",
+    [
+        "opaque",
+        "Qwen3-8B",
+        "MiniMax-M2",
+        "gemma-4-31B-it",
+        "Nemotron-3-Super",
+        "Muse-Glimmer-30B",
+        "Muse-Spark",
+        "Beam-1.0",
+    ],
+)
+def test_local_standard_policy_depends_on_data_not_folder(tmp_path: Path, dirname: str, model_type: str) -> None:
     root = tmp_path / dirname
     root.mkdir()
     assert not identity.is_standard_tokenizer_model_name(str(root))
     (root / "config.json").write_text(json.dumps({"model_type": "llama"}))
     assert not identity.is_standard_tokenizer_model_name(str(root))
-    (root / "config.json").write_text(json.dumps({"model_type": "qwen3"}))
+    (root / "config.json").write_text(json.dumps({"model_type": model_type}))
     assert identity.is_standard_tokenizer_model_name(str(root))
     (root / "config.json").write_text("{")
     assert not identity.is_standard_tokenizer_model_name(str(root))
