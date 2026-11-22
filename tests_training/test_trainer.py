@@ -130,6 +130,18 @@ class TestCreate:
         assert mgr._build_trainer_create_payload(default)["useReservation"] is True
         assert mgr._build_trainer_create_payload(disabled)["useReservation"] is False
 
+    def test_rollout_deployment_name_payload(self, mgr):
+        deployment = "accounts/test/deployments/rollout"
+        config = TrainerJobConfig(
+            base_model="accounts/test/models/qwen3-1p7b",
+            rollout_deployment_name=deployment,
+        )
+
+        assert mgr._build_trainer_create_payload(config)["rolloutDeploymentName"] == deployment
+        assert "rolloutDeploymentName" not in mgr._build_trainer_create_payload(
+            TrainerJobConfig(base_model=config.base_model)
+        )
+
     @pytest.mark.parametrize(("projection_head_dim", "expected"), [(None, None), (0, None), (3, 3)])
     def test_projection_head_dim_payload(self, mgr, projection_head_dim, expected):
         config = TrainerJobConfig(
