@@ -1,0 +1,548 @@
+// Training API v2: the public wire between the Fireworks training SDK and the
+// Rust trainer engine.
+//
+// Transport: HTTP on /api/v2/<operation>. Requests and responses are protobuf,
+// Content-Type: application/x-protobuf. GET routes take no body.
+//
+// Routing and identity travel in headers, never in bodies.
+//   Request headers, set by the SDK:
+//     X-Fireworks-Model-Id    model operations: forward, forward_backward, optim_step,
+//                             save_weights, save_weights_for_sampler, load_weights,
+//                             load_adapter, unload_model, get_info, weight_sync
+//     X-Fireworks-Request-Id  retrieve_future
+//     X-Fireworks-Training-Session  create_model, session_heartbeat, telemetry
+//   The API gateway authenticates the caller, checks that the caller's account
+//   owns what those headers name, and forwards the body untouched. It reads
+//   no training body (see below). The engine does no authentication: it trusts
+//   these headers and the gateway's identity headers.
+//
+//   Response headers, set by the engine so the gateway never reads bodies:
+//     X-Fireworks-Request-Id    on every accepted submission (SubmitResponse)
+//     X-Fireworks-Future-State  on retrieve_future: pending | metadata | done | error
+//     X-Fireworks-Future-Op     on a terminal retrieve_future: the operation name
+//     X-Fireworks-Model-Id      on a done create_model future: the new model ID
+//     X-Fireworks-Error-Category on any Error body: User | Server
+//   The SDK takes request and model IDs from these headers, not from bodies, so
+//   a gateway that re-prefixes IDs only rewrites headers.
+//
+// The gateway may decode a small control body it must validate (create_model,
+// load_weights); it never decodes forward or forward_backward bodies.
+//
+// Calls on /api/v1 get HTTP 426 from a v2-only engine. Python trainers answer
+// /api/v2 with 404, which is how the SDK falls back to v1 for them.
+//
+// An SDK that speaks v2 sends X-Fireworks-Accept-Training-Api: v2 on every
+// trainer call, v1 calls included. The gateway translates v1 calls for SDKs
+// that speak only v1; it passes calls with this header through untranslated,
+// so an SDK that fell back to v1 gets the 426 and returns to v2.
+//
+// The SDK keeps a byte-identical copy of this file:
+//   public-repos/python-sdk/src/fireworks/training/sdk/_wire/training_v2.proto
+//
+// Evolving this contract. Customers keep old SDKs for years and a trainer job
+// keeps the engine it started with, so old SDKs must keep working with new
+// engines, and new SDKs must fail loudly on older engines:
+//   - Fields are only ever added. Numbers are never reused; removed fields are
+//     reserved. CI runs `buf breaking` against the base branch.
+//   - An absent field keeps the meaning it has today.
+//   - Names a caller chooses (loss_fn, precisions, modes) are strings the engine
+//     checks, so an SDK can use names added after its release. Enums are only
+//     for values the SDK must understand to encode or decode them (DType).
+//   - The engine rejects what it does not know (a name, enum value or oneof
+//     case) instead of ignoring it. A new field that an older engine must not
+//     ignore needs a value older engines reject, or a capability the SDK checks.
+//   - The engine sends a new enum value, oneof case or future state only to an
+//     SDK that asked for it.
+syntax = "proto3";
+
+package fireworks.training.v2;
+
+// ---------------------------------------------------------------- tensors
+
+// Tensor element type. Tensor data is little-endian.
+enum DType {
+  DTYPE_UNSPECIFIED = 0;
+  DTYPE_INT64 = 1;    // 8 bytes per element
+  DTYPE_FLOAT32 = 2;  // 4 bytes per element
+}
+
+message Tensor {
+  DType dtype = 1;
+  // Empty means one dimension holding every element.
+  repeated int64 shape = 2;
+  bytes data = 3;
+}
+
+// ---------------------------------------------------------------- inputs
+
+// Token IDs as little-endian int32.
+message TextChunk {
+  bytes tokens = 1;
+}
+
+// The image file's own bytes (PNG, JPEG, WEBP or GIF); the format is read from them.
+message ImageChunk {
+  bytes data = 1;
+  optional int64 expected_tokens = 2;
+}
+
+message Chunk {
+  oneof kind {
+    TextChunk text = 1;
+    ImageChunk image = 2;
+  }
+}
+
+// Rows that serving wrote to shared storage (R3 routing, sampling masks,
+// Monte Carlo draws). Only references travel; rows never do.
+message StorageFile {
+  string store_id = 1;
+  string file_id = 2;
+  string format = 3;
+  uint64 row_count = 4;
+  int64 expires_at = 5;
+}
+
+message StorageSpan {
+  optional uint64 file_index = 1;
+  uint64 file_row_start = 2;
+  uint64 input_token_start = 3;
+  uint64 count = 4;
+}
+
+message References {
+  uint64 length = 1;
+  repeated StorageFile files = 2;
+  repeated StorageSpan spans = 3;
+}
+
+message Datum {
+  repeated Chunk chunks = 1;
+  map<string, Tensor> loss_fn_inputs = 2;
+  References routing = 3;        // R3 expert routing, parquet_v1
+  References sampling_mask = 5;  // sampling-support masks
+  References sample_extra = 6;   // Monte Carlo score-centering draws, parquet_v1
+  reserved 4;                    // retired top-K score centering
+  reserved "top_sampling";
+}
+
+// A loss_fn_config value: any JSON value, with integers kept apart from floats.
+message ConfigValue {
+  oneof kind {
+    bool bool_value = 1;
+    int64 int_value = 2;
+    double float_value = 3;
+    string string_value = 4;
+    // An explicit null, as in a v1 JSON body. dapo's eps_clip_c uses it to turn dual clip off.
+    NullValue null_value = 5;
+    ConfigList list_value = 6;
+    ConfigMap map_value = 7;
+  }
+}
+
+message ConfigList {
+  repeated ConfigValue values = 1;
+}
+
+message ConfigMap {
+  map<string, ConfigValue> values = 1;
+}
+
+enum NullValue {
+  NULL_VALUE = 0;
+}
+
+// Body of forward and forward_backward.
+message TrainingRequest {
+  int64 seq_id = 1;
+  repeated Datum data = 2;
+  // The loss name, e.g. "cross_entropy", "ppo", "dppo". Required by forward
+  // and forward_backward: an unknown or empty name is a 400 (literal_error).
+  string loss_fn = 3;
+  map<string, ConfigValue> loss_fn_config = 4;
+}
+
+// ---------------------------------------------------------------- sessions
+
+// POST /api/v2/create_session
+message CreateSessionRequest {
+  repeated string tags = 1;
+  // String to string, as the SDK's public user_metadata parameter.
+  map<string, string> user_metadata = 2;
+  string sdk_version = 3;
+  optional string project_id = 4;
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
+  string info_message = 2;
+  string warning_message = 3;
+  string error_message = 4;
+}
+
+// POST /api/v2/session_heartbeat (session in X-Fireworks-Training-Session)
+message SessionHeartbeatRequest {}
+message SessionHeartbeatResponse {}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_DEBUG = 1;
+  SEVERITY_INFO = 2;
+  SEVERITY_WARNING = 3;
+  SEVERITY_ERROR = 4;
+  SEVERITY_CRITICAL = 5;
+}
+
+message SessionStart {}
+
+message SessionEnd {
+  string duration = 1;
+}
+
+message UnhandledException {
+  string error_type = 1;
+  string error_message = 2;
+  optional string traceback = 3;
+}
+
+message GenericEvent {
+  string event_name = 1;
+  // Strings only: the SDK sends any other value as its JSON text, so an event
+  // always encodes.
+  map<string, string> event_data = 2;
+}
+
+message TelemetryEvent {
+  string event_id = 1;
+  int64 event_session_index = 2;
+  Severity severity = 3;
+  // RFC 3339.
+  string timestamp = 4;
+  oneof event {
+    SessionStart session_start = 5;
+    SessionEnd session_end = 6;
+    UnhandledException unhandled_exception = 7;
+    GenericEvent generic = 8;
+  }
+}
+
+// POST /api/v2/telemetry (session in X-Fireworks-Training-Session)
+message TelemetryRequest {
+  string platform = 1;
+  string sdk_version = 2;
+  repeated TelemetryEvent events = 3;
+}
+
+message TelemetryResponse {}
+
+// ---------------------------------------------------------------- models
+
+message LoraConfig {
+  int64 rank = 1;
+  optional int64 alpha = 2;
+  optional int64 seed = 3;
+  // Unset means true.
+  optional bool train_unembed = 4;
+  optional bool train_mlp = 5;
+  optional bool train_attn = 6;
+  // "kaiming" or "nora"; empty means the trainer's default.
+  string init_method = 7;
+}
+
+// POST /api/v2/create_model (session in X-Fireworks-Training-Session; a serverless
+// run comes from the gateway's run identity header). Submits a future.
+message CreateModelRequest {
+  int64 model_seq_id = 1;
+  string base_model = 2;
+  // String to string, as the SDK's public user_metadata parameter.
+  map<string, string> user_metadata = 3;
+  LoraConfig lora_config = 4;
+  bool base_only = 5;
+  // The model's optimizer for its lifetime, the type of a v1 optimizer_config:
+  // "adamw" or "dimuon". Empty means "adamw".
+  string optimizer = 6;
+}
+
+message LossCapabilities {
+  optional bool supports_target_logprob_support = 1;
+  optional bool supports_reinforce = 2;
+  optional bool supports_score_centering = 3;
+  optional bool supports_policy_importance_sampling = 4;
+  optional bool supports_mc_score_centering = 6;
+  reserved 5;  // retired top-K score centering
+  reserved "supports_topk_score_centering";
+}
+
+message CreateModelResult {
+  string model_id = 1;
+  string r3_store_id = 2;
+  bool supports_router_replay = 3;
+  bool supports_rdma_weight_sync = 4;
+  bool rdma_weight_sync_enabled = 5;
+  LossCapabilities loss_capabilities = 6;
+}
+
+// POST /api/v2/get_info. Answers directly, not as a future.
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string model_id = 1;
+  string model_name = 2;
+  string architecture = 3;
+  string tokenizer_id = 4;
+  optional bool is_lora = 5;
+  optional int64 lora_rank = 6;
+  bool supports_router_replay = 7;
+  LossCapabilities loss_capabilities = 8;
+}
+
+// POST /api/v2/unload_model. Submits a future.
+message UnloadModelRequest {}
+
+message UnloadModelResult {
+  string model_id = 1;
+}
+
+// ---------------------------------------------------------------- optimizer
+
+// Unset fields take the defaults shown.
+message AdamParams {
+  optional double learning_rate = 1;   // 1e-4
+  optional double beta1 = 2;           // 0.9
+  optional double beta2 = 3;           // 0.95
+  optional double eps = 4;             // 1e-12
+  optional double weight_decay = 5;    // 0
+  optional double grad_clip_norm = 6;  // 0
+  bool return_grad_norms = 7;
+  // Either a boolean or a named policy; unset means false.
+  oneof emit_grad_norm_metrics {
+    bool emit_grad_norm_metrics_enabled = 8;
+    string emit_grad_norm_metrics_policy = 9;
+  }
+}
+
+// DiMuon parameters. Unset fields take the defaults shown.
+message DimuonParams {
+  optional double learning_rate = 1;   // required, >= 0
+  optional double beta1 = 2;           // 0.9, in [0, 1)
+  optional double grad_clip_norm = 3;  // 0
+  // Either a boolean or "off", "basic" or "detailed"; unset means false.
+  oneof emit_grad_norm_metrics {
+    bool emit_grad_norm_metrics_enabled = 4;
+    string emit_grad_norm_metrics_policy = 5;
+  }
+}
+
+// The parameters of a model whose optimizer is not AdamW.
+message OptimizerParams {
+  oneof params {
+    DimuonParams dimuon = 1;
+  }
+}
+
+// POST /api/v2/optim_step. Submits a future.
+message OptimStepRequest {
+  int64 seq_id = 1;
+  // Exactly one of adam_params and optimizer_params, for the model's optimizer.
+  AdamParams adam_params = 2;
+  // "none", "num_sequences" or "num_loss_tokens"; empty means the trainer's default.
+  string grad_accumulation_normalization = 3;
+  OptimizerParams optimizer_params = 4;
+}
+
+message OptimStepResult {
+  map<string, double> metrics = 1;
+}
+
+// ---------------------------------------------------------------- weights
+
+// POST /api/v2/save_weights. Submits a future.
+message SaveWeightsRequest {
+  int64 seq_id = 1;
+  optional string path = 2;
+  optional int64 ttl_seconds = 3;
+}
+
+message SaveWeightsResult {
+  string path = 1;
+}
+
+// Held-out decision temperatures, written into the checkpoint's decision.json.
+// Unset fields take the defaults shown.
+message DecisionCalibration {
+  optional string contract = 1;   // "systemone-letter-v1"
+  optional string objective = 2;  // "nll", the only objective today
+  // Per question type ("noul", "choice" or "score"): 0 < T <= 100. A type
+  // without one has T = 1.
+  map<string, double> temperature = 3;
+  // Held-out rows each temperature was fit on, per question type.
+  map<string, int64> fit_rows = 4;
+  // At most 16 groups of at most 32 finite values.
+  map<string, DecisionMetrics> metrics = 5;
+}
+
+message DecisionMetrics {
+  map<string, double> values = 1;
+}
+
+message SamplerCheckpointMetadata {
+  DecisionCalibration decision_calibration = 1;
+}
+
+// POST /api/v2/save_weights_for_sampler. Submits a future.
+message SaveWeightsForSamplerRequest {
+  int64 seq_id = 1;
+  optional string path = 2;
+  optional int64 sampling_session_seq_id = 3;
+  optional int64 ttl_seconds = 4;
+  // "base", "delta" or "merged_base"; empty means the trainer's default.
+  string checkpoint_type = 5;
+  // "source", "bf16", "nvfp4", "mxfp8" or "fp8_block128"; empty means the trainer's default.
+  string export_precision = 6;
+  // How merged weights are re-encoded onto the source grid: "stochastic" or
+  // "nearest", only with checkpoint_type "merged_base". Empty means the
+  // trainer's default: stochastic, or nearest when it trains with QAT.
+  string export_rounding = 7;
+  SamplerCheckpointMetadata metadata = 8;
+}
+
+message SaveWeightsForSamplerResult {
+  string path = 1;
+}
+
+// POST /api/v2/load_weights. Submits a future.
+message LoadWeightsRequest {
+  int64 seq_id = 1;
+  string path = 2;
+  bool optimizer = 3;
+}
+
+message LoadWeightsResult {
+  string path = 1;
+}
+
+// POST /api/v2/load_adapter. Submits a future.
+message LoadAdapterRequest {
+  int64 seq_id = 1;
+  string adapter_path = 2;
+}
+
+message LoadAdapterResult {
+  string model_id = 1;
+  string adapter_ref = 2;
+  // The adapter's location, only when no adapter_ref names it.
+  optional string adapter_path = 3;
+  // The LoRA rank of the model after the load.
+  optional int64 lora_rank = 4;
+}
+
+// POST /api/v2/weight_sync: hotload to a deployment. Submits a future.
+message WeightSyncRequest {
+  int64 seq_id = 1;
+  string session_id = 2;
+  string source_epoch = 3;
+  string operation_id = 4;
+  string hotload_url = 5;
+  map<string, string> hotload_headers = 6;
+  string deployment = 7;
+  // "all", "new_session" or "none"; empty means "new_session".
+  string reset_prompt_cache = 8;
+  // Required: 1, the only protocol today.
+  uint32 protocol_version = 9;
+  // Required: "RDMA", the only transport today.
+  string transport = 10;
+}
+
+message WeightSyncResult {
+  string version = 1;
+  optional int64 optimizer_version = 2;
+  map<string, double> metrics = 3;
+}
+
+// ---------------------------------------------------------------- reads
+
+// GET /api/v2/get_server_capabilities
+message ServerCapabilities {
+  repeated string supported_models = 1;
+  optional int64 max_request_seq_len = 2;
+  optional int64 internal_seq_len = 3;
+  int64 seq_len_alignment = 4;
+  optional int64 seq_len_min = 5;
+}
+
+message Checkpoint {
+  string checkpoint_id = 1;
+  string checkpoint_type = 2;
+}
+
+// GET /api/v2/list_checkpoints and GET /api/v2/training_runs/{run}/checkpoints
+message CheckpointList {
+  repeated Checkpoint checkpoints = 1;
+}
+
+// ---------------------------------------------------------------- futures
+
+// Response to an accepted submission. The ID is also in X-Fireworks-Request-Id.
+message SubmitResponse {
+  string request_id = 1;
+}
+
+// POST /api/v2/retrieve_future (ID in X-Fireworks-Request-Id)
+message RetrieveFutureRequest {
+  // When the result is larger than the inline limit, return only its size.
+  bool allow_metadata_only = 1;
+}
+
+message DatumOutput {
+  map<string, Tensor> tensors = 1;
+}
+
+// Result of forward and forward_backward. Nonfinite values stay IEEE values.
+message TrainingResult {
+  string loss_fn_output_type = 1;
+  repeated DatumOutput outputs = 2;
+  map<string, double> metrics = 3;
+}
+
+message FuturePending {
+  bool checkpoint_loading = 1;
+  string message = 2;
+}
+
+message FutureMetadata {
+  uint64 response_payload_size = 1;
+}
+
+message FieldError {
+  string path = 1;
+  string message = 2;
+  string kind = 3;
+}
+
+// Any failure: the HTTP response of a rejected call, or a future whose operation failed.
+message Error {
+  int32 status = 1;
+  string message = 2;
+  // "User" when the request must change, "Server" otherwise.
+  string category = 3;
+  // Machine-readable class, e.g. "non_finite_gradients", "cancelled".
+  string error_class = 4;
+  repeated FieldError fields = 5;
+}
+
+message FutureResponse {
+  oneof outcome {
+    FuturePending pending = 1;
+    FutureMetadata metadata = 2;
+    Error error = 3;
+    TrainingResult training = 4;
+    OptimStepResult optim_step = 5;
+    CreateModelResult create_model = 6;
+    UnloadModelResult unload_model = 7;
+    SaveWeightsResult save_weights = 8;
+    SaveWeightsForSamplerResult save_weights_for_sampler = 9;
+    LoadWeightsResult load_weights = 10;
+    LoadAdapterResult load_adapter = 11;
+    WeightSyncResult weight_sync = 12;
+  }
+}
