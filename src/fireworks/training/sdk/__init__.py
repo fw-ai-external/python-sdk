@@ -118,6 +118,7 @@ _EXPORTS = {
     "TITOMetricSummary": ("fireworks.training.sdk.tito", "TITOMetricSummary"),
     "TITORolloutPhaseMetrics": ("fireworks.training.sdk.tito", "TITORolloutPhaseMetrics"),
     "TITOParsedAssistant": ("fireworks.training.sdk.tito", "TITOParsedAssistant"),
+    "TITOMalformedToolCall": ("fireworks.training.sdk.tito", "TITOMalformedToolCall"),
     "TITOPromptMode": ("fireworks.training.sdk.tito", "TITOPromptMode"),
     "TITOResponseAttempt": ("fireworks.training.sdk.tito", "TITOResponseAttempt"),
     "TITORenderer": ("fireworks.training.sdk.tito", "TITORenderer"),

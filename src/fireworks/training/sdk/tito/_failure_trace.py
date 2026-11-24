@@ -197,6 +197,8 @@ class _FailureTraceRecorder:
         trajectory_id: str,
         payload: Mapping[str, Any],
         arrays: Mapping[str, Sequence[Any]] | None = None,
+        *,
+        artifact_base64: str | None = None,
     ) -> None:
         if not self.config.enabled:
             return
@@ -228,6 +230,10 @@ class _FailureTraceRecorder:
                     "omitted_arrays": sorted(set(arrays or {}) - selected_arrays.keys()),
                 }
                 value = TITOLocalDebugSink.sanitize(value)
+                if artifact_base64 is not None:
+                    # Only the SDK-generated encoding of the packed artifact
+                    # skips text redaction. The surrounding trace is sanitized.
+                    value["payload"]["artifact_base64"] = artifact_base64
                 encoded = TITOLocalDebugSink._encode(value)
                 if len(encoded) > self.config.max_trajectory_bytes:
                     raise OSError("TITO trace event exceeds the per-trajectory byte limit")
@@ -387,8 +393,8 @@ def _dump_failure_trace(
             "code": code,
             "exception_chain": traceback.format_exception(type(error), error, error.__traceback__),
             "artifact_encoding": "base64",
-            "artifact_base64": base64.b64encode(artifact.pack()).decode("ascii"),
         }
+        artifact_base64 = base64.b64encode(artifact.pack()).decode("ascii")
         if source_trace is not None:
             try:
                 with _open_collected_trace(source_trace, source_trace_root) as incoming:
@@ -397,7 +403,7 @@ def _dump_failure_trace(
                         payload["collected_trace_jsonl"] = incoming.read(limit).decode("utf-8")
             except (OSError, ValueError, UnicodeError) as exc:
                 payload["collected_trace_error"] = type(exc).__name__
-        recorder.record("call_terminal", key, payload)
+        recorder.record("call_terminal", key, payload, artifact_base64=artifact_base64)
         evidence = recorder.evidence(key)
         if evidence.get("trace_storage_error") and source_trace is not None:
             path = recorder.retain_collected_trace(key, source_trace, source_trace_root)

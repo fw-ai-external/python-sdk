@@ -5,15 +5,25 @@ from __future__ import annotations
 import json
 import stat
 import base64
+import asyncio
+from typing import Any
 from pathlib import Path
 from dataclasses import replace
 
 import httpx
 import pytest
 
-from fireworks.training.sdk import TITOSidecar, TITOFailureTraceConfig
+from fireworks.training.sdk import (
+    TITOError,
+    TITOSidecar,
+    TITOParseError,
+    TITOChatRequest,
+    TITOParsedAssistant,
+    TITOFailureTraceConfig,
+)
 from tests_training.test_tito import FakeSampler, FakeRenderer
 from fireworks.training.sdk.tito import _failure_trace
+from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 
 
@@ -221,6 +231,133 @@ async def test_failed_parse_retains_raw_trajectory_and_next_trajectory_succeeds(
             assert not list(tmp_path.rglob("pending/*.jsonl"))
     finally:
         await sidecar.close()
+
+
+@pytest.mark.parametrize(
+    ("reason", "finish_reason", "stream", "retained"),
+    [
+        ("tool_unknown_name", "stop", False, True),
+        ("tool_missing_name", "tool_calls", True, True),
+        ("tool_unparsed_content", "tool_calls", False, False),
+        ("tool_unknown_name", "length", False, False),
+        ("unclean_parse", "stop", False, False),
+    ],
+)
+async def test_malformed_tool_keeps_exact_turn_without_emitting_it(
+    tmp_path, monkeypatch, reason, finish_reason, stream, retained
+) -> None:
+    renderer = FakeRenderer()
+    sampler = FakeSampler(outputs=[[197, 3], [201, 202, 3]], finishes=["stop", finish_reason])
+    sidecar = TITOSidecar.from_deployment_sampler(
+        sampler,
+        renderer=renderer,
+        max_context_tokens=4096,
+        max_output_tokens=128,
+        failure_trace_config=_config(tmp_path),
+    )
+
+    def reject_tool_call(*_args):
+        raise TITOParseError("bad tool call", reason_code=reason)
+
+    await sidecar.start()
+    try:
+        endpoint = await sidecar.create_trajectory_async()
+        headers = {"authorization": "Bearer " + endpoint.api_key}
+        url = endpoint.openai_base_url + "/chat/completions"
+        async with httpx.AsyncClient(trust_env=False) as client:
+            messages = [{"role": "user", "content": "q"}]
+            first = await client.post(url, headers=headers, json={"messages": messages})
+            assert first.status_code == 200
+            messages.extend([first.json()["choices"][0]["message"], {"role": "user", "content": "next"}])
+            monkeypatch.setattr(renderer, "parse_assistant", reject_tool_call)
+            failed = await client.post(url, headers=headers, json={"messages": messages, "stream": stream})
+            if stream:
+                assert failed.status_code == 200
+                assert "event: error" in failed.text
+                first_data = next(line[6:] for line in failed.text.splitlines() if line.startswith("data: {"))
+                error = json.loads(first_data)["error"]
+            else:
+                assert failed.status_code == 422
+                error = failed.json()["error"]
+            assert error["code"] == "tito_sdk_parse_error"
+            assert error["discard_trajectory"] is True
+
+        artifact = await sidecar.finish_trajectory(endpoint.trajectory_id)
+        assert artifact.status == "failed"
+        assert len(artifact.response_attempts) == 1
+        artifact = type(artifact).unpack(artifact.pack())
+        malformed = artifact.malformed_tool_call
+        turns = [turn for segment in artifact.segments for turn in segment.turns]
+        if retained:
+            assert malformed is not None
+            assert malformed.reason_code == reason
+            assert turns[-1].turn_id == malformed.turn_id
+            assert turns[-1].exact_prompt_ids == sampler.calls[-1]["prompt"]
+            assert turns[-1].exact_completion_ids == (201, 202, 3)
+            assert turns[-1].sampling_logprobs == (-0.2, -0.2, -0.2)
+            assert "tool_calls" not in turns[-1].assistant.message
+        else:
+            assert malformed is None
+            assert len(turns) == 1
+    finally:
+        await sidecar.close()
+
+
+async def test_malformed_tool_reward_excludes_a_concurrent_auxiliary_failure(monkeypatch) -> None:
+    class Renderer(FakeRenderer):
+        def parse_assistant(self, request: TITOChatRequest, *_args: Any) -> TITOParsedAssistant:
+            if request.messages[0]["content"] == "aux":
+                raise RuntimeError("auxiliary parser failed")
+            raise TITOParseError("bad function name", reason_code="tool_unknown_name")
+
+    sampler = FakeSampler()
+    core = _LinearTrajectoryCore(
+        sampler,
+        Renderer(),
+        max_context_tokens=100,
+        max_output_tokens=10,
+        call_classifier=lambda request: "auxiliary" if request.messages[0]["content"] == "aux" else "policy",
+    )
+    trajectory_id = core.create_trajectory()
+    aux_started = asyncio.Event()
+    finish_aux = asyncio.Event()
+    finish_policy_terminal = asyncio.Event()
+    sample = sampler.sample_with_prompt_tokens_result
+    record = core._record_async
+
+    async def gated_sample(tokens: list[int], **kwargs: Any) -> Any:
+        if tokens == [1, 10, *FakeRenderer._text("aux"), 11, 2]:
+            aux_started.set()
+            await finish_aux.wait()
+        return await sample(tokens, **kwargs)
+
+    async def gated_record(state: Any, event: str, payload: Any, arrays: Any = None) -> Any:
+        if event == "call_terminal":
+            finish_aux.set()
+            await finish_policy_terminal.wait()
+        return await record(state, event, payload, arrays)
+
+    monkeypatch.setattr(sampler, "sample_with_prompt_tokens_result", gated_sample)
+    monkeypatch.setattr(core, "_record_async", gated_record)
+
+    async def rejected_call(content: str) -> str:
+        request = TITOChatRequest(messages=({"role": "user", "content": content},))
+        with pytest.raises(TITOError) as failure:
+            await core.complete(trajectory_id, request)
+        return failure.value.code
+
+    async with asyncio.timeout(5), asyncio.TaskGroup() as tasks:
+        aux = tasks.create_task(rejected_call("aux"))
+        await aux_started.wait()
+        policy = tasks.create_task(rejected_call("policy"))
+        assert await aux == "tito_sdk_parser_internal_error"
+        finish_policy_terminal.set()
+        assert await policy == "tito_sdk_parse_error"
+
+    artifact = core.finish(trajectory_id)
+    assert artifact.status == "failed"
+    assert artifact.malformed_tool_call is None
+    assert type(artifact).unpack(artifact.pack()).malformed_tool_call is None
 
 
 @pytest.mark.parametrize(
@@ -491,6 +628,35 @@ def test_only_old_dead_same_host_writers_are_reclaimed(tmp_path, monkeypatch):
     recorder.record("trajectory_open", "new", {})
     assert not (tmp_path / "writer-dead").exists()
     assert all((tmp_path / f"writer-{name}").exists() for name in ("live", "fresh", "foreign", "unmarked"))
+
+
+def test_failure_trace_preserves_packed_bytes_and_redacts_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Artifact:
+        trajectory_id = "packed-trace"
+
+        def pack(self) -> bytes:
+            return b"already packed binary\x00\xff"
+
+    recorder = _FailureTraceRecorder(_config(tmp_path / "retained"))
+    monkeypatch.setattr(_failure_trace, "_default_recorder", recorder)
+    sanitizer = _failure_trace.TITOLocalDebugSink.sanitize
+    packed_text = base64.b64encode(Artifact().pack()).decode("ascii")
+
+    def sanitize(value, **kwargs):
+        assert value != packed_text
+        return sanitizer(value, **kwargs)
+
+    monkeypatch.setattr(_failure_trace.TITOLocalDebugSink, "sanitize", staticmethod(sanitize))
+    path = _failure_trace.dump_tito_failure_trace(
+        Artifact(), ValueError("token=synthetic-placeholder"), code="tito_cookbook_parse_error"
+    )
+    assert path is not None
+    payload = json.loads(Path(path).read_text().splitlines()[-1])["payload"]
+    assert "synthetic-placeholder" not in "".join(payload["exception_chain"])
+    assert "<redacted>" in "".join(payload["exception_chain"])
+    assert base64.b64decode(payload["artifact_base64"]) == Artifact().pack()
 
 
 @pytest.mark.parametrize("pack_fails", [False, True])

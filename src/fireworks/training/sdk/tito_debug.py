@@ -171,6 +171,16 @@ class TITOLocalDebugSink:
                 for item_key, item_value in value.items()
             }
         if isinstance(value, (list, tuple)):
+            if type(value) is list or type(value) is tuple:
+                # Inspect and return the same snapshot. Numeric token and
+                # logprob rows have no text to redact.
+                items = list(value)
+                if all(
+                    item is None or type(item) is int or type(item) is float or type(item) is bool
+                    for item in items
+                ):
+                    return items
+                value = items
             return [cls.sanitize(item, redact_text=redact_text) for item in value]
         if isinstance(value, str):
             if redact_text and key is not None and cls._TEXT_KEY.match(key):
