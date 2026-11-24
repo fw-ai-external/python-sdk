@@ -171,10 +171,69 @@ fn compress_json<'py>(
     Ok(PyBytes::new(py, &output))
 }
 
+// The offset counts Unicode code points, as in Python's JSON decoder.
+fn scan_json_chars(
+    mut characters: impl Iterator<Item = char>,
+    mut at: usize,
+    mut depth: i64,
+    mut quoted: bool,
+) -> (usize, i64, bool, bool) {
+    while let Some(character) = characters.next() {
+        at += 1;
+        if quoted {
+            match character {
+                '\\' => {
+                    characters.next();
+                    // A trailing backslash also skips the first character of the next block.
+                    at += 1;
+                }
+                '"' => quoted = false,
+                _ => (),
+            }
+        } else {
+            match character {
+                '[' | '{' => depth += 1,
+                ']' | '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return (at, depth, quoted, true);
+                    }
+                }
+                '"' => quoted = true,
+                _ => (),
+            }
+        }
+    }
+    (at, depth, quoted, false)
+}
+
+#[pyfunction]
+fn scan_json_composite(
+    text: &Bound<'_, PyString>,
+    at: usize,
+    depth: i64,
+    quoted: bool,
+    ascii: bool,
+) -> PyResult<(usize, i64, bool, bool)> {
+    let text = text.to_cow()?;
+    if ascii {
+        let suffix = text.as_bytes().get(at..).unwrap_or_default();
+        Ok(scan_json_chars(
+            suffix.iter().copied().map(char::from),
+            at,
+            depth,
+            quoted,
+        ))
+    } else {
+        Ok(scan_json_chars(text.chars().skip(at), at, depth, quoted))
+    }
+}
+
 #[pymodule(gil_used = true)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(encode_json, module)?)?;
     module.add_function(wrap_pyfunction!(compress_json, module)?)?;
+    module.add_function(wrap_pyfunction!(scan_json_composite, module)?)?;
     module.add_function(wrap_pyfunction!(lineage::select_parent, module)?)?;
     module.add_function(wrap_pyfunction!(lineage::history_rewrite, module)?)?;
     module.add_function(wrap_pyfunction!(lineage::common_prefix_tokens, module)?)?;

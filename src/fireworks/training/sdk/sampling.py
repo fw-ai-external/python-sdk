@@ -1406,7 +1406,11 @@ class DeploymentSampler(_RestClient):
         context = self._build_context(sampling_context)
 
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
-            await self._acquire_concurrency()
+            try:
+                await self._acquire_concurrency()
+            except asyncio.CancelledError as exc:
+                self._attach_attempt_context(exc, logical_request_id, len(server_attempts), server_attempts)
+                raise
             attempt_started_at = time.monotonic()
             server_metrics: ServerMetrics | None = None
             # Telemetry-only record for failures the controller never observes.
@@ -1631,14 +1635,18 @@ class DeploymentSampler(_RestClient):
                 if self._is_timeout_like_transient(transient)
                 else None
             )
-            backoff = await self._backoff_after_transient(
-                label,
-                attempt,
-                backoff,
-                diagnostic=diagnostic,
-                retry_after_s=retry_after_s,
-                logical_request_id=logical_request_id,
-            )
+            try:
+                backoff = await self._backoff_after_transient(
+                    label,
+                    attempt,
+                    backoff,
+                    diagnostic=diagnostic,
+                    retry_after_s=retry_after_s,
+                    logical_request_id=logical_request_id,
+                )
+            except asyncio.CancelledError as exc:
+                self._attach_attempt_context(exc, logical_request_id, attempt, server_attempts)
+                raise
 
         # Range above guarantees the last attempt either returns or re-raises.
         # This line is here only to satisfy the type checker's flow analysis.

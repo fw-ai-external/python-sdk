@@ -1378,13 +1378,19 @@ class _LinearTrajectoryCore:
         state.calls.append(record)
         state.metrics.increment(f"calls/{outcome}")
         state.metrics.observe("calls/request_wall_seconds", record.ended_at - started_at)
+        if sampled is not None or sampler_wall_seconds is not None:
+            state.metrics.increment("calls/model_requests")
+            state.metrics.increment("calls/upstream_attempts", record.attempts)
+            state.metrics.increment("calls/upstream_retry_attempts", max(0, record.attempts - 1))
         if sampled is not None:
+            state.metrics.increment("calls/upstream_completions")
+            state.metrics.increment(
+                "calls/generated_tokens", sum(completion.completion_len for completion in sampled.completions)
+            )
+            self._observe_server_metrics(state, sampled.server_metrics)
             state.metrics.observe("calls/sampler_wall_seconds", sampled.wall_seconds)
-            state.metrics.increment("calls/upstream_retry_attempts", sampled.attempts - 1)
         elif sampler_wall_seconds is not None:
             state.metrics.observe("calls/sampler_wall_seconds", sampler_wall_seconds)
-            if attempts is not None:
-                state.metrics.increment("calls/upstream_retry_attempts", max(0, attempts - 1))
         return record
 
     async def _record_call_terminal(
@@ -1604,6 +1610,7 @@ class _LinearTrajectoryCore:
         mapping = {
             "server/processing_seconds": metrics.server_processing_time,
             "server/upstream_ttft_seconds": metrics.server_ttft,
+            "server/client_ttft_seconds": metrics.client_ttft,
             "server/tokenizer_queue_seconds": metrics.tokenizer_queue_duration,
             "server/tokenizer_seconds": metrics.tokenizer_duration,
             "server/prefill_queue_seconds": metrics.prefill_queue_duration,
@@ -2282,7 +2289,6 @@ class _LinearTrajectoryCore:
                     else "other"
                 )
                 state.metrics.increment(f"calls/finish_reason_{finish_reason_label}")
-                self._observe_server_metrics(state, sampled.server_metrics)
                 if idempotency_key is not None:
                     state.last_call = _LastCall(
                         idempotency_key=idempotency_key,
@@ -2351,7 +2357,7 @@ class _LinearTrajectoryCore:
                         else None
                     ),
                     logical_request_id=(getattr(exc, "logical_request_id", None) or logical_request_id),
-                    attempts=getattr(exc, "attempts", None) or (1 if sampler_started_at is not None else None),
+                    attempts=getattr(exc, "attempts", 1 if sampler_started_at is not None else None),
                     server_attempts=getattr(exc, "server_attempts", None),
                 )
             raise
@@ -2645,7 +2651,6 @@ class _LinearTrajectoryCore:
                     else None
                 ),
             )
-            self._observe_server_metrics(state, sampled.server_metrics)
             return TITOCallResult(response=MappingProxyType(response), call=record, turn_id=None)
         except asyncio.CancelledError as exc:
             self._call_record(
@@ -2662,7 +2667,7 @@ class _LinearTrajectoryCore:
                     else None
                 ),
                 logical_request_id=(getattr(exc, "logical_request_id", None) or logical_request_id),
-                attempts=getattr(exc, "attempts", None) or (1 if sampler_started_at is not None else None),
+                attempts=getattr(exc, "attempts", 1 if sampler_started_at is not None else None),
                 server_attempts=getattr(exc, "server_attempts", None),
             )
             raise

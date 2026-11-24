@@ -8,6 +8,7 @@ import hashlib
 from types import MappingProxyType
 from typing import Any, Union, Literal, Mapping, Protocol, Sequence, get_args, runtime_checkable
 from dataclasses import field, dataclass
+from collections.abc import Iterable
 
 from fireworks.training.sdk.routing import RoutingReferences
 from fireworks.training.sdk.sampling import ServerMetrics, SampledServerAttempt
@@ -500,7 +501,13 @@ class _MetricAccumulator:
         self.counters[name] = self.counters.get(name, 0) + value
 
     def observe(self, name: str, value: float) -> None:
-        self.distributions[name] = self.distributions.get(name, TITODistribution()).add(float(value))
+        observed = float(value)
+        current = self.distributions.get(name)
+        self.distributions[name] = (
+            TITODistribution(count=1, sum=observed, min=observed, max=observed)
+            if current is None
+            else current.add(observed)
+        )
 
     def snapshot(self) -> TITOMetricSummary:
         return TITOMetricSummary(
@@ -654,6 +661,31 @@ class TITOTrajectoryArtifact:
         from fireworks.training.sdk.tito._artifact import unpack_trajectory_artifact
 
         return unpack_trajectory_artifact(payload)
+
+    @classmethod
+    def unpack_stream(
+        cls,
+        chunks: Iterable[bytes],
+        *,
+        expected_bytes: int,
+        expected_sha256: str | None,
+        max_expanded_bytes: int,
+    ) -> "TITOTrajectoryArtifact":
+        """Decode chunks with bounded expansion and full stream framing checks.
+
+        Supply the manifest SHA-256 for untrusted input. Pass `None` only when
+        the caller has already checked the digest and kept the bytes private
+        and unchanged. Byte count, compression framing and decoded format are
+        checked in either case.
+        """
+        from fireworks.training.sdk.tito._artifact import unpack_trajectory_stream
+
+        return unpack_trajectory_stream(
+            chunks,
+            expected_bytes=expected_bytes,
+            expected_sha256=expected_sha256,
+            max_expanded_bytes=max_expanded_bytes,
+        )
 
 
 def _request_continues_turn(prior: TITOTurn, later: TITOTurn) -> bool:
