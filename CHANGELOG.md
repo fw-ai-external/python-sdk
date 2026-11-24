@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.38 (2026-11-24)
+
+Full Changelog: [v1.2.37...v1.2.38](https://github.com/fw-ai-external/python-sdk/compare/v1.2.37...v1.2.38)
+
+### Refactors
+* **watermark detections (breaking):** `client.watermark_detections.create()` now returns only `object` and `result`, and `result` is `detected` or `not_detected`. The `id`, `detector_version` and `scored_tokens` fields and the `uncertain` result have been removed; text too short to score returns `not_detected`.
+
 ## 1.2.37 (2026-11-24)
 
 Full Changelog: [v1.2.36...v1.2.37](https://github.com/fw-ai-external/python-sdk/compare/v1.2.36...v1.2.37)
