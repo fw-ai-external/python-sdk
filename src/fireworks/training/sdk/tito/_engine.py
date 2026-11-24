@@ -27,6 +27,7 @@ from fireworks.training.sdk.sampling import (
     SampledServerAttempt,
 )
 from fireworks.training.sdk.tito._types import (
+    _MALFORMED_TOOL_CALL_REASONS,
     TITOTurn,
     TITOError,
     TITOCallKind,
@@ -53,6 +54,7 @@ from fireworks.training.sdk.tito._types import (
     _hash_tokens,
     _MetricAccumulator,
     _server_attempt_value,
+    _has_exact_tool_sample,
 )
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 from fireworks.training.sdk.tito._native_runtime import require_native
@@ -127,6 +129,7 @@ class _TrajectoryState:
     auxiliary_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     transport_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     discard_error: TITOError | None = None
+    malformed_tool_call_id: str | None = None
     terminalizing: bool = False
     termination_intent: _TerminationIntent | None = None
     last_policy_commit_at: float | None = None
@@ -309,10 +312,12 @@ class _LinearTrajectoryCore:
         trajectory_id = trajectory_id or uuid.uuid4().hex
         if self._trajectory_id is not None:
             raise RuntimeError("trajectory engine is already bound")
+        initial_metadata = dict(metadata or {})
+        initial_metadata.pop("tito_malformed_tool_call_id", None)
         state = _TrajectoryState(
             trajectory_id=trajectory_id,
             serving_affinity_key=serving_affinity_key or secrets.token_urlsafe(24),
-            metadata=MappingProxyType(_freeze_json(metadata or {})),
+            metadata=MappingProxyType(_freeze_json(initial_metadata)),
             drift_policy=drift_policy or self.default_drift_policy,
             started_at=time.time(),
         )
@@ -1378,13 +1383,19 @@ class _LinearTrajectoryCore:
         state.calls.append(record)
         state.metrics.increment(f"calls/{outcome}")
         state.metrics.observe("calls/request_wall_seconds", record.ended_at - started_at)
+        if sampled is not None or sampler_wall_seconds is not None:
+            state.metrics.increment("calls/model_requests")
+            state.metrics.increment("calls/upstream_attempts", record.attempts)
+            state.metrics.increment("calls/upstream_retry_attempts", max(0, record.attempts - 1))
         if sampled is not None:
+            state.metrics.increment("calls/upstream_completions")
+            state.metrics.increment(
+                "calls/generated_tokens", sum(completion.completion_len for completion in sampled.completions)
+            )
+            self._observe_server_metrics(state, sampled.server_metrics)
             state.metrics.observe("calls/sampler_wall_seconds", sampled.wall_seconds)
-            state.metrics.increment("calls/upstream_retry_attempts", sampled.attempts - 1)
         elif sampler_wall_seconds is not None:
             state.metrics.observe("calls/sampler_wall_seconds", sampler_wall_seconds)
-            if attempts is not None:
-                state.metrics.increment("calls/upstream_retry_attempts", max(0, attempts - 1))
         return record
 
     async def _record_call_terminal(
@@ -1405,6 +1416,7 @@ class _LinearTrajectoryCore:
         error: BaseException,
         phase: str,
         request: TITOChatRequest | None = None,
+        turn_id: str | None = None,
         logical_request_id: str | None = None,
         attempts: int | None = None,
         server_attempts: Sequence[SampledServerAttempt] | None = None,
@@ -1439,6 +1451,10 @@ class _LinearTrajectoryCore:
                         wire_status=last_attempt.status_code,
                     )
             if error.discard_trajectory:
+                if state.discard_error is not error:
+                    # A concurrent failure cannot turn into a model reward,
+                    # even if the parser's diagnostic write finishes last.
+                    state.malformed_tool_call_id = None
                 # Poison the trajectory before diagnostic I/O can yield or be
                 # cancelled; its successful prefix must never become trainable.
                 state.discard_error = error
@@ -1514,6 +1530,7 @@ class _LinearTrajectoryCore:
                 event,
                 {
                     "call_id": call_id,
+                    **({"turn_id": turn_id} if turn_id is not None else {}),
                     "call_kind": kind,
                     "classification_source": classification_source,
                     "outcome": outcome,
@@ -1585,6 +1602,7 @@ class _LinearTrajectoryCore:
             state,
             call_id=call_id,
             kind=kind,
+            turn_id=turn_id,
             classification_source=classification_source,
             outcome=outcome,
             started_at=started_at,
@@ -1604,6 +1622,7 @@ class _LinearTrajectoryCore:
         mapping = {
             "server/processing_seconds": metrics.server_processing_time,
             "server/upstream_ttft_seconds": metrics.server_ttft,
+            "server/client_ttft_seconds": metrics.client_ttft,
             "server/tokenizer_queue_seconds": metrics.tokenizer_queue_duration,
             "server/tokenizer_seconds": metrics.tokenizer_duration,
             "server/prefill_queue_seconds": metrics.prefill_queue_duration,
@@ -1839,6 +1858,7 @@ class _LinearTrajectoryCore:
                     state.auxiliary_tasks.discard(current_task)
 
         sampled: SampledRequestResult | None = None
+        malformed_turn_id: str | None = None
         sampler_started_at: float | None = None
         logical_request_id: str | None = None
         fingerprint: str | None = None
@@ -2111,8 +2131,30 @@ class _LinearTrajectoryCore:
                 include_sample_extra,
             )
             phase = "parser"
-            parsed = self._parse(request, completion)
-            state.metrics.increment("parser/success")
+            malformed_tool_error = None
+            try:
+                parsed = self._parse(request, completion)
+            except TITOError as exc:
+                if (
+                    state.terminalizing
+                    or state.discard_error is not None
+                    or classification_source == "fail_closed"
+                    or exc.code != "tito_sdk_parse_error"
+                    or exc.context.get("parser_reason_code") not in _MALFORMED_TOOL_CALL_REASONS
+                    or not _has_exact_tool_sample(
+                        completion.finish_reason, completion.sampling_logprobs, completion.completion_len
+                    )
+                ):
+                    raise
+                malformed_tool_error = exc
+                # An internal terminal turn can preserve the sample without
+                # inventing an executable tool call or a response emission.
+                parsed = TITOParsedAssistant(
+                    message={"role": "assistant", "content": ""},
+                    output_kind="malformed_tool_call",
+                )
+            else:
+                state.metrics.increment("parser/success")
 
             prior_segment = state.active_segment if plan.close_reason is not None else None
             is_new_segment = plan.segment is None
@@ -2177,6 +2219,19 @@ class _LinearTrajectoryCore:
                 server_attempts=sampled.server_attempts,
                 parser_fallback=parsed.parser_fallback,
             )
+            if malformed_tool_error is not None:
+                if prior_segment is not None:
+                    prior_segment.closed_reason = plan.close_reason
+                if is_new_segment:
+                    state.segments.append(segment)
+                segment.turns.append(turn)
+                segment.closed_reason = "malformed_tool_call"
+                state.latest_segment = segment
+                state.discard_error = malformed_tool_error
+                state.malformed_tool_call_id = call_id
+                malformed_turn_id = turn_id
+                raise malformed_tool_error
+
             commit_payload = {
                 "call_id": call_id,
                 "turn_id": turn_id,
@@ -2282,7 +2337,6 @@ class _LinearTrajectoryCore:
                     else "other"
                 )
                 state.metrics.increment(f"calls/finish_reason_{finish_reason_label}")
-                self._observe_server_metrics(state, sampled.server_metrics)
                 if idempotency_key is not None:
                     state.last_call = _LastCall(
                         idempotency_key=idempotency_key,
@@ -2351,7 +2405,7 @@ class _LinearTrajectoryCore:
                         else None
                     ),
                     logical_request_id=(getattr(exc, "logical_request_id", None) or logical_request_id),
-                    attempts=getattr(exc, "attempts", None) or (1 if sampler_started_at is not None else None),
+                    attempts=getattr(exc, "attempts", 1 if sampler_started_at is not None else None),
                     server_attempts=getattr(exc, "server_attempts", None),
                 )
             raise
@@ -2406,6 +2460,7 @@ class _LinearTrajectoryCore:
                         sampled=sampled,
                         sampler_wall_seconds=sampler_wall_seconds,
                         error_code=exc.code,
+                        turn_id=malformed_turn_id,
                         error=exc,
                         phase=phase,
                         request=request,
@@ -2645,7 +2700,6 @@ class _LinearTrajectoryCore:
                     else None
                 ),
             )
-            self._observe_server_metrics(state, sampled.server_metrics)
             return TITOCallResult(response=MappingProxyType(response), call=record, turn_id=None)
         except asyncio.CancelledError as exc:
             self._call_record(
@@ -2662,7 +2716,7 @@ class _LinearTrajectoryCore:
                     else None
                 ),
                 logical_request_id=(getattr(exc, "logical_request_id", None) or logical_request_id),
-                attempts=getattr(exc, "attempts", None) or (1 if sampler_started_at is not None else None),
+                attempts=getattr(exc, "attempts", 1 if sampler_started_at is not None else None),
                 server_attempts=getattr(exc, "server_attempts", None),
             )
             raise
@@ -3144,11 +3198,16 @@ class _LinearTrajectoryCore:
         status: Literal["completed", "abandoned", "failed"] = "completed",
         reason: str | None = None,
     ) -> TITOTrajectoryArtifact:
+        metadata = state.metadata
+        if state.malformed_tool_call_id is not None:
+            metadata = MappingProxyType(
+                {**metadata, "tito_malformed_tool_call_id": state.malformed_tool_call_id}
+            )
         return TITOTrajectoryArtifact(
             lineage_mode=state.drift_policy.lineage_mode,
             trajectory_id=state.trajectory_id,
             serving_affinity_key_hash=hashlib.sha256(state.serving_affinity_key.encode("utf-8")).hexdigest(),
-            metadata=state.metadata,
+            metadata=metadata,
             status=status,
             terminal_reason=reason,
             segments=tuple(

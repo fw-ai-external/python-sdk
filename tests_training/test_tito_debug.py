@@ -95,6 +95,30 @@ def test_redaction_happens_before_persistence(tmp_path) -> None:
     assert "<redacted>" in serialized
 
 
+def test_sanitize_copies_numeric_rows_and_redacts_mixed_rows() -> None:
+    numeric = [1, -0.2, None, True]
+    source = {"numeric": numeric, "mixed": (1, "token=private", {"authorization": numeric})}
+
+    sanitized = TITOLocalDebugSink.sanitize(source, redact_text=True)
+
+    assert sanitized["numeric"] == numeric
+    assert sanitized["numeric"] is not numeric
+    assert sanitized["mixed"] == [1, "token=<redacted>", {"authorization": "<redacted>"}]
+
+
+def test_sanitize_keeps_single_pass_for_list_subclasses() -> None:
+    class Row(list):
+        iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            return iter([{"authorization": "private"}] if self.iterations == 1 else [1])
+
+    row = Row()
+    assert TITOLocalDebugSink.sanitize(row) == [{"authorization": "<redacted>"}]
+    assert row.iterations == 1
+
+
 def test_quota_failure_does_not_advance_event_sequence(tmp_path) -> None:
     sink = TITOLocalDebugSink(_config(tmp_path, max_local_bytes=300))
     with pytest.raises(TITODebugStorageFullError):

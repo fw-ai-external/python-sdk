@@ -551,6 +551,40 @@ class TestSamplingRetryLoop:
         assert controller.acquired == 1
         assert controller.released == 1
 
+    @pytest.mark.parametrize("pauses_after", [0, 2])
+    def test_cancelled_between_attempts_preserves_send_count(self, pauses_after):
+        sampler = _make_sampler()
+        calls = _install_stream(sampler, [_http_error(503)])
+        blocked = asyncio.Event()
+
+        async def block():
+            blocked.set()
+            await asyncio.Future()
+
+        async def acquire():
+            if not pauses_after:
+                await block()
+
+        async def backoff(_label, attempt, current_backoff, **_kwargs):
+            if attempt == pauses_after:
+                await block()
+            return current_backoff
+
+        sampler._acquire_concurrency = acquire
+        sampler._backoff_after_transient = backoff
+
+        async def run():
+            task = asyncio.create_task(sampler.sample_with_prompt_tokens([1, 2, 3]))
+            await blocked.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError) as excinfo:
+                await task
+            assert excinfo.value.attempts == pauses_after
+            assert len(excinfo.value.server_attempts) == pauses_after
+
+        asyncio.run(run())
+        assert len(calls) == pauses_after
+
     def test_unclassified_stream_error_releases_concurrency_slot(self):
         controller = _CountingController()
         sampler = _make_sampler(concurrency_controller=controller)

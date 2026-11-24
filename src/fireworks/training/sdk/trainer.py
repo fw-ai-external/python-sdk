@@ -403,6 +403,8 @@ class TrainerJobConfig:
     When set, this exact target takes precedence over ``use_reservation`` and
     shared/on-demand spillover is disabled by the control plane.
     """
+    rollout_deployment_name: str | None = None
+    """Deployment linked to this trainer for hot-load. Requires a trusted caller."""
 
     def validate(self) -> None:
         """Self-contained pre-flight check. Call before ``_create()``.
@@ -636,6 +638,8 @@ class TrainerJobManager(FireworksClient):
             payload["preemptible"] = True
         if config.managed_by:
             payload["managedBy"] = config.managed_by
+        if config.rollout_deployment_name:
+            payload["rolloutDeploymentName"] = config.rollout_deployment_name
         if config.inactivity_timeout is not None:
             payload["inactivityTimeout"] = _format_proto_duration(config.inactivity_timeout)
         if config.disable_inactivity_cleanup:

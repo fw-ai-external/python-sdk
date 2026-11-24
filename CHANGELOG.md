@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.37 (2026-11-24)
+
+Full Changelog: [v1.2.36...v1.2.37](https://github.com/fw-ai-external/python-sdk/compare/v1.2.36...v1.2.37)
+
+### Features
+* **watermark detections:** add `client.watermark_detections.create(text=...)` (and the async client equivalent) to check whether text carries a Fireworks watermark.
+
+### Bug Fixes
+* **training-sdk:** load reviewed Kimi K3/K3.1 tokenizers from an offline Hugging Face cache that holds only their data files. Official Kimi repositories always load through the pinned raw-data path.
+* **training-sdk:** require an authorized Fireworks PEFT Model when loading an adapter; reject raw local and cloud-storage paths.
+
 ## 1.2.36 (2026-11-20)
 
 Full Changelog: [v1.2.35...v1.2.36](https://github.com/fw-ai-external/python-sdk/compare/v1.2.35...v1.2.36)

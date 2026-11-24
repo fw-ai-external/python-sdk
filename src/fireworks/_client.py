@@ -52,6 +52,7 @@ if TYPE_CHECKING:
         evaluation_jobs,
         deployment_shapes,
         batch_inference_jobs,
+        watermark_detections,
         deployment_shape_versions,
         supervised_fine_tuning_jobs,
         reinforcement_fine_tuning_jobs,
@@ -73,6 +74,7 @@ if TYPE_CHECKING:
     from .resources.evaluation_jobs import EvaluationJobsResource, AsyncEvaluationJobsResource
     from .resources.deployment_shapes import DeploymentShapesResource, AsyncDeploymentShapesResource
     from .resources.batch_inference_jobs import BatchInferenceJobsResource, AsyncBatchInferenceJobsResource
+    from .resources.watermark_detections import WatermarkDetectionsResource, AsyncWatermarkDetectionsResource
     from .resources.deployment_shape_versions import (
         DeploymentShapeVersionsResource,
         AsyncDeploymentShapeVersionsResource,
@@ -188,6 +190,12 @@ class Fireworks(SyncAPIClient):
         from .resources.completions import CompletionsResource
 
         return CompletionsResource(self)
+
+    @cached_property
+    def watermark_detections(self) -> WatermarkDetectionsResource:
+        from .resources.watermark_detections import WatermarkDetectionsResource
+
+        return WatermarkDetectionsResource(self)
 
     @cached_property
     def messages(self) -> MessagesResource:
@@ -511,6 +519,12 @@ class AsyncFireworks(AsyncAPIClient):
         return AsyncCompletionsResource(self)
 
     @cached_property
+    def watermark_detections(self) -> AsyncWatermarkDetectionsResource:
+        from .resources.watermark_detections import AsyncWatermarkDetectionsResource
+
+        return AsyncWatermarkDetectionsResource(self)
+
+    @cached_property
     def messages(self) -> AsyncMessagesResource:
         from .resources.messages import AsyncMessagesResource
 
@@ -763,6 +777,12 @@ class FireworksWithRawResponse:
         return CompletionsResourceWithRawResponse(self._client.completions)
 
     @cached_property
+    def watermark_detections(self) -> watermark_detections.WatermarkDetectionsResourceWithRawResponse:
+        from .resources.watermark_detections import WatermarkDetectionsResourceWithRawResponse
+
+        return WatermarkDetectionsResourceWithRawResponse(self._client.watermark_detections)
+
+    @cached_property
     def messages(self) -> messages.MessagesResourceWithRawResponse:
         from .resources.messages import MessagesResourceWithRawResponse
 
@@ -894,6 +914,12 @@ class AsyncFireworksWithRawResponse:
         from .resources.completions import AsyncCompletionsResourceWithRawResponse
 
         return AsyncCompletionsResourceWithRawResponse(self._client.completions)
+
+    @cached_property
+    def watermark_detections(self) -> watermark_detections.AsyncWatermarkDetectionsResourceWithRawResponse:
+        from .resources.watermark_detections import AsyncWatermarkDetectionsResourceWithRawResponse
+
+        return AsyncWatermarkDetectionsResourceWithRawResponse(self._client.watermark_detections)
 
     @cached_property
     def messages(self) -> messages.AsyncMessagesResourceWithRawResponse:
@@ -1031,6 +1057,12 @@ class FireworksWithStreamedResponse:
         return CompletionsResourceWithStreamingResponse(self._client.completions)
 
     @cached_property
+    def watermark_detections(self) -> watermark_detections.WatermarkDetectionsResourceWithStreamingResponse:
+        from .resources.watermark_detections import WatermarkDetectionsResourceWithStreamingResponse
+
+        return WatermarkDetectionsResourceWithStreamingResponse(self._client.watermark_detections)
+
+    @cached_property
     def messages(self) -> messages.MessagesResourceWithStreamingResponse:
         from .resources.messages import MessagesResourceWithStreamingResponse
 
@@ -1100,7 +1132,9 @@ class FireworksWithStreamedResponse:
     def reinforcement_fine_tuning_steps(
         self,
     ) -> reinforcement_fine_tuning_steps.ReinforcementFineTuningStepsResourceWithStreamingResponse:
-        from .resources.reinforcement_fine_tuning_steps import ReinforcementFineTuningStepsResourceWithStreamingResponse
+        from .resources.reinforcement_fine_tuning_steps import (
+            ReinforcementFineTuningStepsResourceWithStreamingResponse,
+        )
 
         return ReinforcementFineTuningStepsResourceWithStreamingResponse(self._client.reinforcement_fine_tuning_steps)
 
@@ -1164,6 +1198,12 @@ class AsyncFireworksWithStreamedResponse:
         from .resources.completions import AsyncCompletionsResourceWithStreamingResponse
 
         return AsyncCompletionsResourceWithStreamingResponse(self._client.completions)
+
+    @cached_property
+    def watermark_detections(self) -> watermark_detections.AsyncWatermarkDetectionsResourceWithStreamingResponse:
+        from .resources.watermark_detections import AsyncWatermarkDetectionsResourceWithStreamingResponse
+
+        return AsyncWatermarkDetectionsResourceWithStreamingResponse(self._client.watermark_detections)
 
     @cached_property
     def messages(self) -> messages.AsyncMessagesResourceWithStreamingResponse:

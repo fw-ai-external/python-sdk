@@ -1200,6 +1200,14 @@ async def test_artifact_round_trip_preserves_fork_boundaries(
     restored = type(artifact).unpack(packed)
     assert restored == artifact
     assert restored.pack() == packed
+    for chunk_size in (1, 257, 64 * 1024):
+        streamed = type(artifact).unpack_stream(
+            (packed[offset : offset + chunk_size] for offset in range(0, len(packed), chunk_size)),
+            expected_bytes=len(packed),
+            expected_sha256=hashlib.sha256(packed).hexdigest(),
+            max_expanded_bytes=16 * 1024 * 1024,
+        )
+        assert streamed == restored
     header = b"TITOART\x01"
     decoded = json.loads(zlib.decompress(packed[len(header) :]))
     assert decoded["schema_version"] == (2 if lineage_mode == "tree" else 1)
@@ -1207,6 +1215,75 @@ async def test_artifact_round_trip_preserves_fork_boundaries(
     decoded["segments"][0]["turns"][0]["prompt_prefix"] = 0
     with pytest.raises(TITOError, match="unsupported TITO turn prompt prefix"):
         type(artifact).unpack(header + zlib.compress(json.dumps(decoded).encode("utf-8")))
+
+
+@pytest.mark.parametrize(
+    ("fault", "match"),
+    [
+        ("truncated", "byte count"),
+        ("checksum", "checksum"),
+        ("trailing", "trailing bytes"),
+        ("incomplete_zlib", "incomplete TITO artifact compression stream"),
+        ("expanded_limit", "expanded size"),
+        ("oversize", "byte count"),
+    ],
+)
+async def test_artifact_stream_never_returns_a_corrupt_or_incomplete_trajectory(fault: str, match: str) -> None:
+    engine = _engine(FakeSampler())
+    trajectory = engine.create_trajectory(metadata={"unicode": "雪🔥" * (64 * 1024)})
+    await engine.complete(trajectory, _first_request())
+    artifact = engine.finish(trajectory)
+    packed = artifact.pack()
+    wire = packed
+    size = len(packed)
+    sha256 = hashlib.sha256(packed).hexdigest()
+    expanded_limit = 2 * 1024 * 1024
+
+    if fault == "truncated":
+        wire = packed[:-1]
+    elif fault == "checksum":
+        sha256 = "0" * 64
+    elif fault == "trailing":
+        wire = packed + b"garbage"
+        size = len(wire)
+        sha256 = hashlib.sha256(wire).hexdigest()
+    elif fault == "incomplete_zlib":
+        wire = packed[:-1]
+        size = len(wire)
+        sha256 = hashlib.sha256(wire).hexdigest()
+    elif fault == "expanded_limit":
+        expanded_limit = 64 * 1024
+    else:
+        size -= 1
+
+    with pytest.raises(TITOError, match=match) as exc_info:
+        type(artifact).unpack_stream(
+            (wire[offset : offset + 17] for offset in range(0, len(wire), 17)),
+            expected_bytes=size,
+            expected_sha256=sha256,
+            max_expanded_bytes=expanded_limit,
+        )
+    assert exc_info.value.code == "tito_artifact_invalid"
+
+
+async def test_artifact_stream_retains_cancellation_after_wire_body() -> None:
+    engine = _engine(FakeSampler())
+    trajectory = engine.create_trajectory()
+    await engine.complete(trajectory, _first_request())
+    artifact = engine.finish(trajectory)
+    packed = artifact.pack()
+
+    def cancelled_stream():
+        yield packed
+        raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        type(artifact).unpack_stream(
+            cancelled_stream(),
+            expected_bytes=len(packed),
+            expected_sha256=hashlib.sha256(packed).hexdigest(),
+            max_expanded_bytes=16 * 1024 * 1024,
+        )
 
 
 async def test_strict_mismatch_rejects_without_mutation() -> None:
@@ -1574,6 +1651,33 @@ async def test_full_render_time_is_observed_when_rendering_raises() -> None:
     assert result.metrics.distributions["renderer/full_render_seconds"].count == 2
 
 
+@pytest.mark.parametrize("kind", ["policy", "auxiliary"])
+async def test_server_timing_and_retry_counts_are_observed_once_per_logical_request(kind: str) -> None:
+    class TimedSampler(FakeSampler):
+        async def sample_with_prompt_tokens_result(self, prompt_token_ids, **kwargs):
+            result = await super().sample_with_prompt_tokens_result(prompt_token_ids, **kwargs)
+            result.attempts = 2
+            result.server_metrics = ServerMetrics(client_ttft=0.25, generation_duration=0.75)
+            return result
+
+    engine = _engine(TimedSampler(outputs=([197, 3],)), call_classifier=lambda _: (kind, "test"))
+    trajectory_id = engine.create_trajectory()
+    await engine.complete(trajectory_id, _first_request(), idempotency_key="same")
+    if kind == "policy":
+        replay = await engine.complete(trajectory_id, _first_request(), idempotency_key="same")
+        assert replay.replayed
+    metrics = engine.finish(trajectory_id).metrics
+    assert metrics.counters["calls/model_requests"] == 1
+    assert metrics.counters["calls/upstream_attempts"] == 2
+    assert metrics.counters["calls/upstream_retry_attempts"] == 1
+    assert metrics.counters["calls/upstream_completions"] == 1
+    assert metrics.counters["calls/generated_tokens"] == 2
+    assert metrics.distributions["server/generation_seconds"].count == 1
+    assert metrics.distributions["server/generation_seconds"].sum == 0.75
+    assert metrics.distributions["server/client_ttft_seconds"].count == 1
+    assert metrics.distributions["server/client_ttft_seconds"].sum == 0.25
+
+
 async def test_idempotency_replays_only_same_key_and_fingerprint() -> None:
     sampler = FakeSampler(outputs=([197, 3], [198, 3], [199, 3]))
     renderer = FakeRenderer()
@@ -1920,7 +2024,9 @@ async def test_call_accounting_closes_over_replay_reject_failure_and_cancellatio
             self, prompt_token_ids: list[int], **kwargs: Any
         ) -> SampledRequestResult:
             self.calls.append({"prompt": tuple(prompt_token_ids), **kwargs})
-            raise RuntimeError("upstream failed")
+            error = RuntimeError("upstream failed")
+            error.attempts = 3
+            raise error
 
     failing_engine = _engine(FailingSampler())
     failing_id = failing_engine.create_trajectory()
@@ -1930,7 +2036,11 @@ async def test_call_accounting_closes_over_replay_reject_failure_and_cancellatio
     _assert_call_accounting(failed.metrics.counters)
     assert failed.metrics.counters["calls/failed"] == 1
     assert failed.calls[0].logical_request_id
-    assert failed.calls[0].attempts == 1
+    assert failed.calls[0].attempts == 3
+    assert failed.metrics.counters["calls/model_requests"] == 1
+    assert failed.metrics.counters["calls/upstream_attempts"] == 3
+    assert failed.metrics.counters["calls/upstream_retry_attempts"] == 2
+    assert not failed.metrics.counters.get("calls/upstream_completions")
 
     cancelled_sampler = FakeSampler()
     cancelled_sampler.block = True

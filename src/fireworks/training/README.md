@@ -65,6 +65,19 @@ main(cfg)
 
 For runnable recipes (GRPO, DPO, SFT, etc.), see the [Training Cookbook](https://github.com/fw-ai-external/cookbook/blob/main/training/README.md).
 
+## Tokenizing training inputs
+
+Configure `tokenizer_model` with the tokenizer for the trainer's base model
+when creating the managed training client. Load it on the client and reuse it:
+
+```python
+tokenizer = training_client.get_tokenizer()
+token_ids = tokenizer.encode(text, add_special_tokens=False)
+decoded_text = tokenizer.decode(token_ids)
+```
+
+Use the recipe's renderer for chat messages that need a model-specific template.
+
 ## Recovering sampling concurrency
 
 `DeploymentSampler` uses `AdaptiveConcurrencyController` by default. Its request

@@ -41,7 +41,7 @@ DEEPSEEK_V4_REPOSITORIES = frozenset({"deepseek-ai/DeepSeek-V4-Flash-0731", "dee
 # Capability history: "deepseek-v4-tokenizer-identity/separate-family-and-code-policy"
 # covered DeepSeek V4 only; later revisions added V4.1, saved Kimi profiles,
 # GLM and exact restrictive standard-family/renderer context.
-TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31+glm5-tokenizer-identity/exact-standard-context-v8"
+TOKENIZER_IDENTITY_POLICY_CAPABILITY = "deepseek-v4-v41+kimi-k3-k31+glm5-tokenizer-identity/exact-standard-context-v9"
 
 GLM5_MODEL_TYPES = frozenset({"glm_moe_dsa", "glm5_next", "glm5_next_text"})
 GLM5_REPOSITORIES = frozenset(
@@ -276,6 +276,10 @@ def is_glm5_model_name(model_name: str | None) -> bool:
 # Literal reviewed identifiers, paired with their catalog aliases where present.
 # Whitespace separates entries only; names, namespaces and sizes are never inferred.
 _STANDARD_TOKENIZER_MODEL_NAMES = frozenset("""
+    meta-models/muse-glimmer-30b accounts/fireworks/models/muse-glimmer-30b
+    meta-models/muse-spark-1.2-816b-a42b-nvfp4-open accounts/fireworks/models/muse-spark-open-nvfp4
+    reflection/beam-1.0-501b-a23b reflection/beam-1.0-501b-a23b-nvfp4
+    accounts/fireworks/models/beam-1p0-501b-a23b-nvfp4
     minimaxai/minimax-m2 accounts/fireworks/models/minimax-m2
     minimaxai/minimax-m2.1 accounts/fireworks/models/minimax-m2p1
     minimaxai/minimax-m2.5 accounts/fireworks/models/minimax-m2p5
@@ -337,6 +341,8 @@ _STANDARD_TOKENIZER_MODEL_NAMES = frozenset("""
     nvidia/nemotron-nano-v2-12b-vl accounts/fireworks/models/nemotron-nano-v2-12b-vl
     """.split())
 _STANDARD_TOKENIZER_MODEL_TYPES = frozenset("""
+    muse_glimmer muse_spark beam
+    museglimmerforconditionalgeneration musesparkforconditionalgeneration beamforcausallm
     qwen2 qwen2_moe qwen3 qwen3_moe qwen3_vl qwen3_vl_moe qwen3_5 qwen3_5_moe
     gemma4 gemma4_assistant minimax_m2 minimax_m3_vl nemotron_h nemotron_h_omni
     qwen2forcausallm qwen3forcausallm qwen3moeforcausallm
@@ -347,6 +353,7 @@ _STANDARD_TOKENIZER_MODEL_TYPES = frozenset("""
     nemotronhforcausallm nemotronh_omni_reasoning_v3 nemotronh_nano_omni_reasoning_v3
     """.split())
 _STANDARD_TOKENIZER_RENDERER_NAMES = frozenset("""
+    muse_glimmer muse_spark muse_spark_low muse_spark_medium muse_spark_high muse_spark_xhigh beam
     qwen2_5 qwen3 qwen3_vl qwen3_vl_instruct qwen3_disable_thinking qwen3_instruct
     qwen3_5 qwen3_5_disable_thinking qwen3_5_interleaved qwen3_5_disable_thinking_interleaved
     qwen3_6 qwen3_6_disable_thinking qwen3_6_preserve_thinking qwen3_6_interleaved

@@ -6,8 +6,10 @@ import json
 import time
 import zlib
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
+from contextlib import closing
 from dataclasses import fields
+from collections.abc import Iterable
 
 from fireworks.training.sdk.routing import routing_to_wire, routing_from_wire
 from fireworks.training.sdk.sampling import ServerMetrics, SampledServerAttempt
@@ -25,6 +27,7 @@ from fireworks.training.sdk.tito._types import (
     _freeze_json,
 )
 from fireworks.training.sdk.tito._native_runtime import require_native
+from fireworks.training.sdk.tito._artifact_stream import ArtifactJSONReader, inflate_verified
 
 _MAGIC = b"TITOART\x01"
 _JSON_THREAD_YIELD_INTERVAL_SECONDS = 0.01
@@ -330,80 +333,145 @@ def _turn(raw: Mapping[str, Any]) -> TITOTurn:
     )
 
 
+def _segment(raw: Mapping[str, Any], turns: Iterable[TITOTurn]) -> TITOSegmentResult:
+    return TITOSegmentResult(
+        segment_id=str(raw["segment_id"]),
+        start_reason=str(raw["start_reason"]),
+        render_contract_id=str(raw["render_contract_id"]),
+        turns=tuple(turns),
+        closed_reason=raw.get("closed_reason"),
+    )
+
+
+def _call(raw: Mapping[str, Any]) -> TITOCallRecord:
+    return TITOCallRecord(
+        call_id=str(raw["call_id"]),
+        kind=raw["kind"],
+        classification_source=str(raw["classification_source"]),
+        outcome=raw["outcome"],
+        started_at=float(raw["started_at"]),
+        ended_at=float(raw["ended_at"]),
+        request_fingerprint=raw.get("request_fingerprint"),
+        prepared_prompt_hash=raw.get("prepared_prompt_hash"),
+        turn_id=raw.get("turn_id"),
+        logical_request_id=raw.get("logical_request_id"),
+        upstream_response_id=raw.get("upstream_response_id"),
+        attempts=int(raw.get("attempts", 0)),
+        server_attempts=tuple(_server_attempt(item) for item in raw.get("server_attempts") or ()),
+        error_code=raw.get("error_code"),
+    )
+
+
+def _response_attempt(raw: Mapping[str, Any]) -> TITOResponseAttempt:
+    return TITOResponseAttempt(
+        attempt_id=str(raw["attempt_id"]),
+        turn_id=str(raw["turn_id"]),
+        emission=raw["emission"],
+        created_at=float(raw["created_at"]),
+    )
+
+
+def _validate_wire_schema(raw: Mapping[str, Any]) -> Literal["linear", "tree"]:
+    version = raw.get("schema_version")
+    lineage_mode = raw.get("lineage_mode", "linear")
+    if type(version) is not int or (version, lineage_mode) not in ((1, "linear"), (2, "tree")):
+        raise ValueError(f"unsupported TITO artifact schema or lineage: {version!r}, {lineage_mode!r}")
+    if "prompt_prefixes" in raw:
+        raise ValueError("unsupported TITO prompt prefix table")
+    return lineage_mode
+
+
+def _trajectory(raw: Mapping[str, Any], lineage_mode: Literal["linear", "tree"]) -> TITOTrajectoryArtifact:
+    metrics = raw["metrics"]
+    return TITOTrajectoryArtifact(
+        lineage_mode=lineage_mode,
+        trajectory_id=str(raw["trajectory_id"]),
+        serving_affinity_key_hash=str(raw["serving_affinity_key_hash"]),
+        metadata=MappingProxyType(_freeze_json(raw.get("metadata") or {})),
+        status=raw["status"],
+        terminal_reason=raw.get("terminal_reason"),
+        segments=raw["segments"],
+        calls=raw["calls"],
+        response_attempts=raw["response_attempts"],
+        metrics=TITOMetricSummary(
+            counters=MappingProxyType({str(k): int(v) for k, v in metrics["counters"].items()}),
+            distributions=MappingProxyType(
+                {
+                    str(name): TITODistribution(
+                        count=int(distribution["count"]),
+                        sum=float(distribution["sum"]),
+                        min=distribution.get("min"),
+                        max=distribution.get("max"),
+                    )
+                    for name, distribution in metrics["distributions"].items()
+                }
+            ),
+        ),
+        started_at=float(raw["started_at"]),
+        finished_at=float(raw["finished_at"]),
+    )
+
+
+_ARTIFACT_ERRORS = (KeyError, TypeError, ValueError, AttributeError, OverflowError, RecursionError, zlib.error)
+
+
 def unpack_trajectory_artifact(payload: bytes) -> TITOTrajectoryArtifact:
-    """Decode and validate one compact trajectory artifact."""
+    """Decode a compact artifact already available as bytes."""
     try:
         if not payload.startswith(_MAGIC):
             raise ValueError("missing TITO artifact magic/version")
         raw = _load_artifact_json(zlib.decompress(payload[len(_MAGIC) :]))
-        version = raw.get("schema_version")
-        lineage_mode = raw.get("lineage_mode", "linear")
-        if (version, lineage_mode) not in ((1, "linear"), (2, "tree")):
-            raise ValueError(f"unsupported TITO artifact schema or lineage: {version!r}, {lineage_mode!r}")
-        if "prompt_prefixes" in raw:
-            raise ValueError("unsupported TITO prompt prefix table")
-        metrics = raw["metrics"]
-        return TITOTrajectoryArtifact(
-            lineage_mode=lineage_mode,
-            trajectory_id=str(raw["trajectory_id"]),
-            serving_affinity_key_hash=str(raw["serving_affinity_key_hash"]),
-            metadata=MappingProxyType(_freeze_json(raw.get("metadata") or {})),
-            status=raw["status"],
-            terminal_reason=raw.get("terminal_reason"),
-            segments=tuple(
-                TITOSegmentResult(
-                    segment_id=str(segment["segment_id"]),
-                    start_reason=str(segment["start_reason"]),
-                    render_contract_id=str(segment["render_contract_id"]),
-                    turns=tuple(_turn(turn) for turn in segment["turns"]),
-                    closed_reason=segment.get("closed_reason"),
-                )
-                for segment in raw["segments"]
-            ),
-            calls=tuple(
-                TITOCallRecord(
-                    call_id=str(call["call_id"]),
-                    kind=call["kind"],
-                    classification_source=str(call["classification_source"]),
-                    outcome=call["outcome"],
-                    started_at=float(call["started_at"]),
-                    ended_at=float(call["ended_at"]),
-                    request_fingerprint=call.get("request_fingerprint"),
-                    prepared_prompt_hash=call.get("prepared_prompt_hash"),
-                    turn_id=call.get("turn_id"),
-                    logical_request_id=call.get("logical_request_id"),
-                    upstream_response_id=call.get("upstream_response_id"),
-                    attempts=int(call.get("attempts", 0)),
-                    server_attempts=tuple(_server_attempt(item) for item in call.get("server_attempts") or ()),
-                    error_code=call.get("error_code"),
-                )
-                for call in raw["calls"]
-            ),
-            response_attempts=tuple(
-                TITOResponseAttempt(
-                    attempt_id=str(attempt["attempt_id"]),
-                    turn_id=str(attempt["turn_id"]),
-                    emission=attempt["emission"],
-                    created_at=float(attempt["created_at"]),
-                )
-                for attempt in raw["response_attempts"]
-            ),
-            metrics=TITOMetricSummary(
-                counters=MappingProxyType({str(k): int(v) for k, v in metrics["counters"].items()}),
-                distributions=MappingProxyType(
-                    {
-                        str(name): TITODistribution(
-                            count=int(distribution["count"]),
-                            sum=float(distribution["sum"]),
-                            min=distribution.get("min"),
-                            max=distribution.get("max"),
-                        )
-                        for name, distribution in metrics["distributions"].items()
-                    }
-                ),
-            ),
-            started_at=float(raw["started_at"]),
-            finished_at=float(raw["finished_at"]),
-        )
-    except (KeyError, TypeError, ValueError, zlib.error, json.JSONDecodeError) as exc:
+        lineage_mode = _validate_wire_schema(raw)
+        raw["segments"] = tuple(_segment(segment, map(_turn, segment["turns"])) for segment in raw["segments"])
+        raw["calls"] = tuple(map(_call, raw["calls"]))
+        raw["response_attempts"] = tuple(map(_response_attempt, raw["response_attempts"]))
+        return _trajectory(raw, lineage_mode)
+    except _ARTIFACT_ERRORS as exc:
+        raise TITOError("tito_artifact_invalid", 400, f"invalid TITO trajectory artifact: {exc}") from exc
+
+
+def unpack_trajectory_stream(
+    chunks: Iterable[bytes],
+    *,
+    expected_bytes: int,
+    expected_sha256: str | None,
+    max_expanded_bytes: int,
+) -> TITOTrajectoryArtifact:
+    """Verify one canonical UTF-8 artifact from a caller-owned byte source."""
+    plaintext = inflate_verified(
+        chunks,
+        magic=_MAGIC,
+        expected_bytes=expected_bytes,
+        expected_sha256=expected_sha256,
+        max_expanded_bytes=max_expanded_bytes,
+    )
+    try:
+        with closing(plaintext):
+            reader = ArtifactJSONReader(plaintext)
+            raw: dict[str, Any] = {}
+            for field in reader.members():
+                if field == "segments":
+                    segments = []
+                    for _ in reader.items():
+                        segment: dict[str, Any] = {}
+                        for name in reader.members():
+                            if name == "turns":
+                                segment[name] = tuple(_turn(reader.value()) for _ in reader.items())
+                            else:
+                                segment[name] = reader.value()
+                        segments.append(_segment(segment, segment["turns"]))
+                    raw[field] = tuple(segments)
+                elif field == "calls":
+                    raw[field] = tuple(_call(reader.value()) for _ in reader.items())
+                elif field == "response_attempts":
+                    raw[field] = tuple(_response_attempt(reader.value()) for _ in reader.items())
+                elif field == "prompt_prefixes":
+                    raise ValueError("unsupported TITO prompt prefix table")
+                else:
+                    raw[field] = reader.value()
+                    if field == "schema_version" and (type(raw[field]) is not int or raw[field] not in (1, 2)):
+                        raise ValueError(f"unsupported TITO artifact schema: {raw[field]!r}")
+            reader.finish()
+        return _trajectory(raw, _validate_wire_schema(raw))
+    except _ARTIFACT_ERRORS as exc:
         raise TITOError("tito_artifact_invalid", 400, f"invalid TITO trajectory artifact: {exc}") from exc

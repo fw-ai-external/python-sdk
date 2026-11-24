@@ -8,6 +8,7 @@ import hashlib
 from types import MappingProxyType
 from typing import Any, Union, Literal, Mapping, Protocol, Sequence, get_args, runtime_checkable
 from dataclasses import field, dataclass
+from collections.abc import Iterable
 
 from fireworks.training.sdk.routing import RoutingReferences
 from fireworks.training.sdk.sampling import ServerMetrics, SampledServerAttempt
@@ -500,7 +501,13 @@ class _MetricAccumulator:
         self.counters[name] = self.counters.get(name, 0) + value
 
     def observe(self, name: str, value: float) -> None:
-        self.distributions[name] = self.distributions.get(name, TITODistribution()).add(float(value))
+        observed = float(value)
+        current = self.distributions.get(name)
+        self.distributions[name] = (
+            TITODistribution(count=1, sum=observed, min=observed, max=observed)
+            if current is None
+            else current.add(observed)
+        )
 
     def snapshot(self) -> TITOMetricSummary:
         return TITOMetricSummary(
@@ -598,6 +605,33 @@ class TITOTrajectoryEndpoint:
     api_key: str
 
 
+# Only renderer rejections that identify a tool-call defect with a complete
+# stop are eligible. Generic parse failures and length truncation stay failures.
+_MALFORMED_TOOL_CALL_REASONS = frozenset(
+    {"tool_missing_name", "tool_unknown_name", "tool_arguments_invalid_json", "tool_arguments_not_object"}
+)
+
+
+def _has_exact_tool_sample(
+    finish_reason: str, logprobs: Sequence[float | None] | None, completion_len: int
+) -> bool:
+    return (
+        finish_reason in {"stop", "tool_calls"}
+        and logprobs is not None
+        and completion_len > 0
+        and len(logprobs) == completion_len
+        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in logprobs)
+    )
+
+
+@dataclass(frozen=True)
+class TITOMalformedToolCall:
+    """A rejected terminal tool action with an exact retained policy turn."""
+
+    turn_id: str
+    reason_code: str
+
+
 @dataclass(frozen=True)
 class TITOTrajectoryArtifact:
     trajectory_id: str
@@ -612,6 +646,51 @@ class TITOTrajectoryArtifact:
     started_at: float
     finished_at: float
     lineage_mode: Literal["tree", "linear"] = "linear"
+
+    @property
+    def malformed_tool_call(self) -> TITOMalformedToolCall | None:
+        """Return the terminal malformed tool action, if its sample was retained."""
+        if self.status != "failed" or self.terminal_reason != "tito_sdk_parse_error":
+            return None
+        failure = self.metadata.get("tito_failure")
+        if not isinstance(failure, Mapping):
+            return None
+        reason = failure.get("parser_reason_code")
+        if (
+            failure.get("code") != "tito_sdk_parse_error"
+            or failure.get("origin") != "sdk_parser"
+            or failure.get("debug_storage_error") is not None
+            or not isinstance(reason, str)
+            or reason not in _MALFORMED_TOOL_CALL_REASONS
+        ):
+            return None
+        call_id = self.metadata.get("tito_malformed_tool_call_id")
+        if not isinstance(call_id, str) or call_id != failure.get("call_id"):
+            return None
+        call = next(
+            (item for item in self.calls if item.call_id == call_id),
+            None,
+        )
+        if (
+            call is None
+            or call.kind != "policy"
+            or call.classification_source == "fail_closed"
+            or call.outcome != "model_malformed"
+            or call.error_code != "tito_sdk_parse_error"
+            or call.turn_id is None
+        ):
+            return None
+        for segment in self.segments:
+            if segment.closed_reason != "malformed_tool_call" or not segment.turns:
+                continue
+            turn = segment.turns[-1]
+            if (
+                turn.turn_id == call.turn_id
+                and turn.assistant.output_kind == "malformed_tool_call"
+                and _has_exact_tool_sample(turn.finish_reason, turn.sampling_logprobs, len(turn.exact_completion_ids))
+            ):
+                return TITOMalformedToolCall(turn_id=turn.turn_id, reason_code=reason)
+        return None
 
     def continued_turn_ids(self) -> frozenset[str]:
         """Return assistant turns confirmed by a subsequent accepted request.
@@ -654,6 +733,31 @@ class TITOTrajectoryArtifact:
         from fireworks.training.sdk.tito._artifact import unpack_trajectory_artifact
 
         return unpack_trajectory_artifact(payload)
+
+    @classmethod
+    def unpack_stream(
+        cls,
+        chunks: Iterable[bytes],
+        *,
+        expected_bytes: int,
+        expected_sha256: str | None,
+        max_expanded_bytes: int,
+    ) -> "TITOTrajectoryArtifact":
+        """Decode chunks with bounded expansion and full stream framing checks.
+
+        Supply the manifest SHA-256 for untrusted input. Pass `None` only when
+        the caller has already checked the digest and kept the bytes private
+        and unchanged. Byte count, compression framing and decoded format are
+        checked in either case.
+        """
+        from fireworks.training.sdk.tito._artifact import unpack_trajectory_stream
+
+        return unpack_trajectory_stream(
+            chunks,
+            expected_bytes=expected_bytes,
+            expected_sha256=expected_sha256,
+            max_expanded_bytes=max_expanded_bytes,
+        )
 
 
 def _request_continues_turn(prior: TITOTurn, later: TITOTurn) -> bool:
