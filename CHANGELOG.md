@@ -4,6 +4,9 @@
 
 Full Changelog: [v1.2.37...v1.2.38](https://github.com/fw-ai-external/python-sdk/compare/v1.2.37...v1.2.38)
 
+### Bug Fixes
+* **training-sdk:** load reviewed Kimi K2 Base, Instruct, Instruct-0905, Thinking, K2.5, K2.6 and K2.7-Code tokenizers from installed code without executing checkpoint Python, preserving profile-specific tokenization and saved-reader behavior.
+
 ### Refactors
 * **watermark detections (breaking):** `client.watermark_detections.create()` now returns only `object` and `result`, and `result` is `detected` or `not_detected`. The `id`, `detector_version` and `scored_tokens` fields and the `uncertain` result have been removed; text too short to score returns `not_detected`.
 

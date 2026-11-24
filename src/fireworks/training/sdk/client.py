@@ -41,6 +41,7 @@ from pydantic import Field, BaseModel, StrictBool, field_validator, model_valida
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core import APIStatusError, SamplingClient
 from fireworks.training.sdk._core._compat import model_dump as _training_model_dump
+from fireworks.training.sdk.kimi_k2_identity import get_k2_profile
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
     is_minimax_m2_model_name,
@@ -3141,8 +3142,13 @@ class FiretitanTrainingClient(TrainingClient):
 
         patch_duplicate_mistral_regex_kwarg()
 
-        if is_kimi_k3_k31_model_name(getattr(self, "_tokenizer_base_model", None)) or is_kimi_k3_k31_tokenizer_source(
-            self._tokenizer_model
+        base_model = getattr(self, "_tokenizer_base_model", None)
+        local_base = base_model is not None and os.path.isdir(base_model)
+        base_context = None if local_base else base_model
+        if (
+            is_kimi_k3_k31_model_name(base_context)
+            or (local_base and is_kimi_k3_k31_tokenizer_source(base_model, local_files_only=True))
+            or is_kimi_k3_k31_tokenizer_source(self._tokenizer_model)
         ):
             # Recognized reviewed Kimi K3/K3.1 data: build the id-identical
             # fast tokenizer from reviewed installed code. Checkpoint Python
@@ -3151,14 +3157,25 @@ class FiretitanTrainingClient(TrainingClient):
             from fireworks.training.sdk.kimi_native_tokenizer import load_native_tokenizer
 
             return load_native_tokenizer(self._tokenizer_model)
-        base_model = getattr(self, "_tokenizer_base_model", None)
+        independent_code_free_context = (
+            is_standard_tokenizer_model_name(base_model)
+            or is_code_free_model_name(base_context)
+            or (local_base and requires_code_free_tokenizer_loading(base_model, local_files_only=True))
+        )
+        if not independent_code_free_context and (
+            profile := get_k2_profile(self._tokenizer_model, base_model=base_model)
+        ):
+            # lazy: only selected K2 profiles need the installed tiktoken reader.
+            from fireworks.training.sdk.kimi_k2_tokenizer import load_k2_tokenizer
+
+            return load_k2_tokenizer(self._tokenizer_model, profile=profile)
         if is_minimax_m2_model_name(base_model) or is_minimax_m2_tokenizer_source(self._tokenizer_model):
             # lazy: share the literal reader without sharing the sampling client's cache.
             from fireworks.training.sdk._core.lib.public_interfaces.sampling_client import _load_minimax_tokenizer_json
 
             return _load_minimax_tokenizer_json(self._tokenizer_model)
         if (
-            is_code_free_model_name(base_model)
+            independent_code_free_context
             or is_standard_tokenizer_model_name(base_model)
             or is_standard_tokenizer_model_name(self._tokenizer_model)
             or requires_code_free_tokenizer_loading(self._tokenizer_model)
