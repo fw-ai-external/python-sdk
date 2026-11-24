@@ -212,3 +212,106 @@ def test_sdk_vendors_match_reviewed_lint_adapted_profile_sources():
         assert hashlib.sha256((directory / "encoding_k3.py").read_bytes()).hexdigest() == digest
         assert (directory / "LICENSE").is_file()
         assert (directory / "PROVENANCE.md").is_file()
+
+
+_DATA_FILES = ("config.json", "tiktoken.model", "tokenizer_config.json")
+
+
+@pytest.fixture(scope="module", params=["kimi_k3", "kimi_k31"])
+def hub_cache(request, tmp_path_factory):
+    """A real Hub cache of one pinned profile, written online with its tree listing."""
+    from huggingface_hub import snapshot_download
+
+    profile = request.param
+    if os.environ.get("KIMI_K3_MODEL_PATH" if profile == "kimi_k3" else "KIMI_K31_MODEL_PATH"):
+        pytest.skip("needs a Hub-written cache with its tree listing; local model paths do not provide one")
+    root = tmp_path_factory.mktemp(f"hub-{profile}")
+    snapshot_download(
+        native.KIMI_REPOSITORY_BY_PROFILE[profile],
+        revision=native.KIMI_REVISION_BY_PROFILE[profile],
+        allow_patterns=[*_DATA_FILES, "tokenization_kimi.py"],
+        cache_dir=root,
+    )
+    return root, profile
+
+
+def _offline_cache(hub_cache, tmp_path, monkeypatch, *, drop=(), listing=True, offline=True):
+    """Copy the cache as an image bakes it, then forbid every network connection."""
+    import socket
+
+    from huggingface_hub import constants
+
+    root, profile = hub_cache
+    repository = native.KIMI_REPOSITORY_BY_PROFILE[profile]
+    cache = tmp_path / "hub"
+    shutil.copytree(root, cache, symlinks=True)
+    storage = cache / ("models--" + repository.replace("/", "--"))
+    snapshot = storage / "snapshots" / native.KIMI_REVISION_BY_PROFILE[profile]
+    for name in drop:
+        (snapshot / name).unlink()
+    # The listing is what makes the Hub client reject a snapshot missing a requested file.
+    assert (storage / "trees").is_dir(), "huggingface_hub did not cache a tree listing"
+    if not listing:
+        shutil.rmtree(storage / "trees")
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(cache))
+    monkeypatch.setattr(constants, "HF_HUB_OFFLINE", offline)
+
+    def no_network(*_args, **_kwargs):
+        raise AssertionError("an offline Kimi load opened a network connection")
+
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    return repository, snapshot
+
+
+@pytest.mark.parametrize("listing", [True, False], ids=["tree-listing", "no-listing"])
+def test_offline_data_only_cache_loads_the_reviewed_tokenizer(hub_cache, tmp_path, monkeypatch, listing):
+    root, profile = hub_cache
+    full = next(root.rglob("snapshots/*"))
+    expected = native.build_fast_tokenizer(full, profile=profile)
+    repository, _ = _offline_cache(hub_cache, tmp_path, monkeypatch, drop=["tokenization_kimi.py"], listing=listing)
+    loaded = native.load_native_tokenizer(repository)
+    assert loaded.name_or_path == repository
+    assert loaded.apply_chat_template.profile == profile
+    for text in ("Hello 漢字 <|close|>message<|sep|>", "x" * 26_000, "literal <|sep|> text"):
+        assert loaded.encode(text) == expected.encode(text)
+
+
+def test_local_files_only_uses_the_cache_without_offline_mode(hub_cache, tmp_path, monkeypatch):
+    repository, _ = _offline_cache(
+        hub_cache, tmp_path, monkeypatch, drop=["tokenization_kimi.py"], listing=True, offline=False
+    )
+    assert native.load_native_tokenizer(repository, local_files_only=True).encode("hello")
+
+
+def test_offline_provenance_file_is_verified_when_present(hub_cache, tmp_path, monkeypatch):
+    repository, snapshot = _offline_cache(hub_cache, tmp_path, monkeypatch)
+    source = (snapshot / "tokenization_kimi.py").resolve()
+    (snapshot / "tokenization_kimi.py").unlink()
+    (snapshot / "tokenization_kimi.py").write_text(source.read_text() + "\n# tampered\n")
+    with pytest.raises(ValueError, match="tokenization_kimi.py: sha256"):
+        native.load_native_tokenizer(repository)
+
+
+@pytest.mark.parametrize("missing", ["tiktoken.model", "tokenizer_config.json"])
+@pytest.mark.parametrize("listing", [True, False], ids=["tree-listing", "no-listing"])
+def test_offline_cache_missing_a_data_file_fails_closed(hub_cache, tmp_path, monkeypatch, missing, listing):
+    repository, _ = _offline_cache(hub_cache, tmp_path, monkeypatch, drop=[missing], listing=listing)
+    with pytest.raises((OSError, ValueError)):
+        native.load_native_tokenizer(repository)
+
+
+def test_official_repository_never_loads_a_substituted_tokenizer_json(hub_cache, tmp_path, monkeypatch):
+    """A cache that swaps the pinned raw data for a fast bundle must not pass as the official tokenizer."""
+    repository, snapshot = _offline_cache(hub_cache, tmp_path, monkeypatch, drop=["tiktoken.model"], listing=False)
+    Tokenizer(models.WordLevel({"[UNK]": 0, "hello": 1}, unk_token="[UNK]")).save(str(snapshot / "tokenizer.json"))
+    (snapshot / "tokenizer_config.json").unlink()
+    (snapshot / "tokenizer_config.json").write_text(json.dumps({"kimi_native_profile": hub_cache[1]}))
+    with pytest.raises(ValueError, match="reviewed pins"):
+        native.load_native_tokenizer(repository)
+
+
+def test_offline_without_a_cached_snapshot_fails_clearly(hub_cache, tmp_path, monkeypatch):
+    repository, snapshot = _offline_cache(hub_cache, tmp_path, monkeypatch)
+    shutil.rmtree(snapshot.parents[1])
+    with pytest.raises(OSError):
+        native.load_native_tokenizer(repository)

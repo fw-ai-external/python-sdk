@@ -6,11 +6,13 @@ converts the pinned data files into an id-identical fast tokenizer entirely
 from reviewed installed code, so host loading never imports
 checkpoint-staged Python and ``auto_map`` metadata stays inert.
 
-Only data files are read. ``tokenization_kimi.py`` is hash-checked as
-provenance evidence (the token pattern and reserved-token count below are
-copied from it) but never imported. The two models share one byte-identical
-vocabulary; their XTML chat encoders are distinct reviewed contracts,
-vendored separately by the cookbook renderers and never aliased here.
+Only data files are read. ``tokenization_kimi.py`` is provenance evidence
+(the token pattern and reserved-token count below are copied from it). It is
+never imported, and it is hash-checked when present; an offline bundle that
+ships no Python omits it. The data files that determine token ids are
+required. The two models share one byte-identical vocabulary; their XTML
+chat encoders are distinct reviewed contracts, vendored separately by the
+cookbook renderers and never aliased here.
 
 The cookbook wrapper ``training.utils.kimi_native_tokenizer`` delegates to
 this module when ``KIMI_NATIVE_TOKENIZER_CAPABILITY`` matches and otherwise
@@ -31,7 +33,7 @@ from importlib import import_module
 # TOKENIZER_IDENTITY_POLICY_CAPABILITY: the wrapper defers to this module
 # only when the constant matches exactly, so an intermediate SDK falls back
 # to the cookbook's pinned snapshot instead of inheriting older behavior.
-KIMI_NATIVE_TOKENIZER_CAPABILITY = "kimi-k3-k31-native-tokenizer/chat-and-saved-bundles-v3"
+KIMI_NATIVE_TOKENIZER_CAPABILITY = "kimi-k3-k31-native-tokenizer/chat-and-saved-bundles-offline-v4"
 
 KIMI_K3_PROFILE = "kimi_k3"
 KIMI_K31_PROFILE = "kimi_k31"
@@ -67,6 +69,7 @@ KIMI_REVISION_BY_PROFILE = {
     KIMI_K3_PROFILE: KIMI_K3_REVISION,
     KIMI_K31_PROFILE: KIMI_K31_REVISION,
 }
+_PROVENANCE_ONLY_FILES = frozenset({"tokenization_kimi.py"})
 _PROFILE_BY_REPOSITORY = {repository: profile for profile, repository in KIMI_REPOSITORY_BY_PROFILE.items()}
 _ENCODER_MODULES = {
     KIMI_K3_PROFILE: "fireworks.training.sdk._vendored.kimi_k3.encoding_k3",
@@ -221,7 +224,7 @@ def _sha256(path: Path) -> str:
 
 
 def verify_source_dir(source_dir: str | Path, *, profile: str | None = None) -> str:
-    """Fail closed unless every pinned source file is present and unchanged.
+    """Fail closed unless every pinned data file is present and every pinned file present is unchanged.
 
     With ``profile`` unset, either reviewed profile is accepted; the matched
     profile name is returned. The tiktoken vocabulary digest is shared, so a
@@ -239,7 +242,8 @@ def verify_source_dir(source_dir: str | Path, *, profile: str | None = None) -> 
         for filename, expected in sorted(pins.items()):
             path = root / filename
             if not path.is_file():
-                problems.append(f"{filename}: missing")
+                if filename not in _PROVENANCE_ONLY_FILES:
+                    problems.append(f"{filename}: missing")
             elif _sha256(path) != expected:
                 problems.append(f"{filename}: sha256 {_sha256(path)} != {expected}")
         if not problems:
@@ -311,14 +315,20 @@ def _download_source(
 ) -> Path:
     """Fetch only tokenizer data/provenance files, never model weights."""
     # lazy: Hugging Face access is needed only for hub sources.
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import constants, snapshot_download
 
+    offline = local_files_only or constants.HF_HUB_OFFLINE
+    patterns = ["tiktoken.model", "tokenizer.json", "tokenizer_config.json", "tokenization_kimi.py"]
+    # Offline, the Hub client rejects a cached snapshot that lacks any requested file it has
+    # listed, so do not request the provenance-only file a data-only bundle omits.
+    if offline:
+        patterns = [name for name in patterns if name not in _PROVENANCE_ONLY_FILES]
     return Path(
         snapshot_download(
             repo_id=tokenizer_model,
             revision=revision,
-            allow_patterns=["tiktoken.model", "tokenizer.json", "tokenizer_config.json", "tokenization_kimi.py"],
-            local_files_only=local_files_only,
+            allow_patterns=patterns,
+            local_files_only=offline,
         )
     )
 
@@ -352,6 +362,12 @@ def load_native_tokenizer(
         if revision is None and profile is not None:
             revision = KIMI_REVISION_BY_PROFILE[profile]
         source = _download_source(tokenizer_model, revision=revision, local_files_only=local_files_only)
+        if tokenizer_model in _PROFILE_BY_REPOSITORY:
+            # An official repository is reviewed raw data at a pinned revision: verify and convert it,
+            # never a tokenizer.json or class lookup a cache could substitute.
+            tokenizer = build_fast_tokenizer(source, profile=profile)
+            tokenizer.name_or_path = tokenizer_model
+            return tokenizer
         if not any((source / name).is_file() for name in ("tiktoken.model", "tokenizer.json")):
             # A built-in slow override may need vocab files outside our raw
             # conversion allowlist. Keep its Hub identity/revision, but never
