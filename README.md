@@ -52,13 +52,11 @@ extra, reading TITO artifacts that use the current replay format. For an editabl
 Linux or macOS, build the extension with `bash scripts/build_tito_extension.sh`.
 This requires Cargo and a system linker.
 
-Use `TrajectoryDriftPolicy(lineage_mode="tree")` for new TITO rollouts.
-Tree can resume interleaved branches at their existing checkpoints and reduce
-repeated context in training samples. Linear is the compatibility default
-during migration. Linear rollouts are planned for deprecation and retirement.
-New lineage features and performance work target tree only, and linear
-receives compatibility fixes until retirement. The v1 reader remains available
-for artifacts that meet the current shared replay contract.
+TITO uses tree lineage for all rollouts. Tree can resume interleaved branches
+at their existing checkpoints and reduce repeated context in training samples.
+Remove any explicit lineage option when upgrading. Tree artifacts use schema v2.
+Use the SDK that produced a saved linear v1 artifact to read it, or recapture
+the rollout to produce a tree artifact for current training runs.
 
 > **Note:** Training SDK sources live in
 > [`src/fireworks/training/`](src/fireworks/training/) and

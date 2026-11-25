@@ -23,7 +23,7 @@ from fireworks.training.sdk import (
 )
 from tests_training.test_tito import FakeSampler, FakeRenderer
 from fireworks.training.sdk.tito import _failure_trace
-from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
+from fireworks.training.sdk.tito._engine import _TrajectoryCore
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 
 
@@ -311,7 +311,7 @@ async def test_malformed_tool_reward_excludes_a_concurrent_auxiliary_failure(mon
             raise TITOParseError("bad function name", reason_code="tool_unknown_name")
 
     sampler = FakeSampler()
-    core = _LinearTrajectoryCore(
+    core = _TrajectoryCore(
         sampler,
         Renderer(),
         max_context_tokens=100,
@@ -897,7 +897,7 @@ async def test_malformed_http_200_sse_retains_wire_body_and_discards_trajectory(
 async def test_debug_write_error_does_not_mask_original_parser_error(tmp_path, async_finish):
     from fireworks.training.sdk import TITOError
     from tests_training.test_tito import _first_request
-    from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
+    from fireworks.training.sdk.tito._engine import _TrajectoryCore
 
     class Observer:
         def record(self, event, *args):
@@ -907,7 +907,7 @@ async def test_debug_write_error_does_not_mask_original_parser_error(tmp_path, a
         def close_trajectory(self, *args):
             raise OSError("synthetic debug close failure")
 
-    core = _LinearTrajectoryCore(
+    core = _TrajectoryCore(
         FakeSampler(),
         FakeRenderer(fail_parse=True),
         max_context_tokens=4096,
@@ -960,7 +960,7 @@ async def test_cancellation_during_failure_recording_cannot_leave_a_trainable_pr
     import threading
 
     from tests_training.test_tito import _first_request, _second_request
-    from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
+    from fireworks.training.sdk.tito._engine import _TrajectoryCore
 
     entered = asyncio.Event()
     release = threading.Event()
@@ -976,7 +976,7 @@ async def test_cancellation_during_failure_recording_cannot_leave_a_trainable_pr
             pass
 
     renderer = FakeRenderer()
-    core = _LinearTrajectoryCore(
+    core = _TrajectoryCore(
         FakeSampler(),
         renderer,
         max_context_tokens=4096,

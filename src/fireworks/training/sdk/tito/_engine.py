@@ -94,7 +94,6 @@ class _PolicyCheckpoint:
 class _PolicyBoundary:
     reason: str
     parent: TITOTurn | None = None
-    close_reason: str | None = None
     render_fallback: str | None = None
 
 
@@ -135,12 +134,6 @@ class _TrajectoryState:
     last_policy_commit_at: float | None = None
     sampler_calls: int = 0
     metrics: _MetricAccumulator = field(default_factory=_MetricAccumulator)
-
-    @property
-    def active_segment(self) -> _Segment | None:
-        if self.latest_segment is None or self.latest_segment.closed_reason is not None:
-            return None
-        return self.latest_segment
 
 
 @dataclass
@@ -193,7 +186,6 @@ class _TurnPlan:
     incremental_fallback_reason: str | None
     segment: _Segment | None
     start_reason: str | None
-    close_reason: str | None
     requested_output_tokens: int
     effective_output_tokens: int
     context_remaining_tokens: int
@@ -236,7 +228,7 @@ class _ExactTokenSampler(Protocol):
     ) -> SampledRequestResult: ...
 
 
-class _LinearTrajectoryCore:
+class _TrajectoryCore:
     """Serialized exact-token transaction core for exactly one trajectory."""
 
     def __init__(
@@ -340,7 +332,7 @@ class _LinearTrajectoryCore:
             "serving_affinity_key_hash": hashlib.sha256(state.serving_affinity_key.encode("utf-8")).hexdigest(),
             "drift_policy": {
                 "max_masked_tokens": state.drift_policy.max_masked_tokens,
-                "lineage_mode": state.drift_policy.lineage_mode,
+                "lineage_mode": "tree",
                 "on_other_mismatch": state.drift_policy.on_other_mismatch,
             },
         }
@@ -754,7 +746,6 @@ class _LinearTrajectoryCore:
         parent: TITOTurn | None = None,
         segment: _Segment | None,
         start_reason: str | None,
-        close_reason: str | None,
     ) -> _TurnPlan:
         prompt_ids = tuple(int(token) for token in prompt)
         requested, effective, remaining = self._budget(state, request, len(prompt_ids))
@@ -776,7 +767,6 @@ class _LinearTrajectoryCore:
             parent=parent,
             segment=segment,
             start_reason=start_reason,
-            close_reason=close_reason,
             requested_output_tokens=requested,
             effective_output_tokens=effective,
             context_remaining_tokens=remaining,
@@ -829,7 +819,6 @@ class _LinearTrajectoryCore:
                 parent=checkpoint.parent,
                 segment=None,
                 start_reason=checkpoint.reason,
-                close_reason=checkpoint.close_reason,
             )
 
         plan = await self._prepare_continuation(
@@ -849,52 +838,32 @@ class _LinearTrajectoryCore:
         contract: str,
     ) -> _PolicyCheckpoint | _PolicyBoundary:
         """Find the semantic checkpoint and handle history or contract boundaries."""
-        tree = state.drift_policy.lineage_mode == "tree"
         active, last, reason = self._native.select_parent(
-            tree, state.latest_segment, state.checkpoints, request.messages, contract
+            state.latest_segment, state.checkpoints, request.messages, contract
         )
-        if active is None or last is None:
-            if tree and reason != "initial":
-                state.metrics.increment(f"lineage/boundary_reason_{reason}")
-                if reason == "history_rewrite" and state.latest_segment is not None:
-                    previous = state.latest_segment.turns[-1]
-                    stored = previous.request.messages + (previous.assistant.message,)
-                    rewrite_kind = self._native.history_rewrite(stored, request.messages) or "truncated"
-                    state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
-                if reason != "length_truncation" and state.drift_policy.on_other_mismatch == "reject":
-                    state.metrics.increment("lineage/reject")
-                    raise TITOError("tito_lineage_divergence", 409, f"no unique tree checkpoint: {reason}")
-            render_fallback = reason if tree and reason not in {"initial", "length_truncation"} else None
-            return _PolicyBoundary(reason, parent=last, render_fallback=render_fallback)
+        if active is not None and last is not None:
+            stored = last.request.messages + (last.assistant.message,)
+            return _PolicyCheckpoint(active, last, stored)
 
-        if reason == "contract_change":
-            state.metrics.increment("lineage/boundary_reason_contract_change")
-            if state.drift_policy.on_other_mismatch == "reject":
-                state.metrics.increment("lineage/reject")
-                raise TITOError("tito_lineage_divergence", 409, "incoming request changes the active render contract")
-            return _PolicyBoundary(reason, close_reason=reason, render_fallback=reason)
+        if reason == "initial":
+            return _PolicyBoundary(reason)
 
-        stored = last.request.messages + (last.assistant.message,)
-        if not tree:
-            rewrite_kind = self._native.history_rewrite(stored, request.messages)
-            if rewrite_kind is not None:
-                state.metrics.increment("lineage/boundary_reason_history_rewrite")
-                state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
-                if state.drift_policy.on_other_mismatch == "reject":
-                    state.metrics.increment("lineage/reject")
-                    raise TITOError(
-                        "tito_lineage_divergence", 409, "incoming history does not extend the active segment"
-                    )
-                return _PolicyBoundary(
-                    "history_rewrite", close_reason="history_rewrite", render_fallback="history_rewrite"
-                )
-        return _PolicyCheckpoint(active, last, stored)
+        state.metrics.increment(f"lineage/boundary_reason_{reason}")
+        if reason == "length_truncation":
+            return _PolicyBoundary(reason, parent=last)
+        if reason == "history_rewrite" and state.latest_segment is not None:
+            previous = state.latest_segment.turns[-1]
+            stored = previous.request.messages + (previous.assistant.message,)
+            rewrite_kind = self._native.history_rewrite(stored, request.messages) or "truncated"
+            state.metrics.increment(f"lineage/history_rewrite_{rewrite_kind}")
+        if state.drift_policy.on_other_mismatch == "reject":
+            state.metrics.increment("lineage/reject")
+            raise TITOError("tito_lineage_divergence", 409, f"no unique tree checkpoint: {reason}")
+        return _PolicyBoundary(reason, parent=last, render_fallback=reason)
 
     def _place_policy_turn(self, state: _TrajectoryState, checkpoint: _PolicyCheckpoint, plan: _TurnPlan) -> _TurnPlan:
         """Place a prepared turn without changing how its prompt was rendered."""
         active, last = checkpoint.segment, checkpoint.parent
-        if state.drift_policy.lineage_mode == "linear":
-            return replace(plan, parent=last)
         fork_reason = self._native.fork_reason(
             last is active.turns[-1],
             active is state.latest_segment,
@@ -913,7 +882,7 @@ class _LinearTrajectoryCore:
                 realign_from_token=None,
                 realigned_masked_tokens=0,
             )
-        return replace(plan, parent=last, close_reason=None)
+        return replace(plan, parent=last)
 
     async def _prepare_continuation(
         self,
@@ -959,7 +928,6 @@ class _LinearTrajectoryCore:
                     incremental_fallback_reason="unsupported_incremental_join",
                     segment=None,
                     start_reason="incremental_unsupported",
-                    close_reason="incremental_unsupported",
                 )
 
             # Miles Session v2 is the mechanism reference for this experimental
@@ -1001,7 +969,6 @@ class _LinearTrajectoryCore:
                 incremental_checkpoint_trim_tokens=trim_tokens,
                 segment=active,
                 start_reason=None,
-                close_reason=None,
             )
 
         if full_prompt is None:
@@ -1025,7 +992,6 @@ class _LinearTrajectoryCore:
                 realigned_masked_tokens=0,
                 segment=active,
                 start_reason=None,
-                close_reason=None,
             )
 
         state.metrics.increment("lineage/prefix_mismatch")
@@ -1042,7 +1008,6 @@ class _LinearTrajectoryCore:
                 realigned_masked_tokens=masked_tokens,
                 segment=active,
                 start_reason=None,
-                close_reason=None,
             )
 
         state.metrics.increment("lineage/boundary_reason_unbounded_or_ambiguous_drift")
@@ -1065,7 +1030,6 @@ class _LinearTrajectoryCore:
             realigned_masked_tokens=0,
             segment=None,
             start_reason="token_drift",
-            close_reason="token_drift",
         )
 
     @staticmethod
@@ -1964,18 +1928,14 @@ class _LinearTrajectoryCore:
             phase = "prepare"
             plan = await self._prepare_policy(state, request, contract, fingerprint)
             prompt_hash = plan.prepared_prompt_hash
-            tree = state.drift_policy.lineage_mode == "tree"
-            parent_id = plan.parent.turn_id if tree and plan.parent is not None else None
-            prior_checkpoint = plan.parent
-            if not tree and state.active_segment is not None:
-                prior_checkpoint = state.active_segment.turns[-1]
+            parent_id = plan.parent.turn_id if plan.parent is not None else None
             phase = "sampling_admission"
             sampling_kwargs = self._sampling_kwargs(state, request)
             include_routing = bool(sampling_kwargs.get("include_routing_matrix", False))
             include_top_sampling = bool(sampling_kwargs.get("top_sampling_logprobs"))
             include_sampling_mask = bool(sampling_kwargs.get("sampling_mask"))
             include_sample_extra = bool(sampling_kwargs.get("sample_extra_tokens"))
-            if tree and plan.segment is not None:
+            if plan.segment is not None:
                 prior = plan.segment.turns[-1]
                 if (
                     (prior.routing_matrices is not None) != include_routing
@@ -2020,9 +1980,9 @@ class _LinearTrajectoryCore:
                     "incremental_fallback_reason": (plan.incremental_fallback_reason),
                     "segment_id": plan.segment.segment_id if plan.segment is not None else None,
                     "start_reason": plan.start_reason,
-                    "close_reason": plan.close_reason,
+                    "close_reason": None,
                     "prior_checkpoint_hash": (
-                        _hash_tokens(prior_checkpoint.exact_checkpoint_ids) if prior_checkpoint is not None else None
+                        _hash_tokens(plan.parent.exact_checkpoint_ids) if plan.parent is not None else None
                     ),
                     "requested_output_tokens": plan.requested_output_tokens,
                     "effective_output_tokens": plan.effective_output_tokens,
@@ -2156,7 +2116,6 @@ class _LinearTrajectoryCore:
             else:
                 state.metrics.increment("parser/success")
 
-            prior_segment = state.active_segment if plan.close_reason is not None else None
             is_new_segment = plan.segment is None
             segment = plan.segment or _Segment(
                 segment_id=uuid.uuid4().hex,
@@ -2220,8 +2179,6 @@ class _LinearTrajectoryCore:
                 parser_fallback=parsed.parser_fallback,
             )
             if malformed_tool_error is not None:
-                if prior_segment is not None:
-                    prior_segment.closed_reason = plan.close_reason
                 if is_new_segment:
                     state.segments.append(segment)
                 segment.turns.append(turn)
@@ -2236,10 +2193,10 @@ class _LinearTrajectoryCore:
                 "call_id": call_id,
                 "turn_id": turn_id,
                 "segment_id": segment.segment_id,
-                **({"parent_turn_id": parent_id} if tree else {}),
+                "parent_turn_id": parent_id,
                 "segment_start_reason": segment.start_reason if is_new_segment else None,
-                "prior_segment_id": prior_segment.segment_id if prior_segment is not None else None,
-                "prior_segment_close_reason": plan.close_reason,
+                "prior_segment_id": None,
+                "prior_segment_close_reason": None,
                 "segment_close_reason": ("length_truncation" if completion.finish_reason == "length" else None),
                 "prompt_disposition": plan.prompt_disposition,
                 "prefix_match_tokens": plan.prefix_match_tokens,
@@ -2299,15 +2256,12 @@ class _LinearTrajectoryCore:
             }
 
             def apply_commit() -> TITOCallResult:
-                if prior_segment is not None:
-                    prior_segment.closed_reason = plan.close_reason
                 if is_new_segment:
                     state.segments.append(segment)
                 segment.turns.append(turn)
                 state.latest_segment = segment
-                if tree:
-                    key = len(request.messages) + 1
-                    state.checkpoints.setdefault(key, []).append((segment, turn))
+                key = len(request.messages) + 1
+                state.checkpoints.setdefault(key, []).append((segment, turn))
                 state.metrics.increment(f"lineage/{plan.prompt_disposition}")
                 state.metrics.increment(f"prompt_construction/{plan.prompt_mode}")
                 if plan.incremental_fallback_reason is not None:
@@ -2618,7 +2572,6 @@ class _LinearTrajectoryCore:
                     incremental_fallback_reason=None,
                     segment=None,
                     start_reason=None,
-                    close_reason=None,
                     requested_output_tokens=_requested,
                     effective_output_tokens=effective,
                     context_remaining_tokens=_remaining,
@@ -3204,7 +3157,6 @@ class _LinearTrajectoryCore:
                 {**metadata, "tito_malformed_tool_call_id": state.malformed_tool_call_id}
             )
         return TITOTrajectoryArtifact(
-            lineage_mode=state.drift_policy.lineage_mode,
             trajectory_id=state.trajectory_id,
             serving_affinity_key_hash=hashlib.sha256(state.serving_affinity_key.encode("utf-8")).hexdigest(),
             metadata=metadata,
@@ -3335,14 +3287,14 @@ class _LinearTrajectoryCore:
 class TITOTrajectoryEngine:
     """Internal state machine for exactly one independent trajectory.
 
-    ``_LinearTrajectoryCore`` retains the proven token transaction while this
+    ``_TrajectoryCore`` retains the proven token transaction while this
     object fixes its cardinality to one. The environment sidecar owns the only
     table of these engines; no ancestry or cross-engine state is represented.
     """
 
     def __init__(
         self,
-        engine: _LinearTrajectoryCore,
+        engine: _TrajectoryCore,
         trajectory_id: str,
     ) -> None:
         self._core = engine

@@ -11,7 +11,7 @@ from fireworks.training.sdk.tito_debug import (
     TITOLocalDebugConfig,
     TITODebugStorageFullError,
 )
-from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
+from fireworks.training.sdk.tito._engine import _TrajectoryCore
 
 
 def _config(tmp_path, **kwargs):
@@ -133,7 +133,7 @@ async def test_engine_fails_loudly_when_enabled_debug_storage_is_full(
     from tests_training.test_tito import FakeSampler, FakeRenderer
 
     sink = TITOLocalDebugSink(_config(tmp_path, max_local_bytes=300))
-    engine = _LinearTrajectoryCore(
+    engine = _TrajectoryCore(
         FakeSampler(),  # type: ignore[arg-type]
         FakeRenderer(),
         max_context_tokens=256,

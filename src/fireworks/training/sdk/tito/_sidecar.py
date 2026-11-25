@@ -28,8 +28,8 @@ from fireworks.training.sdk.tito._types import (
 from fireworks.training.sdk.tito._engine import (
     TITOEventObserver,
     TITOTrajectoryEngine,
+    _TrajectoryCore,
     _ExactTokenSampler,
-    _LinearTrajectoryCore,
 )
 from fireworks.training.sdk.tito._failure_trace import (
     TITOFailureTraceConfig,
@@ -214,7 +214,7 @@ class TITOSidecar:
             or trajectory_id in self._pending_trajectory_ids
         ):
             raise ValueError(f"duplicate trajectory_id: {trajectory_id}")
-        core = _LinearTrajectoryCore(
+        core = _TrajectoryCore(
             self._sampler,
             self._renderer,
             max_context_tokens=self._max_context_tokens,
@@ -257,7 +257,7 @@ class TITOSidecar:
             raise ValueError(f"duplicate trajectory_id: {trajectory_id}")
         requested_trajectory_id = trajectory_id
         self._pending_trajectory_ids.add(requested_trajectory_id)
-        core = _LinearTrajectoryCore(
+        core = _TrajectoryCore(
             self._sampler,
             self._renderer,
             max_context_tokens=self._max_context_tokens,
