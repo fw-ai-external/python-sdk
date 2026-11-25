@@ -27,7 +27,6 @@ from fireworks.training.sdk.sampling import (
     SampledServerAttempt,
 )
 from fireworks.training.sdk.tito._types import (
-    _MALFORMED_TOOL_CALL_REASONS,
     TITOTurn,
     TITOError,
     TITOCallKind,
@@ -55,6 +54,7 @@ from fireworks.training.sdk.tito._types import (
     _MetricAccumulator,
     _server_attempt_value,
     _has_exact_tool_sample,
+    _is_retained_tool_reason,
 )
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 from fireworks.training.sdk.tito._native_runtime import require_native
@@ -1139,16 +1139,18 @@ class _TrajectoryCore:
                 completion.finish_reason,
             )
         except TITOParseError as parser_error:
+            context = self._parser_context(request, completion, parser_error)
+            context["parser_reason_code"] = self._parser_tag(getattr(parser_error, "reason_code", "unclassified"))
+            closed_tool_action = getattr(parser_error, "closed_tool_action", None)
+            if isinstance(closed_tool_action, bool):
+                context["closed_tool_action"] = closed_tool_action
             raise TITOError(
                 "tito_sdk_parse_error",
                 422,
                 "local TITO parser rejected the sampled output; discard this trajectory",
                 origin="sdk_parser",
                 discard_trajectory=True,
-                context={
-                    **self._parser_context(request, completion, parser_error),
-                    "parser_reason_code": self._parser_tag(getattr(parser_error, "reason_code", "unclassified")),
-                },
+                context=context,
             ) from parser_error
         except Exception as parser_error:
             raise TITOError(
@@ -2100,7 +2102,7 @@ class _TrajectoryCore:
                     or state.discard_error is not None
                     or classification_source == "fail_closed"
                     or exc.code != "tito_sdk_parse_error"
-                    or exc.context.get("parser_reason_code") not in _MALFORMED_TOOL_CALL_REASONS
+                    or not _is_retained_tool_reason(exc.context)
                     or not _has_exact_tool_sample(
                         completion.finish_reason, completion.sampling_logprobs, completion.completion_len
                     )

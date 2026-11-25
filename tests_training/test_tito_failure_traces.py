@@ -234,17 +234,22 @@ async def test_failed_parse_retains_raw_trajectory_and_next_trajectory_succeeds(
 
 
 @pytest.mark.parametrize(
-    ("reason", "finish_reason", "stream", "retained"),
+    ("reason", "finish_reason", "stream", "closed", "retained"),
     [
-        ("tool_unknown_name", "stop", False, True),
-        ("tool_missing_name", "tool_calls", True, True),
-        ("tool_unparsed_content", "tool_calls", False, False),
-        ("tool_unknown_name", "length", False, False),
-        ("unclean_parse", "stop", False, False),
+        ("tool_unknown_name", "stop", False, None, True),
+        ("tool_missing_name", "tool_calls", True, None, True),
+        ("tool_invalid_argument", "stop", False, True, True),
+        ("tool_invalid_argument", "stop", False, None, False),
+        ("tool_arguments_invalid_json", "stop", False, False, False),
+        ("tool_invalid_argument", "tool_calls", True, True, True),
+        ("tool_invalid_argument", "length", False, True, False),
+        ("tool_unparsed_content", "tool_calls", False, False, False),
+        ("tool_unknown_name", "length", False, False, False),
+        ("unclean_parse", "stop", False, False, False),
     ],
 )
 async def test_malformed_tool_keeps_exact_turn_without_emitting_it(
-    tmp_path, monkeypatch, reason, finish_reason, stream, retained
+    tmp_path, monkeypatch, reason, finish_reason, stream, closed, retained
 ) -> None:
     renderer = FakeRenderer()
     sampler = FakeSampler(outputs=[[197, 3], [201, 202, 3]], finishes=["stop", finish_reason])
@@ -257,7 +262,10 @@ async def test_malformed_tool_keeps_exact_turn_without_emitting_it(
     )
 
     def reject_tool_call(*_args):
-        raise TITOParseError("bad tool call", reason_code=reason)
+        error = TITOParseError("bad tool call", reason_code=reason)
+        if closed is not None:
+            error.closed_tool_action = closed
+        raise error
 
     await sidecar.start()
     try:

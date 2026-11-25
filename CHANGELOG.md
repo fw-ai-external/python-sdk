@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.39 (2026-11-25)
+
+Full Changelog: [v1.2.38...v1.2.39](https://github.com/fw-ai-external/python-sdk/compare/v1.2.38...v1.2.39)
+
+### Bug Fixes
+* **training-sdk:** TITO can retain a normally finished tool call for scoring when the renderer confirms the call closed with an invalid argument and every sampled token has a finite sampling log probability. Incomplete or length-truncated calls remain ineligible.
+
 ## 1.2.38 (2026-11-25)
 
 Full Changelog: [v1.2.37...v1.2.38](https://github.com/fw-ai-external/python-sdk/compare/v1.2.37...v1.2.38)
