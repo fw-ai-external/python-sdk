@@ -8,13 +8,12 @@ __all__ = ["WatermarkDetection"]
 
 
 class WatermarkDetection(BaseModel):
-    id: str
     object: Literal["watermark.detection"]
-    detector_version: str
-    result: Literal["detected", "not_detected", "uncertain"]
-    scored_tokens: int
-    """Token positions scored under the tokenizer that decided the result.
 
-    When no tokenizer could score enough of the text, this is the largest count
-    any tokenizer reached, and 0 when none could score it.
+    result: Literal["detected", "not_detected"]
+    """
+    `detected` when the Fireworks watermark was found; otherwise `not_detected`,
+    including text too short to score. Text watermarked before the last key
+    rotation is scored like unwatermarked text. `not_detected` does not prove
+    human authorship.
     """

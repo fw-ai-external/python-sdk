@@ -8,85 +8,60 @@ use pyo3::{
 type Parent<'py> = (Option<Bound<'py, PyAny>>, Option<Bound<'py, PyAny>>, String);
 
 #[pyfunction]
-#[pyo3(signature = (tree, latest, checkpoints, messages, contract))]
+#[pyo3(signature = (latest, checkpoints, messages, contract))]
 pub(crate) fn select_parent<'py>(
-    tree: bool,
     latest: Option<Bound<'py, PyAny>>,
     checkpoints: &Bound<'py, PyDict>,
     messages: &Bound<'py, PyTuple>,
     contract: &str,
 ) -> PyResult<Parent<'py>> {
-    if tree {
-        for depth in (1..=messages.len()).rev() {
-            let Some(candidates) = checkpoints.get_item(depth)? else {
+    for depth in (1..=messages.len()).rev() {
+        let Some(candidates) = checkpoints.get_item(depth)? else {
+            continue;
+        };
+        let response = messages.get_item(depth - 1)?;
+        if !response.call_method1("get", ("role",))?.eq("assistant")? {
+            continue;
+        }
+        let mut matched = None;
+        for row in candidates.try_iter()? {
+            let (segment, turn): (Bound<'_, PyAny>, Bound<'_, PyAny>) = row?.extract()?;
+            if !response.eq(turn.getattr("assistant")?.getattr("message")?)? {
                 continue;
-            };
-            let response = messages.get_item(depth - 1)?;
-            if !response.call_method1("get", ("role",))?.eq("assistant")? {
+            }
+            let history = turn
+                .getattr("request")?
+                .getattr("messages")?
+                .cast_into::<PyTuple>()?;
+            if history.len() != depth - 1
+                || common_prefix_tokens(&history, messages)? != history.len()
+            {
                 continue;
             }
-            let mut matched = None;
-            for row in candidates.try_iter()? {
-                let (segment, turn): (Bound<'_, PyAny>, Bound<'_, PyAny>) = row?.extract()?;
-                if !response.eq(turn.getattr("assistant")?.getattr("message")?)? {
-                    continue;
-                }
-                let history = turn
-                    .getattr("request")?
-                    .getattr("messages")?
-                    .cast_into::<PyTuple>()?;
-                if history.len() != depth - 1
-                    || common_prefix_tokens(&history, messages)? != history.len()
-                {
-                    continue;
-                }
-                if matched.is_some() {
-                    return Ok((None, None, "ambiguous_parent".into()));
-                }
-                matched = Some((segment, turn));
+            if matched.is_some() {
+                return Ok((None, None, "ambiguous_parent".into()));
             }
-            if let Some((segment, turn)) = matched {
-                if turn.getattr("finish_reason")?.eq("length")? {
-                    return Ok((None, Some(turn), "length_truncation".into()));
-                }
-                if !segment.getattr("render_contract_id")?.eq(contract)? {
-                    return Ok((None, Some(turn), "contract_change".into()));
-                }
-                return Ok((Some(segment), Some(turn), String::new()));
+            matched = Some((segment, turn));
+        }
+        if let Some((segment, turn)) = matched {
+            if turn.getattr("finish_reason")?.eq("length")? {
+                return Ok((None, Some(turn), "length_truncation".into()));
             }
+            if !segment.getattr("render_contract_id")?.eq(contract)? {
+                return Ok((None, Some(turn), "contract_change".into()));
+            }
+            return Ok((Some(segment), Some(turn), String::new()));
         }
     }
     let Some(latest) = latest else {
         return Ok((None, None, "initial".into()));
     };
-    if tree {
-        let reason = if latest.getattr("render_contract_id")?.eq(contract)? {
-            "history_rewrite"
-        } else {
-            "contract_change"
-        };
-        return Ok((None, None, reason.into()));
-    }
-    let closed = latest.getattr("closed_reason")?;
-    if !closed.is_none() {
-        let reason: String = closed.extract()?;
-        return Ok((
-            None,
-            None,
-            if reason.is_empty() {
-                "initial".into()
-            } else {
-                reason
-            },
-        ));
-    }
     let reason = if latest.getattr("render_contract_id")?.eq(contract)? {
-        "initial"
+        "history_rewrite"
     } else {
         "contract_change"
     };
-    let turn = latest.getattr("turns")?.get_item(-1)?;
-    Ok((Some(latest), Some(turn), reason.into()))
+    Ok((None, None, reason.into()))
 }
 
 #[pyfunction]

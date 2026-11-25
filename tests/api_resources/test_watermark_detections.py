@@ -12,21 +12,14 @@ def test_create_watermark_detection() -> None:
         assert json.loads(request.content) == {"text": "hello"}
         return httpx.Response(
             200,
-            json={
-                "id": "wmdet_test",
-                "object": "watermark.detection",
-                "detector_version": "detector-v1",
-                "result": "not_detected",
-                "scored_tokens": 400,
-            },
+            json={"object": "watermark.detection", "result": "not_detected"},
         )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
         client = Fireworks(api_key="test", http_client=http_client)
         result = client.watermark_detections.create(text="hello")
-    assert result.id == "wmdet_test"
+    assert result.object == "watermark.detection"
     assert result.result == "not_detected"
-    assert result.scored_tokens == 400
 
 
 def test_create_watermark_detection_with_overridden_base_url() -> None:
@@ -34,13 +27,7 @@ def test_create_watermark_detection_with_overridden_base_url() -> None:
         assert request.url.path == "/v1/watermark/detect"
         return httpx.Response(
             200,
-            json={
-                "id": "wmdet_test",
-                "object": "watermark.detection",
-                "detector_version": "detector-v1",
-                "result": "uncertain",
-                "scored_tokens": 20,
-            },
+            json={"object": "watermark.detection", "result": "detected"},
         )
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
@@ -50,4 +37,4 @@ def test_create_watermark_detection_with_overridden_base_url() -> None:
             http_client=http_client,
         )
         result = client.watermark_detections.create(text="hello")
-    assert result.result == "uncertain"
+    assert result.result == "detected"

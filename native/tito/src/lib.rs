@@ -8,7 +8,7 @@ use pyo3::{
 };
 use std::{collections::HashSet, io::Write};
 
-mod lineage;
+mod tree;
 
 const BUFFER_SIZE: usize = 64 * 1024;
 
@@ -145,18 +145,6 @@ fn write_json<'py>(
 }
 
 #[pyfunction]
-fn encode_json<'py>(
-    value: &Bound<'py, PyAny>,
-    encoder: Bound<'py, PyAny>,
-    write: Bound<'py, PyAny>,
-) -> PyResult<()> {
-    write_json(value, encoder, |data| {
-        write.call1((PyBytes::new(value.py(), data),))?;
-        Ok(())
-    })
-}
-
-#[pyfunction]
 fn compress_json<'py>(
     value: &Bound<'py, PyAny>,
     encoder: Bound<'py, PyAny>,
@@ -231,12 +219,12 @@ fn scan_json_composite(
 
 #[pymodule(gil_used = true)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(encode_json, module)?)?;
+    module.add("TITO_ABI_VERSION", 2)?;
     module.add_function(wrap_pyfunction!(compress_json, module)?)?;
     module.add_function(wrap_pyfunction!(scan_json_composite, module)?)?;
-    module.add_function(wrap_pyfunction!(lineage::select_parent, module)?)?;
-    module.add_function(wrap_pyfunction!(lineage::history_rewrite, module)?)?;
-    module.add_function(wrap_pyfunction!(lineage::common_prefix_tokens, module)?)?;
-    module.add_function(wrap_pyfunction!(lineage::fork_reason, module)?)?;
-    module.add_function(wrap_pyfunction!(lineage::full_history_alignment, module)?)
+    module.add_function(wrap_pyfunction!(tree::select_parent, module)?)?;
+    module.add_function(wrap_pyfunction!(tree::history_rewrite, module)?)?;
+    module.add_function(wrap_pyfunction!(tree::common_prefix_tokens, module)?)?;
+    module.add_function(wrap_pyfunction!(tree::fork_reason, module)?)?;
+    module.add_function(wrap_pyfunction!(tree::full_history_alignment, module)?)
 }

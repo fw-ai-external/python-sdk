@@ -553,15 +553,7 @@ def test_core_training_tokenizer_uses_existing_architecture_metadata(
     _assert_tokenizer_equal(tokenizer, original)
 
 
-@pytest.mark.parametrize(
-    "tokenizer,revision",
-    [
-        ("moonshotai/Kimi-K2-Thinking", "612681931a8c906ddb349f8ad0f582cb552189cd"),
-        ("moonshotai/Kimi-K2.5", "2426b45b6af0da48d0dcce71bbce6225e5c73adc"),
-        ("moonshotai/Kimi-K2.6", "b5aabbfb20227ed42becbf5541dbffd213942c58"),
-    ],
-)
-def test_other_model_kimi_policies_and_revisions_remain_unchanged(monkeypatch, tokenizer, revision):
+def test_unrelated_model_generic_loading_remains_unchanged(monkeypatch):
     import transformers
 
     from fireworks.training.sdk._core.lib.public_interfaces import sampling_client
@@ -569,8 +561,8 @@ def test_other_model_kimi_policies_and_revisions_remain_unchanged(monkeypatch, t
     calls = []
     monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda _model, **kwargs: calls.append(kwargs))
     sampling_client._load_tokenizer_from_model_info.cache_clear()
-    sampling_client._load_tokenizer_from_model_info("unmigrated-model", tokenizer)
-    assert calls == [{"fast": True, "trust_remote_code": True, "revision": revision}]
+    sampling_client._load_tokenizer_from_model_info("unmigrated-model", "customer/unrelated-tokenizer")
+    assert calls == [{"fast": True}]
 
 
 # ---------------------------------------------------------------------------

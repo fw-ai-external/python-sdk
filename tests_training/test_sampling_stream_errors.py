@@ -19,7 +19,7 @@ from fireworks.training.sdk._sse import _SSEDecoder, _SSEProtocolError, _SSETrun
 from fireworks.training.sdk.tito import TITOChatRequest
 from fireworks.training.sdk.sampling import ServerMetrics, DeploymentSampler, SamplingRequestError
 from fireworks.training.sdk.concurrency import AdaptiveConcurrencyController
-from fireworks.training.sdk.tito._engine import _LinearTrajectoryCore
+from fireworks.training.sdk.tito._engine import _TrajectoryCore
 from fireworks.training.sdk.tito._failure_trace import _FailureTraceRecorder
 from fireworks.training.sdk.sampling_observability import extract_request_id
 
@@ -135,7 +135,7 @@ async def test_done_and_token_ids_do_not_invent_a_finish() -> None:
             assert failure.value.wire_status == 200
             assert failure.value.request_id == "synthetic-response-id"
             assert len(calls) == 1
-            mapped = _LinearTrajectoryCore._operation_error(failure.value, "inference")
+            mapped = _TrajectoryCore._operation_error(failure.value, "inference")
             assert mapped.context["phase"] == "inference"
             assert mapped.context["transport_hop"] == "sidecar_to_inference"
             assert mapped.context["retry_scope"] == "logical_request"

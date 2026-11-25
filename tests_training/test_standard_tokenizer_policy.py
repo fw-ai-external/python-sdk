@@ -78,13 +78,21 @@ def test_independent_architecture_is_restrictive(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.parametrize("override", OVERRIDES[1:])
-def test_unrelated_model_keeps_legacy_k2_policy(monkeypatch: pytest.MonkeyPatch, override: str) -> None:
-    calls: list[dict[str, Any]] = []
+def test_unrelated_model_uses_installed_k2_reader(monkeypatch: pytest.MonkeyPatch, override: str) -> None:
+    # lazy: the installed reader is optional outside tokenizer-using clients.
+    from fireworks.training.sdk import kimi_k2_tokenizer
+    from fireworks.training.sdk.kimi_k2_identity import PROFILES, get_k2_profile
+
+    calls = []
+    sentinel = object()
     monkeypatch.setattr(sampling_client, "is_kimi_k3_k31_tokenizer_source", lambda *_a, **_k: False)
     monkeypatch.setattr(sampling_client, "requires_code_free_tokenizer_loading", lambda *_a, **_k: False)
-    monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda *_a, **k: calls.append(k) or object())
-    sampling_client._load_tokenizer_from_model_info("acme/unrelated", override)
-    assert calls[0]["trust_remote_code"] is True and calls[0]["revision"]
+    monkeypatch.setattr(
+        kimi_k2_tokenizer, "load_k2_tokenizer", lambda model, **kwargs: calls.append((model, kwargs)) or sentinel
+    )
+    assert sampling_client._load_tokenizer_from_model_info("acme/unrelated", override) is sentinel
+    profile = get_k2_profile(override)
+    assert calls == [(override, {"revision": PROFILES[profile].revision, "profile": profile})]
 
 
 @pytest.mark.parametrize("model", ["moonshotai/Kimi-K3", "moonshotai/Kimi-K3.1-Pro"])

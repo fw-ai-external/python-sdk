@@ -9,11 +9,13 @@ import asyncio
 import logging
 import dataclasses
 from typing import TYPE_CHECKING, Any, TypeVar, cast
+from pathlib import Path
 from concurrent.futures import Future as ConcurrentFuture
 
 import fireworks.training.sdk._core as core
 from fireworks.training.sdk import types
 from fireworks.training.sdk._core._utils import lru_cache
+from fireworks.training.sdk.kimi_k2_identity import get_k2_profile
 from fireworks.training.sdk._core.lib.sidecar import SidecarRPC, SidecarHandle, create_sidecar_handle
 from fireworks.training.sdk.tokenizer_identity import (
     is_code_free_model_name,
@@ -513,7 +515,10 @@ def _load_tokenizer_from_model_info(
 
     patch_duplicate_mistral_regex_kwarg()
 
-    model_name = model_name.split(":")[0]
+    local_model = Path(model_name).is_dir()
+    if not local_model:
+        model_name = model_name.split(":")[0]
+    model_context = None if local_model else model_name
 
     # Use tokenizer_id if provided, otherwise fall back to heuristic logic
     kwargs = {}
@@ -522,7 +527,9 @@ def _load_tokenizer_from_model_info(
         # in some cases we'll deploy variants using the format
         # "<org>/<model>/<variant>". In that case, we want to load the tokenizer
         # using the huggingface convention.
-        if model_name.startswith("meta-llama/Llama-3"):
+        if local_model:
+            tokenizer_id = model_name
+        elif model_name.startswith("meta-llama/Llama-3"):
             # Avoid gating of Llama 3 models:
             tokenizer_id = "thinkingmachineslabinc/meta-llama-3-instruct-tokenizer"
         elif model_name.count("/") == 2:
@@ -533,26 +540,24 @@ def _load_tokenizer_from_model_info(
 
     if tokenizer_id == "moonshotai/Kimi-K2-Thinking":
         kwargs = {
-            "trust_remote_code": True,
             "revision": "612681931a8c906ddb349f8ad0f582cb552189cd",
         }
 
     if tokenizer_id in ("moonshotai/Kimi-K2.5-Text-Only", "moonshotai/Kimi-K2.5"):
         tokenizer_id = "moonshotai/Kimi-K2.5"
         kwargs = {
-            "trust_remote_code": True,
             "revision": "2426b45b6af0da48d0dcce71bbce6225e5c73adc",
         }
 
     if tokenizer_id == "moonshotai/Kimi-K2.6":
         tokenizer_id = "moonshotai/Kimi-K2.6"
         kwargs = {
-            "trust_remote_code": True,
             "revision": "b5aabbfb20227ed42becbf5541dbffd213942c58",
         }
 
     if (
-        is_kimi_k3_k31_model_name(model_name)
+        is_kimi_k3_k31_model_name(model_context)
+        or (local_model and is_kimi_k3_k31_tokenizer_source(model_name, local_files_only=True))
         or model_arch in ("KimiK3ForConditionalGeneration", "KimiK31ForConditionalGeneration")
         or is_kimi_k3_k31_tokenizer_source(tokenizer_id, revision=kwargs.get("revision"))
     ):
@@ -563,8 +568,21 @@ def _load_tokenizer_from_model_info(
 
         return load_native_tokenizer(tokenizer_id, revision=kwargs.get("revision"))
 
+    independent_code_free_context = (
+        is_standard_tokenizer_model_name(model_name)
+        or is_standard_tokenizer_model_name(model_arch)
+        or is_code_free_model_name(model_context)
+        or is_code_free_model_name(model_arch)
+        or (local_model and requires_code_free_tokenizer_loading(model_name, local_files_only=True))
+    )
+    if not independent_code_free_context and (profile := get_k2_profile(tokenizer_id, base_model=model_name)):
+        # lazy: only selected K2 profiles need the installed tiktoken reader.
+        from fireworks.training.sdk.kimi_k2_tokenizer import load_k2_tokenizer
+
+        return load_k2_tokenizer(tokenizer_id, revision=kwargs.get("revision"), profile=profile)
+
     if (
-        is_code_free_model_name(model_name)
+        independent_code_free_context
         or is_code_free_model_name(model_arch)
         or is_standard_tokenizer_model_name(model_name)
         or is_standard_tokenizer_model_name(model_arch)

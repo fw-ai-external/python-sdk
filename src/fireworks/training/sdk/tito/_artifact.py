@@ -6,7 +6,7 @@ import json
 import time
 import zlib
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, Mapping
 from contextlib import closing
 from dataclasses import fields
 from collections.abc import Iterable
@@ -142,8 +142,9 @@ def _turn_value(value: TITOTurn) -> dict[str, Any]:
 
 
 def _artifact_value(value: TITOTrajectoryArtifact) -> dict[str, Any]:
-    encoded: dict[str, Any] = {
-        "schema_version": 2 if value.lineage_mode == "tree" else 1,
+    return {
+        "schema_version": 2,
+        "lineage_mode": "tree",
         "trajectory_id": value.trajectory_id,
         "serving_affinity_key_hash": value.serving_affinity_key_hash,
         "metadata": dict(value.metadata),
@@ -203,29 +204,14 @@ def _artifact_value(value: TITOTrajectoryArtifact) -> dict[str, Any]:
         "finished_at": value.finished_at,
     }
 
-    if value.lineage_mode == "tree":
-        encoded["lineage_mode"] = "tree"
-    return encoded
-
 
 def pack_trajectory_artifact(value: TITOTrajectoryArtifact) -> bytes:
-    """Encode one artifact, using v1 for linear and v2 for tree lineage."""
+    """Encode one tree artifact in the v2 wire format."""
+    if value.lineage_mode != "tree":
+        raise ValueError("TITO artifact encoding requires tree lineage")
     native = require_native()
     encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    wire = _artifact_value(value)
-    if value.lineage_mode == "tree":
-        return _MAGIC + native.compress_json(wire, encoder.encode)
-
-    # Use this interpreter's zlib to preserve the v1 compression bytes.
-    compressor = zlib.compressobj(level=6)
-    compressed = [_MAGIC]
-
-    def compress_chunk(chunk: bytes) -> None:
-        compressed.append(compressor.compress(chunk))
-
-    native.encode_json(wire, encoder.encode, compress_chunk)
-    compressed.append(compressor.flush())
-    return b"".join(compressed)
+    return _MAGIC + native.compress_json(_artifact_value(value), encoder.encode)
 
 
 def _server_metrics(raw: Mapping[str, Any] | None) -> ServerMetrics | None:
@@ -371,20 +357,18 @@ def _response_attempt(raw: Mapping[str, Any]) -> TITOResponseAttempt:
     )
 
 
-def _validate_wire_schema(raw: Mapping[str, Any]) -> Literal["linear", "tree"]:
+def _validate_wire_schema(raw: Mapping[str, Any]) -> None:
     version = raw.get("schema_version")
-    lineage_mode = raw.get("lineage_mode", "linear")
-    if type(version) is not int or (version, lineage_mode) not in ((1, "linear"), (2, "tree")):
+    lineage_mode = raw.get("lineage_mode")
+    if type(version) is not int or version != 2 or lineage_mode != "tree":
         raise ValueError(f"unsupported TITO artifact schema or lineage: {version!r}, {lineage_mode!r}")
     if "prompt_prefixes" in raw:
         raise ValueError("unsupported TITO prompt prefix table")
-    return lineage_mode
 
 
-def _trajectory(raw: Mapping[str, Any], lineage_mode: Literal["linear", "tree"]) -> TITOTrajectoryArtifact:
+def _trajectory(raw: Mapping[str, Any]) -> TITOTrajectoryArtifact:
     metrics = raw["metrics"]
     return TITOTrajectoryArtifact(
-        lineage_mode=lineage_mode,
         trajectory_id=str(raw["trajectory_id"]),
         serving_affinity_key_hash=str(raw["serving_affinity_key_hash"]),
         metadata=MappingProxyType(_freeze_json(raw.get("metadata") or {})),
@@ -421,11 +405,11 @@ def unpack_trajectory_artifact(payload: bytes) -> TITOTrajectoryArtifact:
         if not payload.startswith(_MAGIC):
             raise ValueError("missing TITO artifact magic/version")
         raw = _load_artifact_json(zlib.decompress(payload[len(_MAGIC) :]))
-        lineage_mode = _validate_wire_schema(raw)
+        _validate_wire_schema(raw)
         raw["segments"] = tuple(_segment(segment, map(_turn, segment["turns"])) for segment in raw["segments"])
         raw["calls"] = tuple(map(_call, raw["calls"]))
         raw["response_attempts"] = tuple(map(_response_attempt, raw["response_attempts"]))
-        return _trajectory(raw, lineage_mode)
+        return _trajectory(raw)
     except _ARTIFACT_ERRORS as exc:
         raise TITOError("tito_artifact_invalid", 400, f"invalid TITO trajectory artifact: {exc}") from exc
 
@@ -469,9 +453,10 @@ def unpack_trajectory_stream(
                     raise ValueError("unsupported TITO prompt prefix table")
                 else:
                     raw[field] = reader.value()
-                    if field == "schema_version" and (type(raw[field]) is not int or raw[field] not in (1, 2)):
+                    if field == "schema_version" and (type(raw[field]) is not int or raw[field] != 2):
                         raise ValueError(f"unsupported TITO artifact schema: {raw[field]!r}")
             reader.finish()
-        return _trajectory(raw, _validate_wire_schema(raw))
+        _validate_wire_schema(raw)
+        return _trajectory(raw)
     except _ARTIFACT_ERRORS as exc:
         raise TITOError("tito_artifact_invalid", 400, f"invalid TITO trajectory artifact: {exc}") from exc
