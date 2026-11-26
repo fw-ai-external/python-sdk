@@ -613,8 +613,23 @@ class TITOTrajectoryEndpoint:
 # Only renderer rejections that identify a tool-call defect with a complete
 # stop are eligible. Generic parse failures and length truncation stay failures.
 _MALFORMED_TOOL_CALL_REASONS = frozenset(
-    {"tool_missing_name", "tool_unknown_name", "tool_arguments_invalid_json", "tool_arguments_not_object"}
+    {
+        "tool_missing_name",
+        "tool_unknown_name",
+        "tool_arguments_invalid_json",
+        "tool_arguments_not_object",
+    }
 )
+
+
+def _is_retained_tool_reason(failure: Mapping[str, Any]) -> bool:
+    reason = failure.get("parser_reason_code")
+    if failure.get("closed_tool_action") is False:
+        return False
+    return isinstance(reason, str) and (
+        reason in _MALFORMED_TOOL_CALL_REASONS
+        or (reason == "tool_invalid_argument" and failure.get("closed_tool_action") is True)
+    )
 
 
 def _has_exact_tool_sample(
@@ -666,7 +681,7 @@ class TITOTrajectoryArtifact:
             or failure.get("origin") != "sdk_parser"
             or failure.get("debug_storage_error") is not None
             or not isinstance(reason, str)
-            or reason not in _MALFORMED_TOOL_CALL_REASONS
+            or not _is_retained_tool_reason(failure)
         ):
             return None
         call_id = self.metadata.get("tito_malformed_tool_call_id")
